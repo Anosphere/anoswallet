@@ -61,10 +61,11 @@ on this machine).
     SHARE_THRESHOLD     3                                                    how many shares rebuild a secret
     DEFAULT_VALIDATOR   1                                                    the validator the wallet posts to
     DIST_DIR            dist/wallet/browser                                  the Angular build it serves
+    RP_ID               localhost                                            the relying-party id the browser uses in both ceremonies; the masterpod's RP_ID
 
 Routes
 
-    GET  /api/config                  200 { validators, keyholders, shareThreshold, defaultValidator }: the two counts
+    GET  /api/config                  200 { validators, keyholders, shareThreshold, defaultValidator, rpId }: the two counts
                                       are the list lengths; the browser never sees an address
     GET  /api/health                  200 { status: "ok" }
     ANY  /api/masterpod/<path>        forwarded to MASTERPOD_URL/<path>
@@ -826,6 +827,73 @@ that differed from the plan and why.
   whole flow from landing to a transfer. The first run-through is the
   user's, with the checks of steps 4 to 9 that were deferred to it listed
   in those steps' notes.
+
+### Deploy build 1 (2026-11)
+
+Built 2026-11-03 from `forclaude/wallet-deploy-plan-1.md` section 1 and
+appendix B, in this repository and in signingserver, nothing else. The
+plan's line numbers matched the tree (web_app at 13d9760, signingserver at
+63aa775). The two code changes: `changeOrigin: true` in `server/app.js`
+(proxy.conf.json keeps its `false`), and `RP_ID` through `server/config.js`,
+`GET /api/config` as `rpId`, the boot lines, `WalletConfig` and
+`PasskeyService`, which now takes the id from the configuration in both
+ceremonies and no longer reads the page's host. New: `network/wallet.env`,
+the three units, the nginx site, the install script, `LICENSE`, the
+README section "The wallet servers", the `RP_ID` row and `rpId` in
+section 2. In signingserver: its unit, its install script, `LICENSE`,
+`"license": "Apache-2.0"`, the README section "On signing1".
+
+Chosen where the plan was silent:
+
+- `text()` trims the value before judging it, so a whitespace-only `RP_ID`
+  is refused like an empty one (`RP_ID must not be empty`), and the trimmed
+  value is what the browser gets.
+- The `RP_ID` row sits last in section 2's variables table and last in the
+  README's variables sentence; `rpId` follows `defaultValidator` in the
+  `GET /api/config` row. That row does not list `edition` and was not
+  changed beyond `rpId`.
+- `"license": "Apache-2.0"` sits after `"private": true` in this
+  package.json; signingserver's keeps its place, line 15.
+- The README section "The wallet servers" is the last section of the
+  file, after Layout's closing paragraph, with the four update lines of
+  the plan's section 10 as an indented block and no dollar sign anywhere.
+- The six appendix B files were copied out of the plan by line range, so
+  they are byte-identical to it; `wallet-attestor.service` and
+  `wallet-moderator.service` are `wallet.service` with the three lines
+  the plan names replaced and nothing else (diff checked). Mode 644, like
+  the doorman's scripts: they run with `sh`. `LICENSE` is the masterpod's
+  file, same SHA-256 in both repositories.
+- In `PasskeyService` the `await this.config.load()` is the first line of
+  each ceremony. `ConfigService.load` shares one fetch and the shell
+  starts it at launch (app.ts), so in the ordinary case the await resolves
+  from that promise within the click's user activation. No import cycle:
+  config.service imports log.service, which imports nothing of the app's
+  services.
+
+Checked here, with Node 24.22.0 from nvm:
+
+- `node --check` clean on `server/app.js`, `server/config.js`,
+  `server/index.js` and signingserver's `src/server.js`; `sh -n` clean on
+  both install scripts.
+- `ng build` clean: 1.37 MB initial (270 kB estimated transfer), no
+  warning; `dist/wallet/browser` holds `favicon.ico`, `index.html`,
+  `main-2LVVVTYY.js` and `styles-32FV4QL7.css`.
+- The proxy on 4399, a spare port: with `RP_ID=wallet.anocloud.com
+  EDITION=attestor`, `/api/config` answered
+  `"edition":"attestor","rpId":"wallet.anocloud.com"`, `/api/health`
+  `{"status":"ok"}`, and the boot lines ended `edition attestor`,
+  `rp id wallet.anocloud.com`; with `RP_ID=` empty the boot stopped with
+  `Error: RP_ID must not be empty`, exit code 1; without the variable
+  `/api/config` answered `"rpId":"localhost"`. One more boot, with
+  `--env-file=network/wallet.env` as the units run it, answered
+  `{"validators":8,"keyholders":8,"shareThreshold":3,"defaultValidator":1,"edition":"wallet","rpId":"wallet.anocloud.com"}`
+  and printed the eight doormen, api.anocloud.com and signing1 in its boot
+  lines: the env file parses. A boot opens no connection; nothing ran
+  against any server from this Mac.
+- Not checked here, by design: the forwarding with `changeOrigin` against
+  the masterpod's and the doormen's certificates, the units, the site and
+  the install script on a server. Those are the plan's sections 4 to 9,
+  the operator's.
 
 
 ## 12. Recovery and the moderator edition

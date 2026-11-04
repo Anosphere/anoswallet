@@ -1,0 +1,23 @@
+[Unit]
+Description=anos wallet, wallet edition
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=wallet
+WorkingDirectory=/opt/wallet/web_app
+Environment=EDITION=wallet
+Environment=PORT=4300
+ExecStart=/usr/bin/node --env-file=network/wallet.env server/index.js
+Restart=always
+RestartSec=5
+MemoryMax=1G
+MemorySwapMax=0
+TasksMax=256
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,7 +1,8 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { hexToBytes, utf8ToBytes } from '@noble/hashes/utils.js';
 import { PRF_SALT_LABEL } from '../constants';
+import { ConfigService } from './config.service';
 
 /** A Uint8Array over its own ArrayBuffer, which WebAuthn and WebCrypto require. */
 export type Bytes = Uint8Array<ArrayBuffer>;
@@ -38,16 +39,16 @@ export interface Assertion {
 
 /**
  * The WebAuthn ceremonies (the keyholder test app's passkey.service.ts,
- * unchanged). Both ask for the PRF extension with the fixed salt, require
- * user verification, and hand back the browser's toJSON() form with the PRF
- * results removed: the PRF output never leaves the tab.
+ * with the relying-party id from the configuration). Both ask for the PRF
+ * extension with the fixed salt, require user verification, and hand back
+ * the browser's toJSON() form with the PRF results removed: the PRF output
+ * never leaves the tab. The relying-party id comes from GET /api/config,
+ * the proxy's RP_ID, not from the page's host: a wallet that cannot load
+ * its configuration makes no passkey rather than one bound to the wrong id.
  */
 @Injectable({ providedIn: 'root' })
 export class PasskeyService {
-  /** The relying party id: the page's host (localhost in development), as the server's RP_ID. */
-  get rpId(): string {
-    return location.hostname;
-  }
+  private readonly config = inject(ConfigService);
 
   /**
    * Registers a discoverable passkey for a new pod: the challenge from
@@ -55,9 +56,10 @@ export class PasskeyService {
    * authenticator does not report prf.enabled, since the server will.
    */
   async register(challengeHex: string, anopodIdHex: string, username: string, displayName: string): Promise<Registration> {
+    const { rpId } = await this.config.load();
     const credential = await navigator.credentials.create({
       publicKey: {
-        rp: { name: RP_NAME, id: this.rpId },
+        rp: { name: RP_NAME, id: rpId },
         user: { id: toBuffer(hexToBytes(anopodIdHex)), name: username, displayName },
         challenge: toBuffer(hexToBytes(challengeHex)),
         pubKeyCredParams: [
@@ -91,10 +93,11 @@ export class PasskeyService {
    * The assertion JSON goes to /unlock without its prf results.
    */
   async assert(challengeHex: string): Promise<Assertion> {
+    const { rpId } = await this.config.load();
     const credential = await navigator.credentials.get({
       publicKey: {
         challenge: toBuffer(hexToBytes(challengeHex)),
-        rpId: this.rpId,
+        rpId,
         userVerification: 'required',
         timeout: CEREMONY_TIMEOUT_MS,
         extensions: { prf: { eval: { first: PRF_SALT } } },

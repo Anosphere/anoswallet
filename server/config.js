@@ -3,7 +3,8 @@
  * default so no env file is needed on this machine. Read once at boot. The
  * list variables are comma separated, in validator and keyholder order;
  * the browser only ever learns the two counts. EDITION (12.1, 13.1) picks
- * the wallet, the moderator or the attestor edition of the same app.
+ * the wallet, the moderator or the attestor edition of the same app; RP_ID
+ * is the relying-party id of the browser's two passkey ceremonies.
  */
 
 function list(name, fallback) {
@@ -34,12 +35,22 @@ function oneOf(name, allowed, fallback) {
   return value;
 }
 
+/** A variable's trimmed value; `fallback` when it is unset. An empty value is refused at boot. */
+function text(name, fallback) {
+  const value = process.env[name];
+  if (value === undefined) return fallback;
+  if (value.trim() === '') throw new Error(`${name} must not be empty`);
+  return value.trim();
+}
+
 const ports = (from, count) => Array.from({ length: count }, (_, i) => `http://localhost:${from + i}`).join(',');
 
 export const config = Object.freeze({
   port: integer('PORT', 4300),
   /** Which app this proxy serves (wallet spec 12.1, 13.1): the wallet, or the same app with the moderator or the attestor section switched on. */
   edition: oneOf('EDITION', ['wallet', 'moderator', 'attestor'], 'wallet'),
+  /** The WebAuthn relying-party id the browser registers and asserts under: the masterpod's RP_ID. localhost in development, wallet.anocloud.com on the servers. */
+  rpId: text('RP_ID', 'localhost'),
   masterpodUrl: url('MASTERPOD_URL', 'http://localhost:3100'),
   validatorUrls: list('VALIDATOR_URLS', ports(3001, 5)),
   keyholderUrls: list('KEYHOLDER_URLS', ports(3201, 5)),

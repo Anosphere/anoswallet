@@ -37,7 +37,7 @@ unavailable" }`. Everything else is the Angular build (`dist/wallet/browser`),
 with `index.html` for the router's deep links. Variables, each with a
 local default (`server/config.js`): `PORT` 4300, `MASTERPOD_URL`,
 `VALIDATOR_URLS`, `KEYHOLDER_URLS`, `SIGNING_SERVER_URL`, `SHARE_THRESHOLD`
-3, `DEFAULT_VALIDATOR` 1, `DIST_DIR`.
+3, `DEFAULT_VALIDATOR` 1, `DIST_DIR`, `RP_ID` localhost.
 
 ## Layout
 
@@ -71,3 +71,50 @@ proxy.conf.json            ng serve forwards /api to the proxy
 
 Everything secret lives in RAM and dies with the tab; nothing touches
 browser storage. A new tab unlocks again.
+
+## The wallet servers
+
+On the testnet the wallet runs on two Hetzner servers, wallet1 and
+wallet2, behind the balancer wallet-lb1, which passes TCP with the PROXY
+protocol. The plan is `forclaude/wallet-deploy-plan-1.md` beside the
+repos; the operator runs it paste by paste, and nothing runs against the
+servers from a chat. On each server:
+
+- The code is the clone of this repository at `/opt/wallet/web_app`,
+  owned by the system user `wallet`, home `/opt/wallet`. The Angular build
+  is made there with `npx ng build`; `dist/` stays out of git.
+- Three units from `deploy/`: `wallet.service` (EDITION wallet, port
+  4300), `wallet-attestor.service` (attestor, 4301) and
+  `wallet-moderator.service` (moderator, 4302). Each runs
+  `node --env-file=network/wallet.env server/index.js` as `wallet`.
+- The environment is the committed `network/wallet.env`: the masterpod,
+  the validators and the keyholders in registry order, the signing
+  server, the threshold, the default validator and RP_ID. Nothing in it
+  is secret and both servers hold it byte for byte; EDITION and PORT come
+  from the unit. No `.env` exists on the servers.
+- nginx ends TLS for https://wallet.anocloud.com,
+  https://attestor.wallet.anocloud.com and
+  https://moderator.wallet.anocloud.com with the site
+  `deploy/nginx/wallet.conf`, each name to its edition's port on
+  loopback. The certificate is the operator's, at
+  `/etc/wallet/tls/fullchain.pem` and `/etc/wallet/tls/key.pem`, with a
+  renewal hook that ends in `systemctl reload nginx`.
+- `scripts/install-system-files.sh`, run as root from the repo root, puts
+  the deploy files in place (the TLS folder, the nginx site, the three
+  units) and restarts the three units. It runs twice at setup: before the
+  certificate exists it skips the site, after it installs the site; and
+  again after any pull that touched `deploy/`.
+
+Updating, wallet1 first, then wallet2 minutes later (the plan, section
+10): the pull as `wallet`, `npm ci` when the pull names
+`package-lock.json`, the build after every pull, then the install script,
+which restarts the three units.
+
+    sudo -iu wallet git -C /opt/wallet/web_app pull --ff-only
+    sudo -iu wallet bash -c 'cd /opt/wallet/web_app && npm ci'
+    sudo -iu wallet bash -c 'cd /opt/wallet/web_app && npx ng build'
+    sh /opt/wallet/web_app/scripts/install-system-files.sh
+
+A change to `network/wallet.env` alone, a new validator or another
+threshold, is the pull and then
+`systemctl restart wallet wallet-attestor wallet-moderator`.

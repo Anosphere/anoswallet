@@ -14,6 +14,8 @@ const server = createApp(config).listen(config.port, () => {
   console.log(`  keyholders      ${config.keyholderUrls.join(', ')} (threshold ${config.shareThreshold})`);
   console.log(`  signing server  ${config.signingServerUrl}`);
   console.log(`  build           ${config.distDir}`);
+  console.log(`  edition         ${config.edition}`);
+  console.log(`  rp id           ${config.rpId}`);
 });
 
 // Each of the thirteen proxies listens for the server closing; Node warns

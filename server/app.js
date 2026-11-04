@@ -6,8 +6,8 @@ import { createProxyMiddleware } from 'http-proxy-middleware';
 /**
  * The wallet's proxy (wallet spec section 2): the one origin the browser
  * talks to. /api/config tells the browser how many validators and
- * keyholders there are and which edition this is (12.1); everything else
- * under /api is forwarded to a
+ * keyholders there are and which edition this is (12.1) and the
+ * relying-party id; everything else under /api is forwarded to a
  * backend with its prefix stripped, bodies streamed, headers as received,
  * the backend's status and body returned unchanged; the rest is the Angular
  * build. Nothing is logged but 502s.
@@ -30,12 +30,16 @@ function unavailable(who) {
  * A proxy to `target` for the paths `prefix` matches (a RegExp anchored at
  * the start), the matched prefix cut off and `replacement` put in its place
  * ('' by default, so /api/masterpod/unlock becomes /unlock); `method`, when
- * given, limits it to that method (the two signing server routes).
+ * given, limits it to that method (the two signing server routes). With
+ * changeOrigin the Host header, and with it the TLS server name, become the
+ * target's, so the masterpod's certificate for api.anocloud.com and the
+ * doormen's certificates for their addresses verify; the browser's Origin
+ * header is forwarded as received.
  */
 function forward(config, target, who, prefix, replacement = '', method = null) {
   return createProxyMiddleware({
     target,
-    changeOrigin: false,
+    changeOrigin: true,
     proxyTimeout: config.proxyTimeoutMs,
     timeout: config.proxyTimeoutMs,
     pathFilter: (path, req) => prefix.test(path) && (method === null || req.method === method),
@@ -69,6 +73,7 @@ export function createApp(config) {
       shareThreshold: config.shareThreshold,
       defaultValidator: config.defaultValidator,
       edition: config.edition,
+      rpId: config.rpId,
     });
   });
   app.get('/api/health', (req, res) => {
