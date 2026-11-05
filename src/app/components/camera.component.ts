@@ -11,6 +11,9 @@ export interface Photo {
 /** normal: 1280 by 720, JPEG 0.92 (a selfie, a bucket two image); high: 1920 by 1080, JPEG 0.95 (bucket one). */
 export type CameraQuality = 'normal' | 'high';
 
+/** user: the front camera (a selfie); environment: the back camera (an ID laid on a table). */
+export type CameraFacing = 'user' | 'environment';
+
 const SIZES: Record<CameraQuality, { width: number; height: number; jpeg: number }> = {
   normal: { width: 1280, height: 720, jpeg: 0.92 },
   high: { width: 1920, height: 1080, jpeg: 0.95 },
@@ -18,11 +21,12 @@ const SIZES: Record<CameraQuality, { width: number; height: number; jpeg: number
 
 /**
  * The camera component (wallet spec 8.4): the live camera when getUserMedia
- * is available (facingMode user, the size from the quality), Take photo, the
- * frame drawn to a canvas and encoded as JPEG, preview, Retake. Below it
- * always a file input, accept image/*, capture user, so a phone offers its
- * camera, as the fallback when the camera is refused or absent. Every photo
- * taken or file chosen is emitted as `photo`; Retake emits `cleared`.
+ * is available (facingMode from `facing`, user or environment, the size from
+ * the quality), Take photo, the frame drawn to a canvas and encoded as JPEG,
+ * preview, Retake. Below it always a file input, accept image/*, capture set
+ * to the same facing, so a phone offers that camera, as the fallback when the
+ * camera is refused or absent. Every photo taken or file chosen is emitted as
+ * `photo`; Retake emits `cleared`.
  */
 @Component({
   selector: 'app-camera',
@@ -48,7 +52,7 @@ const SIZES: Record<CameraQuality, { width: number; height: number; jpeg: number
       }
       <label class="file">
         <span class="muted">Or pick a photo</span>
-        <input type="file" accept="image/*" capture="user" (change)="fileChosen($event)" />
+        <input type="file" accept="image/*" [attr.capture]="facing()" (change)="fileChosen($event)" />
       </label>
     </div>
   `,
@@ -62,6 +66,7 @@ const SIZES: Record<CameraQuality, { width: number; height: number; jpeg: number
 })
 export class CameraComponent implements OnDestroy {
   readonly quality = input<CameraQuality>('normal');
+  readonly facing = input<CameraFacing>('user');
   readonly photo = output<Photo>();
   readonly cleared = output<void>();
 
@@ -92,7 +97,7 @@ export class CameraComponent implements OnDestroy {
     const size = SIZES[this.quality()];
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: size.width }, height: { ideal: size.height } },
+        video: { facingMode: this.facing(), width: { ideal: size.width }, height: { ideal: size.height } },
         audio: false,
       });
     } catch (err) {
