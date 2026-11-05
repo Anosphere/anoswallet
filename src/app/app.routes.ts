@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { AccountHomePage } from './pages/account-home.page';
 import { AccountPage } from './pages/account.page';
 import { AccountRecoveryPage } from './pages/account-recovery.page';
 import { AttestingDisputeCasePage } from './pages/attesting-dispute-case.page';
@@ -43,8 +44,11 @@ export const routes: Routes = [
   { path: 'vouching', component: VouchingPage, canActivate: [sessionGuard], title: 'Vouching' },
   { path: 'identity', component: IdentityPage, canActivate: [sessionGuard], title: 'Public ledger id' },
   { path: 'setup', component: SetupPage, canActivate: [sessionGuard], title: 'Setup' },
-  { path: 'security/bucket-one', component: AccountRecoveryPage, canActivate: [sessionGuard], data: { start: 'selfie' }, title: 'Recovery selfie' },
-  { path: 'security/bucket-two', component: AccountRecoveryPage, canActivate: [sessionGuard], data: { start: 'details' }, title: 'Recovery details' },
+  { path: 'account', component: AccountHomePage, canActivate: [sessionGuard], title: 'Your account' },
+  { path: 'account/recovery/selfie', component: AccountRecoveryPage, canActivate: [sessionGuard], data: { start: 'selfie' }, title: 'Recovery selfie' },
+  { path: 'account/recovery/details', component: AccountRecoveryPage, canActivate: [sessionGuard], data: { start: 'details' }, title: 'Recovery details' },
+  { path: 'security/bucket-one', redirectTo: 'account/recovery/selfie', pathMatch: 'full' },
+  { path: 'security/bucket-two', redirectTo: 'account/recovery/details', pathMatch: 'full' },
   { path: 'wallet', component: WalletPage, canActivate: [sessionGuard], title: 'Wallet' },
   { path: 'wallet/:accountId', component: AccountPage, canActivate: [sessionGuard], title: 'Account' },
   { path: 'chat', component: ChatPage, canActivate: [sessionGuard], title: 'Chat' },

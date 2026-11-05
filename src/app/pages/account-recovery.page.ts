@@ -39,8 +39,9 @@ const ID = 1;
  * /add-to-security-bucket-two): the ID and extra photos, and one info line
  * each for phone, email, contact and bank, then every extra line.
  *
- * /security/bucket-one opens at the selfie, /security/bucket-two at the ID
- * (route data `start`). On a first visit, until the details are on file (an
+ * /account/recovery/selfie opens at the selfie, /account/recovery/details at
+ * the ID (route data `start`); the two old /security addresses forward
+ * there. On a first visit, until the details are on file (an
  * image and three infos, the next-step rule's line), the ID, email, phone
  * and contact are required; after that every step is optional and Finish
  * needs at least one new thing, or reads Done.
@@ -283,7 +284,7 @@ export class AccountRecoveryPage {
   private readonly shares = inject(SharesService);
   private readonly router = inject(Router);
 
-  /** The selfie at /security/bucket-one, the ID at /security/bucket-two. */
+  /** The selfie at /account/recovery/selfie, the ID at /account/recovery/details. */
   protected readonly startIndex = inject(ActivatedRoute).snapshot.data['start'] === 'details' ? ID : SELFIE;
   /** True until the details are on file: then the ID, email, phone and contact are required. */
   protected readonly firstVisit = !detailsOnFile(this.session.status());
@@ -499,6 +500,7 @@ function detailsOnFile(status: StatusAnswer | null | undefined): boolean {
   return !!status && status.bucketTwoImages > 0 && status.bucketTwoInfos >= 3;
 }
 
-function count(n: number, one: string, many: string): string {
+/** "1 selfie", "2 photos": a count with its noun, for this page and the Account page. */
+export function count(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
 }

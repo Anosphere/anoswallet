@@ -24,8 +24,8 @@ interface NavItem {
  * The shell (wallet spec 8 and 8.1): a toolbar and a side navigation on a
  * desktop, the navigation collapsing behind a menu button on a phone. Which
  * pages the navigation shows follows the status: vouching until vouched;
- * identity and setup until setup is complete; security, wallet, chat and
- * marketplace once it is, and Cases with them (wallet spec 13.1); seed when
+ * identity and setup until setup is complete; wallet, chat, marketplace and
+ * account once it is, and Cases with them (wallet spec 13.1); seed when
  * the pod is a seed; Moderation in the moderator edition (wallet spec 12.1),
  * which also names the app "Moderator wallet" in the toolbar; Attesting in
  * the attestor edition (wallet spec 13.1), named "Attestor wallet".
@@ -58,12 +58,11 @@ export class App {
       items.push({ path: '/identity', label: 'Identity', icon: 'badge' }, { path: '/setup', label: 'Setup', icon: 'key' });
     } else {
       items.push(
-        { path: '/security/bucket-one', label: 'Security bucket one', icon: 'photo_camera' },
-        { path: '/security/bucket-two', label: 'Security bucket two', icon: 'shield' },
         { path: '/wallet', label: 'Wallet', icon: 'account_balance_wallet' },
         { path: '/cases', label: 'Cases', icon: 'folder_shared' },
         { path: '/chat', label: 'Chat', icon: 'chat' },
         { path: '/marketplace', label: 'Marketplace', icon: 'storefront' },
+        { path: '/account', label: 'Account', icon: 'manage_accounts' },
       );
     }
     if (this.config.moderatorEdition()) items.push({ path: '/moderation', label: 'Moderation', icon: 'gavel' });

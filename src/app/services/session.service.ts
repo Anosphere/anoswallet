@@ -184,14 +184,15 @@ export class SessionService {
 
   /**
    * Where the pod goes next, from the status: vouching until vouched;
-   * identity until setup is complete; bucket one while it is empty; bucket
-   * two until it has an image and three texts; otherwise the wallet.
+   * identity until setup is complete; the recovery selfie while bucket one
+   * is empty; the recovery details until bucket two has an image and three
+   * texts; otherwise the wallet.
    */
   nextStep(status: StatusAnswer = this.status() ?? emptyStatus()): string {
     if (!status.vouched) return '/vouching';
     if (!status.setupComplete) return '/identity';
-    if (status.bucketOneImages === 0) return '/security/bucket-one';
-    if (status.bucketTwoImages === 0 || status.bucketTwoInfos < 3) return '/security/bucket-two';
+    if (status.bucketOneImages === 0) return '/account/recovery/selfie';
+    if (status.bucketTwoImages === 0 || status.bucketTwoInfos < 3) return '/account/recovery/details';
     return '/wallet';
   }
 }
