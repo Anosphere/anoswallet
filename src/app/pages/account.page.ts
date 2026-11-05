@@ -13,6 +13,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { RouterLink } from '@angular/router';
 import { anosToMillionths, millionthsToAnos } from '../amounts';
 import { ACCOUNT_POLL_MS, GUARDED_LOCK_MINUTES, LOCK_OFFSET_MINUTES, VAULT_LOCK_MINUTES } from '../constants';
+import { escrowStageWords } from '../escrow-stage';
 import { AccountAnswer, Accepted, AnosApiService, EscrowItem, PendingItem, TransactionItem } from '../services/anos-api.service';
 import {
   AccountType,
@@ -134,7 +135,7 @@ interface Outcome {
           @for (e of escrows(); track e.transactionId) {
             <mat-list-item lines="2">
               <mat-icon matListItemIcon>{{ e.accountId === accountId() ? 'call_made' : 'call_received' }}</mat-icon>
-              <span matListItemTitle>{{ millionthsToAnos(e.amount) }} anos {{ e.accountId === accountId() ? 'to' : 'from' }} <code>{{ e.accountId === accountId() ? e.accountIdTo : e.accountId }}</code></span>
+              <a matListItemTitle [routerLink]="['/wallet', accountId(), 'escrow', e.transactionId]">{{ millionthsToAnos(e.amount) }} anos {{ e.accountId === accountId() ? 'to' : 'from' }} <code>{{ e.accountId === accountId() ? e.accountIdTo : e.accountId }}</code></a>
               <span matListItemLine>{{ stageWords(e) }} · {{ e.createdAt | date: 'medium' }}</span>
             </mat-list-item>
           } @empty {
@@ -347,22 +348,9 @@ export class AccountPage {
     return t.accountId === this.accountId() ? t.accountIdTo : t.accountId;
   }
 
-  /** The stage of an open escrow trade in words, from this account's side (anossoftware spec 16.2); a stage the wallet does not know reads Open. */
+  /** The stage of an open escrow trade in words, from this account's side (escrow-stage.ts, shared with the trade page). */
   protected stageWords(e: EscrowItem): string {
-    switch (e.stage) {
-      case 'waiting':
-        return 'Waiting for the validators';
-      case 'held':
-        return e.accountId === this.accountId() ? 'Waiting for you to release the anos' : 'Waiting for the seller to release the anos';
-      case 'releasing':
-        return 'Being released';
-      case 'cancelling':
-        return 'Being cancelled';
-      case 'disputed':
-        return 'In dispute, attestors are deciding';
-      default:
-        return 'Open';
-    }
+    return escrowStageWords(e.stage, e.accountId === this.accountId() ? 'seller' : 'buyer');
   }
 
   /** Pair one, opened from the keyBlob for one signature; the caller drops it. */

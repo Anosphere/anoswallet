@@ -8,6 +8,7 @@ import { AttestingPage } from './pages/attesting.page';
 import { CasesPage } from './pages/cases.page';
 import { ChatPage } from './pages/chat.page';
 import { CreatePage } from './pages/create.page';
+import { EscrowTradePage } from './pages/escrow-trade.page';
 import { IdentityPage } from './pages/identity.page';
 import { LandingPage } from './pages/landing.page';
 import { LogPage } from './pages/log.page';
@@ -51,6 +52,7 @@ export const routes: Routes = [
   { path: 'security/bucket-two', redirectTo: 'account/recovery/details', pathMatch: 'full' },
   { path: 'wallet', component: WalletPage, canActivate: [sessionGuard], title: 'Wallet' },
   { path: 'wallet/:accountId', component: AccountPage, canActivate: [sessionGuard], title: 'Account' },
+  { path: 'wallet/:accountId/escrow/:transactionId', component: EscrowTradePage, canActivate: [sessionGuard], title: 'Escrow trade' },
   { path: 'chat', component: ChatPage, canActivate: [sessionGuard], title: 'Chat' },
   { path: 'marketplace', component: MarketplacePage, canActivate: [sessionGuard], title: 'Marketplace' },
   { path: 'notifications', component: NotificationsPage, canActivate: [sessionGuard], title: 'Notifications' },

@@ -374,7 +374,8 @@ as in the test apps; a new tab unlocks again.
     /security/bucket-one     forwards to /account/recovery/selfie
     /security/bucket-two     forwards to /account/recovery/details
     /wallet                  the anos accounts and Create anos account
-    /wallet/:accountId       one account: balance, transactions, send, follow-ups, fund proposal
+    /wallet/:accountId       one account: balance, escrow trades, transactions, send, follow-ups, fund proposal
+    /wallet/:accountId/escrow/:transactionId   one escrow trade: the details, the buttons for your side, the closed view
     /chat                    rooms, invites, join requests, messages
     /marketplace             listings
     /notifications           the list, mark read
@@ -570,8 +571,7 @@ validators"; held, "Waiting for you to release the anos" to the seller
 and "Waiting for the seller to release the anos" to the buyer;
 releasing, "Being released"; cancelling, "Being cancelled"; disputed,
 "In dispute, attestors are deciding"; a word the wallet does not know,
-"Open". A row opens the trade page (step 3; until it exists the rows
-are plain).
+"Open". A row opens the trade page.
 
 Send: recipient account id (typed, as the anos test app), amount in
 anos, and the kind the account type allows, ported from the test wallet:
@@ -591,6 +591,46 @@ the fund proposal form are the test wallet's, ported with the same
 fields and the same signing path; the escrow follow-ups (success,
 cancel, dispute, verdict) left this form on 2026-11-05 for the trade
 page.
+
+Escrow trade, at /wallet/:accountId/escrow/:transactionId, opened from a
+row of the Escrow trades list (2026-11-05, section 11). Titled "Escrow
+trade", the subtitle "You are the seller" or "You are the buyer", Back
+to the account. The trade is picked out of /list-escrows by its id
+(there is no read for one trade, and the list is short by the
+validator's rule): the amount, the other side's account id (Buyer to the
+seller, Seller to the buyer), when it was made, the stage in the words
+of the Account paragraph, the transaction id, and one sentence of what
+the stage means for this side (the buyer pays outside the system; when
+paid, the seller releases; the buyer can cancel and the seller keeps the
+anos; either can dispute and attestors decide). While the stage is held,
+the buttons for this side: the seller "Release the anos" and "Dispute",
+the buyer "Cancel trade" and "Dispute". Each asks once in place
+("Release 5 anos to the buyer? Do this once you have been paid. It
+cannot be undone."; "Cancel this trade? The seller keeps the 5 anos. It
+cannot be undone."; "Dispute this trade? Attestors will decide it, and
+neither side can release or cancel it after that."), then Yes or Back.
+Yes builds the escrowSuccess, escrowCancel or escrowDispute follow-up
+(crypto buildFollowUp, pair one from the keyBlob), /api/sign adds the
+wallet pair, /escrow-signature takes it, then "Sent. ..." in green or
+the validator's refusal in plain words (not all accepted yet; the other
+side moved first, naming what they did; already in dispute; not this
+account's to sign), and the page refreshes. No buttons in any other
+stage, nor for a stage word the wallet does not know, which reads Open.
+In dispute: who disputed it (you or the other side), the verdicts so far
+("No verdict yet.", or "Verdicts so far: 1 to release. Waiting for one
+more.", "A third attestor decides." when the two disagree, the
+verdicts not yet accepted by every validator counted apart) and, when
+/list-my-cases has a dispute case with this transaction id, a "See the
+case" button to /cases/:caseId. The page refreshes every 5 seconds
+while the trade is open. The closed view, for someone on the page when
+the trade leaves the list: the first page of /list-transactions is
+read, and the id on it means "This trade is closed. The anos were
+released to the buyer.", not on it "This trade is closed. The trade was
+cancelled and the anos stayed with the seller.", with "after the
+attestors decided" when the last stage seen was disputed; a transactions
+read that fails says only that the trade is closed. A trade the page
+never saw open (an old link) reads "This trade is not open. Released
+trades are in the account's transactions."
 
 Chat and Marketplace: the masterpod test app's sections, ported to
 Material lists and forms, the same calls, the same polls (messages every
@@ -1083,6 +1123,29 @@ line.
 - The Transactions list is unchanged by decision: its raw type words wait
   for a cleanup of their own.
 - `npx ng build` clean.
+
+### The escrow trades, step 3 (2026-11-05)
+
+- `src/app/pages/escrow-trade.page.ts` (`EscrowTradePage`, inputs
+  `accountId` and `transactionId` bound from the route), the route in
+  `app.routes.ts` behind the session guard, and the rows of the Escrow
+  trades list now link to it (`account.page.ts`).
+- The stage words moved to `src/app/escrow-stage.ts`
+  (`escrowStageWords(stage, side)`), used by both pages so the list and
+  the trade page cannot drift apart; the account page's own copy went.
+  The one change beyond the plan's letter.
+- The page reads the whole list (/list-escrows) and picks its trade. A
+  trade seen open and then missing is the closed view; one never seen
+  open is "not open". The 5-second poll stops once the trade is closed.
+  The case link is looked up (/list-my-cases, quiet) on each refresh of a
+  disputed trade until a case is found.
+- The follow-up is built and signed exactly as the removed form did
+  (`buildFollowUp` with pair one, `/api/sign`, `/escrow-signature`); the
+  validator's refusals are mapped to plain sentences by their reason
+  text (`plainReason`), the rest shown as "/escrow-signature: HTTP
+  <status>: <reason>".
+- `npx ng build` clean. Not run against a validator here; the user tests
+  on the testnet.
 
 ## 12. Recovery and the moderator edition
 
