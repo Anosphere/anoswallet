@@ -124,14 +124,16 @@ function asPublicKeyCredential(credential: Credential | null): PublicKeyCredenti
 }
 
 /**
- * The credential as PublicKeyCredential.toJSON() gives it: base64url
- * everywhere. Built by hand where the browser lacks toJSON().
+ * The credential in the form PublicKeyCredential.toJSON() gives it:
+ * base64url everywhere. Always built by hand, never with the browser's own
+ * toJSON(): WebKit on iOS 18 traps inside PublicKeyCredential.toJSON() when
+ * PRF outputs are present (its serialiser reads the largeBlob output, which
+ * was never asked for), which kills the page process where no JavaScript
+ * can catch it. Seen 2026-11-05 on an iPhone 11, iOS 18.7.8: the create
+ * stepper restarted empty after the passkey was saved, and Unlock would
+ * have died the same way.
  */
 function toJson(pkc: PublicKeyCredential): Record<string, unknown> {
-  const withToJson = pkc as PublicKeyCredential & { toJSON?: () => unknown };
-  if (typeof withToJson.toJSON === 'function') {
-    return withToJson.toJSON() as unknown as Record<string, unknown>;
-  }
   const response: Record<string, unknown> = { clientDataJSON: toBase64Url(pkc.response.clientDataJSON) };
   if (pkc.response instanceof AuthenticatorAttestationResponse) {
     response['attestationObject'] = toBase64Url(pkc.response.attestationObject);
