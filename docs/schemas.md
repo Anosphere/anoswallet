@@ -253,8 +253,10 @@ with their comments pointed at this server, and require-account.js:
 
 ### 5.4 The two reads
 
-src/reads/ (router, handlers, service, queries), wired in app.js. Both
-answer the signer's own account only; nothing about anyone else.
+src/reads/ (router, handlers, service, queries), wired in app.js. All
+answer the signer's own account only; nothing about anyone else. The
+third, /list-escrows, was added 2026-11-05 for the escrow trades
+(anossoftware spec section 16).
 
     POST /get-account (account)
     body { }
@@ -271,7 +273,23 @@ answer the signer's own account only; nothing about anyone else.
       below beforePosition when given, limit rows; createdAt the row's created_at. pending: the signer's
       pending row (there is at most one), fields read from og_transaction.payload (transactionType, accountIdTo,
       amount or "0", createdAt). The other holding tables (locked, assisted, escrow, fund proposals) are not
-      listed; a guarded transfer shows up when it lands (section 10).
+      listed here; a guarded transfer shows up when it lands (section 10), and the open escrows have
+      /list-escrows.
+
+    POST /list-escrows (account)
+    body { }
+    answer: 200 { escrows: [ { transactionId, accountId, accountIdTo, amount: string, createdAt,
+      stage: waiting | held | releasing | cancelling | disputed, disputedBy: hex | null,
+      verdicts: [ { verdict: success | cancel, approved } ] } ] }
+    escrows: the escrow_transfers rows where account_id (the seller) or account_id_to (the buyer) is the
+      signer, newest first, at most 200: the open trades only, nothing from logs (which may be purged) or
+      archives. A released escrow is on the chain under the same id, so /list-transactions shows it to
+      both sides for good; a cancelled one leaves no trace the wallet reads. stage is named by the
+      validator from the row's columns (anossoftware spec 16.2): waiting until every validator accepted
+      the trade (no follow-up is accepted on it yet); held when nothing is signed on it; releasing with
+      the seller's success on it; cancelling with the buyer's cancel on it; disputed with a dispute on it,
+      which only verdicts move. disputedBy is the signer of the dispute. verdicts carry what each verdict
+      says and whether every validator accepted it, never the attestor's id.
 
 Refusals are 400 or 401 + { error }, logged "failed: <reason>" like
 every other route. The 1 MB JSON limit stays.
@@ -533,21 +551,46 @@ seconds until it is on the ledger.
 
 Account. Balance, type, the latest transaction id, the transaction list
 from /list-transactions (newest first, Load more with beforePosition),
-the pending transaction if any, Refresh, and a 5-second poll while
-something is pending. Send: recipient account id (typed, as the anos test
-app), amount in anos, and the kind the account type allows, ported from
-the test wallet: spending picks plain, escrow or stake with a purpose;
-guarded and vault date the transfer the lock plus the offset ahead (the
-local constants, 1 + 1 and 2 + 1 minutes, kept in a constants file);
-assisted sends assistedAnosTransfer. previousTransactionId is
-/get-account's latestTransactionId, fetched right before building. The
-payload is signed by pair one (keyBlob opened for the signature and
-dropped), /api/sign adds the wallet pair, the validator gets it, the
-list refreshes. Send is disabled while the account has a pending
-transaction (one per account). Follow-ups (attestation, assisted
-transfer cancel, guardian vote, escrow success / cancel / dispute /
-verdict) and the fund proposal form are the test wallet's, ported with
-the same fields and the same signing path.
+the pending transaction if any, the open escrow trades from
+/list-escrows (section 5.4), Refresh, and a 5-second poll while
+something is pending or an escrow trade is open. Under the balance,
+while this account is the seller of an open escrow trade, one line: "5
+anos of this are in an open escrow trade." The validator moves a
+balance only when the trade is written, so the balance stays whole while
+the anos are spoken for.
+
+Escrow trades (2026-11-05, section 11), between Pending and
+Transactions: one row per open trade, "5 anos to <buyer>" when this
+account is the seller or "5 anos from <seller>" when it is the buyer,
+the stage in words from this account's side, and the date; "No open
+escrow trades." when there are none; the read's refusal in red when it
+fails (a validator without the route). The stage words, from the
+validator's stage (anossoftware spec 16.2): waiting, "Waiting for the
+validators"; held, "Waiting for you to release the anos" to the seller
+and "Waiting for the seller to release the anos" to the buyer;
+releasing, "Being released"; cancelling, "Being cancelled"; disputed,
+"In dispute, attestors are deciding"; a word the wallet does not know,
+"Open". A row opens the trade page (step 3; until it exists the rows
+are plain).
+
+Send: recipient account id (typed, as the anos test app), amount in
+anos, and the kind the account type allows, ported from the test wallet:
+spending picks plain, escrow or stake with a purpose; guarded and vault
+date the transfer the lock plus the offset ahead (the local constants, 1
++ 1 and 2 + 1 minutes, kept in a constants file); assisted sends
+assistedAnosTransfer. previousTransactionId is /get-account's
+latestTransactionId, fetched right before building. The payload is
+signed by pair one (keyBlob opened for the signature and dropped),
+/api/sign adds the wallet pair, the validator gets it, the list
+refreshes. Send is disabled while the account has a pending transaction
+or is the seller of an open escrow trade (one held transaction per
+account; the validator refuses a second), the latter with the line "An
+escrow trade is open. This account can send again when it closes."
+Follow-ups (attestation, assisted transfer cancel, guardian vote) and
+the fund proposal form are the test wallet's, ported with the same
+fields and the same signing path; the escrow follow-ups (success,
+cancel, dispute, verdict) left this form on 2026-11-05 for the trade
+page.
 
 Chat and Marketplace: the masterpod test app's sections, ported to
 Material lists and forms, the same calls, the same polls (messages every
@@ -574,7 +617,7 @@ excepted, with the keyholder and anos calls included.
                             routes and the four new ones added
     keyholder-api.service   the keyholder test app's, base path /api/keyholder/<n>
     anos-api.service        the anos test app's account-api.service.ts, base path /api/anos/<defaultValidator>,
-                            plus the two signed reads
+                            plus the three signed reads (listEscrows added 2026-11-05)
     signing.service         /api/sign/public-keys and /api/sign
     crypto.service          the keyholder test app's crypto.service.ts plus the anos test app's (keys, the
                             builders, signing), plus section 7 and the public ledger id
@@ -1009,6 +1052,37 @@ Checked here, with Node 24.22.0 from nvm:
 - Checked here: `ng build` clean after each of the three commits. The
   pages need a live session, so the run-through is the user's, after the
   deploy.
+
+### The escrow trades, step 2 (2026-11-05)
+
+Planned 2026-11-05 in chat, no plan file: the validator read of section
+5.4 (anossoftware section 16, step 1), this step, and the trade page
+(step 3). Why: nothing showed a waiting escrow on either side, and every
+follow-up needed the transaction id pasted from the one-time "accepted"
+line.
+
+- `anos-api.service.ts`: `listEscrows(pairOne, accountId, quiet)`, the
+  account envelope as `getAccount` builds it, with `EscrowItem`,
+  `EscrowStage` and `EscrowVerdictSummary`; `EscrowItem.stage` is typed as
+  the five words or any string, so a word added on the validator later
+  compiles here and reads "Open".
+- `account.page.ts`: the read joins `refresh()` beside the other two, its
+  refusal kept apart (`escrowsError`) so the balance and the transactions
+  still show, which matters while a validator runs without the route
+  (its doorman answers 404, shown as "/list-escrows: HTTP 404: Not
+  Found"). The Escrow trades list; the balance line (`heldAsSeller`, the
+  amounts of the open trades where this account is the seller, summed as
+  BigInt, one by the validator's rule); the Send rule (`sellerEscrowOpen`);
+  the 5-second poll while a trade is open; `stageWords`. The escrow block
+  of the follow-ups form, its three signals, `ESCROW_SIGNATURES` and
+  `sendEscrowSignature()` are gone; `anosApi.escrowSignature` stays for
+  the trade page and the attestor's verdict page (13.3).
+- The rows are not links yet: the trade page and its route are step 3,
+  and a link to a page that does not exist would land on the catch-all.
+  Step 3 adds the link.
+- The Transactions list is unchanged by decision: its raw type words wait
+  for a cleanup of their own.
+- `npx ng build` clean.
 
 ## 12. Recovery and the moderator edition
 

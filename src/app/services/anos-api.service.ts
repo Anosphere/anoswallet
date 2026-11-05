@@ -84,10 +84,32 @@ export interface DisputedEscrowItem {
   verdicts: EscrowVerdictItem[];
 }
 
+/** Where an open escrow trade is, as the validator names it (anossoftware spec 16.2). A word the wallet does not know is shown as open with no action. */
+export type EscrowStage = 'waiting' | 'held' | 'releasing' | 'cancelling' | 'disputed';
+
+/** One verdict on a disputed trade, without the attestor's id: what it says and whether every validator accepted it. */
+export interface EscrowVerdictSummary {
+  verdict: Verdict;
+  approved: boolean;
+}
+
+/** One open escrow trade of the signer, as /list-escrows answers it (anossoftware spec 16): accountId the seller, accountIdTo the buyer. */
+export interface EscrowItem {
+  transactionId: string;
+  accountId: string;
+  accountIdTo: string;
+  amount: string;
+  createdAt: string;
+  stage: EscrowStage | string;
+  disputedBy: string | null;
+  verdicts: EscrowVerdictSummary[];
+}
+
 /**
  * All HTTP calls to the validators (the anos test app's
  * account-api.service.ts, base path /api/anos/<defaultValidator>), plus the
- * two signed reads of the account level and the two attestor reads
+ * three signed reads of the account level (/list-escrows: anossoftware 16)
+ * and the two attestor reads
  * (anossoftware 13, the account level plus attestor stake). One method per
  * endpoint; every one resolves to the status and the body, never throws on
  * an HTTP error.
@@ -148,6 +170,11 @@ export class AnosApiService {
   /** POST /list-transactions, signed by pair one. */
   listTransactions(pairOne: PairOne, accountId: string, body: { beforePosition?: number; limit?: number } = {}, quiet = false): Promise<ApiResponse<TransactionsAnswer>> {
     return this.post('/list-transactions', this.crypto.signAccountEnvelope(pairOne, accountId, '/list-transactions', body), quiet);
+  }
+
+  /** POST /list-escrows, signed by pair one: the account's open escrow trades as seller or buyer, newest first (anossoftware spec 16). */
+  listEscrows(pairOne: PairOne, accountId: string, quiet = false): Promise<ApiResponse<{ escrows: EscrowItem[] }>> {
+    return this.post('/list-escrows', this.crypto.signAccountEnvelope(pairOne, accountId, '/list-escrows', {}), quiet);
   }
 
   // --- the attestor reads (anossoftware 13.2): the account envelope as getAccount builds it, the signer staked for attestor ---
