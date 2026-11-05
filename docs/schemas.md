@@ -899,6 +899,40 @@ Checked here, with Node 24.22.0 from nvm:
   the operator's.
 
 
+### The iPhone passkey crash (2026-11-05)
+
+- Reported by the user: on https://wallet.anocloud.com the create stepper
+  works on a laptop, but on an iPhone 11 (iOS 18.7.8, Safari and Chrome
+  alike) it jumped back to step 1 with empty fields the moment the passkey
+  sheet closed. Two WebContent crash records from the phone show why: a
+  trap (EXC_BREAKPOINT) on the main thread inside WebKit's own
+  `PublicKeyCredential.toJSON()`, while it serialises the PRF extension
+  outputs, called by `toJson()` in `src/app/services/passkey.service.ts`.
+  In WebKit's iOS 18 branch (the 621 train; the phone runs build
+  8621.8.1.10.1) that serialiser reads the largeBlob output by a copy-paste
+  mistake, and largeBlob is empty because the wallet asks only for PRF, so
+  every call traps. A trap kills the page process, where no JavaScript can
+  catch it; Safari reloads /create and the stepper starts over. Chrome on
+  iOS is the same WebKit. WebKit main was fixed on 2026-03-06, which is why
+  iOS 27 in the simulator and desktop Chrome never showed it. Unlock calls
+  the same function after `navigator.credentials.get()`, so it would have
+  died the same way on the phone.
+- The change: `toJson()` never calls the native `toJSON()` and always
+  builds the JSON by hand, the branch that already served browsers without
+  `toJSON()`. That form carries id, rawId, type, authenticatorAttachment,
+  response (clientDataJSON, attestationObject and transports for a
+  registration; authenticatorData, signature and userHandle for an
+  assertion) and clientExtensionResults, which `register()` still replaces
+  with prf enabled only and `assert()` still strips of prf. That is
+  everything the masterpod reads: `verifyRegistrationResponse` and
+  `verifyAuthenticationResponse` of @simplewebauthn/server 14.0.3 use
+  exactly those fields, and `masterpodsoftware/src/auth/webauthn.js` reads
+  clientExtensionResults.prf, rawId and response.userHandle. The native
+  form's extra registration fields (response.authenticatorData, publicKey
+  and publicKeyAlgorithm) were never read.
+- Checked here with Node 24.22.0 from nvm: `ng build` clean, 1.37 MB
+  initial, no warning. The phone is the user's check, after the deploy.
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`
