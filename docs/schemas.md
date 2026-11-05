@@ -561,8 +561,11 @@ What runs, who starts it
 
 Masterpod WEB_ORIGIN and RP_ID stay http://localhost:4200 and localhost:
 the browser's origin is 4200 and the passkey ceremonies happen there. On
-the testnet they become https://wallet.masterpod.com and masterpod.com,
-and the proxy's URLs point at the real servers.
+the testnet they are the three origins https://wallet.anocloud.com,
+https://attestor.wallet.anocloud.com and https://moderator.wallet.anocloud.com
+and the one id wallet.anocloud.com, the proxy's RP_ID, and the proxy's URLs
+point at the real servers through the committed network/wallet.env
+(section 11, Deploy build 1).
 
 ## 10. Out of scope, not built
 
