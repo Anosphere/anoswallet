@@ -350,8 +350,11 @@ as in the test apps; a new tab unlocks again.
     /vouching                find seeds, send requests, wait
     /identity                the public ledger id: why, the form, the review
     /setup                   keys, the backup code, the deposits, complete-setup
-    /security/bucket-one     the high quality selfie
-    /security/bucket-two     ID, phone, email, a contact, more
+    /account                 your account: Recovery selfie and Recovery details, with what is on file
+    /account/recovery/selfie    the account recovery walkthrough, opened at the selfie
+    /account/recovery/details   the walkthrough opened at the ID
+    /security/bucket-one     forwards to /account/recovery/selfie
+    /security/bucket-two     forwards to /account/recovery/details
     /wallet                  the anos accounts and Create anos account
     /wallet/:accountId       one account: balance, transactions, send, follow-ups, fund proposal
     /chat                    rooms, invites, join requests, messages
@@ -362,7 +365,7 @@ as in the test apps; a new tab unlocks again.
 
 A guard sends anyone without a session to /. Which pages the navigation
 shows follows the status: vouching until vouched; identity and setup
-until setup is complete; security, wallet, chat and marketplace once it
+until setup is complete; wallet, chat, marketplace and account once it
 is; seed when isSeed.
 
 The next-step rule, applied after an unlock and after each step
@@ -370,8 +373,8 @@ finishes:
 
     not vouched                                   /vouching
     vouched, setup not complete                   /identity
-    setup complete, bucketOneImages = 0           /security/bucket-one
-    bucketTwoImages = 0 or bucketTwoInfos < 3     /security/bucket-two
+    setup complete, bucketOneImages = 0           /account/recovery/selfie
+    bucketTwoImages = 0 or bucketTwoInfos < 3     /account/recovery/details
     otherwise                                     /wallet
 
 The user may navigate anywhere the navigation shows at any time.
@@ -441,24 +444,69 @@ Retry (section 6, step 3). A /complete-setup refused with 409 setup
 already complete means a dropped answer earlier: /check-anopod-status,
 and if setup is complete, carry on.
 
-Bucket one. "Add a high quality selfie." The camera component in high
-quality (ideal 1920 by 1080, JPEG quality 0.95), up to five images,
-preview and remove. Add: a fresh bucket key and keyId; each image
-encrypted under the key; the deposits (securitybucket1); then
-/add-to-security-bucket-one with keyId and the images; on 201 the key is
-dropped and the next-step rule runs. Bucket two is reachable from the
-navigation afterwards and the user can add more later.
+Account recovery, one linear Material stepper, at
+/account/recovery/selfie (opened at step 1) and /account/recovery/details
+(opened at step 2). Titled "Account recovery", with "Everything here is
+encrypted on your phone before it is sent. Nobody at anoPod can read it."
+above the steps. It replaced the two bucket pages on 2026-11-05 (section
+11); the server calls are the same.
+1. Selfie. "Take a selfie." and a "Why do we need this?" button that
+   opens the longer text (what a moderator compares it with, the key only
+   the keyholders can rebuild, up to five, one is enough). The camera
+   component in high quality, front camera, up to five, preview and
+   remove. Next runs bucket one's flow: a fresh bucket key and keyId;
+   each image encrypted under the key; the deposits (securitybucket1);
+   /add-to-security-bucket-one with keyId and the images; on 201 the key
+   is dropped, the status re-read, and the stepper moves on. With a
+   selfie already on file and none pending, Next just moves on.
+2. ID. The reminder "The more you add here, the easier it will be to
+   recover your account if you are ever locked out." Then "Now a photo of
+   your ID. The best ones show your photo and your full name, like a
+   driver's license, a national or state ID card, or a passport. Lay it
+   flat on a table and fill the frame. Things that do not prove who you
+   are, like a bus pass, do not help." The camera component in normal
+   quality, back camera, preview and remove. No Back here, the selfie is
+   sent.
+3. Email. "An email address where you can be reached if you are locked
+   out of your account."
+4. Phone. "A phone number where you can be reached."
+5. Friend or family. Their name and their phone number, both or neither;
+   "A moderator may phone them to check that it is really you. Someone
+   like a spouse, or someone who lives with you, is best."
+6. Bank account, optional, with Skip. Bank, name on the account, account
+   number, all three or skip. "A bank account in your name is strong
+   proof. In a recovery a moderator can send two small deposits and ask
+   you the amounts. The name on the account should match the name on
+   your ID." and "This is encrypted on your phone. Nobody at anoPod can
+   read it. It is only opened in a recovery you ask for."
+7. Anything else, optional. The camera again, back camera (the ID photos
+   and these share the five per visit), free lines one per line, and the
+   reminder once more. Finish runs bucket two's flow with everything
+   gathered: the photos, and one info entry per piece, "phone: ...",
+   "email: ...", "contact: name, phone", "bank: bank, name, number", then
+   each extra line; the deposits (securitybucket2);
+   /add-to-security-bucket-two; on 201 the key is dropped and the status
+   re-read.
+Then the done view: "Done. On file for a recovery: 1 selfie, 2 photos
+and 4 details." (the status counts), "You can add more any time under
+Account." and Go to wallet, by the next-step rule.
 
-Bucket two. "Things that prove you are who you say you are. The minimum
-now: a good photo of your ID, your phone number, your email, and someone
-who can vouch for you by phone, like a spouse or someone who lives with
-you. You can add more later." Images (the camera component in normal
-quality, or files), and text fields: phone, email, contact name, contact
-phone, plus free extra lines, one per line as today. Add needs at least
-one image and the three texts phone, email and contact; each text is one
-info entry, as "phone: +1 ...", "email: ...", "contact: name, phone". The
-flow is bucket one's with securitybucket2 and
-/add-to-security-bucket-two.
+On a first visit, until the details are on file (an image and three
+infos, the next-step rule's line), steps 2 to 5 are required: each Next
+waits for its piece, and Finish for all four. After that every step is
+optional, Finish needs at least one new thing, and with nothing new it
+reads Done and shows the done view without a call. Nothing leaves the
+phone before Next on the selfie and Finish at the end, so Back costs
+nothing; each send makes one key with the keyholders, which is why the
+details go in one batch. A failed deposit or call shows the error and
+Retry, which starts that send again with a fresh key.
+
+Account. "Your account", at /account, in the navigation once setup is
+complete, after Marketplace. Two rows, Recovery selfie and Recovery
+details, opening the walkthrough at step 1 or step 2, each with what the
+status counts on file ("1 selfie on file", "2 photos and 4 details on
+file", "None on file yet"). The status only counts, since everything is
+encrypted, so the rows say how many, never which.
 
 Wallet. "Your anoPod is complete." The accounts from
 /list-anos-accounts, each with its type, its masterpod state (submitted
@@ -539,14 +587,16 @@ localStorage, sessionStorage or IndexedDB.
 
 ### 8.4 The camera component
 
-One component for the selfie, the bucket images and any photo: when
-getUserMedia is available it shows the live camera (facingMode user,
-width and height ideal from a quality input: normal 1280 by 720, high
-1920 by 1080), a Take photo button, the frame drawn to a canvas and
-encoded as JPEG (quality 0.92 normal, 0.95 high), preview, Retake. Below
-it always a file input, accept image/*, with capture="user" so a phone
-offers its camera, as the fallback when the camera is refused or absent.
-The output is { contentType, bytes } for the caller to encrypt or send.
+One component for the selfie, the recovery photos and any photo: when
+getUserMedia is available it shows the live camera (facingMode from a
+facing input, user by default or environment for the back camera, which
+the ID steps use; width and height ideal from a quality input: normal
+1280 by 720, high 1920 by 1080), a Take photo button, the frame drawn to
+a canvas and encoded as JPEG (quality 0.92 normal, 0.95 high), preview,
+Retake. Below it always a file input, accept image/*, with capture set to
+the same facing so a phone offers that camera, as the fallback when the
+camera is refused or absent. The output is { contentType, bytes } for the
+caller to encrypt or send.
 
 ## 9. Configuration, and running it on this machine
 
@@ -932,6 +982,33 @@ Checked here, with Node 24.22.0 from nvm:
   and publicKeyAlgorithm) were never read.
 - Checked here with Node 24.22.0 from nvm: `ng build` clean, 1.37 MB
   initial, no warning. The phone is the user's check, after the deploy.
+
+### The account recovery walkthrough (2026-11-05)
+
+- Why: testers did not know what to do on the bucket pages, did not
+  notice moving from the first to the second (both opened with the front
+  camera), and "security bucket" is a server word that had reached the
+  screen. Decided in chat the same day, no plan file, built in three
+  commits.
+- The change (sections 8.1, 8.2 and 8.4): the two bucket pages became one
+  linear stepper, `src/app/pages/account-recovery.page.ts`, seven steps
+  and a done view; the camera component took a `facing` input and the ID
+  steps use the back camera; a new Account page,
+  `src/app/pages/account-home.page.ts`, at /account, and an Account entry
+  in the navigation in place of the two bucket entries; the addresses
+  /account/recovery/selfie and /account/recovery/details, the old
+  /security ones forwarding; the next-step rule answers the new
+  addresses. The server calls, the share types and the forms of the info
+  entries are unchanged, with one new form, "bank: bank, name on the
+  account, number". The moderator and attestor case pages still say
+  Bucket one and Bucket two, by decision.
+- By decision: the friend or family contact stays required on a first
+  visit; the bank account and anything else are optional; no
+  country-specific document is named on screen; no field for a moderator
+  to note the two deposit amounts, for now.
+- Checked here: `ng build` clean after each of the three commits. The
+  pages need a live session, so the run-through is the user's, after the
+  deploy.
 
 ## 12. Recovery and the moderator edition
 
