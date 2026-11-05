@@ -13,18 +13,17 @@ import { MatSelectModule } from '@angular/material/select';
 import { RouterLink } from '@angular/router';
 import { anosToMillionths, millionthsToAnos } from '../amounts';
 import { ACCOUNT_POLL_MS, GUARDED_LOCK_MINUTES, LOCK_OFFSET_MINUTES, VAULT_LOCK_MINUTES } from '../constants';
-import { AccountAnswer, Accepted, AnosApiService, PendingItem, TransactionItem } from '../services/anos-api.service';
+import { escrowStageWords } from '../escrow-stage';
+import { AccountAnswer, Accepted, AnosApiService, EscrowItem, PendingItem, TransactionItem } from '../services/anos-api.service';
 import {
   AccountType,
   CryptoService,
-  EscrowSignatureType,
   FollowUp,
   PairOne,
   Payout,
   STAKE_PURPOSES,
   StakePurpose,
   TransferType,
-  Verdict,
   Vote,
 } from '../services/crypto.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
@@ -43,10 +42,6 @@ const TRANSFERS: Record<AccountType, { transactionType: TransferType; minutesAhe
 /** What a spending account's Send does: a plain transfer, an escrow transfer, or a stake with the fund. */
 const SPENDING_KINDS = ['plain', 'escrow', 'stake'] as const;
 type SpendingKind = (typeof SPENDING_KINDS)[number];
-
-/** The four escrow follow-ups one form sends, by payload.type. */
-const ESCROW_SIGNATURES = ['escrowSuccess', 'escrowCancel', 'escrowDispute', 'escrowVerdict'] as const;
-type EscrowSignature = (typeof ESCROW_SIGNATURES)[number];
 
 /** One row of the fund proposal form; amounts in anos, purpose empty for a plain payout. */
 interface PayoutRow {
@@ -71,8 +66,15 @@ interface Outcome {
  * /get-account's latestTransactionId, fetched right before building. The
  * payload is signed by pair one (keyBlob opened for the signature and
  * dropped), /api/sign adds the wallet pair, the validator gets it, the list
- * refreshes. Send is disabled while the account has a pending transaction.
- * Follow-ups and the fund proposal form are the test wallet's.
+ * refreshes. Send is disabled while the account has a pending transaction
+ * or is the seller of an open escrow trade (one held transaction per
+ * account). Escrow trades (2026-11-05, section 11): /list-escrows is read
+ * with the other two, the open trades are listed between Pending and
+ * Transactions with the stage in words from this account's side, a line
+ * under the balance says what is held as the seller, and the 5-second poll
+ * also runs while a trade is open; the escrow follow-ups left the
+ * follow-ups form for the trade page (step 3). The other follow-ups and
+ * the fund proposal form are the test wallet's.
  */
 @Component({
   selector: 'app-account-page',
@@ -91,6 +93,9 @@ interface Outcome {
         @if (account(); as a) {
           <div class="summary">
             <div><span class="label">Balance</span><span class="value">{{ millionthsToAnos(a.balance) }} anos</span></div>
+            @if (heldAsSeller(); as held) {
+              <div><span class="label"></span><span class="value muted">{{ held }} anos of this are in an open escrow trade.</span></div>
+            }
             <div><span class="label">Type</span><span class="value">{{ a.type }}</span></div>
             <div><span class="label">Latest transaction</span><code class="value">{{ a.latestTransactionId ?? 'none' }}</code></div>
             <div><span class="label">Created</span><span class="value">{{ a.createdAt | date: 'medium' }}</span></div>
@@ -104,6 +109,8 @@ interface Outcome {
           <button mat-stroked-button type="button" (click)="refresh()" [disabled]="busy()">Refresh</button>
           @if (pending().length > 0) {
             <span class="muted">A transaction is pending; refreshing every 5 seconds.</span>
+          } @else if (escrows().length > 0) {
+            <span class="muted">An escrow trade is open; refreshing every 5 seconds.</span>
           }
         </div>
 
@@ -119,6 +126,24 @@ interface Outcome {
             }
           </mat-list>
         }
+
+        <h3>Escrow trades</h3>
+        @if (escrowsError(); as text) {
+          <p class="error">{{ text }}</p>
+        }
+        <mat-list>
+          @for (e of escrows(); track e.transactionId) {
+            <mat-list-item lines="2">
+              <mat-icon matListItemIcon>{{ e.accountId === accountId() ? 'call_made' : 'call_received' }}</mat-icon>
+              <a matListItemTitle [routerLink]="['/wallet', accountId(), 'escrow', e.transactionId]">{{ millionthsToAnos(e.amount) }} anos {{ e.accountId === accountId() ? 'to' : 'from' }} <code>{{ e.accountId === accountId() ? e.accountIdTo : e.accountId }}</code></a>
+              <span matListItemLine>{{ stageWords(e) }} · {{ e.createdAt | date: 'medium' }}</span>
+            </mat-list-item>
+          } @empty {
+            @if (!escrowsError()) {
+              <p class="muted">No open escrow trades.</p>
+            }
+          }
+        </mat-list>
 
         <h3>Transactions</h3>
         <mat-list>
@@ -166,8 +191,11 @@ interface Outcome {
               <mat-label>Amount (anos)</mat-label>
               <input matInput [ngModel]="amount()" (ngModelChange)="amount.set($event)" placeholder="1 or 0.5" />
             </mat-form-field>
-            <button mat-flat-button type="button" (click)="send()" [disabled]="busy() || pending().length > 0 || !canSend()">Send {{ transferType() }}</button>
+            <button mat-flat-button type="button" (click)="send()" [disabled]="busy() || pending().length > 0 || sellerEscrowOpen() || !canSend()">Send {{ transferType() }}</button>
           </div>
+          @if (sellerEscrowOpen()) {
+            <p class="muted">An escrow trade is open. This account can send again when it closes.</p>
+          }
           @if (item.accountType === 'guarded' || item.accountType === 'vault') {
             <p class="muted">A {{ item.accountType }} transfer is dated {{ minutesAhead(item.accountType) }} minutes ahead and waits out its lock on the validators.</p>
           }
@@ -192,20 +220,6 @@ interface Outcome {
                 <mat-select [value]="vote()" (valueChange)="vote.set($event)"><mat-option value="for">for</mat-option><mat-option value="against">against</mat-option></mat-select>
               </mat-form-field>
               <button mat-stroked-button type="button" (click)="sendVote()" [disabled]="busy() || !voteTransactionId().trim()">Send guardianVote</button>
-            </div>
-            <div class="form">
-              <mat-form-field appearance="outline" class="wide"><mat-label>Escrow transfer transactionId</mat-label><input matInput [ngModel]="escrowTransactionId()" (ngModelChange)="escrowTransactionId.set($event)" /></mat-form-field>
-              <mat-form-field appearance="outline"><mat-label>Signature</mat-label>
-                <mat-select [value]="escrowSignature()" (valueChange)="escrowSignature.set($event)">
-                  @for (which of escrowSignatures; track which) { <mat-option [value]="which">{{ which }}</mat-option> }
-                </mat-select>
-              </mat-form-field>
-              @if (escrowSignature() === 'escrowVerdict') {
-                <mat-form-field appearance="outline"><mat-label>Verdict</mat-label>
-                  <mat-select [value]="escrowVerdict()" (valueChange)="escrowVerdict.set($event)"><mat-option value="success">success</mat-option><mat-option value="cancel">cancel</mat-option></mat-select>
-                </mat-form-field>
-              }
-              <button mat-stroked-button type="button" (click)="sendEscrowSignature()" [disabled]="busy() || !escrowTransactionId().trim()">Send {{ escrowSignature() }}</button>
             </div>
             @if (followUpOutcome(); as o) { <p [class.error]="!o.ok" [class.ok]="o.ok">{{ o.text }}</p> }
           </mat-expansion-panel>
@@ -264,12 +278,13 @@ export class AccountPage {
   protected readonly millionthsToAnos = millionthsToAnos;
   protected readonly spendingKinds = SPENDING_KINDS;
   protected readonly stakePurposes = STAKE_PURPOSES;
-  protected readonly escrowSignatures = ESCROW_SIGNATURES;
 
   protected readonly item = computed(() => this.session.accounts().find((a) => a.accountId === this.accountId()) ?? null);
   protected readonly account = signal<AccountAnswer | null>(null);
   protected readonly transactions = signal<TransactionItem[]>([]);
   protected readonly pending = signal<PendingItem[]>([]);
+  protected readonly escrows = signal<EscrowItem[]>([]);
+  protected readonly escrowsError = signal<string | null>(null);
   protected readonly canLoadMore = signal(false);
   protected readonly readError = signal<string | null>(null);
   protected readonly busy = signal(false);
@@ -285,9 +300,6 @@ export class AccountPage {
   protected readonly cancelTransactionId = signal('');
   protected readonly voteTransactionId = signal('');
   protected readonly vote = signal<Vote>('for');
-  protected readonly escrowTransactionId = signal('');
-  protected readonly escrowSignature = signal<EscrowSignature>('escrowSuccess');
-  protected readonly escrowVerdict = signal<Verdict>('success');
   protected readonly followUpOutcome = signal<Outcome | null>(null);
 
   protected readonly payouts = signal<PayoutRow[]>([{ accountIdTo: '', amount: '', reason: '', stakeFor: '' }]);
@@ -308,13 +320,22 @@ export class AccountPage {
     return this.transferType() === 'transferToFund' || /^[0-9a-f]{64}$/i.test(this.accountIdTo().trim());
   });
 
+  /** True while an open escrow trade has this account as the seller: the validator holds one transaction per account, so Send waits. */
+  protected readonly sellerEscrowOpen = computed(() => this.escrows().some((e) => e.accountId === this.accountId()));
+
+  /** The anos of this account held in open escrow trades as the seller (one, by the validator's rule), for the line under the balance; null when none. */
+  protected readonly heldAsSeller = computed((): string | null => {
+    const held = this.escrows().filter((e) => e.accountId === this.accountId()).reduce((sum, e) => sum + BigInt(e.amount), 0n);
+    return held > 0n ? millionthsToAnos(held) : null;
+  });
+
   constructor() {
     effect(() => {
       this.accountId();
       untracked(() => void this.refresh());
     });
     const timer = setInterval(() => {
-      if (this.pending().length > 0 && !this.busy()) void this.refresh(true);
+      if ((this.pending().length > 0 || this.escrows().length > 0) && !this.busy()) void this.refresh(true);
     }, ACCOUNT_POLL_MS);
     inject(DestroyRef).onDestroy(() => clearInterval(timer));
   }
@@ -325,6 +346,11 @@ export class AccountPage {
 
   protected counterpart(t: TransactionItem): string | null {
     return t.accountId === this.accountId() ? t.accountIdTo : t.accountId;
+  }
+
+  /** The stage of an open escrow trade in words, from this account's side (escrow-stage.ts, shared with the trade page). */
+  protected stageWords(e: EscrowItem): string {
+    return escrowStageWords(e.stage, e.accountId === this.accountId() ? 'seller' : 'buyer');
   }
 
   /** Pair one, opened from the keyBlob for one signature; the caller drops it. */
@@ -341,14 +367,15 @@ export class AccountPage {
     return this.crypto.pairOneFromKeyBlob(this.crypto.fromHex(item.keyBlob), encryptionKey);
   }
 
-  /** /get-account and the first page of /list-transactions. */
+  /** /get-account, the first page of /list-transactions and /list-escrows. A refused escrow read is shown on its own, so the rest of the page still shows. */
   protected async refresh(quiet = false): Promise<void> {
     this.readError.set(null);
     try {
       const pairOne = await this.pairOne();
-      const [account, list] = await Promise.all([
+      const [account, list, escrows] = await Promise.all([
         this.anos.getAccount(pairOne, this.accountId(), quiet),
         this.anos.listTransactions(pairOne, this.accountId(), {}, quiet),
+        this.anos.listEscrows(pairOne, this.accountId(), quiet),
       ]);
       if (!account.ok) {
         this.readError.set(account.status === 401 && /unknown account/.test(reasonOf(account)) ? 'Not on the ledger yet: the creation has not landed.' : `/get-account: ${reasonOf(account)}`);
@@ -359,6 +386,12 @@ export class AccountPage {
         this.transactions.set(list.body.transactions);
         this.pending.set(list.body.pending);
         this.canLoadMore.set(list.body.transactions.length >= 50);
+      }
+      if (escrows.ok) {
+        this.escrows.set(escrows.body.escrows);
+        this.escrowsError.set(null);
+      } else {
+        this.escrowsError.set(`/list-escrows: ${reasonOf(escrows)}`);
       }
     } catch (err) {
       this.readError.set(err instanceof Error ? err.message : String(err));
@@ -418,17 +451,6 @@ export class AccountPage {
 
   protected sendVote(): Promise<void> {
     return this.followUp((pairOne, own) => this.crypto.buildFollowUp(pairOne, { type: 'guardianVote', transactionId: this.voteTransactionId().trim(), guardianId: own, vote: this.vote() }), (f) => this.anos.guardianVote(f));
-  }
-
-  protected sendEscrowSignature(): Promise<void> {
-    const transactionId = this.escrowTransactionId().trim();
-    const which = this.escrowSignature();
-    return this.followUp(
-      (pairOne, own) => which === 'escrowVerdict'
-        ? this.crypto.buildFollowUp(pairOne, { type: which, transactionId, arbitratorId: own, verdict: this.escrowVerdict() })
-        : this.crypto.buildFollowUp(pairOne, { type: which as EscrowSignatureType, transactionId, accountId: own }),
-      (f) => this.anos.escrowSignature(f as never),
-    );
   }
 
   private followUp<T extends FollowUp>(build: (pairOne: PairOne, own: string) => T, post: (signed: T) => Promise<ApiResponse<Accepted>>): Promise<void> {
