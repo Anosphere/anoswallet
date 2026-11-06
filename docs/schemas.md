@@ -62,11 +62,20 @@ on this machine).
     DEFAULT_VALIDATOR   1                                                    the validator the wallet posts to
     DIST_DIR            dist/wallet/browser                                  the Angular build it serves
     RP_ID               localhost                                            the relying-party id the browser uses in both ceremonies; the masterpod's RP_ID
+    GUARDED_LOCK_MINUTES  1    the validators' time lock on a guarded account, in minutes (10 on the testnet; a week in production)
+    VAULT_LOCK_MINUTES    2    the same on a vault account (20 on the testnet; a month)
+    LOCK_OFFSET_MINUTES   1    how much more than its lock a guarded or vault transfer may be dated ahead (5 on the testnet; 10)
+
+The three lock numbers are the validators' (anossoftware's
+network/testnet.env); the wallet dates a guarded or vault transfer the
+lock plus the offset ahead and a validator refuses one outside its
+window, so the two files are changed together (2026-11-06, section 11).
 
 Routes
 
-    GET  /api/config                  200 { validators, keyholders, shareThreshold, defaultValidator, rpId }: the two counts
-                                      are the list lengths; the browser never sees an address
+    GET  /api/config                  200 { validators, keyholders, shareThreshold, defaultValidator, edition, rpId,
+                                      guardedLockMinutes, vaultLockMinutes, lockOffsetMinutes }: the two counts are the
+                                      list lengths; the browser never sees an address
     GET  /api/health                  200 { status: "ok" }
     ANY  /api/masterpod/<path>        forwarded to MASTERPOD_URL/<path>
     ANY  /api/anos/<n>/<path>         forwarded to VALIDATOR_URLS[n - 1]/<path>; n not 1..count: 404 { error: "unknown validator" }
@@ -744,8 +753,15 @@ box the usual way."; Safari asks with its own Paste bubble first; 2026-11-05,
 section 11), amount in anos, and the kind the account type allows, ported
 from the test wallet:
 spending picks plain, escrow or stake with a purpose; guarded and vault
-date the transfer the lock plus the offset ahead (the local constants, 1
-+ 1 and 2 + 1 minutes, kept in a constants file); assisted sends
+date the transfer the lock plus the offset ahead by the numbers
+/api/config gives (section 2: the proxy's env, the validators' numbers;
+10 + 5 and 20 + 5 minutes on the testnet, 1 + 1 and 2 + 1 locally;
+2026-11-06, section 11), with the line "A guarded transfer is dated 15
+minutes ahead and waits out its lock on the validators." under Send, the
+minutes in words (minutes-words.ts: "7 days and 10 minutes" in
+production); while the numbers have not loaded, Send is off and the line
+reads "The lock settings have not loaded from the proxy. Refresh to try
+again."; assisted sends
 assistedAnosTransfer. previousTransactionId is /get-account's
 latestTransactionId, fetched right before building. The payload is
 signed by pair one (keyBlob opened for the signature and dropped),
@@ -753,7 +769,8 @@ signed by pair one (keyBlob opened for the signature and dropped),
 refreshes. Send is disabled while the account has a pending transaction,
 is the seller of an open escrow trade, holds an assisted transfer or has
 a transfer waiting out its lock (one held transaction per account; the
-validator refuses a second), with the line "An escrow trade is open.
+validator refuses a second) or, on a guarded or vault account, while the
+lock numbers have not loaded, with the line "An escrow trade is open.
 This account can send again when it closes.", "An assisted transfer is
 waiting. This account can send again when it is written or cancelled."
 or "A transfer is waiting out its lock. This account can send again when
@@ -1107,7 +1124,8 @@ excepted, with the keyholder and anos calls included.
 
 ### 8.3 Services and state
 
-    config.service          GET /api/config once; the counts and the threshold
+    config.service          GET /api/config once; the counts, the threshold, the edition, rpId and the three lock
+                            numbers (2026-11-06)
     session.service         signals: anopodId, username, firstName, lastName, the session keys, the PRF output
                             while needed, the encryption key, the chat keys, the PLID and lookup id, the status
                             from /check-anopod-status, the keyholder receiving keys, the wallet public keys, the
@@ -1253,6 +1271,11 @@ and the one id wallet.anocloud.com, the proxy's RP_ID, and the proxy's URLs
 point at the real servers through the committed network/wallet.env
 (section 11, Deploy build 1).
 
+The three lock numbers come from the proxy: on this machine its defaults
+1, 2 and 1 match the local validators and no env file is needed; on the
+testnet network/wallet.env says 10, 20 and 5, the validators'
+network/testnet.env numbers (2026-11-06, section 11).
+
 ## 10. Out of scope, not built
 
 - Recover account: the locked-out flow and the case view are built
@@ -1276,6 +1299,10 @@ point at the real servers through the committed network/wallet.env
   receiver's view of an incoming assisted transfer; a username for an
   account id; a notification when a transfer is written; asking several
   validators instead of one; "Anos" with a capital.
+- Asking a validator for its lock numbers, so that they live in one
+  place, set aside 2026-11-06 (forclaude/wallet-locks-plan-1.md): the
+  proxy's env carries the validators' numbers and the two files are
+  changed together.
 - Any check by a validator that walletKey in a creation is the signing
   server's key: the binding check with the masterpod is the check.
 - Several passkeys, push delivery, languages other than English, a custom
@@ -2225,6 +2252,81 @@ time, with no way to look at one month.
 - `npx ng build` clean (1.67 MB initial; the range picker's code joined
   the bundle). Not run against a validator here; the user tests on the
   testnet.
+
+### The lock numbers from the proxy, step 1 (2026-11-06)
+
+Step 1 of forclaude/wallet-locks-plan-1.md: the proxy and the env file;
+steps 1 and 2 were built back to back on the user's word. Why: a
+transfer from a guarded account on the testnet was refused with
+"payload.createdAt must be at least 10 and at most 15 minutes ahead of
+now". The wallet dated a guarded or vault transfer by three numbers
+typed into src/app/constants.ts (1, 2 and 1, the local validators'
+numbers, baked into every build), while the testnet validators read
+theirs from anossoftware's network/testnet.env (10, 20 and 5). The
+three are facts about the network the wallet talks to, like the
+validator list and the threshold, so they move to the proxy's committed
+env file beside those and reach the browser through /api/config. The
+validators and their env file are not touched.
+
+- `network/wallet.env`: `GUARDED_LOCK_MINUTES=10`, `VAULT_LOCK_MINUTES=20`
+  and `LOCK_OFFSET_MINUTES=5` as a block of their own at the end, with a
+  comment saying they are the validators' numbers and that the two files
+  are changed together.
+- `server/config.js`: `guardedLockMinutes`, `vaultLockMinutes` and
+  `lockOffsetMinutes` by `integer`, with the local defaults 1, 2 and 1
+  (this machine's validators'); a value that is not a positive integer
+  is refused at boot, as the other integers are.
+- `server/app.js`: the three answered in `/api/config` after `rpId`.
+- `server/index.js`: one boot line after the rp id line, "locks guarded
+  10 min, vault 20 min, offset 5 min".
+- Readings where the plan left a detail open: the three new rows of the
+  variable table in section 2 keep the plan's own spacing rather than
+  the table's columns, since the names are longer than the column; the
+  README's proxy paragraph and deploy bullet were re-wrapped only where
+  the words grew.
+- Spec: 2 (the table, the sentence under it, the /api/config row), 9,
+  this note; README (the proxy paragraph, the variables, the deploy
+  bullet).
+- `node --check` on the three server files, clean. No proxy was booted
+  here; the first caller of the new fields is step 2.
+
+### The lock numbers from the proxy, step 2 (2026-11-06)
+
+Step 2 of forclaude/wallet-locks-plan-1.md: the app. Why: with step 1
+the proxy answers the three lock numbers, but the account page still
+dated a guarded or vault transfer by the constants 1, 2 and 1, so a
+guarded transfer on the testnet was dated 2 minutes ahead where 10 to
+15 are required.
+
+- `services/config.service.ts`: `WalletConfig` gains
+  `guardedLockMinutes`, `vaultLockMinutes` and `lockOffsetMinutes`,
+  optional since an older proxy does not send them; `load()` as it was.
+- `constants.ts`: `GUARDED_LOCK_MINUTES`, `VAULT_LOCK_MINUTES` and
+  `LOCK_OFFSET_MINUTES` gone with their comment; the account page was
+  their only importer.
+- `src/app/minutes-words.ts`: `minutesWords(minutes)`, the days, hours
+  and minutes in words, the parts that are not zero joined "a, b and c".
+- `account.page.ts`: `TRANSFERS` is `TRANSFER_TYPES`, the type words
+  only; `minutesAhead` is a computed over the config, 0 on a spending or
+  assisted account, the lock plus the offset on a guarded or vault one,
+  null while the numbers have not loaded; Send is off while it is null,
+  with the line "The lock settings have not loaded from the proxy.
+  Refresh to try again.", else the lock line says the minutes in words;
+  `refresh()` asks the config service to load (the shell's fetch is
+  shared; a new one only after a failure); `send()` throws the same
+  sentence as a backstop when the numbers are missing.
+- README: the layout line of `constants.ts` no longer names the lock
+  minutes (the user's word; the plan did not name the line).
+- Readings where the plan left a detail open: the two new imports sit
+  in the file's path order; the config line in `refresh()` carries its
+  comment as a line comment above it; the class comment's new words end
+  a line of their own so the lines after it stay as they were;
+  `minutesWords` joins the parts with a slice rather than naming three
+  cases.
+- Spec: 8.2 Account (the Send sentences), 8.3 (config.service), 10,
+  this note.
+- `npx ng build` clean (1.67 MB initial). Not run against a proxy or a
+  validator here; the user tests on the testnet.
 
 ## 12. Recovery and the moderator edition
 

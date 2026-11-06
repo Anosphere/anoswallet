@@ -4,7 +4,7 @@ import { LogService, reasonOf } from './log.service';
 /** The three editions of the app (wallet spec 12.1, 13.1): the wallet, or the same app with the moderator or the attestor section switched on. */
 export type Edition = 'wallet' | 'moderator' | 'attestor';
 
-/** What GET /api/config answers: the two counts, the threshold, the edition and the relying-party id; the browser never sees an address. */
+/** What GET /api/config answers: the two counts, the threshold, the edition, the relying-party id and the three lock numbers; the browser never sees an address. */
 export interface WalletConfig {
   validators: number;
   keyholders: number;
@@ -13,6 +13,10 @@ export interface WalletConfig {
   edition: Edition;
   /** The relying-party id of both passkey ceremonies: the proxy's RP_ID. */
   rpId: string;
+  /** The time locks on guarded and vault accounts and the offset, in minutes: the validators' numbers, from the proxy's env (wallet spec 2). Optional: an older proxy does not send them. */
+  guardedLockMinutes?: number;
+  vaultLockMinutes?: number;
+  lockOffsetMinutes?: number;
 }
 
 /** The wallet's configuration, fetched from the proxy once (wallet spec 8.3). */

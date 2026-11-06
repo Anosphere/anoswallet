@@ -14,10 +14,12 @@ import { RouterLink } from '@angular/router';
 import { anosToMillionths, millionthsToAnos } from '../amounts';
 import { assistedStageWords } from '../assisted-stage';
 import { CopyButtonComponent } from '../components/copy-button.component';
-import { ACCOUNT_POLL_MS, GUARDED_LOCK_MINUTES, LOCK_OFFSET_MINUTES, VAULT_LOCK_MINUTES } from '../constants';
+import { ACCOUNT_POLL_MS } from '../constants';
 import { escrowStageWords } from '../escrow-stage';
 import { lockedStageWords } from '../locked-stage';
+import { minutesWords } from '../minutes-words';
 import { AccountAnswer, Accepted, AnosApiService, EscrowItem, HeldAssistedTransfer, HeldLockedTransfer, PendingItem } from '../services/anos-api.service';
+import { ConfigService } from '../services/config.service';
 import {
   AccountType,
   CryptoService,
@@ -34,12 +36,12 @@ import { MasterpodApiService } from '../services/masterpod-api.service';
 import { AnosAccountItem, SessionService } from '../services/session.service';
 import { SigningService } from '../services/signing.service';
 
-/** What an account of each type sends, and how many minutes ahead of now to date it (the local constants). */
-const TRANSFERS: Record<AccountType, { transactionType: TransferType; minutesAhead: number }> = {
-  spending: { transactionType: 'anosTransfer', minutesAhead: 0 },
-  guarded: { transactionType: 'guardedAnosTransfer', minutesAhead: GUARDED_LOCK_MINUTES + LOCK_OFFSET_MINUTES },
-  vault: { transactionType: 'vaultAnosTransfer', minutesAhead: VAULT_LOCK_MINUTES + LOCK_OFFSET_MINUTES },
-  assisted: { transactionType: 'assistedAnosTransfer', minutesAhead: 0 },
+/** What an account of each type sends. A guarded or vault transfer is dated the lock plus the offset ahead by the proxy's numbers (minutesAhead). */
+const TRANSFER_TYPES: Record<AccountType, TransferType> = {
+  spending: 'anosTransfer',
+  guarded: 'guardedAnosTransfer',
+  vault: 'vaultAnosTransfer',
+  assisted: 'assistedAnosTransfer',
 };
 
 /** What a spending account's Send does: a plain transfer, an escrow transfer, or a stake with the fund. */
@@ -73,7 +75,10 @@ interface Outcome {
  * the pending list); then the follow-ups and the fund proposal panels.
  * Send: recipient account id (typed, or the 64 hex characters on the
  * clipboard by the paste button), amount in anos, and the kind the account
- * type allows; guarded and vault date the transfer lock + offset ahead.
+ * type allows; guarded and vault date the transfer lock + offset ahead by
+ * the numbers /api/config gives (the proxy's env, wallet spec 2;
+ * 2026-11-06, section 11), and Send waits with a line while those have
+ * not loaded.
  * previousTransactionId is /get-account's latestTransactionId, fetched
  * right before building. The payload is signed by pair one (keyBlob opened
  * for the signature and dropped), /api/sign adds the wallet pair, the
@@ -176,7 +181,7 @@ interface Outcome {
               <mat-label>Amount (anos)</mat-label>
               <input matInput [ngModel]="amount()" (ngModelChange)="amount.set($event)" placeholder="1 or 0.5" />
             </mat-form-field>
-            <button mat-flat-button type="button" (click)="send()" [disabled]="busy() || pending().length > 0 || sellerEscrowOpen() || assisted() !== null || locked() !== null || !canSend()">Send {{ transferType() }}</button>
+            <button mat-flat-button type="button" (click)="send()" [disabled]="busy() || pending().length > 0 || sellerEscrowOpen() || assisted() !== null || locked() !== null || minutesAhead() === null || !canSend()">Send {{ transferType() }}</button>
           </div>
           @if (sellerEscrowOpen()) {
             <p class="muted">An escrow trade is open. This account can send again when it closes.</p>
@@ -188,7 +193,11 @@ interface Outcome {
             <p class="muted">A transfer is waiting out its lock. This account can send again when it is written.</p>
           }
           @if (item.accountType === 'guarded' || item.accountType === 'vault') {
-            <p class="muted">A {{ item.accountType }} transfer is dated {{ minutesAhead(item.accountType) }} minutes ahead and waits out its lock on the validators.</p>
+            @if (minutesAhead(); as ahead) {
+              <p class="muted">A {{ item.accountType }} transfer is dated {{ minutesWords(ahead) }} ahead and waits out its lock on the validators.</p>
+            } @else {
+              <p class="muted">The lock settings have not loaded from the proxy. Refresh to try again.</p>
+            }
           } @else if (item.accountType === 'assisted') {
             <p class="muted">An assisted transfer waits until two attestors have checked it. An attestor will open a case and ask for your lookup id. You can cancel it until it is written.</p>
           }
@@ -333,8 +342,10 @@ export class AccountPage {
   private readonly anos = inject(AnosApiService);
   private readonly crypto = inject(CryptoService);
   private readonly signing = inject(SigningService);
+  private readonly config = inject(ConfigService);
 
   protected readonly millionthsToAnos = millionthsToAnos;
+  protected readonly minutesWords = minutesWords;
   protected readonly assistedStageWords = assistedStageWords;
   protected readonly lockedStageWords = lockedStageWords;
   protected readonly spendingKinds = SPENDING_KINDS;
@@ -373,12 +384,22 @@ export class AccountPage {
       const kind = this.spendingKind();
       return kind === 'stake' ? 'transferToFund' : kind === 'escrow' ? 'escrowTransfer' : 'anosTransfer';
     }
-    return type ? TRANSFERS[type].transactionType : 'anosTransfer';
+    return type ? TRANSFER_TYPES[type] : 'anosTransfer';
   });
 
   protected readonly canSend = computed(() => {
     if (anosToMillionths(this.amount()) === null) return false;
     return this.transferType() === 'transferToFund' || /^[0-9a-f]{64}$/i.test(this.accountIdTo().trim());
+  });
+
+  /** How many minutes ahead Send dates a transfer: 0 on a spending or assisted account; the lock plus the offset on a guarded or vault account, from the proxy's numbers (/api/config, wallet spec 2); null while those have not loaded. */
+  protected readonly minutesAhead = computed((): number | null => {
+    const type = this.item()?.accountType;
+    if (type !== 'guarded' && type !== 'vault') return 0;
+    const c = this.config.config();
+    const lock = type === 'guarded' ? c?.guardedLockMinutes : c?.vaultLockMinutes;
+    const offset = c?.lockOffsetMinutes;
+    return typeof lock === 'number' && typeof offset === 'number' ? lock + offset : null;
   });
 
   /** True while an open escrow trade has this account as the seller: the validator holds one transaction per account, so Send waits. */
@@ -401,10 +422,6 @@ export class AccountPage {
     inject(DestroyRef).onDestroy(() => clearInterval(timer));
   }
 
-  protected minutesAhead(type: AccountType): number {
-    return TRANSFERS[type].minutesAhead;
-  }
-
   /** The stage of an open escrow trade in words, from this account's side (escrow-stage.ts, shared with the trade page). */
   protected stageWords(e: EscrowItem): string {
     return escrowStageWords(e.stage, e.accountId === this.accountId() ? 'seller' : 'buyer');
@@ -424,9 +441,11 @@ export class AccountPage {
     return this.crypto.pairOneFromKeyBlob(this.crypto.fromHex(item.keyBlob), encryptionKey);
   }
 
-  /** /get-account, the first page of /list-transactions (for the pending list; the history page shows the transactions), /list-escrows and, on an assisted account, /get-assisted-transfer, or, on a guarded or vault account, /get-locked-transfer. A refused escrow, assisted or locked read is shown on its own, so the rest of the page still shows. */
+  /** /get-account, the first page of /list-transactions (for the pending list; the history page shows the transactions), /list-escrows and, on an assisted account, /get-assisted-transfer, or, on a guarded or vault account, /get-locked-transfer, and the proxy's config for the lock numbers. A refused escrow, assisted or locked read is shown on its own, so the rest of the page still shows. */
   protected async refresh(quiet = false): Promise<void> {
     this.readError.set(null);
+    // the lock numbers (minutesAhead): the shell loads the config at start; this asks again after a failure, when the page opens and on Refresh
+    void this.config.load().catch(() => undefined);
     try {
       const pairOne = await this.pairOne();
       const type = this.item()?.accountType;
@@ -507,7 +526,9 @@ export class AccountPage {
         res = await this.anos.transferToFund(tx);
       } else {
         const transactionType = this.transferType() as TransferType;
-        const createdAt = new Date(Date.now() + TRANSFERS[type].minutesAhead * 60_000);
+        const ahead = this.minutesAhead();
+        if (ahead === null) throw new Error('The lock settings have not loaded from the proxy. Refresh to try again.');
+        const createdAt = new Date(Date.now() + ahead * 60_000);
         const tx = await this.signing.sign(this.crypto.buildAnosTransferTransaction(pairOne, this.accountId(), previous, this.accountIdTo().trim().toLowerCase(), amount, transactionType, createdAt));
         res = await this.anos.anosTransfer(tx);
       }

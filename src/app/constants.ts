@@ -2,18 +2,6 @@
  * The wallet's local constants (wallet spec sections 7 and 8).
  */
 
-/**
- * Time locks on a guarded and on a vault account, in minutes: the
- * validators' GUARDED_LOCK_MINUTES and VAULT_LOCK_MINUTES (1 and 2 locally;
- * a week and a month in production), and LOCK_OFFSET_MINUTES (1 locally, 10
- * in production), added so a transfer that takes a while to reach a
- * validator is still at least the lock ahead. The wallet dates a guarded or
- * vault transfer lock + offset ahead.
- */
-export const GUARDED_LOCK_MINUTES = 1;
-export const VAULT_LOCK_MINUTES = 2;
-export const LOCK_OFFSET_MINUTES = 1;
-
 /** The PRF salt label: SHA-256 of it is the 32-byte prf.eval.first at every passkey ceremony. Public; it only labels the key. */
 export const PRF_SALT_LABEL = 'masterpod/prf-salt/v1';
 
