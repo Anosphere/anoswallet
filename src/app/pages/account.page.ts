@@ -12,9 +12,10 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { RouterLink } from '@angular/router';
 import { anosToMillionths, millionthsToAnos } from '../amounts';
+import { CopyButtonComponent } from '../components/copy-button.component';
 import { ACCOUNT_POLL_MS, GUARDED_LOCK_MINUTES, LOCK_OFFSET_MINUTES, VAULT_LOCK_MINUTES } from '../constants';
 import { escrowStageWords } from '../escrow-stage';
-import { AccountAnswer, Accepted, AnosApiService, EscrowItem, PendingItem, TransactionItem } from '../services/anos-api.service';
+import { AccountAnswer, Accepted, AnosApiService, EscrowItem, PendingItem } from '../services/anos-api.service';
 import {
   AccountType,
   CryptoService,
@@ -41,6 +42,9 @@ const TRANSFERS: Record<AccountType, { transactionType: TransferType; minutesAhe
 
 /** What a spending account's Send does: a plain transfer, an escrow transfer, or a stake with the fund. */
 const SPENDING_KINDS = ['plain', 'escrow', 'stake'] as const;
+
+/** Exactly 64 hex characters with no hex character on either side: an account id in whatever was copied. */
+const ACCOUNT_ID_IN_TEXT = /(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])/i;
 type SpendingKind = (typeof SPENDING_KINDS)[number];
 
 /** One row of the fund proposal form; amounts in anos, purpose empty for a plain payout. */
@@ -57,32 +61,35 @@ interface Outcome {
 }
 
 /**
- * One account (wallet spec 8.2, Account): balance, type, the latest
- * transaction id, the transaction list from /list-transactions (newest
- * first, Load more with beforePosition), the pending transaction if any,
- * Refresh, and a 5-second poll while something is pending. Send: recipient
- * account id, amount in anos, and the kind the account type allows; guarded
- * and vault date the transfer lock + offset ahead. previousTransactionId is
- * /get-account's latestTransactionId, fetched right before building. The
- * payload is signed by pair one (keyBlob opened for the signature and
- * dropped), /api/sign adds the wallet pair, the validator gets it, the list
- * refreshes. Send is disabled while the account has a pending transaction
- * or is the seller of an open escrow trade (one held transaction per
- * account). Escrow trades (2026-11-05, section 11): /list-escrows is read
- * with the other two, the open trades are listed between Pending and
- * Transactions with the stage in words from this account's side, a line
- * under the balance says what is held as the seller, and the 5-second poll
- * also runs while a trade is open; the escrow follow-ups left the
- * follow-ups form for the trade page (step 3). The other follow-ups and
- * the fund proposal form are the test wallet's.
+ * One account (wallet spec 8.2, Account), in this order: the id in the
+ * title with a copy button (8.5); balance, type, the latest transaction id,
+ * created; Refresh, and a 5-second poll while something is pending or an
+ * escrow trade is open; Send; Pending; Escrow trades; a Transaction history
+ * button to /wallet/:accountId/history (2026-11-05, section 11: the
+ * transaction list moved there; /list-transactions is still read here for
+ * the pending list); then the follow-ups and the fund proposal panels.
+ * Send: recipient account id (typed, or the 64 hex characters on the
+ * clipboard by the paste button), amount in anos, and the kind the account
+ * type allows; guarded and vault date the transfer lock + offset ahead.
+ * previousTransactionId is /get-account's latestTransactionId, fetched
+ * right before building. The payload is signed by pair one (keyBlob opened
+ * for the signature and dropped), /api/sign adds the wallet pair, the
+ * validator gets it, the page refreshes. Send is disabled while the account
+ * has a pending transaction or is the seller of an open escrow trade (one
+ * held transaction per account). Escrow trades (2026-11-05, section 11):
+ * /list-escrows is read with the other two, the open trades are listed
+ * with the stage in words from this account's side, and a line under the
+ * balance says what is held as the seller; the escrow follow-ups left the
+ * follow-ups form for the trade page. The other follow-ups and the fund
+ * proposal form are the test wallet's.
  */
 @Component({
   selector: 'app-account-page',
-  imports: [DatePipe, FormsModule, RouterLink, MatCardModule, MatButtonModule, MatListModule, MatIconModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatProgressBarModule, MatExpansionModule],
+  imports: [DatePipe, FormsModule, RouterLink, MatCardModule, MatButtonModule, MatListModule, MatIconModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatProgressBarModule, MatExpansionModule, CopyButtonComponent],
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
-        <mat-card-title>Account <code class="id">{{ accountId() }}</code></mat-card-title>
+        <mat-card-title>Account <code class="id">{{ accountId() }}</code> <app-copy-button [text]="accountId()" label="Copy the account id" /></mat-card-title>
         <mat-card-subtitle>
           @if (item(); as item) { {{ item.accountType }} account }
           @if (!item()) { not one of this anoPod's accounts }
@@ -113,6 +120,48 @@ interface Outcome {
             <span class="muted">An escrow trade is open; refreshing every 5 seconds.</span>
           }
         </div>
+
+        <h3>Send</h3>
+        @if (item(); as item) {
+          <div class="form send">
+            @if (item.accountType === 'spending') {
+              <mat-form-field appearance="outline">
+                <mat-label>Kind</mat-label>
+                <mat-select [value]="spendingKind()" (valueChange)="spendingKind.set($event)">
+                  @for (kind of spendingKinds; track kind) { <mat-option [value]="kind">{{ kind }}</mat-option> }
+                </mat-select>
+              </mat-form-field>
+              @if (spendingKind() === 'stake') {
+                <mat-form-field appearance="outline">
+                  <mat-label>Stake for</mat-label>
+                  <mat-select [value]="stakePurpose()" (valueChange)="stakePurpose.set($event)">
+                    @for (purpose of stakePurposes; track purpose) { <mat-option [value]="purpose">{{ purpose }}</mat-option> }
+                  </mat-select>
+                </mat-form-field>
+              }
+            }
+            @if (transferType() !== 'transferToFund') {
+              <mat-form-field appearance="outline" class="wide" subscriptSizing="dynamic">
+                <mat-label>Recipient account id</mat-label>
+                <input matInput [ngModel]="accountIdTo()" (ngModelChange)="accountIdTo.set($event)" placeholder="64 hex characters" />
+                <button mat-icon-button matSuffix type="button" (click)="pasteRecipient()" aria-label="Paste the recipient account id"><mat-icon>content_paste</mat-icon></button>
+                @if (pasteNote(); as note) { <mat-hint>{{ note }}</mat-hint> }
+              </mat-form-field>
+            }
+            <mat-form-field appearance="outline">
+              <mat-label>Amount (anos)</mat-label>
+              <input matInput [ngModel]="amount()" (ngModelChange)="amount.set($event)" placeholder="1 or 0.5" />
+            </mat-form-field>
+            <button mat-flat-button type="button" (click)="send()" [disabled]="busy() || pending().length > 0 || sellerEscrowOpen() || !canSend()">Send {{ transferType() }}</button>
+          </div>
+          @if (sellerEscrowOpen()) {
+            <p class="muted">An escrow trade is open. This account can send again when it closes.</p>
+          }
+          @if (item.accountType === 'guarded' || item.accountType === 'vault') {
+            <p class="muted">A {{ item.accountType }} transfer is dated {{ minutesAhead(item.accountType) }} minutes ahead and waits out its lock on the validators.</p>
+          }
+          @if (sendOutcome(); as o) { <p [class.error]="!o.ok" [class.ok]="o.ok">{{ o.text }}</p> }
+        }
 
         @if (pending().length > 0) {
           <h3>Pending</h3>
@@ -145,62 +194,7 @@ interface Outcome {
           }
         </mat-list>
 
-        <h3>Transactions</h3>
-        <mat-list>
-          @for (t of transactions(); track t.transactionId) {
-            <mat-list-item lines="3">
-              <mat-icon matListItemIcon>{{ t.type === 'accountCreation' ? 'add_circle' : t.accountId === accountId() ? 'call_made' : 'call_received' }}</mat-icon>
-              <span matListItemTitle>{{ t.type }} · {{ t.type === 'accountCreation' ? '' : (t.accountId === accountId() ? '−' : '+') + millionthsToAnos(t.amount) + ' anos' }} · #{{ t.position }}</span>
-              <span matListItemLine>{{ t.createdAt | date: 'medium' }}@if (counterpart(t); as other) { · {{ t.accountId === accountId() ? 'to' : 'from' }} <code>{{ other }}</code> }</span>
-              <span matListItemLine><code>{{ t.transactionId }}</code></span>
-            </mat-list-item>
-          } @empty {
-            <p class="muted">Nothing on the ledger for this account yet.</p>
-          }
-        </mat-list>
-        @if (canLoadMore()) {
-          <button mat-button type="button" (click)="loadMore()" [disabled]="busy()">Load more</button>
-        }
-
-        <h3>Send</h3>
-        @if (item(); as item) {
-          <div class="form">
-            @if (item.accountType === 'spending') {
-              <mat-form-field appearance="outline">
-                <mat-label>Kind</mat-label>
-                <mat-select [value]="spendingKind()" (valueChange)="spendingKind.set($event)">
-                  @for (kind of spendingKinds; track kind) { <mat-option [value]="kind">{{ kind }}</mat-option> }
-                </mat-select>
-              </mat-form-field>
-              @if (spendingKind() === 'stake') {
-                <mat-form-field appearance="outline">
-                  <mat-label>Stake for</mat-label>
-                  <mat-select [value]="stakePurpose()" (valueChange)="stakePurpose.set($event)">
-                    @for (purpose of stakePurposes; track purpose) { <mat-option [value]="purpose">{{ purpose }}</mat-option> }
-                  </mat-select>
-                </mat-form-field>
-              }
-            }
-            @if (transferType() !== 'transferToFund') {
-              <mat-form-field appearance="outline" class="wide">
-                <mat-label>Recipient account id</mat-label>
-                <input matInput [ngModel]="accountIdTo()" (ngModelChange)="accountIdTo.set($event)" placeholder="64 hex characters" />
-              </mat-form-field>
-            }
-            <mat-form-field appearance="outline">
-              <mat-label>Amount (anos)</mat-label>
-              <input matInput [ngModel]="amount()" (ngModelChange)="amount.set($event)" placeholder="1 or 0.5" />
-            </mat-form-field>
-            <button mat-flat-button type="button" (click)="send()" [disabled]="busy() || pending().length > 0 || sellerEscrowOpen() || !canSend()">Send {{ transferType() }}</button>
-          </div>
-          @if (sellerEscrowOpen()) {
-            <p class="muted">An escrow trade is open. This account can send again when it closes.</p>
-          }
-          @if (item.accountType === 'guarded' || item.accountType === 'vault') {
-            <p class="muted">A {{ item.accountType }} transfer is dated {{ minutesAhead(item.accountType) }} minutes ahead and waits out its lock on the validators.</p>
-          }
-          @if (sendOutcome(); as o) { <p [class.error]="!o.ok" [class.ok]="o.ok">{{ o.text }}</p> }
-        }
+        <p><a mat-stroked-button [routerLink]="['/wallet', accountId(), 'history']"><mat-icon>history</mat-icon> Transaction history</a></p>
 
         <mat-accordion class="followups">
           <mat-expansion-panel>
@@ -258,6 +252,8 @@ interface Outcome {
     .value { word-break: break-all; }
     .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
     .form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
+    .send { align-items: flex-start; }
+    .send > button { margin-top: 8px; }
     .wide { min-width: 360px; flex: 1; }
     .followups { display: block; margin-top: 16px; }
     .muted { color: var(--mat-sys-on-surface-variant); }
@@ -281,17 +277,16 @@ export class AccountPage {
 
   protected readonly item = computed(() => this.session.accounts().find((a) => a.accountId === this.accountId()) ?? null);
   protected readonly account = signal<AccountAnswer | null>(null);
-  protected readonly transactions = signal<TransactionItem[]>([]);
   protected readonly pending = signal<PendingItem[]>([]);
   protected readonly escrows = signal<EscrowItem[]>([]);
   protected readonly escrowsError = signal<string | null>(null);
-  protected readonly canLoadMore = signal(false);
   protected readonly readError = signal<string | null>(null);
   protected readonly busy = signal(false);
 
   protected readonly spendingKind = signal<SpendingKind>('plain');
   protected readonly stakePurpose = signal<StakePurpose>('attestor');
   protected readonly accountIdTo = signal('');
+  protected readonly pasteNote = signal<string | null>(null);
   protected readonly amount = signal('1');
   protected readonly sendOutcome = signal<Outcome | null>(null);
 
@@ -344,10 +339,6 @@ export class AccountPage {
     return TRANSFERS[type].minutesAhead;
   }
 
-  protected counterpart(t: TransactionItem): string | null {
-    return t.accountId === this.accountId() ? t.accountIdTo : t.accountId;
-  }
-
   /** The stage of an open escrow trade in words, from this account's side (escrow-stage.ts, shared with the trade page). */
   protected stageWords(e: EscrowItem): string {
     return escrowStageWords(e.stage, e.accountId === this.accountId() ? 'seller' : 'buyer');
@@ -367,7 +358,7 @@ export class AccountPage {
     return this.crypto.pairOneFromKeyBlob(this.crypto.fromHex(item.keyBlob), encryptionKey);
   }
 
-  /** /get-account, the first page of /list-transactions and /list-escrows. A refused escrow read is shown on its own, so the rest of the page still shows. */
+  /** /get-account, the first page of /list-transactions (for the pending list; the history page shows the transactions) and /list-escrows. A refused escrow read is shown on its own, so the rest of the page still shows. */
   protected async refresh(quiet = false): Promise<void> {
     this.readError.set(null);
     try {
@@ -382,11 +373,7 @@ export class AccountPage {
         return;
       }
       this.account.set(account.body);
-      if (list.ok) {
-        this.transactions.set(list.body.transactions);
-        this.pending.set(list.body.pending);
-        this.canLoadMore.set(list.body.transactions.length >= 50);
-      }
+      if (list.ok) this.pending.set(list.body.pending);
       if (escrows.ok) {
         this.escrows.set(escrows.body.escrows);
         this.escrowsError.set(null);
@@ -398,20 +385,22 @@ export class AccountPage {
     }
   }
 
-  protected async loadMore(): Promise<void> {
-    const last = this.transactions().at(-1);
-    if (!last) return;
-    this.busy.set(true);
+  /** The recipient from the clipboard: the run of exactly 64 hex characters in it, lower-cased; a hint under the box otherwise. Safari asks with its Paste bubble first. */
+  protected async pasteRecipient(): Promise<void> {
+    let text: string;
     try {
-      const pairOne = await this.pairOne();
-      const res = await this.anos.listTransactions(pairOne, this.accountId(), { beforePosition: last.position });
-      if (res.ok) {
-        this.transactions.update((list) => [...list, ...res.body.transactions]);
-        this.canLoadMore.set(res.body.transactions.length >= 50);
-      }
-    } finally {
-      this.busy.set(false);
+      text = await navigator.clipboard.readText();
+    } catch {
+      this.pasteNote.set('The browser did not allow reading the clipboard. Paste into the box the usual way.');
+      return;
     }
+    const found = ACCOUNT_ID_IN_TEXT.exec(text);
+    if (!found) {
+      this.pasteNote.set('Nothing on the clipboard looks like an account id.');
+      return;
+    }
+    this.accountIdTo.set(found[0].toLowerCase());
+    this.pasteNote.set(null);
   }
 
   /** Builds, signs (pair one here, the wallet pair at /api/sign) and posts what the account type allows. */

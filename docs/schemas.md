@@ -374,8 +374,9 @@ as in the test apps; a new tab unlocks again.
     /security/bucket-one     forwards to /account/recovery/selfie
     /security/bucket-two     forwards to /account/recovery/details
     /wallet                  the anos accounts and Create anos account
-    /wallet/:accountId       one account: balance, escrow trades, transactions, send, follow-ups, fund proposal
+    /wallet/:accountId       one account: balance, send, pending, escrow trades, follow-ups, fund proposal
     /wallet/:accountId/escrow/:transactionId   one escrow trade: the details, the buttons for your side, the closed view
+    /wallet/:accountId/history   the transaction history: the list, newest first, Load more
     /chat                    rooms, invites, join requests, messages
     /marketplace             listings
     /notifications           the list, mark read
@@ -530,7 +531,9 @@ encrypted, so the rows say how many, never which.
 Wallet. "Your anoPod is complete." The accounts from
 /list-anos-accounts, each with its type, its masterpod state (submitted
 or not) and its ledger state from /get-account (unknown account means not
-landed yet; a balance once it has). Create anos account: a type select
+landed yet; a balance once it has). Each row ends with a copy button
+(8.5) for the account id, so the number can be shared without opening
+the account (2026-11-05, section 11). Create anos account: a type select
 (spending, guarded, vault, assisted) and a button that runs, as a
 progress list:
 1. pair one, pair two, the break-glass seed and its two keys; the
@@ -550,18 +553,21 @@ Resubmit on such an account, which re-posts the stored creation (step 5)
 and marks it (step 6). Then the account polls /get-account every 5
 seconds until it is on the ledger.
 
-Account. Balance, type, the latest transaction id, the transaction list
-from /list-transactions (newest first, Load more with beforePosition),
-the pending transaction if any, the open escrow trades from
-/list-escrows (section 5.4), Refresh, and a 5-second poll while
-something is pending or an escrow trade is open. Under the balance,
-while this account is the seller of an open escrow trade, one line: "5
-anos of this are in an open escrow trade." The validator moves a
-balance only when the trade is written, so the balance stays whole while
-the anos are spoken for.
+Account. The account id in the title with a copy button (8.5). Then, in
+this order: balance, type, the latest transaction id, created; Refresh,
+and a 5-second poll while something is pending or an escrow trade is
+open; Send; Pending, the pending transaction if any; Escrow trades, the
+open trades from /list-escrows (section 5.4); a "Transaction history"
+button to the history page below; then the follow-ups and the fund
+proposal panels. The transaction list left this page for the history
+page on 2026-11-05 (section 11); /list-transactions is still read here,
+for the pending list. Under the balance, while this account is the
+seller of an open escrow trade, one line: "5 anos of this are in an open
+escrow trade." The validator moves a balance only when the trade is
+written, so the balance stays whole while the anos are spoken for.
 
-Escrow trades (2026-11-05, section 11), between Pending and
-Transactions: one row per open trade, "5 anos to <buyer>" when this
+Escrow trades (2026-11-05, section 11), after Pending: one row per
+open trade, "5 anos to <buyer>" when this
 account is the seller or "5 anos from <seller>" when it is the buyer,
 the stage in words from this account's side, and the date; "No open
 escrow trades." when there are none; the read's refusal in red when it
@@ -573,15 +579,21 @@ releasing, "Being released"; cancelling, "Being cancelled"; disputed,
 "In dispute, attestors are deciding"; a word the wallet does not know,
 "Open". A row opens the trade page.
 
-Send: recipient account id (typed, as the anos test app), amount in
-anos, and the kind the account type allows, ported from the test wallet:
+Send: recipient account id (typed, or by the paste button at the right
+end of the box, which reads the clipboard and takes the run of exactly 64
+hex characters in it, lower-cased; with none, the hint under the box says
+"Nothing on the clipboard looks like an account id."; when the browser
+refuses, "The browser did not allow reading the clipboard. Paste into the
+box the usual way."; Safari asks with its own Paste bubble first; 2026-11-05,
+section 11), amount in anos, and the kind the account type allows, ported
+from the test wallet:
 spending picks plain, escrow or stake with a purpose; guarded and vault
 date the transfer the lock plus the offset ahead (the local constants, 1
 + 1 and 2 + 1 minutes, kept in a constants file); assisted sends
 assistedAnosTransfer. previousTransactionId is /get-account's
 latestTransactionId, fetched right before building. The payload is
 signed by pair one (keyBlob opened for the signature and dropped),
-/api/sign adds the wallet pair, the validator gets it, the list
+/api/sign adds the wallet pair, the validator gets it, the page
 refreshes. Send is disabled while the account has a pending transaction
 or is the seller of an open escrow trade (one held transaction per
 account; the validator refuses a second), the latter with the line "An
@@ -591,6 +603,17 @@ the fund proposal form are the test wallet's, ported with the same
 fields and the same signing path; the escrow follow-ups (success,
 cancel, dispute, verdict) left this form on 2026-11-05 for the trade
 page.
+
+Transaction history, at /wallet/:accountId/history, opened by the
+button on the account page (2026-11-05, section 11). Titled
+"Transaction history", the account id under it, Back to the account,
+Refresh. The list from /list-transactions, newest first, Load more with
+beforePosition while a page came back full (50 rows), the rows as the
+account page showed them before: the type word, the amount with its
+sign, the position, the date, the other side, the transaction id;
+"Nothing on the ledger for this account yet." when empty; a failed read
+in red. Read when opened and by Refresh only, no poll. The rows keep
+their raw type words; their cleanup is a later job of its own.
 
 Escrow trade, at /wallet/:accountId/escrow/:transactionId, opened from a
 row of the Escrow trades list (2026-11-05, section 11). Titled "Escrow
@@ -635,7 +658,10 @@ trades are in the account's transactions."
 Chat and Marketplace: the masterpod test app's sections, ported to
 Material lists and forms, the same calls, the same polls (messages every
 3 s), invites by username, the join inbox, listings with filters and
-sort, a listing's room.
+sort, a listing's room. In a chat message, a run of exactly 64 hex
+characters with no hex character on either side (an account id) shows in
+code font with a copy button (8.5) after it; the rest of the text shows
+as written (2026-11-05, section 11).
 
 Notifications: the list, newest first, mark read; the 5-second poll
 runs while a session is open and updates the status (vouched, counts).
@@ -680,6 +706,17 @@ Retake. Below it always a file input, accept image/*, with capture set to
 the same facing so a phone offers that camera, as the fallback when the
 camera is refused or absent. The output is { contentType, bytes } for the
 caller to encrypt or send.
+
+### 8.5 The copy button
+
+One small component, src/app/components/copy-button.component.ts
+(`<app-copy-button>`), for every account id a person may want to share
+or paste (2026-11-05, section 11): an icon button that copies the text
+it is given (navigator.clipboard.writeText) and shows "copied" next to
+the icon for two seconds, or "could not copy" when the browser refuses.
+It sits after the account id in the Account title, at the end of each
+Wallet row, and after an account id in a chat message. The case pages of
+sections 12 and 13 keep their own copy code.
 
 ## 9. Configuration, and running it on this machine
 
@@ -1146,6 +1183,65 @@ line.
   <status>: <reason>".
 - `npx ng build` clean. Not run against a validator here; the user tests
   on the testnet.
+
+### Copy and paste buttons (2026-11-05)
+
+Step 1 of the send upgrade, settled in chat (no plan file): sharing an
+account id, and getting one into the Recipient box, meant selecting 64
+hex characters by hand.
+
+- `src/app/components/copy-button.component.ts` (`CopyButtonComponent`,
+  `<app-copy-button>`, inputs `text` and `label`): the copy button of
+  8.5. "copied" for two seconds, "could not copy" when `writeText`
+  throws; the timer is cleared on destroy. The case pages of sections 12
+  and 13 keep their own copy code, untouched.
+- `account.page.ts`: the copy button after the id in the title. The
+  paste icon (`content_paste`, `matSuffix`) in the Recipient account id
+  box: `pasteRecipient()` reads `navigator.clipboard.readText()`, takes
+  the first run of exactly 64 hex characters with no hex character on
+  either side (`ACCOUNT_ID_IN_TEXT`), lower-cases it into `accountIdTo`
+  and clears the hint; otherwise one of the two hints of 8.2
+  (`pasteNote`, a `mat-hint`). The field has `subscriptSizing="dynamic"`
+  so a two-line hint pushes the row down instead of overlapping it, and
+  the Send row is top-aligned (`.send`) with the Send button 8 px down
+  so it stays level with the boxes. Chrome asks once whether the site
+  may read the clipboard; Safari shows its Paste bubble at every tap,
+  and a dismissed bubble ends as the "did not allow" hint.
+- `wallet.page.ts`: the copy button at the end of each row, after
+  Resubmit when that shows.
+- `chat.page.ts`: a message is split into pieces when decrypted
+  (`piecesOf`, the same 64-hex rule); an account id piece renders as
+  code with the copy button after it. `ShownMessage` holds `pieces`
+  instead of `text`.
+- Spec: 8.2 Wallet, Account (the title, Send) and Chat, the new 8.5,
+  this note.
+- `npx ng build` clean.
+
+### The transaction history page (2026-11-05)
+
+Step 2 of the send upgrade: the transaction list sat between the
+balance and Send, so Send was hard to find and the list read as part of
+it.
+
+- `src/app/pages/transaction-history.page.ts`
+  (`TransactionHistoryPage`, input `accountId` from the route), the
+  route `/wallet/:accountId/history` in `app.routes.ts` behind the
+  session guard. The rows are the account page's rows, moved as they
+  were (the raw type words included, by decision); `pairOne()` is the
+  trade page's copy; Refresh and Load more set `busy`, which shows the
+  progress bar and disables the buttons. No poll.
+- `account.page.ts`: the Send block moved up to right after the Refresh
+  row, so the page reads balance, Refresh, Send, Pending, Escrow trades,
+  the "Transaction history" button (a stroked link button with the
+  history icon), the two panels. The Transactions heading, list and Load
+  more are gone, with the `transactions` and `canLoadMore` signals,
+  `loadMore()`, `counterpart()` and the `TransactionItem` import.
+  `refresh()` still reads the first page of /list-transactions, now only
+  for the pending list. The class comment rewritten for the order.
+- Spec: 8.1 (the two route lines), 8.2 Account (the order, the Escrow
+  trades and Send sentences) and the new Transaction history paragraph,
+  this note.
+- `npx ng build` clean.
 
 ## 12. Recovery and the moderator edition
 

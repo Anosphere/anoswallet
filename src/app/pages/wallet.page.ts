@@ -9,6 +9,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { RouterLink } from '@angular/router';
 import { millionthsToAnos } from '../amounts';
+import { CopyButtonComponent } from '../components/copy-button.component';
 import { ACCOUNT_POLL_MS } from '../constants';
 import { AnosApiService } from '../services/anos-api.service';
 import { ACCOUNT_TYPES, AccountType, BrowserAccountKeys, CreateAccountTransaction, CryptoService } from '../services/crypto.service';
@@ -46,11 +47,12 @@ const ALREADY_THERE = /already (exists|pending|in the garlic chain)/;
  * The wallet page (wallet spec 8.2): "Your anoPod is complete." The accounts
  * from /list-anos-accounts, each with its type, its masterpod state and its
  * ledger state from /get-account; Create anos account as a progress list;
- * Resubmit for an account whose creation never reached the validator.
+ * Resubmit for an account whose creation never reached the validator. Each
+ * row ends with a copy button for the account id (8.5).
  */
 @Component({
   selector: 'app-wallet-page',
-  imports: [FormsModule, RouterLink, MatCardModule, MatButtonModule, MatListModule, MatIconModule, MatFormFieldModule, MatSelectModule, MatProgressBarModule],
+  imports: [FormsModule, RouterLink, MatCardModule, MatButtonModule, MatListModule, MatIconModule, MatFormFieldModule, MatSelectModule, MatProgressBarModule, CopyButtonComponent],
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
@@ -78,6 +80,7 @@ const ALREADY_THERE = /already (exists|pending|in the garlic chain)/;
                 @if (!account.submittedAt) {
                   <button mat-stroked-button type="button" (click)="resubmit(account)" [disabled]="busy()">Resubmit</button>
                 }
+                <app-copy-button [text]="account.accountId" label="Copy the account id" />
               </span>
             </mat-list-item>
           } @empty {
