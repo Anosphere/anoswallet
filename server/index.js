@@ -16,6 +16,7 @@ const server = createApp(config).listen(config.port, () => {
   console.log(`  build           ${config.distDir}`);
   console.log(`  edition         ${config.edition}`);
   console.log(`  rp id           ${config.rpId}`);
+  console.log(`  locks           guarded ${config.guardedLockMinutes} min, vault ${config.vaultLockMinutes} min, offset ${config.lockOffsetMinutes} min`);
 });
 
 // Each of the thirteen proxies listens for the server closing; Node warns

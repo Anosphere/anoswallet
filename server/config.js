@@ -4,7 +4,10 @@
  * list variables are comma separated, in validator and keyholder order;
  * the browser only ever learns the two counts. EDITION (12.1, 13.1) picks
  * the wallet, the moderator or the attestor edition of the same app; RP_ID
- * is the relying-party id of the browser's two passkey ceremonies.
+ * is the relying-party id of the browser's two passkey ceremonies. The
+ * three lock numbers are the validators' (anossoftware's
+ * network/testnet.env on the testnet) and reach the browser through
+ * /api/config.
  */
 
 function list(name, fallback) {
@@ -57,6 +60,10 @@ export const config = Object.freeze({
   signingServerUrl: url('SIGNING_SERVER_URL', 'http://localhost:3300'),
   shareThreshold: integer('SHARE_THRESHOLD', 3),
   defaultValidator: integer('DEFAULT_VALIDATOR', 1),
+  /** The time locks on guarded and vault accounts and the offset, in minutes: the validators' numbers (wallet spec 2), answered to the browser by /api/config. The local defaults are this machine's validators'. */
+  guardedLockMinutes: integer('GUARDED_LOCK_MINUTES', 1),
+  vaultLockMinutes: integer('VAULT_LOCK_MINUTES', 2),
+  lockOffsetMinutes: integer('LOCK_OFFSET_MINUTES', 1),
   distDir: process.env.DIST_DIR ?? 'dist/wallet/browser',
   /** How long a backend has to answer, in milliseconds. */
   proxyTimeoutMs: 120_000,

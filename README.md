@@ -28,8 +28,9 @@ the build from 4300 as well.
 ## The proxy (server/)
 
 The one origin the browser talks to. `GET /api/config` tells the browser
-how many validators and keyholders there are; `/api/masterpod/<path>`,
-`/api/anos/<n>/<path>`, `/api/keyholder/<n>/<path>`, `POST /api/sign` and
+how many validators and keyholders there are and the three lock numbers;
+`/api/masterpod/<path>`, `/api/anos/<n>/<path>`,
+`/api/keyholder/<n>/<path>`, `POST /api/sign` and
 `GET /api/sign/public-keys` are forwarded with the prefix cut, bodies
 streamed, the browser's Origin kept, the backend's answer returned
 unchanged; a backend that does not answer is `502 { error: "<who>
@@ -37,7 +38,9 @@ unavailable" }`. Everything else is the Angular build (`dist/wallet/browser`),
 with `index.html` for the router's deep links. Variables, each with a
 local default (`server/config.js`): `PORT` 4300, `MASTERPOD_URL`,
 `VALIDATOR_URLS`, `KEYHOLDER_URLS`, `SIGNING_SERVER_URL`, `SHARE_THRESHOLD`
-3, `DEFAULT_VALIDATOR` 1, `DIST_DIR`, `RP_ID` localhost.
+3, `DEFAULT_VALIDATOR` 1, `DIST_DIR`, `RP_ID` localhost,
+`GUARDED_LOCK_MINUTES` 1, `VAULT_LOCK_MINUTES` 2, `LOCK_OFFSET_MINUTES` 1
+(the validators' lock numbers, answered in `/api/config`).
 
 ## Layout
 
@@ -49,7 +52,7 @@ server/
 src/app/
   app.ts, app.html         the shell: toolbar, side navigation by status, the notification poll
   app.routes.ts            the routes of spec 8.1; session.guard.ts sends anyone without a session to /
-  constants.ts             the lock minutes, the PRF salt label, the polling intervals
+  constants.ts             the PRF salt label, the polling intervals
   amounts.ts               anos <-> millionths
   countries.ts             the ISO 3166-1 alpha-2 codes for the identity form
   unlock.ts                the unlock flow, shared by the landing page and setup
@@ -89,9 +92,10 @@ servers from a chat. On each server:
   `node --env-file=network/wallet.env server/index.js` as `wallet`.
 - The environment is the committed `network/wallet.env`: the masterpod,
   the validators and the keyholders in registry order, the signing
-  server, the threshold, the default validator and RP_ID. Nothing in it
-  is secret and both servers hold it byte for byte; EDITION and PORT come
-  from the unit. No `.env` exists on the servers.
+  server, the threshold, the default validator, RP_ID and the three lock
+  numbers, equal to the validators'. Nothing in it is secret and both
+  servers hold it byte for byte; EDITION and PORT come from the unit. No
+  `.env` exists on the servers.
 - nginx ends TLS for https://wallet.anocloud.com,
   https://attestor.wallet.anocloud.com and
   https://moderator.wallet.anocloud.com with the site
