@@ -2,7 +2,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { millionthsToAnos } from '../amounts';
 import { CryptoService } from './crypto.service';
 import { ApiResponse } from './log.service';
-import { MasterpodApiService, RoomItem, RoomMember, RoomsAnswer } from './masterpod-api.service';
+import { MasterpodApiService, RoomItem, RoomListing, RoomMember, RoomsAnswer } from './masterpod-api.service';
 import { Bytes } from './passkey.service';
 import { SessionService } from './session.service';
 
@@ -102,7 +102,12 @@ export class ChatService {
 
   // --- how a room reads -----------------------------------------------------
 
-  /** The room's title: a public room's name; a listing room's "Sell 50 anos for THB"; a private room's other people, the invited marked, or "Just you". */
+  /**
+   * The room's title: a public room's name; an old listing room's "Sell 50
+   * anos for THB"; a private room's other people, the invited marked, or
+   * "Just you", and for a private room about a listing (2026-11-06) the
+   * listing's words after them: "somchai · Selling 100 anos for THB".
+   */
   title(room: RoomItem): string {
     if (room.type === 'public') return room.name ?? 'Public room';
     if (room.type === 'marketplace') {
@@ -111,7 +116,13 @@ export class ChatService {
       return `${listing.side === 'sell' ? 'Sell' : 'Buy'} ${millionthsToAnos(listing.quantity)} anos for ${listing.currency}`;
     }
     const names = [...this.otherMembers(room).map((m) => m.username), ...room.invited.map((m) => `${m.username} (invited)`)];
-    return names.length > 0 ? names.join(', ') : 'Just you';
+    const people = names.length > 0 ? names.join(', ') : 'Just you';
+    return room.listing ? `${people} · ${this.listingWords(room.listing)}` : people;
+  }
+
+  /** A listing in a few words, for a room's title and a request (2026-11-06): "Selling 100 anos for THB". */
+  listingWords(listing: RoomListing): string {
+    return `${listing.side === 'sell' ? 'Selling' : 'Buying'} ${millionthsToAnos(listing.quantity)} anos for ${listing.currency}`;
   }
 
   /** Direct for a private room with exactly one other person, member or invited; else group, public or marketplace. */

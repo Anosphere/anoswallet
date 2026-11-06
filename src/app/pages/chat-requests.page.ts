@@ -88,7 +88,9 @@ export class ChatRequestsPage {
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
 
+  /** An invite about a listing reads "wants to chat about your listing Selling 100 anos for THB" (2026-11-06); the others as before. */
   protected inviteText(invite: InviteItem): string {
+    if (invite.listing) return `wants to chat about your listing ${this.chat.listingWords(invite.listing)}`;
     return invite.type === 'public' ? `invited you to "${invite.name}"` : 'invited you to a private chat';
   }
 
