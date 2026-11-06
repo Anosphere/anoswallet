@@ -14,11 +14,14 @@ import { CreatePage } from './pages/create.page';
 import { EscrowTradePage } from './pages/escrow-trade.page';
 import { IdentityPage } from './pages/identity.page';
 import { LandingPage } from './pages/landing.page';
+import { ListingNewPage } from './pages/listing-new.page';
+import { ListingPage } from './pages/listing.page';
 import { LogPage } from './pages/log.page';
 import { MarketplacePage } from './pages/marketplace.page';
 import { ModerationCasePage } from './pages/moderation-case.page';
 import { ModerationPage } from './pages/moderation.page';
 import { MyCasePage } from './pages/my-case.page';
+import { MyListingsPage } from './pages/my-listings.page';
 import { NotificationsPage } from './pages/notifications.page';
 import { RecoverCasePage } from './pages/recover-case.page';
 import { RecoverOpenPage } from './pages/recover-open.page';
@@ -70,6 +73,9 @@ export const routes: Routes = [
     ],
   },
   { path: 'marketplace', component: MarketplacePage, canActivate: [sessionGuard], title: 'Marketplace' },
+  { path: 'marketplace/new', component: ListingNewPage, canActivate: [sessionGuard], title: 'New listing' },
+  { path: 'marketplace/mine', component: MyListingsPage, canActivate: [sessionGuard], title: 'Your listings' },
+  { path: 'marketplace/:listingId', component: ListingPage, canActivate: [sessionGuard], title: 'Listing' },
   { path: 'notifications', component: NotificationsPage, canActivate: [sessionGuard], title: 'Notifications' },
   { path: 'seed', component: SeedPage, canActivate: [sessionGuard], title: 'Vouch requests' },
   { path: 'moderation', component: ModerationPage, canActivate: [moderationGuard], title: 'Moderation' },

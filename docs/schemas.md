@@ -381,7 +381,10 @@ as in the test apps; a new tab unlocks again.
     /chat/requests           invites to me and join requests on my rooms
     /chat/new                start a chat: Message someone, New public room, Find public rooms
     /chat/:chatRoomId        one conversation
-    /marketplace             listings
+    /marketplace             browse: the filter chips, the Your listings row, the cards
+    /marketplace/new         a new listing
+    /marketplace/mine        your listings, open first, with who connected and Close
+    /marketplace/:listingId  one listing: the details, the owner, Connect / Waiting / Open chat; the owner's view
     /notifications           the list, mark read
     /seed                    the vouch request inbox (seeds only)
     /log                     the activity log, newest 40 calls, polls excepted (the test apps' Log)
@@ -688,9 +691,11 @@ decrypted as one line, "You: " before this pod's own, "No messages yet"
 without one, "(cannot read)" when it will not open; and the time (today
 the time, yesterday "Yesterday", within six days the weekday, else the
 date); an unread room (below) has a dot under the time and a bold
-title. A room's title: a public room's name; a listing room's "Sell 50
-anos for THB" from the listing summary the masterpod sends; a private
-room's other people, the invited as "mai (invited)", or "Just you". The
+title. A room's title: a public room's name; an old listing room's "Sell
+50 anos for THB" from the listing summary the masterpod sends; a private
+room's other people, the invited as "mai (invited)", or "Just you", and
+for a private room about a listing (2026-11-06) the listing's words after
+them, "somchai · Selling 100 anos for THB". The
 rooms are the latest /list-chat-rooms answer kept in the session, which
 the shell's 5-second poll refreshes once setup is complete; the list
 refreshes it once when it opens. "No chat keys in this tab: unlock
@@ -724,9 +729,53 @@ line. The room is marked seen (Unread, below) when it opens and when
 new messages show. "You are not in this chat." for a room that is not in
 the list.
 
+The pinned card (2026-11-06, section 11), in a private room about a
+listing, under the header and its panels and above the thread: the
+listing in one line, "Selling 100 anos · 35.50 THB each · 3,550 THB",
+with the other person's avatar (8.6) and Closed when the listing is
+closed; the roles from the listing (the owner of a sell listing and the
+other person of a buy listing are the seller). The buyer's "Share an
+account": a menu of this pod's accounts (the id shortened, the type); one
+tap posts "Please send the anos to this account: <the account id>" into
+the chat, encrypted like any message, so the thread shows the id in code
+font with its copy button (8.5). The seller's "Start the escrow trade",
+disabled with the hint "Ask them to share an account first" until the
+other person has posted an account id: a small form in the card, From
+(this pod's spending accounts; one is fixed, more is a select), To (the
+other person's account ids in the chat, newest first; one is fixed),
+Amount in anos (the listing's quantity at first), the total at the
+listing's price, Start and Cancel; Start asks once in place ("Put 100
+anos into escrow for somchai? You release them once you have been paid.
+Only the buyer can cancel; either side can dispute.", Yes or Back), and
+Yes builds the escrowTransfer as the account page's Send does (pair one
+from the account's keyBlob and the encryption key, /get-account for the
+latest transaction id, buildAnosTransferTransaction with type
+escrowTransfer, /api/sign, /anos-transfer), posts "Escrow trade started:
+100 anos from <my account id> to <their account id>. Transaction <id>."
+and shows the stage; a refusal shows the validator's reason as the
+account page shows it. The stage: every 5 seconds while the conversation
+is open, /list-escrows on each of this pod's accounts named in the chat
+(an id in the messages that is one of session.accounts, pair one from its
+keyBlob); the newest trade whose other side is an account named in the
+chat shows as "Escrow trade: 100 anos · Waiting for the seller to release
+the anos" (escrow-stage.ts, by this pod's side) with "See the trade" to
+/wallet/<my account>/escrow/<transactionId>; Release, Cancel and Dispute
+stay on that page. A trade seen open here and then gone from the list is
+closed: its id on the first page of /list-transactions of my account
+means "Released: 100 anos went to the buyer.", otherwise "Cancelled: the
+seller kept the anos." (the trade page's rule); after a release the owner
+of an open listing gets "Close the listing", which asks once and calls
+/close-listing, and the card reads Closed once the room list is
+refreshed. Share and Start show until a trade has started, and again
+after a cancelled one; a closed listing's card shows only the stage of a
+trade when there is one. A room whose listing the masterpod does not give
+shows no card.
+
 Requests, at /chat/requests: the invites to this pod (the inviter's
-username, then `invited you to "<the public room's name>"` or `invited
-you to a private chat`), Accept (the room opens) and Decline; the join
+username, then `invited you to "<the public room's name>"`, `invited you
+to a private chat` or, for a room about one of this pod's listings,
+`wants to chat about your listing Selling 100 anos for THB`; 2026-11-06),
+Accept (the room opens) and Decline; the join
 requests on the rooms this pod created (`<username> asks to join
 <title>`), Approve (the room key wrapped to the requester) and Decline;
 each with the person's avatar; "No requests." when both lists are empty.
@@ -755,12 +804,84 @@ every room with messages as unread until each is opened once. A count of
 messages is not possible, since positions count across all rooms
 (2026-11-05, section 11).
 
-Marketplace: the masterpod test app's section, ported to Material lists
-and forms, the same calls, listings with filters and sort, a listing's
-room. The owner's Room link opens the listing's room at
-/chat/:chatRoomId; another's listing shows Open chat when this pod is in
-its room, Requested after a request from this tab, else Request to join
-(2026-11-05, section 11).
+Marketplace (rebuilt for the phone 2026-11-06, section 11; the plan is
+forclaude/wallet-marketplace-plan-1.md): four screens. Browse, at
+/marketplace: one row of chips on top, scrolling sideways on a phone: All,
+Selling, Buying (one chosen, All at first); Country and Currency, each
+showing the chosen name or its own word and opening the picker sheet
+(8.7); Sort, a menu of Newest, Price low to high and Price high to low;
+Filters, with the number of ranges set, opening the filters sheet (8.7). A
+chip change reads the listings again: /list-listings with the side, the
+currency, the country, the sort and limit 200, open listings only. Under
+the chips a "Your listings" row with a storefront icon and the line "N
+open · M waiting", shown while this pod has listings or someone waits on
+one (the open count from one /list-listings with mine when the page
+opens, the waiting count the invites to this pod that carry a listing),
+to /marketplace/mine. Then the cards (8.7) in a grid, one column on a
+phone and two or three on a desktop; the quantity and price ranges are
+applied on the phone over the listings loaded, the price range only once
+a currency is picked; "No listings match." when nothing is left; a
+refused read in red. A round + at the bottom right to /marketplace/new on
+a phone, a New listing button in the chip row on a desktop. The country
+and the currency picked last are remembered on the device (localStorage,
+`anopod-wallet.marketplace-filters`); Browse opens with them and the
+new-listing form starts from them.
+
+Listing, at /marketplace/:listingId: /get-listing when the page opens and
+after Connect, Accept, Decline and Close ("Loading" meanwhile, "This
+listing does not exist." on a 404); a back arrow to /marketplace; the
+price in large bold text ("35.50 THB per anos"), then "Selling 100
+anos", "Total 3,550 THB", the country's name, when it was posted, and the
+owner with their avatar (8.6, 56 px), username and name; a Closed banner
+when closed. Someone else's listing, by this pod's own room about it
+(8.3, marketplace.service): no room, a big Connect that opens the
+first-message box, a textarea with "Hi, is this still available?" on a
+Selling listing or "Hi, I can sell you anos. Are you still buying?" on a
+Buying one, which can be changed, Send and Cancel; Send makes a private
+room about the listing with a new room key, invites the owner with the
+key wrapped to theirs and sends the message, and the state becomes
+waiting; the owner invited, the big button disabled reading "Waiting for
+somchai to accept"; the owner in, a big Open chat to the conversation; the
+owner neither, "somchai did not accept." and Connect again, the box
+again, the invite and the message into the same room. A closed listing
+shows "This listing is closed." instead of Connect and keeps Open chat
+when a room exists. The error line in red under the button; without chat
+keys "No chat keys in this tab: unlock again." and Connect disabled. This
+pod's own listing: the people who connected (8.7) and, for an open
+listing, Close listing, which asks once in place ("Close this listing?
+People can no longer connect; your chats stay.", Yes or Back) and calls
+/close-listing; a closed one has nothing to do.
+
+New listing, at /marketplace/new: a back arrow; two large toggle buttons,
+"I am selling anos" and "I am buying anos" (selling at first); the
+quantity in anos (up to six decimals); the price per anos (a decimal, up
+to eight decimals, two usual); Currency and Country as buttons that open
+the picker sheet (8.7) and show the chosen name, the remembered ones at
+first; a live "Total 3,550 THB" once the three are in; Create listing,
+which calls /create-listing (side, quantity in millionths, currency,
+country, price; no room and no key work) and opens the listing's page; the
+refusal in red.
+
+Your listings, at /marketplace/mine: a back arrow; /list-listings with
+mine and status any when the page opens and after a Close: the open
+listings first, newest first, then the closed ones; each a card (8.7)
+with, under it, the people who connected (8.7) and, for an open listing,
+Close, asking once as on the listing page. "You have no listings yet."
+with a New listing button when there are none.
+
+The prices (src/app/prices.ts): a price shows with at least two decimals,
+the whole part grouped by the browser's locale and the currency code after
+the number, never a symbol ("35.50 THB"); a total is the quantity times
+the price rounded to two decimals on the digits (BigInt, as amounts.ts
+does amounts), shown without decimals when whole ("3,550 THB", else
+"3,554.38 THB"); the currencies and their names come from
+Intl.supportedValuesOf and Intl.DisplayNames, the countries' names from
+Intl.DisplayNames (src/app/countries.ts, countryName). Nobody types a
+currency or country code, an anopod id or an account id: the pickers show
+names, people are found by username and selfie. The old group room per
+listing is not made any more; old marketplace rooms stay in Chat for the
+people in them, and Request to join stays for public rooms (Chat, New
+chat).
 
 Notifications: the list, newest first, mark read; the 5-second poll
 runs while a session is open and updates the status (vouched, counts),
@@ -785,13 +906,21 @@ excepted, with the keyholder and anos calls included.
                             latest /list-chat-rooms answer), the seen positions with markSeen and the unread
                             rooms (2026-11-05); the next-step rule
     masterpod-api.service   the keyholder test app's api.service.ts, base path /api/masterpod, the two changed
-                            routes and the four new ones added
+                            routes and the four new ones added; the marketplace routes of 2026-11-06: getListing,
+                            listingId on createChatRoom, mine and status any on listListings, no hpkeKey on
+                            createListing, the fuller RoomListing and the listing on an invite
     keyholder-api.service   the keyholder test app's, base path /api/keyholder/<n>
     anos-api.service        the anos test app's account-api.service.ts, base path /api/anos/<defaultValidator>,
                             plus the three signed reads (listEscrows added 2026-11-05)
     chat.service            what the chat pages share (2026-11-05): room keys (roomKeyOf, wrapFor), decryptMessage,
                             piecesOf, a room's title, kind, icon and other person, the order by activity, shortWhen,
-                            timeOf and dayLabel, requestedRooms, refreshRooms
+                            timeOf and dayLabel, requestedRooms, refreshRooms; listingWords, a listing in a few
+                            words for a title or a request (2026-11-06)
+    marketplace.service     what the marketplace pages share (2026-11-06): load, get, mine and close (the reads
+                            and the close), sideWords, mySide and firstWords, the rooms and invites about a
+                            listing out of session.chatRooms (roomsAbout, myRoomAbout, invitesAbout,
+                            waitingCount), stateOf, connect and connectAgain, and the country and currency this
+                            device remembers (remembered, remember)
     profile-cache.service   one /get-anopod-profile per pod per tab, quiet, as a signal: undefined while it loads,
                             null when there is no such pod (2026-11-05)
     signing.service         /api/sign/public-keys and /api/sign
@@ -836,7 +965,51 @@ One small component, src/app/components/avatar.component.ts
 else a round disc in the primary-container colour with the first letter
 of the username. The profile comes from profile-cache.service (8.3), one
 /get-anopod-profile per pod per tab. In the chat list, the conversation
-header, the members panel and the chat requests.
+header, the members panel and the chat requests; since 2026-11-06 also on
+the listing cards (24 px), the listing page (56 px), the people who
+connected and the pinned listing card (8.7).
+
+### 8.7 The marketplace components
+
+Five small components (2026-11-06, section 11), under
+src/app/components/:
+
+- listing-card.component.ts (`<app-listing-card [listing]>`): the card of
+  Browse and Your listings, a link to the listing's page. Line 1 in bold,
+  "35.50 THB per anos"; line 2, "Selling 100 anos · 3,550 THB"; line 3,
+  the owner's avatar (24 px), username, country name and the short time
+  of the chat list (shortWhen). Small labels when so: Yours, Closed,
+  Waiting (this pod's room about it, the owner not yet in), Chat open
+  (the owner in).
+- listing-people.component.ts (`<app-listing-people [listing]
+  (changed)>`): the owner's block of the listing page and Your listings:
+  the people waiting (the invites to this pod about the listing: avatar,
+  "somchai wants to chat", Accept, which calls /accept-invite and
+  refreshes the rooms, and Decline), then the chats (the rooms about it:
+  avatar, username, Open chat to /chat/:chatRoomId); "Nobody has
+  connected yet." when both are empty. Live from session.chatRooms;
+  `changed` fires after an answer so the listing page reads its listing
+  again.
+- picker-sheet.component.ts (`PickerSheetComponent`), opened with
+  MatBottomSheet for a country or a currency, on Browse and on the
+  new-listing form: a title, a search box, "Any" on top when the sheet
+  allows it, the options `{ code, name }` whose code or name contains the
+  typed letters; tapping one closes the sheet with the code. Without any
+  option (a browser that does not know the currencies) a typed
+  three-letter code can be used as it is.
+- filters-sheet.component.ts (`FiltersSheetComponent`): the quantity
+  range (least and most anos) and the price range (least and most,
+  disabled with the hint "Pick a currency first" while Browse has no
+  currency), Apply and Clear.
+- pinned-listing.component.ts (`<app-pinned-listing [room]
+  [accountIds]>`): the pinned card of a private room about a listing (8.2,
+  Chat), drawn by chat-room.page.ts under its header, above the thread.
+  `accountIds` is the page's computed of the account ids found in the
+  decrypted messages (the 64-hex pieces of `piecesOf`), each with its
+  sender and position, newest first; the page changes only to draw the
+  card and feed it. The card posts its own messages (Share an account,
+  Escrow trade started) encrypted with the room key, and the thread's poll
+  shows them. It exports `FoundAccountId`.
 
 ## 9. Configuration, and running it on this machine
 
@@ -1513,6 +1686,87 @@ Built in the same round as step 4.
 - Spec: 8.1 (the navigation), 8.2 Chat (the list row, the conversation's
   marking, Unread), 8.3, this note.
 - `npx ng build` clean (1.49 MB initial).
+
+### The marketplace, step 2 (2026-11-06)
+
+Step 2 of forclaude/wallet-marketplace-plan-1.md, the wallet's screens,
+on the masterpod of step 1 (its /get-listing, the listingId on
+/create-chat-room, the listing on every room and invite). The old
+marketplace page was a Material list with typed codes and one group room
+per listing.
+
+- `src/app/services/marketplace.service.ts` (`MarketplaceService`, 8.3):
+  the reads, the words and roles, the rooms and invites about a listing
+  out of `session.chatRooms`, `stateOf`, `connect` (the Message someone
+  flow of chat-new.page.ts with the listing and the first message) and
+  `connectAgain`, and `remembered` with `remember`. `firstWords` holds
+  the ready-made first message of the plan's decision 3.
+- `src/app/prices.ts`: `formatPrice(amount, currency, minimumDecimals =
+  2)`, `totalOf`, `currencyOptions`, and `priceUnits`, the parser they
+  share (a price scaled to eight decimals, a BigInt), which the new
+  listing form and the price range use too. A total is rounded to two
+  decimals and shown without decimals when whole, so a card reads "3,550
+  THB" as the plan writes it, and "3,554.38 THB" otherwise.
+  `src/app/countries.ts`: `countryName`.
+- The four components of 8.7. The picker and filters sheets open with
+  `autoFocus: 'dialog'`, so a phone does not raise its keyboard before
+  the person taps the search box.
+- `marketplace.page.ts` (Browse) rewritten: the chip row
+  (`mat-chip-listbox` for the side, `mat-chip`s with `role="button"` for
+  the pickers, the sort menu and the filters), the Your listings row, the
+  grid, the fab; `inRanges` applies the two ranges on the digits. The
+  pages `listing.page.ts`, `listing-new.page.ts` and
+  `my-listings.page.ts` are new; the routes `marketplace/new` and
+  `marketplace/mine` come before `marketplace/:listingId`.
+- `masterpod-api.service.ts`: `RoomListing` in its fuller form,
+  `listingId` and `listing` on `InviteItem`, `ListingItem.chatRoomId`
+  nullable, `ListingFields` without `hpkeKey`, `ListingFilters.mine` and
+  `status: 'any'`, `getListing`, `createChatRoom` with the optional
+  `listingId`. `chat.service.ts`: `title` adds the listing's words to a
+  private room about a listing; `listingWords` is shared with the
+  Requests wording in `chat-requests.page.ts`.
+- Readings where the plan left a detail open: the remembered country and
+  currency are written by Browse's pickers and by a created listing;
+  Clear in the filters sheet closes it with no ranges; the people who
+  connected show the room's creator, who is the person who connected; a
+  closed listing in the waiting state reads "This listing is closed."
+  too.
+- Spec: 8.1, 8.2 (Marketplace rewritten; Chat, the title and the
+  Requests wording), 8.3, 8.6, the new 8.7, this note.
+- `npx ng build` clean (1.60 MB initial).
+
+### The marketplace, step 3 (2026-11-06)
+
+Step 3 of forclaude/wallet-marketplace-plan-1.md, the trade from the chat:
+the pinned card of 8.7 and its paragraph in 8.2 Chat. Only one page
+changes.
+
+- `src/app/components/pinned-listing.component.ts`
+  (`PinnedListingComponent`): the card. The roles come from
+  `MarketplaceService.mySide(room.listing)`; the first line from
+  `formatPrice` and `totalOf`; the stage words from `escrowStageWords`.
+  `start()` copies the account page's Send for the escrowTransfer, with
+  `createdAt` now (a spending account has no lock); a refusal shows as
+  "The validator refused the trade: " and the reason as `reasonOf` gives
+  it, the account page's words. `poll()` runs when one of this pod's
+  accounts is first named in the chat and every ACCOUNT_POLL_MS; a quiet
+  read that fails keeps the card as it is. `post()` sends an encrypted
+  message with the room key from `ChatService.roomKeyOf`; the thread's
+  3-second poll shows it.
+- `chat-room.page.ts`: `accountIds`, a computed over `messages()`
+  (lower-cased ids, newest position first), and the card drawn under the
+  panels when the room is private and has a listing. The thread and the
+  composer are untouched.
+- Readings where the plan left a detail open: the card carries the other
+  person's avatar at the left of its first line (8.6 names the card as an
+  avatar's use); Share and Start come back after a cancelled trade, so a
+  second trade can be started in the same chat, and stay away after a
+  release; Close the listing refreshes the room list at once rather than
+  waiting for the shell's poll; the seller's From starts as the first
+  spending account and the To as the newest account id the other person
+  posted.
+- Spec: 8.2 Chat (the pinned card), 8.6, 8.7, this note.
+- `npx ng build` clean (1.61 MB initial).
 
 ## 12. Recovery and the moderator edition
 

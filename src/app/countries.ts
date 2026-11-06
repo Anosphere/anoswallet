@@ -1,6 +1,7 @@
 /**
  * ISO 3166-1 alpha-2 codes, for the country select of the identity form
- * (docs/public-ledger-id.md section 1). The names come from the browser's
+ * (docs/public-ledger-id.md section 1) and the marketplace's country
+ * picker, cards and chips (2026-11-06). The names come from the browser's
  * Intl.DisplayNames at run time, so only the codes are listed here.
  */
 export const COUNTRY_CODES: readonly string[] = [
@@ -35,4 +36,9 @@ export const COUNTRY_CODES: readonly string[] = [
 export function countryOptions(): { code: string; name: string }[] {
   const names = new Intl.DisplayNames(['en'], { type: 'region' });
   return COUNTRY_CODES.map((code) => ({ code, name: names.of(code) ?? code })).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** The country's name, the code itself when the browser has no name for it: the marketplace's cards, chips and listing page (2026-11-06). */
+export function countryName(code: string): string {
+  return new Intl.DisplayNames(['en'], { type: 'region' }).of(code) ?? code;
 }

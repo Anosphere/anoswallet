@@ -132,11 +132,16 @@ export interface RoomMember {
   username: string;
 }
 
-/** The listing behind a marketplace room, as /list-chat-rooms summarises it: the quantity in millionths, a decimal string. */
+/** The listing a room is about, as /list-chat-rooms gives it (2026-11-06): the quantity in millionths and the price per anos, decimal strings; the owner by id and username. */
 export interface RoomListing {
+  listingId: string;
   side: 'buy' | 'sell';
   quantity: string;
   currency: string;
+  country: string;
+  price: string;
+  status: 'open' | 'closed';
+  owner: RoomMember;
 }
 
 export interface RoomItem {
@@ -144,7 +149,7 @@ export interface RoomItem {
   type: 'private' | 'public' | 'marketplace';
   name: string | null;
   listingId: string | null;
-  /** The listing's summary for a marketplace room, null for the others. */
+  /** The listing the room is about (an old marketplace room, or a private room made with a listingId), null for the others. */
   listing: RoomListing | null;
   creatorAnopodId: string;
   hpkeKey: string;
@@ -162,6 +167,9 @@ export interface InviteItem {
   chatRoomId: string;
   type: string;
   name: string | null;
+  /** The listing the room is about, null for a room without one (2026-11-06). */
+  listingId: string | null;
+  listing: RoomListing | null;
   from: Profile;
   createdAt: string;
 }
@@ -208,20 +216,22 @@ export interface ChatKeyItem {
   chatPublicKeyPq: string;
 }
 
+/** The body of /create-listing: no room key since 2026-11-06, a listing has no room of its own. */
 export interface ListingFields {
   side: 'buy' | 'sell';
   quantity: string;
   currency: string;
   country: string;
   price: string;
-  hpkeKey: string;
 }
 
+/** The body of /list-listings; `mine` restricts it to the caller's own listings and `status` takes `any` (2026-11-06). */
 export interface ListingFilters {
   side?: string;
   currency?: string;
   country?: string;
-  status?: string;
+  status?: 'open' | 'closed' | 'any';
+  mine?: boolean;
   sortBy?: string;
   sortDirection?: string;
   limit?: number;
@@ -230,7 +240,8 @@ export interface ListingFilters {
 
 export interface ListingItem {
   listingId: string;
-  chatRoomId: string;
+  /** The old marketplace room of a listing made before 2026-11-06, null since. */
+  chatRoomId: string | null;
   owner: Profile;
   side: 'buy' | 'sell';
   quantity: string;
@@ -645,8 +656,11 @@ export class MasterpodApiService {
 
   // --- level setup: chat --------------------------------------------------
 
-  createChatRoom(type: 'private' | 'public', name: string | undefined, hpkeKey: string): Promise<ApiResponse<{ chatRoomId: string }>> {
-    return this.signed('/create-chat-room', type === 'public' ? { type, name, hpkeKey } : { type, hpkeKey });
+  /** A room; `listingId` makes a private room about that listing (2026-11-06). */
+  createChatRoom(type: 'private' | 'public', name: string | undefined, hpkeKey: string, listingId?: string): Promise<ApiResponse<{ chatRoomId: string }>> {
+    const body: Record<string, unknown> = type === 'public' ? { type, name, hpkeKey } : { type, hpkeKey };
+    if (listingId !== undefined) body['listingId'] = listingId;
+    return this.signed('/create-chat-room', body);
   }
 
   inviteToChatRoom(chatRoomId: string, anopodIdTo: string, hpkeKey: string): Promise<ApiResponse<{ inviteId: string }>> {
@@ -700,7 +714,7 @@ export class MasterpodApiService {
 
   // --- level setup: marketplace -------------------------------------------
 
-  createListing(fields: ListingFields): Promise<ApiResponse<{ listingId: string; chatRoomId: string }>> {
+  createListing(fields: ListingFields): Promise<ApiResponse<{ listingId: string; chatRoomId: string | null }>> {
     return this.signed('/create-listing', fields);
   }
 
@@ -710,6 +724,11 @@ export class MasterpodApiService {
 
   listListings(filters: ListingFilters): Promise<ApiResponse<{ listings: ListingItem[] }>> {
     return this.signed('/list-listings', filters);
+  }
+
+  /** One listing, open or closed, in the list's form (2026-11-06). */
+  getListing(listingId: string): Promise<ApiResponse<{ listing: ListingItem }>> {
+    return this.signed('/get-listing', { listingId });
   }
 
   // --- level setup: anos accounts (wallet spec 4.4) -------------------------
