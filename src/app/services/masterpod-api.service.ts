@@ -132,14 +132,27 @@ export interface RoomMember {
   username: string;
 }
 
+/** The listing behind a marketplace room, as /list-chat-rooms summarises it: the quantity in millionths, a decimal string. */
+export interface RoomListing {
+  side: 'buy' | 'sell';
+  quantity: string;
+  currency: string;
+}
+
 export interface RoomItem {
   chatRoomId: string;
   type: 'private' | 'public' | 'marketplace';
   name: string | null;
   listingId: string | null;
+  /** The listing's summary for a marketplace room, null for the others. */
+  listing: RoomListing | null;
   creatorAnopodId: string;
   hpkeKey: string;
   members: RoomMember[];
+  /** The people invited who have not answered yet, oldest first. */
+  invited: RoomMember[];
+  /** The room's newest message, null when it has none. */
+  lastMessage: MessageItem | null;
   lastPosition: number;
   createdAt: string;
 }
@@ -180,6 +193,13 @@ export interface MessageItem {
   senderAnopodId: string;
   message: string;
   createdAt: string;
+}
+
+/** The query of /list-messages: the messages after a position, or with `beforePosition` the newest `limit` below it, afterPosition then ignored. */
+export interface MessagesQuery {
+  afterPosition?: number;
+  beforePosition?: number;
+  limit?: number;
 }
 
 export interface ChatKeyItem {
@@ -665,8 +685,9 @@ export class MasterpodApiService {
     return this.signed('/list-public-chat-rooms', {});
   }
 
-  listMessages(chatRoomId: string, afterPosition: number, quiet = false): Promise<ApiResponse<{ messages: MessageItem[] }>> {
-    return this.signed('/list-messages', { chatRoomId, afterPosition }, quiet);
+  /** The room's messages after a position (the poll), or with `beforePosition` the newest `limit` below it (opening a room, loading older ones). */
+  listMessages(chatRoomId: string, query: MessagesQuery, quiet = false): Promise<ApiResponse<{ messages: MessageItem[] }>> {
+    return this.signed('/list-messages', { chatRoomId, ...query }, quiet);
   }
 
   sendMessage(chatRoomId: string, message: string): Promise<ApiResponse<{ messageId: string; position: number }>> {
