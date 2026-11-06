@@ -105,11 +105,25 @@ export interface EscrowItem {
   verdicts: EscrowVerdictSummary[];
 }
 
+/** Where a held assisted transfer is, as the validator names it (anossoftware spec 17.2). A word the wallet does not know is shown as held with no action. */
+export type AssistedStage = 'waiting' | 'attesting' | 'writing' | 'cancelling';
+
+/** The signer's own held assisted transfer, as /get-assisted-transfer answers it (anossoftware spec 17): accountId the sender, accountIdTo the receiver, attestations the slots holding one, 0, 1 or 2. */
+export interface HeldAssistedTransfer {
+  transactionId: string;
+  accountId: string;
+  accountIdTo: string;
+  amount: string;
+  createdAt: string;
+  stage: AssistedStage | string;
+  attestations: number;
+}
+
 /**
  * All HTTP calls to the validators (the anos test app's
  * account-api.service.ts, base path /api/anos/<defaultValidator>), plus the
- * three signed reads of the account level (/list-escrows: anossoftware 16)
- * and the two attestor reads
+ * four signed reads of the account level (/list-escrows: anossoftware 16,
+ * /get-assisted-transfer: anossoftware 17) and the two attestor reads
  * (anossoftware 13, the account level plus attestor stake). One method per
  * endpoint; every one resolves to the status and the body, never throws on
  * an HTTP error.
@@ -175,6 +189,11 @@ export class AnosApiService {
   /** POST /list-escrows, signed by pair one: the account's open escrow trades as seller or buyer, newest first (anossoftware spec 16). */
   listEscrows(pairOne: PairOne, accountId: string, quiet = false): Promise<ApiResponse<{ escrows: EscrowItem[] }>> {
     return this.post('/list-escrows', this.crypto.signAccountEnvelope(pairOne, accountId, '/list-escrows', {}), quiet);
+  }
+
+  /** POST /get-assisted-transfer, signed by pair one: the account's own held assisted transfer, or null when none is held (anossoftware spec 17). */
+  getAssistedTransfer(pairOne: PairOne, accountId: string, quiet = false): Promise<ApiResponse<{ transfer: HeldAssistedTransfer | null }>> {
+    return this.post('/get-assisted-transfer', this.crypto.signAccountEnvelope(pairOne, accountId, '/get-assisted-transfer', {}), quiet);
   }
 
   // --- the attestor reads (anossoftware 13.2): the account envelope as getAccount builds it, the signer staked for attestor ---

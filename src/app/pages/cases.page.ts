@@ -39,10 +39,13 @@ interface KnownTransaction {
  * Cases (wallet spec 13.3, /cases, every edition): /list-my-cases, the
  * trades and the disputes where this pod is a party, newest first, each row
  * the kind, the amount and the other account when the account's transaction
- * list (/list-transactions, as the account page reads it) knows the
- * transaction, otherwise the transaction id, the status in words and when
- * it was opened. A row opens /cases/:caseId. A held trade or escrow is not
- * in that list until it lands, so the id shows while a case is open.
+ * list (/list-transactions, as the account page reads it) or, on an
+ * assisted account, its held transfer (/get-assisted-transfer, 2026-11-06)
+ * knows the transaction, otherwise the transaction id, the status in words
+ * and when it was opened. A row opens /cases/:caseId. A held escrow is not
+ * in that list until it lands, so the id shows while a dispute case is
+ * open; a trade row reads its amount and the receiver from the held
+ * transfer while it waits.
  */
 @Component({
   selector: 'app-cases-page',
@@ -139,8 +142,10 @@ export class CasesPage {
    * The transactions the account page's list knows, for each of this pod's
    * accounts on the cases: /list-transactions signed by pair one (the
    * keyBlob opened for the signature and dropped), the chain links and the
-   * pending row. An account not in the session, or no encryption key in
-   * RAM, knows nothing; the id shows instead.
+   * pending row, and for an assisted account its held transfer from
+   * /get-assisted-transfer (quiet), so a trade row knows its amount and the
+   * receiver while the transfer waits. An account not in the session, or no
+   * encryption key in RAM, knows nothing; the id shows instead.
    */
   private async knownTransactions(accountIds: string[]): Promise<Map<string, KnownTransaction>> {
     const known = new Map<string, KnownTransaction>();
@@ -155,6 +160,10 @@ export class CasesPage {
       if (!item) continue;
       try {
         const pairOne = await this.crypto.pairOneFromKeyBlob(this.crypto.fromHex(item.keyBlob), encryptionKey);
+        if (item.accountType === 'assisted') {
+          const held = await this.anos.getAssistedTransfer(pairOne, accountId, true);
+          if (held.ok && held.body.transfer) known.set(held.body.transfer.transactionId, { amount: held.body.transfer.amount, accountId: held.body.transfer.accountId, accountIdTo: held.body.transfer.accountIdTo });
+        }
         const res = await this.anos.listTransactions(pairOne, accountId, {}, true);
         if (!res.ok) continue;
         for (const t of res.body.transactions) known.set(t.transactionId, { amount: t.amount, accountId: t.accountId, accountIdTo: t.accountIdTo });

@@ -20,7 +20,7 @@ const FILES_PER_REQUEST = 5;
 const MAX_FILE_BYTES = 10_485_760 - 28;
 
 /** A dismissal's preset reason in words, as the person reads it (masterpod 13.4.4). */
-const DISMISS_WORDS: Record<string, string> = {
+export const DISMISS_WORDS: Record<string, string> = {
   selfieMismatch: 'the selfie did not match',
   documentsMismatch: 'the documents did not match',
   noShow: 'you did not join the call',
@@ -100,6 +100,7 @@ interface Outcome {
           <p class="muted">Transaction <code>{{ d.case.transactionId }}</code></p>
 
           @if (d.kind === 'trade') {
+            <p><a mat-stroked-button [routerLink]="['/wallet', d.case.accountId, 'assisted', d.case.transactionId]"><mat-icon>call_made</mat-icon> See the transfer</a></p>
             <h3>Share my lookup id</h3>
             <p>
               The attestor checks your security buckets against you on a video call. For that they need your lookup id: the one-way hash of your
