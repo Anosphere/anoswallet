@@ -22,6 +22,7 @@ import { RecoverOpenPage } from './pages/recover-open.page';
 import { RecoverPage } from './pages/recover.page';
 import { SeedPage } from './pages/seed.page';
 import { SetupPage } from './pages/setup.page';
+import { TransactionHistoryPage } from './pages/transaction-history.page';
 import { VouchingPage } from './pages/vouching.page';
 import { WalletPage } from './pages/wallet.page';
 import { attestingGuard } from './attesting.guard';
@@ -53,6 +54,7 @@ export const routes: Routes = [
   { path: 'wallet', component: WalletPage, canActivate: [sessionGuard], title: 'Wallet' },
   { path: 'wallet/:accountId', component: AccountPage, canActivate: [sessionGuard], title: 'Account' },
   { path: 'wallet/:accountId/escrow/:transactionId', component: EscrowTradePage, canActivate: [sessionGuard], title: 'Escrow trade' },
+  { path: 'wallet/:accountId/history', component: TransactionHistoryPage, canActivate: [sessionGuard], title: 'Transaction history' },
   { path: 'chat', component: ChatPage, canActivate: [sessionGuard], title: 'Chat' },
   { path: 'marketplace', component: MarketplacePage, canActivate: [sessionGuard], title: 'Marketplace' },
   { path: 'notifications', component: NotificationsPage, canActivate: [sessionGuard], title: 'Notifications' },

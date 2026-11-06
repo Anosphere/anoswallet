@@ -8,6 +8,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatListModule } from '@angular/material/list';
 import { MatSelectModule } from '@angular/material/select';
+import { CopyButtonComponent } from '../components/copy-button.component';
 import { MESSAGES_POLL_MS } from '../constants';
 import { CryptoService } from '../services/crypto.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
@@ -15,23 +16,46 @@ import { InviteItem, JoinRequestItem, MasterpodApiService, Profile, PublicRoomIt
 import { Bytes } from '../services/passkey.service';
 import { SessionService } from '../services/session.service';
 
-/** A decrypted message of the selected room. */
+/** A piece of a shown message: plain text, or an account id, which shows in code font with a copy button. */
+interface Piece {
+  text: string;
+  accountId: boolean;
+}
+
+/** A decrypted message of the selected room, split into its pieces. */
 interface ShownMessage {
   position: number;
   senderAnopodId: string;
-  text: string;
+  pieces: Piece[];
   mine: boolean;
+}
+
+/** Exactly 64 hex characters with no hex character on either side: how an account id looks in a message. */
+const ACCOUNT_ID_IN_TEXT = /(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])/gi;
+
+/** The text split around its account ids; one plain piece when there is none. */
+function piecesOf(text: string): Piece[] {
+  const pieces: Piece[] = [];
+  let last = 0;
+  for (const match of text.matchAll(ACCOUNT_ID_IN_TEXT)) {
+    if (match.index > last) pieces.push({ text: text.slice(last, match.index), accountId: false });
+    pieces.push({ text: match[0], accountId: true });
+    last = match.index + match[0].length;
+  }
+  if (last < text.length || pieces.length === 0) pieces.push({ text: text.slice(last), accountId: false });
+  return pieces;
 }
 
 /**
  * Chat (wallet spec 8.2): the masterpod test app's chat section on Material:
  * rooms, invites by username, the join inbox, public rooms, messages polled
  * every 3 seconds. Room keys are unwrapped with the chat keys and kept in the
- * session for the tab's life.
+ * session for the tab's life. An account id in a message (exactly 64 hex
+ * characters) shows in code font with a copy button (8.5).
  */
 @Component({
   selector: 'app-chat-page',
-  imports: [FormsModule, MatCardModule, MatButtonModule, MatListModule, MatIconModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatExpansionModule],
+  imports: [FormsModule, MatCardModule, MatButtonModule, MatListModule, MatIconModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatExpansionModule, CopyButtonComponent],
   template: `
     <div class="chat">
       <mat-card appearance="outlined" class="rooms">
@@ -124,7 +148,15 @@ interface ShownMessage {
               @for (m of messages(); track m.position) {
                 <div class="bubble" [class.mine]="m.mine">
                   <span class="sender">{{ senderName(room, m.senderAnopodId) }}</span>
-                  <span>{{ m.text }}</span>
+                  <span>
+                    @for (piece of m.pieces; track $index) {
+                      @if (piece.accountId) {
+                        <code>{{ piece.text }}</code><app-copy-button [text]="piece.text" label="Copy the account id" />
+                      } @else {
+                        {{ piece.text }}
+                      }
+                    }
+                  </span>
                 </div>
               } @empty {
                 <p class="muted">No messages yet.</p>
@@ -153,6 +185,7 @@ interface ShownMessage {
     .thread { display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow: auto; padding: 8px 0; }
     .bubble { display: flex; flex-direction: column; max-width: 80%; padding: 8px 12px; border-radius: 12px; background: var(--mat-sys-surface-container); align-self: flex-start; }
     .bubble.mine { align-self: flex-end; background: var(--mat-sys-primary-container); }
+    .bubble code { font-size: 12px; word-break: break-all; }
     .sender { font-size: 11px; color: var(--mat-sys-on-surface-variant); }
     .selfie { width: 40px; height: 40px; object-fit: cover; border-radius: 50%; }
     .muted { color: var(--mat-sys-on-surface-variant); }
@@ -357,7 +390,7 @@ export class ChatPage {
           text = '(cannot decrypt)';
         }
       }
-      shown.push({ position: m.position, senderAnopodId: m.senderAnopodId, text, mine: m.senderAnopodId === this.session.anopodId() });
+      shown.push({ position: m.position, senderAnopodId: m.senderAnopodId, pieces: piecesOf(text), mine: m.senderAnopodId === this.session.anopodId() });
       this.lastPosition = Math.max(this.lastPosition, m.position);
     }
     if (shown.length > 0) this.messages.update((list) => [...list, ...shown]);
