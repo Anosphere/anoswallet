@@ -254,10 +254,13 @@ with their comments pointed at this server, and require-account.js:
 ### 5.4 The two reads
 
 src/reads/ (router, handlers, service, queries), wired in app.js. All
-four answer the signer's own account only; nothing about anyone else.
+five answer the signer's own account only; nothing about anyone else.
 The third, /list-escrows, was added 2026-11-05 for the escrow trades
 (anossoftware spec section 16); the fourth, /get-assisted-transfer, on
-2026-11-06 for the assisted transfer (anossoftware spec section 17).
+2026-11-06 for the assisted transfer (anossoftware spec section 17); the
+fifth, /get-locked-transfer, and the date range on /list-transactions on
+2026-11-06 for the balances and the history (anossoftware spec section
+18).
 
     POST /get-account (account)
     body { }
@@ -266,16 +269,20 @@ The third, /list-escrows, was added 2026-11-05 for the escrow trades
       highest position whose account_id is the signer: what the next transfer names as previousTransactionId.
 
     POST /list-transactions (account)
-    body { beforePosition?: integer, limit?: integer (default 50, at most 200) }
+    body { beforePosition?: integer, limit?: integer (default 50, at most 200), from?: ISO 8601, to?: ISO 8601 }
     answer: 200 { transactions: [ { transactionId, position, type, accountId, accountIdTo, amount: string,
       createdAt } ], pending: [ { transactionId, type, accountId, accountIdTo, amount: string, createdAt,
       approved } ] }
     transactions: garlic_chain links where account_id or account_id_to is the signer, position descending,
-      below beforePosition when given, limit rows; createdAt the row's created_at. pending: the signer's
-      pending row (there is at most one), fields read from og_transaction.payload (transactionType, accountIdTo,
-      amount or "0", createdAt). The other holding tables (locked, assisted, escrow, fund proposals) are not
-      listed here; a guarded transfer shows up when it lands (section 10), and the open escrows have
-      /list-escrows.
+      below beforePosition when given, with created_at at or after from and before to when given, limit rows;
+      createdAt the row's created_at. pending: the signer's pending row (there is at most one), fields read
+      from og_transaction.payload (transactionType, accountIdTo, amount or "0", createdAt). The other holding
+      tables (locked, assisted, escrow, fund proposals) are not listed here; a guarded transfer shows up when
+      it lands (section 10), the open escrows have /list-escrows and the locked transfer /get-locked-transfer.
+    from and to (2026-11-06, anossoftware spec 18.3): either alone works; to is the first moment after the
+      range, so the wallet sends the start of the day after the last day picked; beforePosition and limit work
+      as before, within the range; pending is not cut. A value Date.parse does not accept is 400 invalid from
+      or 400 invalid to.
 
     POST /list-escrows (account)
     body { }
@@ -307,6 +314,21 @@ The third, /list-escrows, was added 2026-11-05 for the escrow trades
       still cancel); attesting otherwise, accepted and waiting for two approved attestations. attestations
       counts the attestation slots holding one; the two reach the validator together, posted by the
       deciding attestor's app, so it is nearly always 0 or 2.
+
+    POST /get-locked-transfer (account)
+    body { }
+    answer: 200 { transfer: { transactionId, accountId, accountIdTo, amount: string, createdAt,
+      unlocksAt: ISO 8601, stage: waiting | locked | due } | null }
+    transfer: the locked_transactions row whose account_id is the signer, a guarded or vault transfer waiting
+      out its time lock, or null when there is none (2026-11-06, anossoftware spec section 18). There is at
+      most one: account_id is unique there, and the validator holds one transaction per account. The sender's
+      only: the receiver sees it in the history when it lands. The held transfer only, nothing from logs or
+      archives: a written transfer is on the chain under the same id, and the row is deleted when written.
+      Nothing can be done with a locked transfer: no follow-up exists for it. unlocksAt is the row's
+      future_date, the moment the transfer may be written. stage is named by the validator from the row by the
+      database's clock, the one the ready list reads (anossoftware spec 18.2): waiting until every validator
+      accepted the transfer; locked while the unlock moment is ahead; due once it has passed, until the next
+      leader round writes it (a round starts with the next transaction of any kind).
 
 Refusals are 400 or 401 + { error }, logged "failed: <reason>" like
 every other route. The 1 MB JSON limit stays.
@@ -390,11 +412,12 @@ as in the test apps; a new tab unlocks again.
     /account/recovery/details   the walkthrough opened at the ID
     /security/bucket-one     forwards to /account/recovery/selfie
     /security/bucket-two     forwards to /account/recovery/details
+    /home                    home: the greeting, the balance card, things to do, the tiles
     /wallet                  the anos accounts and Create anos account
     /wallet/:accountId       one account: balance, send, pending, escrow trades, follow-ups, fund proposal
     /wallet/:accountId/escrow/:transactionId   one escrow trade: the details, the buttons for your side, the closed view
     /wallet/:accountId/assisted/:transactionId   one assisted transfer: the details, the stage, the case, Cancel transfer, the closed view
-    /wallet/:accountId/history   the transaction history: the list, newest first, Load more
+    /wallet/:accountId/history   the transaction history: the rows in plain words by day, a date range, Show more
     /chat                    the list of chats; on a desktop the pane beside it shows the child route
     /chat/requests           invites to me and join requests on my rooms
     /chat/new                start a chat: Message someone, New public room, Find public rooms
@@ -409,9 +432,13 @@ as in the test apps; a new tab unlocks again.
 
 A guard sends anyone without a session to /. Which pages the navigation
 shows follows the status: vouching until vouched; identity and setup
-until setup is complete; wallet, chat, marketplace and account once it
-is; seed when isSeed. The Chat entry carries the number of unread rooms
-(8.2, Chat; 2026-11-05, section 11).
+until setup is complete; home first, then wallet, chat, marketplace and
+account once it is (2026-11-06, section 11); seed when isSeed. The Chat
+entry carries the number of unread rooms (8.2, Chat; 2026-11-05, section
+11) and the Notifications entry the number of unread notifications
+(2026-11-06); the side panel and the Home tiles draw one list,
+navigation.service (8.3). The toolbar's "anoPod wallet" is a link to
+/home once setup is complete.
 
 The next-step rule, applied after an unlock and after each step
 finishes:
@@ -421,6 +448,11 @@ finishes:
     setup complete, bucketOneImages = 0           /account/recovery/selfie
     bucketTwoImages = 0 or bucketTwoInfos < 3     /account/recovery/details
     otherwise                                     /wallet
+
+After an unlock, Wallet reads Home: the landing page sends a pod whose
+next step is /wallet to /home, while the setup steps (the recovery
+walkthrough's "Go to wallet") still end at Wallet, the next thing to do
+(2026-11-06, section 11).
 
 The user may navigate anywhere the navigation shows at any time.
 
@@ -567,13 +599,63 @@ status counts on file ("1 selfie on file", "2 photos and 4 details on
 file", "None on file yet"). The status only counts, since everything is
 encrypted, so the rows say how many, never which.
 
-Wallet. "Your anoPod is complete." The accounts from
-/list-anos-accounts, each with its type, its masterpod state (submitted
-or not) and its ledger state from /get-account (unknown account means not
-landed yet; a balance once it has). Each row ends with a copy button
-(8.5) for the account id, so the number can be shared without opening
-the account (2026-11-05, section 11). Create anos account: a type select
-(spending, guarded, vault, assisted) and a button that runs, as a
+Home (2026-11-06, section 11), at /home, where an unlock lands once
+setup is complete, first in the navigation; no outer card. Top to
+bottom: the greeting, the person's avatar (8.6, 56 px) and "Hello,
+Somchai" (the first name, the username when it is empty); the balance
+card of the Wallet paragraph below, the same component; "Things to do",
+a short list of links, the heading and the list hidden when none
+applies, in this order, each only when it applies: "Add a recovery
+selfie" (bucketOneImages 0, to /account/recovery/selfie); "Add your
+recovery details" (bucketTwoImages 0 or bucketTwoInfos under 3, to
+/account/recovery/details); "Open your first anos account" (the
+accounts read and none, to /wallet); "Finish creating your Spending
+account 2" (an account not submitted to the validator, by its name, to
+/wallet); "3 unread chats" (to /chat); "2 chat requests" (the invites to
+this pod and the join requests on its rooms, to /chat/requests); "4
+unread notifications" (to /notifications), each singular when it is
+one; then the tiles, one square per side-panel entry except Home itself
+and Log, with the entry's icon and label, Chat and Notifications
+carrying their unread counts at the top right, drawn from the same list
+as the side panel (navigation.service, 8.3). On open /list-anos-accounts
+(quiet) fills the session's accounts, a refusal in red, then the
+balances are read; every 5 seconds they are read again while an account
+is not on the ledger yet or any anos are held or pending, as the Wallet
+page does.
+
+Wallet. Titled "Wallet" (the subtitle left on 2026-11-06, section 11).
+On top the balance card (balance-card.component over balances.service,
+8.3), the card Home shows too: Total, the balances as the validator says
+them, with a refresh button; Available, Total minus what is spoken for;
+then one small line per kind spoken for, each only when its number is
+above zero ("25 anos in escrow trades", "10 anos in assisted transfers",
+"15 anos waiting out a lock", "5 anos in pending transfers"), then "1
+account is not on the ledger yet" and "1 account could not be read"
+(plural likewise); "No anos account yet." without an account; "Reading…"
+until the first read finished. The validator moves a balance only when a
+transfer is written, so Total stays whole while anos are spoken for.
+Then "Accounts": one card per account from /list-anos-accounts, in the
+masterpod's order (oldest first), in a grid; "No anos account yet. Open
+one below." when there are none. A card is named by its type, "Spending
+account", or "Spending account 1" and "Spending account 2" when the pod
+has more than one of a type (account-names.ts), with the type's icon;
+the name and the balance are one link to the account page. Under the
+name: the balance in large type once the account is on the ledger and,
+while something is held, "100 anos available · 25 in an escrow trade"
+(the held part named by its one kind: in an escrow trade, in an assisted
+transfer, waiting out a lock, pending) and, when a held-amount read was
+refused, "Some of this account's reads failed; what is held may be
+incomplete."; "Not submitted to the validator" for a creation that never
+reached the validator; "Waiting for the ledger…" while the creation has
+not landed (unknown account); another refusal in red; "Reading…" before
+the first read. The card's footer: the id in short form ("a1b2c3d4…e5f6",
+the first 8 and the last 4 characters), a copy button (8.5) with the
+full id, and Resubmit on an unsubmitted account. The balances are read
+when the page opens, by the card's refresh button, by Refresh (which
+reloads the account list too) and every 5 seconds while an account is
+not on the ledger yet or any anos are held or pending; quiet in the log,
+as the polls are. Then "Open a new account": a type select (spending,
+guarded, vault, assisted) and Create anos account, which runs, as a
 progress list:
 1. pair one, pair two, the break-glass seed and its two keys; the
    wallet public keys from /api/sign/public-keys; accountId; the
@@ -587,27 +669,31 @@ progress list:
    submitted;
 6. /mark-anos-account-submitted.
 A failure before step 4 shows Retry, which starts over with fresh keys. A
-failure at step 5 or 6 leaves the row unsubmitted; the list shows
-Resubmit on such an account, which re-posts the stored creation (step 5)
-and marks it (step 6). Then the account polls /get-account every 5
-seconds until it is on the ledger.
+failure at step 5 or 6 leaves the row unsubmitted; its card shows
+Resubmit, which re-posts the stored creation (step 5) and marks it (step
+6). After step 4 and after step 6 the list is read again, so the new
+card shows "Waiting for the ledger…" and the 5-second poll picks it up.
 
 Account. The account id in the title with a copy button (8.5). Then, in
 this order: balance, type, the latest transaction id, created; Refresh,
-and a 5-second poll while something is pending, an escrow trade is open
-or an assisted transfer is waiting; Send; Pending, the pending
-transaction if any; Escrow trades, the open trades from /list-escrows
-(section 5.4); Assisted transfer, on an assisted account, the held
-transfer from /get-assisted-transfer (section 5.4); a "Transaction
-history" button to the history page below; then the follow-ups and the
-fund proposal panels. The transaction list left this page for the
-history page on 2026-11-05 (section 11); /list-transactions is still read
-here, for the pending list. Under the balance, while this account is the
-seller of an open escrow trade, one line: "5 anos of this are in an open
-escrow trade."; while an assisted transfer of this account is held, "5
-anos of this are waiting in an assisted transfer." (2026-11-06, section
-11). The validator moves a balance only when the trade or the transfer
-is written, so the balance stays whole while the anos are spoken for.
+and a 5-second poll while something is pending, an escrow trade is open,
+an assisted transfer is waiting or a transfer is waiting out its lock;
+Send; Pending, the pending transaction if any; Escrow trades, the open
+trades from /list-escrows (section 5.4); Assisted transfer, on an
+assisted account, the held transfer from /get-assisted-transfer (section
+5.4); Locked transfer, on a guarded or vault account, the transfer
+waiting out its lock from /get-locked-transfer (section 5.4); a
+"Transaction history" button to the history page below; then the
+follow-ups and the fund proposal panels. The transaction list left this
+page for the history page on 2026-11-05 (section 11); /list-transactions
+is still read here, for the pending list. Under the balance, while this
+account is the seller of an open escrow trade, one line: "5 anos of this
+are in an open escrow trade."; while an assisted transfer of this account
+is held, "5 anos of this are waiting in an assisted transfer."; while a
+guarded or vault transfer of this account waits out its lock, "5 anos of
+this are waiting out a lock." (2026-11-06, section 11). The validator
+moves a balance only when the trade or the transfer is written, so the
+balance stays whole while the anos are spoken for.
 
 Escrow trades (2026-11-05, section 11), after Pending: one row per
 open trade, "5 anos to <buyer>" when this
@@ -634,6 +720,21 @@ cancelled"; a word the wallet does not know, "Open". The row opens the
 transfer page. On any other account type nothing is read and nothing
 shows.
 
+Locked transfer (2026-11-06, section 11), after Escrow trades, on a
+guarded or vault account only: the transfer waiting out its time lock
+from /get-locked-transfer as one row that is not a link, since nothing
+can be done with it (no follow-up exists for a locked transfer, and it
+has no page of its own): "5 anos to <receiver>", then "Waiting out the
+lock · until <the unlock moment>" while the stage is locked, else the
+stage in words and the date it was made; "No transfer is waiting." when
+there is none; the read's refusal in red when it fails (a validator or
+doorman without the route), the rest of the page unharmed. The stage
+words, from the validator's stage (anossoftware spec 18.2,
+locked-stage.ts): waiting, "Waiting for the validators"; locked,
+"Waiting out the lock"; due, "Unlocked, being written"; a word the
+wallet does not know, "Held". On any other account type nothing is read
+and nothing shows.
+
 Send: recipient account id (typed, or by the paste button at the right
 end of the box, which reads the clipboard and takes the run of exactly 64
 hex characters in it, lower-cased; with none, the hint under the box says
@@ -650,11 +751,13 @@ latestTransactionId, fetched right before building. The payload is
 signed by pair one (keyBlob opened for the signature and dropped),
 /api/sign adds the wallet pair, the validator gets it, the page
 refreshes. Send is disabled while the account has a pending transaction,
-is the seller of an open escrow trade or holds an assisted transfer (one
-held transaction per account; the validator refuses a second), with the
-line "An escrow trade is open. This account can send again when it
-closes." or "An assisted transfer is waiting. This account can send
-again when it is written or cancelled." Under Send, an assisted account
+is the seller of an open escrow trade, holds an assisted transfer or has
+a transfer waiting out its lock (one held transaction per account; the
+validator refuses a second), with the line "An escrow trade is open.
+This account can send again when it closes.", "An assisted transfer is
+waiting. This account can send again when it is written or cancelled."
+or "A transfer is waiting out its lock. This account can send again when
+it is written." Under Send, an assisted account
 reads "An assisted transfer waits until two attestors have checked it.
 An attestor will open a case and ask for your lookup id. You can cancel
 it until it is written." where a guarded or vault account reads its lock
@@ -666,15 +769,34 @@ assisted transfer cancel forms on 2026-11-06: the attestor's trade case
 page posts the attestation (13.3), the transfer page the cancel.
 
 Transaction history, at /wallet/:accountId/history, opened by the
-button on the account page (2026-11-05, section 11). Titled
-"Transaction history", the account id under it, Back to the account,
-Refresh. The list from /list-transactions, newest first, Load more with
-beforePosition while a page came back full (50 rows), the rows as the
-account page showed them before: the type word, the amount with its
-sign, the position, the date, the other side, the transaction id;
-"Nothing on the ledger for this account yet." when empty; a failed read
-in red. Read when opened and by Refresh only, no poll. The rows keep
-their raw type words; their cleanup is a later job of its own.
+button on the account page (2026-11-05, section 11; rewritten
+2026-11-06). Titled "Transaction history", the account's name and short
+id under it ("Spending account 1 · a1b2c3d4…e5f6"), Back to the account,
+then the date range field ("Dates", From and To, the picker's toggle
+and, while a range is set, a clear button) and Refresh. The list from
+/list-transactions, newest first, 20 rows at a time (HISTORY_PAGE):
+Show more adds 20 older ones with beforePosition while a page came back
+full. With a range the reads carry from, the start of the first day, and
+to, the start of the day after the last day (local midnight, ISO 8601);
+a change with both dates set, or both cleared, reads the first page
+again, one alone waits for the other, and the clear button empties both
+and reads again. The rows in plain words under day headings ("Today",
+"Yesterday", "6 November", with the year for another year, the words of
+ChatService.dayLabel): an icon; "Sent to a1b2c3d4…e5f6", "Received from
+…", "Account created", "Escrow released to …", "Escrow received from …",
+"Staked with the fund", "Fund proposal", "Received from the fund", "Fund
+payout to …" (history-words.ts; a type word the wallet does not know
+shows as it is); the time under the title; the amount at the right,
+"+5 anos" in the primary colour, "−5 anos" in the on-surface colour, the
+amount without a sign for a payout seen by its proposer, nothing for a
+creation or a proposal. A tap opens the details under the row: Kind in
+words (plain, guarded, vault or assisted transfer, escrow transfer,
+stake, fund proposal, fund payout, account creation), To or From the
+other side's full id with a copy button (8.5), Transaction the id with a
+copy button, Position, When the full date and time. "Nothing on the
+ledger for this account yet." when empty without a range, "No
+transactions between these dates." with one; a failed read in red. Read
+when opened, by Refresh and by a range change only, no poll.
 
 Escrow trade, at /wallet/:accountId/escrow/:transactionId, opened from a
 row of the Escrow trades list (2026-11-05, section 11). Titled "Escrow
@@ -998,8 +1120,18 @@ excepted, with the keyholder and anos calls included.
                             createListing, the fuller RoomListing and the listing on an invite
     keyholder-api.service   the keyholder test app's, base path /api/keyholder/<n>
     anos-api.service        the anos test app's account-api.service.ts, base path /api/anos/<defaultValidator>,
-                            plus the four signed reads (listEscrows added 2026-11-05, getAssistedTransfer
-                            2026-11-06)
+                            plus the five signed reads (listEscrows added 2026-11-05, getAssistedTransfer and
+                            getLockedTransfer 2026-11-06; listTransactions takes from and to, 2026-11-06)
+    balances.service        what Home and the Wallet page share (2026-11-06): one entry per account (landed,
+                            balance, what is pending, in escrow, assisted or locked, held, available, partial)
+                            read by refresh from /get-account, /list-transactions, /list-escrows and the
+                            held-transfer read of the account's type, every account at once; the totals over
+                            the session's accounts; needsPoll while an account is not on the ledger yet or
+                            any anos are held or pending
+    navigation.service      the one navigation list (2026-11-06): NavItem (path, label, icon, badge) and items,
+                            the side panel's entries by the status and the edition, Home first once setup is
+                            complete, Chat and Notifications with their unread counts; the side panel and the
+                            Home tiles both draw it
     chat.service            what the chat pages share (2026-11-05): room keys (roomKeyOf, wrapFor), decryptMessage,
                             piecesOf, a room's title, kind, icon and other person, the order by activity, shortWhen,
                             timeOf and dayLabel, requestedRooms, refreshRooms; listingWords, a listing in a few
@@ -1041,8 +1173,10 @@ One small component, src/app/components/copy-button.component.ts
 or paste (2026-11-05, section 11): an icon button that copies the text
 it is given (navigator.clipboard.writeText) and shows "copied" next to
 the icon for two seconds, or "could not copy" when the browser refuses.
-It sits after the account id in the Account title, at the end of each
-Wallet row, and after an account id in a chat message. The case pages of
+It sits after the account id in the Account title, in the footer of each
+account card on the Wallet page (2026-11-06, section 11), after an
+account id in a chat message, and in a history row's details beside the
+other side's id and the transaction id (2026-11-06). The case pages of
 sections 12 and 13 keep their own copy code.
 
 ### 8.6 The avatar
@@ -1055,7 +1189,8 @@ of the username. The profile comes from profile-cache.service (8.3), one
 /get-anopod-profile per pod per tab. In the chat list, the conversation
 header, the members panel and the chat requests; since 2026-11-06 also on
 the listing cards (24 px), the listing page (56 px), the people who
-connected and the pinned listing card (8.7).
+connected and the pinned listing card (8.7), and on Home beside the
+greeting (56 px).
 
 ### 8.7 The marketplace components
 
@@ -1129,10 +1264,18 @@ point at the real servers through the committed network/wallet.env
 - Keyholder discovery and ceremonies: the proxy's list is the truth.
 - A retry of a failed keyholder deposit: the step restarts with a new
   secret.
-- Reads of the other holding tables: the open escrows have /list-escrows
-  (2026-11-05) and the assisted transfer /get-assisted-transfer
-  (2026-11-06); the wallet shows a guarded or vault transfer only when
-  it lands.
+- Reads of the holding tables: the pending row has /list-transactions,
+  the open escrows /list-escrows (2026-11-05), the assisted transfer
+  /get-assisted-transfer and the locked transfer /get-locked-transfer
+  (2026-11-06); a guardian's fund proposal has no read.
+- From the Home plan (forclaude/wallet-home-plan-1.md, 2026-11-06): a
+  nickname for an account (would need a masterpod column); a QR code of
+  an account id (would need a package); the Log as a tile on Home; a
+  count of waiting vouch requests on Home for a seed (needs a read); a
+  cancel for a locked transfer (none exists on the validator); the
+  receiver's view of an incoming assisted transfer; a username for an
+  account id; a notification when a transfer is written; asking several
+  validators instead of one; "Anos" with a capital.
 - Any check by a validator that walletKey in a creation is the signing
   server's key: the binding check with the masterpod is the check.
 - Several passkeys, push delivery, languages other than English, a custom
@@ -1944,6 +2087,144 @@ transaction id pasted into the follow-ups form.
   case), this note.
 - `npx ng build` clean (1.63 MB initial). Not run against a validator
   here; the user tests on the testnet.
+
+### Home and the account cards, step 2 (2026-11-06)
+
+Step 2 of forclaude/wallet-home-plan-1.md: the balances, the Wallet page
+and the account page. Step 1, the validator's /get-locked-transfer and
+the date range on /list-transactions (anossoftware section 18) and the
+doorman's route line, was built and committed first; steps 2, 3 and 4
+were built together on the user's word. Why: the Wallet page was a bare
+list of ids with nothing saying how many anos a person has in all, and
+nothing counted the anos a guarded or vault transfer holds while it waits
+out its lock.
+
+- `anos-api.service.ts`: `getLockedTransfer(pairOne, accountId, quiet)`,
+  the account envelope as `getAccount` builds it, with
+  `HeldLockedTransfer` and `LockedStage` (`stage` typed as the three
+  words or any string, as the assisted one is); `listTransactions`'s
+  body takes `from` and `to`.
+- `src/app/locked-stage.ts`: `lockedStageWords(stage)`, the words of the
+  plan's 4.2; `src/app/short-id.ts`: `shortId(id)`, the first 8 and the
+  last 4 characters; `src/app/account-names.ts`:
+  `accountNames(accounts)`, the names by type in list order.
+- `services/balances.service.ts`: `BalancesService` with `byAccount`,
+  `busy`, `readAt`, `totals`, `needsPoll` and `refresh(quiet)`, which
+  reads every account at once by `readOne` (/get-account,
+  /list-transactions with limit 1, /list-escrows and the held-transfer
+  read of the account's type, together); the entries of the plan's 4.2.
+- `components/balance-card.component.ts`: `<app-balance-card>`, no
+  inputs, over the two services.
+- `wallet.page.ts`: the subtitle gone; the balance card, the Accounts
+  heading and the cards, "Open a new account" over the row and the
+  progress list as they were. `ledger`, `LedgerState`, `checkLedger()`
+  and `pollLedger()` left; `load()` lists the accounts and then
+  `balances.refresh()`; the 5-second timer calls
+  `balances.refresh(true)` while `needsPoll()` and nothing is busy.
+- `account.page.ts`: on a guarded or vault account /get-locked-transfer
+  joins `refresh()` as a fifth read, its refusal kept apart
+  (`lockedError`); the Locked transfer section after the Assisted one,
+  one row with no link; the balance line; the Send rule and its line;
+  the poll while a transfer is locked.
+- Readings where the plan left a detail open: the balance card's small
+  lines are built in a computed (`lines`) and the account card's by
+  `balanceWords` and `heldWords`, since a template cannot write a bigint
+  such as `0n`; `heldWords` names every held kind above zero joined by
+  " · ", one in practice since an account holds one transaction at a
+  time; a card with no entry yet reads "Reading…" even for an
+  unsubmitted account, until the first read answers; the entry's field
+  comments are doc comments rather than end-of-line ones; the card's
+  refresh button takes the card's text colour through the icon-button
+  colour token.
+- Spec: 5.4, 8.2 Wallet (rewritten) and Account (the refresh line, the
+  balance line, the Send rule and its line, the Locked transfer
+  paragraph), 8.3, 8.5, 10, this note.
+- `npx ng build` clean (1.63 MB initial). Not run against a validator
+  here; the user tests on the testnet.
+
+### Home and the account cards, step 3 (2026-11-06)
+
+Step 3 of forclaude/wallet-home-plan-1.md: Home. Why: the app opened on
+the Wallet page, and the side panel behind the menu button was the only
+way around the app.
+
+- `services/navigation.service.ts`: `NavigationService` with `NavItem`
+  (moved here from `app.ts` and exported) and `items`, the body of the
+  shell's `navItems` moved as it was, with Home first once setup is
+  complete and the Notifications entry's badge; the side panel and the
+  Home tiles both draw it.
+- `app.ts`: `navItems = this.navigation.items`; the interface and the
+  computed body left, `computed` left the import line. `app.html`: the
+  brand is a link to /home once setup is complete, the span as before
+  until then. `app.css`: `.brand` inherits its colour and has no
+  underline.
+- `landing.page.ts`, `unlock()`: a next step of /wallet goes to /home;
+  the rule's own answer stays Wallet, so `setup.page.ts`,
+  `account-recovery.page.ts` and `recover-case.page.ts` were not touched.
+- `app.routes.ts`: /home before /wallet, behind the session guard.
+- `pages/home.page.ts`: `HomePage`, no outer card: the greeting
+  (`<app-avatar>` at 56 px and "Hello, <first name>", the username when
+  it is empty); the list refusal in red; `<app-balance-card>`; "Things to
+  do" as a `mat-nav-list` only while `todo()` has lines, in the plan's
+  order; the tiles from `navigation.items()` without Home and Log, each
+  a square link with the icon, the label and the badge at the top right.
+  On open /list-anos-accounts (quiet) into the session, `accountsLoaded`
+  on success, then `balances.refresh()`; the 5-second timer as the
+  Wallet page's.
+- Readings where the plan left a detail open: the balances are read
+  after the account list whether or not the list was refused, so the
+  card still shows what the session knows; the greeting is an `<h2>`;
+  the to-do lines are tracked by index; the "Add your recovery details"
+  line waits for the status to be read, as the selfie line does.
+- Spec: 8.1 (the route line, the navigation sentence, the next-step
+  sentence, the brand link), 8.2 (the Home paragraph), 8.3
+  (navigation.service), 8.6, this note.
+- `npx ng build` clean (1.64 MB initial). Not run against a validator
+  here; the user tests on the testnet.
+
+### Home and the account cards, step 4 (2026-11-06)
+
+Step 4 of forclaude/wallet-home-plan-1.md: the transaction history page.
+Why: the history was a list of raw type words and full ids, 50 rows at a
+time, with no way to look at one month.
+
+- `constants.ts`: `HISTORY_PAGE = 20`, after `MESSAGES_PAGE`.
+- `src/app/history-words.ts`: `historyWords(t, accountId)`, the table of
+  the plan's 4.6 (the title, the kind in words, the sign, the icon), the
+  other side shortened by `shortId`; `HistoryWords` exported for the
+  page.
+- `transaction-history.page.ts`: rewritten. The subtitle is the
+  account's name (account-names.ts) and short id; the date range field
+  (`mat-date-range-input` with `matStartDate` and `matEndDate`, the
+  toggle, a clear button while a date is set, `mat-date-range-picker`),
+  `from` and `to` as signals of `Date | null` set by `dateChange`;
+  `changed()` reads the first page again when both are set or both
+  cleared; `clearDates()` empties both and reads again. The reads carry
+  `{ limit: HISTORY_PAGE }` plus, with a range, `from` the local midnight
+  of the first day and `to` the local midnight after the last day, as
+  ISO 8601; Show more adds `beforePosition` and keeps the range;
+  `canLoadMore` while a page came back with `HISTORY_PAGE` rows. The
+  rows are grouped by `ChatService.dayLabel` into day headings (a
+  computed `days`), each row a full-width button with the icon, the
+  title, the time (`timeOf`) and the amount at the right ("+5 anos" in
+  the primary colour, "−5 anos" in the on-surface colour, the amount
+  alone in muted for a payout seen by its proposer, nothing for a
+  creation or a proposal); a tap opens the details (Kind, To or From
+  with a copy button, Transaction with a copy button, Position, When).
+  `MatListModule` left the imports.
+- Readings where the plan left a detail open: `FormsModule` is not
+  imported, since the two date inputs are bound with `[value]` and
+  `(dateChange)` and nothing uses `ngModel`; the subtitle reads "Account"
+  for the name until the account is in the session (the first read loads
+  it); an open row stays open across a refresh while its id is still in
+  the list; the day headings are tracked by their label, unique while the
+  rows are in position order; the route line of 8.1 was reworded for the
+  page it now describes.
+- Spec: 8.1 (the route line), 8.2 Transaction history (rewritten), 8.5,
+  this note.
+- `npx ng build` clean (1.67 MB initial; the range picker's code joined
+  the bundle). Not run against a validator here; the user tests on the
+  testnet.
 
 ## 12. Recovery and the moderator edition
 

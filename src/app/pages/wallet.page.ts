@@ -1,4 +1,4 @@
-import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -8,23 +8,20 @@ import { MatListModule } from '@angular/material/list';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { RouterLink } from '@angular/router';
+import { accountNames } from '../account-names';
 import { millionthsToAnos } from '../amounts';
+import { BalanceCardComponent } from '../components/balance-card.component';
 import { CopyButtonComponent } from '../components/copy-button.component';
 import { ACCOUNT_POLL_MS } from '../constants';
 import { AnosApiService } from '../services/anos-api.service';
+import { AccountBalance, BalancesService } from '../services/balances.service';
 import { ACCOUNT_TYPES, AccountType, BrowserAccountKeys, CreateAccountTransaction, CryptoService } from '../services/crypto.service';
 import { reasonOf } from '../services/log.service';
 import { MasterpodApiService } from '../services/masterpod-api.service';
 import { AnosAccountItem, SessionService } from '../services/session.service';
 import { DepositError, SharesService } from '../services/shares.service';
 import { SigningService } from '../services/signing.service';
-
-/** What the ledger says about an account: not landed yet, or its balance. */
-interface LedgerState {
-  landed: boolean;
-  balance: string | null;
-  error: string | null;
-}
+import { shortId } from '../short-id';
 
 interface Step {
   label: string;
@@ -44,51 +41,74 @@ const STEPS = [
 const ALREADY_THERE = /already (exists|pending|in the garlic chain)/;
 
 /**
- * The wallet page (wallet spec 8.2): "Your anoPod is complete." The accounts
- * from /list-anos-accounts, each with its type, its masterpod state and its
- * ledger state from /get-account; Create anos account as a progress list;
- * Resubmit for an account whose creation never reached the validator. Each
- * row ends with a copy button for the account id (8.5).
+ * The wallet page (wallet spec 8.2, Wallet): the balance card on top
+ * (balance-card.component over balances.service, shared with Home); then
+ * the accounts from /list-anos-accounts as cards, each named by its type
+ * (account-names.ts), with its balance in large type once it is on the
+ * ledger, what is available and held while something is held, its state
+ * while it is not on the ledger, the id in short form with a copy button
+ * (8.5) and Resubmit for a creation that never reached the validator; then
+ * Open a new account, the six-step progress list. The balances are read
+ * when the page opens, by Refresh and every 5 seconds while an account is
+ * not on the ledger yet or any anos are held or pending.
  */
 @Component({
   selector: 'app-wallet-page',
-  imports: [FormsModule, RouterLink, MatCardModule, MatButtonModule, MatListModule, MatIconModule, MatFormFieldModule, MatSelectModule, MatProgressBarModule, CopyButtonComponent],
+  imports: [FormsModule, RouterLink, MatCardModule, MatButtonModule, MatListModule, MatIconModule, MatFormFieldModule, MatSelectModule, MatProgressBarModule, CopyButtonComponent, BalanceCardComponent],
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
         <mat-card-title>Wallet</mat-card-title>
-        <mat-card-subtitle>Your anoPod is complete. Your anos accounts live here.</mat-card-subtitle>
       </mat-card-header>
       <mat-card-content>
         @if (listError(); as text) {
           <p class="error">{{ text }}</p>
         }
-        <mat-list>
+        <app-balance-card />
+
+        <h3>Accounts</h3>
+        <div class="cards">
           @for (account of session.accounts(); track account.accountId) {
-            <mat-list-item lines="3">
-              <mat-icon matListItemIcon>{{ account.accountType === 'vault' ? 'lock' : account.accountType === 'guarded' ? 'shield' : account.accountType === 'assisted' ? 'group' : 'account_balance_wallet' }}</mat-icon>
-              <a matListItemTitle [routerLink]="['/wallet', account.accountId]"><code>{{ account.accountId }}</code></a>
-              <span matListItemLine>{{ account.accountType }} · masterpod: {{ account.submittedAt ? 'submitted ' + account.submittedAt : 'not submitted' }}</span>
-              <span matListItemLine>
-                @if (ledger()[account.accountId]; as state) {
-                  ledger: {{ state.landed ? (state.balance !== null ? millionthsToAnos(state.balance) + ' anos' : 'landed') : (state.error ?? 'not landed yet') }}
+            <mat-card appearance="outlined" class="account">
+              <a class="main" [routerLink]="['/wallet', account.accountId]">
+                <span class="name">
+                  <mat-icon>{{ account.accountType === 'vault' ? 'lock' : account.accountType === 'guarded' ? 'shield' : account.accountType === 'assisted' ? 'group' : 'account_balance_wallet' }}</mat-icon>
+                  {{ names().get(account.accountId) }}
+                </span>
+                @if (balances.byAccount()[account.accountId]; as entry) {
+                  @if (entry.landed) {
+                    <span class="balance">{{ balanceWords(entry) }}</span>
+                    @if (heldWords(entry); as held) {
+                      <span class="small muted">{{ held }}</span>
+                    }
+                    @if (entry.partial) {
+                      <span class="small muted">Some of this account's reads failed; what is held may be incomplete.</span>
+                    }
+                  } @else if (!account.submittedAt) {
+                    <span class="muted">Not submitted to the validator</span>
+                  } @else if (entry.error === 'not landed yet') {
+                    <span class="muted">Waiting for the ledger…</span>
+                  } @else {
+                    <span class="error">{{ entry.error }}</span>
+                  }
                 } @else {
-                  ledger: checking…
+                  <span class="muted">Reading…</span>
                 }
-              </span>
-              <span matListItemMeta>
+              </a>
+              <div class="footer">
+                <code>{{ shortId(account.accountId) }}</code>
+                <app-copy-button [text]="account.accountId" label="Copy the account id" />
                 @if (!account.submittedAt) {
                   <button mat-stroked-button type="button" (click)="resubmit(account)" [disabled]="busy()">Resubmit</button>
                 }
-                <app-copy-button [text]="account.accountId" label="Copy the account id" />
-              </span>
-            </mat-list-item>
+              </div>
+            </mat-card>
           } @empty {
-            <p class="muted">No anos account yet.</p>
+            <p class="muted">No anos account yet. Open one below.</p>
           }
-        </mat-list>
+        </div>
 
-        <h3>Create anos account</h3>
+        <h3>Open a new account</h3>
         <div class="row">
           <mat-form-field appearance="outline">
             <mat-label>Type</mat-label>
@@ -122,6 +142,13 @@ const ALREADY_THERE = /already (exists|pending|in the garlic chain)/;
   `,
   styles: `
     .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin: 8px 0 16px; }
+    .main { display: flex; flex-direction: column; gap: 4px; padding: 16px 16px 8px; color: inherit; text-decoration: none; }
+    .name { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+    .balance { font-size: 28px; font-weight: 500; line-height: 1.2; margin-top: 4px; }
+    .small { font-size: 13px; }
+    .footer { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 0 8px 8px 16px; }
+    .footer code { flex: 1; }
     .muted { color: var(--mat-sys-on-surface-variant); }
     .error { color: var(--mat-sys-error); }
     code { font-size: 12px; }
@@ -129,6 +156,7 @@ const ALREADY_THERE = /already (exists|pending|in the garlic chain)/;
 })
 export class WalletPage {
   protected readonly session = inject(SessionService);
+  protected readonly balances = inject(BalancesService);
   private readonly masterpod = inject(MasterpodApiService);
   private readonly anos = inject(AnosApiService);
   private readonly crypto = inject(CryptoService);
@@ -137,18 +165,24 @@ export class WalletPage {
 
   protected readonly accountTypes = ACCOUNT_TYPES;
   protected readonly millionthsToAnos = millionthsToAnos;
+  protected readonly shortId = shortId;
   protected readonly accountType = signal<AccountType>('spending');
-  protected readonly ledger = signal<Record<string, LedgerState>>({});
   protected readonly steps = signal<Step[]>([]);
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly listError = signal<string | null>(null);
   protected readonly failedBeforeRegister = signal(false);
 
+  /** The accounts' names by id, "Spending account 1" and so on (account-names.ts). */
+  protected readonly names = computed(() => accountNames(this.session.accounts()));
+
   constructor() {
     void this.load();
-    // Accounts not yet on the ledger are polled every 5 seconds.
-    const timer = setInterval(() => void this.pollLedger(), ACCOUNT_POLL_MS);
+    // The balances are read again every 5 seconds while an account is not
+    // on the ledger yet or any anos are held or pending (balances.service).
+    const timer = setInterval(() => {
+      if (this.balances.needsPoll() && !this.busy() && !this.balances.busy()) void this.balances.refresh(true);
+    }, ACCOUNT_POLL_MS);
     inject(DestroyRef).onDestroy(() => clearInterval(timer));
   }
 
@@ -156,7 +190,23 @@ export class WalletPage {
     return { todo: 'radio_button_unchecked', doing: 'pending', done: 'check_circle', failed: 'error' }[state];
   }
 
-  /** The accounts from the masterpod, then each one's ledger state. */
+  /** A landed account's balance, "125 anos". */
+  protected balanceWords(entry: AccountBalance): string {
+    return `${millionthsToAnos(entry.balance ?? 0n)} anos`;
+  }
+
+  /** The small line under the balance while something is held: what is available, then the held part named by its kind (one at a time, by the validator's rule). */
+  protected heldWords(entry: AccountBalance): string | null {
+    if (entry.held <= 0n) return null;
+    const parts: string[] = [];
+    if (entry.escrow > 0n) parts.push(`${millionthsToAnos(entry.escrow)} in an escrow trade`);
+    if (entry.assisted > 0n) parts.push(`${millionthsToAnos(entry.assisted)} in an assisted transfer`);
+    if (entry.locked > 0n) parts.push(`${millionthsToAnos(entry.locked)} waiting out a lock`);
+    if (entry.pending > 0n) parts.push(`${millionthsToAnos(entry.pending)} pending`);
+    return `${millionthsToAnos(entry.available)} anos available · ${parts.join(' · ')}`;
+  }
+
+  /** The accounts from the masterpod, then the balances of every one. */
   protected async load(): Promise<void> {
     this.listError.set(null);
     const res = await this.masterpod.listAnosAccounts(true);
@@ -165,37 +215,14 @@ export class WalletPage {
       return;
     }
     this.session.accounts.set(res.body.accounts);
-    for (const account of res.body.accounts) await this.checkLedger(account, false);
-  }
-
-  private async pollLedger(): Promise<void> {
-    if (this.busy()) return;
-    for (const account of this.session.accounts()) {
-      if (!this.ledger()[account.accountId]?.landed) await this.checkLedger(account, true);
-    }
-  }
-
-  /** /get-account signed by pair one, opened from keyBlob for the signature and dropped. */
-  private async checkLedger(account: AnosAccountItem, quiet: boolean): Promise<void> {
-    const encryptionKey = this.session.getEncryptionKey();
-    if (!encryptionKey) return;
-    try {
-      const pairOne = await this.crypto.pairOneFromKeyBlob(this.crypto.fromHex(account.keyBlob), encryptionKey);
-      const res = await this.anos.getAccount(pairOne, account.accountId, quiet);
-      const state: LedgerState = res.ok
-        ? { landed: true, balance: res.body.balance, error: null }
-        : { landed: false, balance: null, error: res.status === 401 && /unknown account/.test(reasonOf(res)) ? 'not landed yet' : reasonOf(res) };
-      this.ledger.update((all) => ({ ...all, [account.accountId]: state }));
-    } catch (err) {
-      this.ledger.update((all) => ({ ...all, [account.accountId]: { landed: false, balance: null, error: err instanceof Error ? err.message : String(err) } }));
-    }
+    await this.balances.refresh();
   }
 
   private setStep(index: number, state: Step['state']): void {
     this.steps.update((steps) => steps.map((step, i) => (i === index ? { ...step, state } : step)));
   }
 
-  /** The six steps of 8.2 Wallet. A failure before step 4 shows Retry (fresh keys); at 5 or 6 the row is unsubmitted and the list shows Resubmit. */
+  /** The six steps of 8.2 Wallet. A failure before step 4 shows Retry (fresh keys); at 5 or 6 the row is unsubmitted and its card shows Resubmit. */
   protected async create(): Promise<void> {
     const encryptionKey = this.session.getEncryptionKey();
     if (!encryptionKey) {

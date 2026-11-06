@@ -13,6 +13,7 @@ import { ChatRequestsPage } from './pages/chat-requests.page';
 import { ChatRoomPage } from './pages/chat-room.page';
 import { CreatePage } from './pages/create.page';
 import { EscrowTradePage } from './pages/escrow-trade.page';
+import { HomePage } from './pages/home.page';
 import { IdentityPage } from './pages/identity.page';
 import { LandingPage } from './pages/landing.page';
 import { ListingNewPage } from './pages/listing-new.page';
@@ -58,6 +59,7 @@ export const routes: Routes = [
   { path: 'account/recovery/details', component: AccountRecoveryPage, canActivate: [sessionGuard], data: { start: 'details' }, title: 'Recovery details' },
   { path: 'security/bucket-one', redirectTo: 'account/recovery/selfie', pathMatch: 'full' },
   { path: 'security/bucket-two', redirectTo: 'account/recovery/details', pathMatch: 'full' },
+  { path: 'home', component: HomePage, canActivate: [sessionGuard], title: 'Home' },
   { path: 'wallet', component: WalletPage, canActivate: [sessionGuard], title: 'Wallet' },
   { path: 'wallet/:accountId', component: AccountPage, canActivate: [sessionGuard], title: 'Account' },
   { path: 'wallet/:accountId/escrow/:transactionId', component: EscrowTradePage, canActivate: [sessionGuard], title: 'Escrow trade' },

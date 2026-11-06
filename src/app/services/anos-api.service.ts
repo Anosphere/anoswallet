@@ -119,14 +119,29 @@ export interface HeldAssistedTransfer {
   attestations: number;
 }
 
+/** Where a locked transfer is, as the validator names it (anossoftware spec 18.2). A word the wallet does not know is shown as held with no action. */
+export type LockedStage = 'waiting' | 'locked' | 'due';
+
+/** The signer's own locked transfer, as /get-locked-transfer answers it (anossoftware spec 18): a guarded or vault transfer waiting out its time lock, accountId the sender, accountIdTo the receiver, unlocksAt the moment it may be written. */
+export interface HeldLockedTransfer {
+  transactionId: string;
+  accountId: string;
+  accountIdTo: string;
+  amount: string;
+  createdAt: string;
+  unlocksAt: string;
+  stage: LockedStage | string;
+}
+
 /**
  * All HTTP calls to the validators (the anos test app's
  * account-api.service.ts, base path /api/anos/<defaultValidator>), plus the
- * four signed reads of the account level (/list-escrows: anossoftware 16,
- * /get-assisted-transfer: anossoftware 17) and the two attestor reads
- * (anossoftware 13, the account level plus attestor stake). One method per
- * endpoint; every one resolves to the status and the body, never throws on
- * an HTTP error.
+ * five signed reads of the account level (/list-escrows: anossoftware 16,
+ * /get-assisted-transfer: anossoftware 17, /get-locked-transfer and the
+ * date range on /list-transactions: anossoftware 18) and the two attestor
+ * reads (anossoftware 13, the account level plus attestor stake). One
+ * method per endpoint; every one resolves to the status and the body,
+ * never throws on an HTTP error.
  */
 @Injectable({ providedIn: 'root' })
 export class AnosApiService {
@@ -181,8 +196,8 @@ export class AnosApiService {
     return this.post('/get-account', this.crypto.signAccountEnvelope(pairOne, accountId, '/get-account', {}), quiet);
   }
 
-  /** POST /list-transactions, signed by pair one. */
-  listTransactions(pairOne: PairOne, accountId: string, body: { beforePosition?: number; limit?: number } = {}, quiet = false): Promise<ApiResponse<TransactionsAnswer>> {
+  /** POST /list-transactions, signed by pair one; from and to (ISO 8601) cut the list to a date range (anossoftware spec 18.3). */
+  listTransactions(pairOne: PairOne, accountId: string, body: { beforePosition?: number; limit?: number; from?: string; to?: string } = {}, quiet = false): Promise<ApiResponse<TransactionsAnswer>> {
     return this.post('/list-transactions', this.crypto.signAccountEnvelope(pairOne, accountId, '/list-transactions', body), quiet);
   }
 
@@ -194,6 +209,11 @@ export class AnosApiService {
   /** POST /get-assisted-transfer, signed by pair one: the account's own held assisted transfer, or null when none is held (anossoftware spec 17). */
   getAssistedTransfer(pairOne: PairOne, accountId: string, quiet = false): Promise<ApiResponse<{ transfer: HeldAssistedTransfer | null }>> {
     return this.post('/get-assisted-transfer', this.crypto.signAccountEnvelope(pairOne, accountId, '/get-assisted-transfer', {}), quiet);
+  }
+
+  /** POST /get-locked-transfer, signed by pair one: the account's own guarded or vault transfer waiting out its lock, or null when none is held (anossoftware spec 18). */
+  getLockedTransfer(pairOne: PairOne, accountId: string, quiet = false): Promise<ApiResponse<{ transfer: HeldLockedTransfer | null }>> {
+    return this.post('/get-locked-transfer', this.crypto.signAccountEnvelope(pairOne, accountId, '/get-locked-transfer', {}), quiet);
   }
 
   // --- the attestor reads (anossoftware 13.2): the account envelope as getAccount builds it, the signer staked for attestor ---
