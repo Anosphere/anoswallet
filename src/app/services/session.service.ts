@@ -1,5 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { ChatKeys, CryptoService, Envelope, HybridPublicKey, SessionKeys, WalletPublicKeys } from './crypto.service';
+import type { RoomsAnswer } from './masterpod-api.service';
 import { Bytes } from './passkey.service';
 
 /** What /check-anopod-status answers, the three counts included (wallet spec 4.3). */
@@ -87,6 +88,8 @@ export class SessionService {
   /** The notifications, newest first, refreshed by the shell's 5-second poll. */
   readonly notifications = signal<NotificationItem[]>([]);
   readonly unread = computed(() => this.notifications().filter((n) => !n.read));
+  /** The latest /list-chat-rooms answer (the rooms, the invites to this pod, the join requests on its rooms): the shell's poll once setup is complete, and the chat pages. */
+  readonly chatRooms = signal<RoomsAnswer | null>(null);
 
   readonly hasSession = computed(() => this.anopodId() !== null);
   readonly vouched = computed(() => this.status()?.vouched ?? false);
@@ -127,6 +130,7 @@ export class SessionService {
     this.walletKeys.set(null);
     this.accounts.set([]);
     this.notifications.set([]);
+    this.chatRooms.set(null);
   }
 
   /**

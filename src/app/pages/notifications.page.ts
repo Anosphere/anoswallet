@@ -11,7 +11,7 @@ import { SessionService } from '../services/session.service';
 /** The five case kinds of masterpod 13.7: their reference id is a case id, and the label links to the person's case page (wallet spec 13.4). */
 const CASE_KINDS = ['tradeCaseOpened', 'disputeCaseOpened', 'caseScheduled', 'caseDecided', 'caseDismissed'];
 
-/** The notifications page (wallet spec 8.2): the list, newest first, mark read; the five case kinds link to /cases/:caseId (13.4). The shell's poll keeps it fresh. */
+/** The notifications page (wallet spec 8.2): the list, newest first, mark read; the five case kinds link to /cases/:caseId (13.4), the chat kinds to the chat requests or the room (8.2, Chat). The shell's poll keeps it fresh. */
 @Component({
   selector: 'app-notifications-page',
   imports: [DatePipe, RouterLink, MatCardModule, MatButtonModule, MatListModule, MatIconModule],
@@ -26,8 +26,8 @@ const CASE_KINDS = ['tradeCaseOpened', 'disputeCaseOpened', 'caseScheduled', 'ca
           @for (n of session.notifications(); track n.notificationNumber) {
             <mat-list-item>
               <mat-icon matListItemIcon>{{ n.read ? 'drafts' : 'mark_email_unread' }}</mat-icon>
-              @if (isCase(n.kind)) {
-                <a matListItemTitle [routerLink]="['/cases', n.referenceId]">{{ label(n.kind) }}</a>
+              @if (linkOf(n.kind, n.referenceId); as link) {
+                <a matListItemTitle [routerLink]="link">{{ label(n.kind) }}</a>
               } @else {
                 <span matListItemTitle>{{ label(n.kind) }}</span>
               }
@@ -57,9 +57,12 @@ export class NotificationsPage {
     void this.refresh();
   }
 
-  /** True for a case notification: its label opens the case. */
-  protected isCase(kind: string): boolean {
-    return CASE_KINDS.includes(kind);
+  /** Where the label leads: a case kind to the case; chatInvite and joinRequest to the chat requests; inviteAccepted, inviteDeclined and joinApproved to the room, the reference being its id; null for the rest. */
+  protected linkOf(kind: string, referenceId: string): string[] | null {
+    if (CASE_KINDS.includes(kind)) return ['/cases', referenceId];
+    if (kind === 'chatInvite' || kind === 'joinRequest') return ['/chat/requests'];
+    if (kind === 'inviteAccepted' || kind === 'inviteDeclined' || kind === 'joinApproved') return ['/chat', referenceId];
+    return null;
   }
 
   /** The kinds of the masterpod spec section 6 and the five case kinds of 13.7, in words. */

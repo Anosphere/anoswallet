@@ -10,6 +10,7 @@ import { MatListModule } from '@angular/material/list';
 import { MatSelectModule } from '@angular/material/select';
 import { RouterLink } from '@angular/router';
 import { anosToMillionths, millionthsToAnos } from '../amounts';
+import { ChatService } from '../services/chat.service';
 import { CryptoService } from '../services/crypto.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
 import { ListingItem, MasterpodApiService } from '../services/masterpod-api.service';
@@ -19,7 +20,10 @@ import { SessionService } from '../services/session.service';
  * Marketplace (wallet spec 8.2): the masterpod test app's section on
  * Material: listings with filters and sort, a new listing with its room (the
  * room key wrapped to this pod's own chat keys), Request to join on
- * another's open listing, Close on one's own.
+ * another's open listing, Close on one's own. The owner's Room link opens
+ * the listing's room; another's listing shows Open chat when this pod is in
+ * its room, Requested after a request from this tab, else Request to join
+ * (2026-11-05, section 11).
  */
 @Component({
   selector: 'app-marketplace-page',
@@ -72,9 +76,15 @@ import { SessionService } from '../services/session.service';
               <span matListItemLine>by <code>{{ listing.owner.username }}</code></span>
               <span matListItemMeta class="meta">
                 @if (listing.owner.anopodId !== session.anopodId()) {
-                  <button mat-stroked-button type="button" (click)="requestToJoin(listing.chatRoomId)" [disabled]="busy() || listing.status !== 'open'">Request to join</button>
+                  @if (inRoom(listing.chatRoomId)) {
+                    <a mat-stroked-button [routerLink]="['/chat', listing.chatRoomId]">Open chat</a>
+                  } @else if (chat.requestedRooms().has(listing.chatRoomId)) {
+                    <button mat-stroked-button type="button" disabled>Requested</button>
+                  } @else {
+                    <button mat-stroked-button type="button" (click)="requestToJoin(listing.chatRoomId)" [disabled]="busy() || listing.status !== 'open'">Request to join</button>
+                  }
                 } @else {
-                  <a mat-button routerLink="/chat">Room</a>
+                  <a mat-button [routerLink]="['/chat', listing.chatRoomId]">Room</a>
                   <button mat-button type="button" (click)="closeListing(listing.listingId)" [disabled]="busy() || listing.status !== 'open'">Close</button>
                 }
               </span>
@@ -98,6 +108,7 @@ export class MarketplacePage {
   protected readonly session = inject(SessionService);
   private readonly api = inject(MasterpodApiService);
   private readonly crypto = inject(CryptoService);
+  protected readonly chat = inject(ChatService);
 
   protected readonly millionthsToAnos = millionthsToAnos;
   protected readonly side = signal<'buy' | 'sell'>('sell');
@@ -158,8 +169,17 @@ export class MarketplacePage {
     }
   }
 
+  /** True when this pod is in the listing's room: its owner, or let in. */
+  protected inRoom(chatRoomId: string): boolean {
+    return this.session.chatRooms()?.rooms.some((r) => r.chatRoomId === chatRoomId) ?? false;
+  }
+
   protected requestToJoin(chatRoomId: string): Promise<void> {
-    return this.run(() => this.api.requestToJoin(chatRoomId));
+    return this.run(async () => {
+      const res = await this.api.requestToJoin(chatRoomId);
+      if (res.ok) this.chat.markRequested(chatRoomId);
+      return res;
+    });
   }
 
   protected closeListing(listingId: string): Promise<void> {

@@ -22,6 +22,9 @@ export const NOTIFICATIONS_POLL_MS = 5_000;
 export const MESSAGES_POLL_MS = 3_000;
 export const ACCOUNT_POLL_MS = 5_000;
 
+/** A conversation opens with this many of its newest messages and loads older ones by as many (wallet spec 8.2, Chat). */
+export const MESSAGES_PAGE = 50;
+
 /** The attesting lists, the two attestor case pages and My case refresh this often while open (wallet spec 13.3). */
 export const CASES_POLL_MS = 15_000;
 

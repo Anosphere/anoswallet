@@ -377,7 +377,10 @@ as in the test apps; a new tab unlocks again.
     /wallet/:accountId       one account: balance, send, pending, escrow trades, follow-ups, fund proposal
     /wallet/:accountId/escrow/:transactionId   one escrow trade: the details, the buttons for your side, the closed view
     /wallet/:accountId/history   the transaction history: the list, newest first, Load more
-    /chat                    rooms, invites, join requests, messages
+    /chat                    the list of chats; on a desktop the pane beside it shows the child route
+    /chat/requests           invites to me and join requests on my rooms
+    /chat/new                start a chat: Message someone, New public room, Find public rooms
+    /chat/:chatRoomId        one conversation
     /marketplace             listings
     /notifications           the list, mark read
     /seed                    the vouch request inbox (seeds only)
@@ -669,16 +672,77 @@ read that fails says only that the trade is closed. A trade the page
 never saw open (an old link) reads "This trade is not open. Released
 trades are in the account's transactions."
 
-Chat and Marketplace: the masterpod test app's sections, ported to
-Material lists and forms, the same calls, the same polls (messages every
-3 s), invites by username, the join inbox, listings with filters and
-sort, a listing's room. In a chat message, a run of exactly 64 hex
-characters with no hex character on either side (an account id) shows in
-code font with a copy button (8.5) after it; the rest of the text shows
-as written (2026-11-05, section 11).
+Chat (rebuilt as a messenger 2026-11-05, section 11): two panes. The
+list of chats on the left, 360 px on a desktop, and the pane for the
+child route on the right; on a phone (839 px and under) one or the other,
+the pane while a child route is open, every child with a back arrow on
+top. The list: a header "Chats" with a pencil to /chat/new (a floating
+button on a phone); a "Requests" row on top, only while invites to this
+pod or join requests on its rooms wait, reading "N invites, M join
+requests"; then the rooms, newest activity first (the newest message,
+else the room's creation). A row shows the other person's avatar (8.6)
+for a private room with one other person, member or invited, else the
+kind's icon (group, public, storefront); the title; the newest message
+decrypted as one line, "You: " before this pod's own, "No messages yet"
+without one, "(cannot read)" when it will not open; and the time (today
+the time, yesterday "Yesterday", within six days the weekday, else the
+date). A room's title: a public room's name; a listing room's "Sell 50
+anos for THB" from the listing summary the masterpod sends; a private
+room's other people, the invited as "mai (invited)", or "Just you". The
+rooms are the latest /list-chat-rooms answer kept in the session, which
+the shell's 5-second poll refreshes once setup is complete; the list
+refreshes it once when it opens. "No chat keys in this tab: unlock
+again." shows without chat keys.
+
+One conversation, at /chat/:chatRoomId: a header with the avatar or icon,
+the title, the members (the invited marked) and a menu with Invite
+someone (the creator of a private or public room; the username search,
+the person's selfie, Invite), Members (a panel of the members and the
+invited with avatars) and Leave (a member who is not the creator; the
+room key is dropped and the list opens). The thread opens at the room's
+newest 50 messages (/list-messages with beforePosition, MESSAGES_PAGE)
+and shows "Load older messages" on top while a page came back full; the
+3-second poll reads after the newest shown position; the thread scrolls
+to the bottom after opening and after a send. Bubbles as before: this
+pod's on the right, the sender's name on the others'; a run of exactly
+64 hex characters with no hex character on either side (an account id)
+shows in code font with a copy button (8.5) after it; the rest of the
+text shows as written, line breaks kept. The message box and Send at
+the bottom. "You are not in this chat." for a room that is not in the
+list.
+
+Requests, at /chat/requests: the invites to this pod (the inviter's
+username, then `invited you to "<the public room's name>"` or `invited
+you to a private chat`), Accept (the room opens) and Decline; the join
+requests on the rooms this pod created (`<username> asks to join
+<title>`), Approve (the room key wrapped to the requester) and Decline;
+each with the person's avatar; "No requests." when both lists are empty.
+
+New chat, at /chat/new, three tabs. Message someone: a username, Find
+(/search-usernames), the person's name, username and selfie, Start chat:
+the private chat with exactly the two of you opens when it exists, else
+a private room is created with a new room key wrapped to this pod's chat
+keys, the person is invited with it wrapped to theirs (their chat public
+keys are read first, so someone without them makes no room) and the room
+opens; finding yourself reads "That is you.". New public room: a name,
+Create, the room opens. Find public rooms: /list-public-chat-rooms when
+the tab first opens and on Refresh, each room with its name, "by
+<username> · N members" and Open (this pod is in it), Requested (asked
+from this tab) or Request to join.
+
+Marketplace: the masterpod test app's section, ported to Material lists
+and forms, the same calls, listings with filters and sort, a listing's
+room. The owner's Room link opens the listing's room at
+/chat/:chatRoomId; another's listing shows Open chat when this pod is in
+its room, Requested after a request from this tab, else Request to join
+(2026-11-05, section 11).
 
 Notifications: the list, newest first, mark read; the 5-second poll
-runs while a session is open and updates the status (vouched, counts).
+runs while a session is open and updates the status (vouched, counts),
+and the chat rooms with them once setup is complete. The chat kinds
+link: chatInvite and joinRequest to /chat/requests; inviteAccepted,
+inviteDeclined and joinApproved to the room, /chat/:chatRoomId
+(2026-11-05, section 11).
 
 Seed: /list-vouch-requests with selfies, approve and decline, for a seed
 or super seed.
@@ -692,12 +756,18 @@ excepted, with the keyholder and anos calls included.
     session.service         signals: anopodId, username, firstName, lastName, the session keys, the PRF output
                             while needed, the encryption key, the chat keys, the PLID and lookup id, the status
                             from /check-anopod-status, the keyholder receiving keys, the wallet public keys, the
-                            accounts (keyBlob ciphertext and creation, never open keys); the next-step rule
+                            accounts (keyBlob ciphertext and creation, never open keys), the chat rooms (the
+                            latest /list-chat-rooms answer, 2026-11-05); the next-step rule
     masterpod-api.service   the keyholder test app's api.service.ts, base path /api/masterpod, the two changed
                             routes and the four new ones added
     keyholder-api.service   the keyholder test app's, base path /api/keyholder/<n>
     anos-api.service        the anos test app's account-api.service.ts, base path /api/anos/<defaultValidator>,
                             plus the three signed reads (listEscrows added 2026-11-05)
+    chat.service            what the chat pages share (2026-11-05): room keys (roomKeyOf, wrapFor), decryptMessage,
+                            piecesOf, a room's title, kind, icon and other person, the order by activity, shortWhen
+                            and dayLabel, requestedRooms, refreshRooms
+    profile-cache.service   one /get-anopod-profile per pod per tab, quiet, as a signal: undefined while it loads,
+                            null when there is no such pod (2026-11-05)
     signing.service         /api/sign/public-keys and /api/sign
     crypto.service          the keyholder test app's crypto.service.ts plus the anos test app's (keys, the
                             builders, signing), plus section 7 and the public ledger id
@@ -731,6 +801,16 @@ the icon for two seconds, or "could not copy" when the browser refuses.
 It sits after the account id in the Account title, at the end of each
 Wallet row, and after an account id in a chat message. The case pages of
 sections 12 and 13 keep their own copy code.
+
+### 8.6 The avatar
+
+One small component, src/app/components/avatar.component.ts
+(`<app-avatar>`, inputs `anopodId`, `username` and `size`, 40 by default;
+2026-11-05, section 11): a round selfie when the pod's profile has one,
+else a round disc in the primary-container colour with the first letter
+of the username. The profile comes from profile-cache.service (8.3), one
+/get-anopod-profile per pod per tab. In the chat list, the conversation
+header, the members panel and the chat requests.
 
 ## 9. Configuration, and running it on this machine
 
@@ -1295,6 +1375,70 @@ landing page said nothing about it.
 - The Thai text is the planning chat's translation, to be checked by a
   Thai reader before deploy.
 - Spec: 8.2 Landing, this note.
+- `npx ng build` clean.
+
+### The chat as a messenger, step 2 (2026-11-05)
+
+Steps 2 and 3 of forclaude/wallet-chat-plan-1.md, built as one round
+after step 1 (the masterpod's lastMessage, listing and invited in
+/list-chat-rooms, beforePosition on /list-messages). The chat was one
+page of two cards with four fold-out panels; on a phone the panels came
+before the messages.
+
+- `masterpod-api.service.ts`: `RoomItem` gains `listing` (`RoomListing`:
+  side, quantity, currency), `invited` and `lastMessage`; `MessagesQuery`
+  and `listMessages(chatRoomId, query, quiet)`. `constants.ts`:
+  `MESSAGES_PAGE = 50`. `session.service.ts`: `chatRooms`, the latest
+  /list-chat-rooms answer, cleared by `close()`. `app.ts`: the 5-second
+  poll adds `listChatRooms(true)` once setup is complete.
+- `src/app/services/chat.service.ts` (`ChatService`): `roomKeyOf`,
+  `wrapFor` (by room id; the key from the session or the listed room),
+  `piecesOf` and `ACCOUNT_ID_IN_TEXT`, moved from the old chat page;
+  `decryptMessage` (null when it will not open), `title`, `kind`,
+  `otherPerson`, `icon`, `activityAt`, `sorted`, `shortWhen`, `dayLabel`
+  (for step 4), `requestedRooms` with `markRequested`, `refreshRooms`.
+- `src/app/services/profile-cache.service.ts` and
+  `src/app/components/avatar.component.ts`: 8.6.
+- `app.routes.ts`: `chat` keeps `ChatPage` and gets the children
+  `requests`, `new` and `:chatRoomId`.
+- `src/app/pages/chat.page.ts`, rewritten: the list and the pane (8.2
+  Chat). The page takes the height under the toolbar (64 px, 56 px under
+  600 px, less main's padding) so the list and the pane scroll inside
+  it; a signal from the router's url says whether a child is open; the
+  previews are decrypted once per message id by an effect on the room
+  list.
+- `src/app/pages/chat-room.page.ts` (`ChatRoomPage`, input `chatRoomId`):
+  the conversation. An effect opens the route's room once the list has
+  it, and again when the id changes; opening reads `beforePosition:
+  lastPosition + 1`; Load older reads before the oldest shown and keeps
+  the reader's place (scrollTop moved by the added height); the poll
+  reads after the newest shown, quiet, skipped while busy; new messages
+  are deduplicated by id. The invite form and Members are panels under
+  the header, opened from the menu.
+- `src/app/pages/chat-requests.page.ts` (`ChatRequestsPage`): the invites
+  and the join requests, moved from the old page's panels.
+- Spec: 8.1 (the four chat lines), 8.2 Chat (rewritten) and
+  Notifications (the poll), 8.3, the new 8.6, this note.
+- `npx ng build` clean (1.46 MB initial).
+
+### The chat as a messenger, step 3 (2026-11-05)
+
+Built in the same round as step 2.
+
+- `src/app/pages/chat-new.page.ts` (`ChatNewPage`): the three tabs of 8.2
+  Chat, New chat. Start chat reads the person's chat public keys before
+  creating the room, so a person without them makes no empty room;
+  `justUs` finds the existing private chat with exactly the two of you.
+- `marketplace.page.ts`: the owner's Room link to the listing's room;
+  Open chat, Requested or Request to join on another's listing (`inRoom`,
+  `ChatService.requestedRooms`); `requestToJoin` marks the room on
+  success. The class comment says so.
+- `notifications.page.ts`: `isCase` became `linkOf(kind, referenceId)`:
+  the case kinds to the case, chatInvite and joinRequest to
+  /chat/requests, inviteAccepted, inviteDeclined and joinApproved to the
+  room; joinDeclined has no link.
+- Spec: 8.1 (/chat/new), 8.2 Chat (New chat), Marketplace and
+  Notifications (the links), this note.
 - `npx ng build` clean.
 
 ## 12. Recovery and the moderator edition

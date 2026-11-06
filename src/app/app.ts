@@ -76,7 +76,8 @@ export class App {
   constructor() {
     void this.config.load().catch(() => undefined);
     // The notification poll (wallet spec 8.2): while a session is open, the
-    // notifications and the status (vouched, the counts) every 5 seconds.
+    // notifications and the status (vouched, the counts) every 5 seconds,
+    // and the chat rooms with them once setup is complete (8.2, Chat).
     const timer = setInterval(() => void this.poll(), NOTIFICATIONS_POLL_MS);
     inject(DestroyRef).onDestroy(() => clearInterval(timer));
   }
@@ -87,10 +88,15 @@ export class App {
     if (!this.session.hasSession() || this.polling) return;
     this.polling = true;
     try {
-      const [notifications, status] = await Promise.all([this.api.listNotifications(false, true), this.api.checkAnopodStatus(true)]);
+      const [notifications, status, rooms] = await Promise.all([
+        this.api.listNotifications(false, true),
+        this.api.checkAnopodStatus(true),
+        this.session.setupComplete() ? this.api.listChatRooms(true) : Promise.resolve(null),
+      ]);
       if (!this.session.hasSession()) return;
       if (notifications.ok) this.session.notifications.set(notifications.body.notifications);
       if (status.ok) this.session.status.set(status.body);
+      if (rooms?.ok) this.session.chatRooms.set(rooms.body);
     } finally {
       this.polling = false;
     }
