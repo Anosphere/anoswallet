@@ -1,3 +1,4 @@
+import { TextFieldModule } from '@angular/cdk/text-field';
 import { Component, DestroyRef, ElementRef, Injector, afterNextRender, computed, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -15,7 +16,7 @@ import { ApiResponse, reasonOf } from '../services/log.service';
 import { MasterpodApiService, MessageItem, Profile, RoomItem } from '../services/masterpod-api.service';
 import { SessionService } from '../services/session.service';
 
-/** A decrypted message of the room, split into its pieces. */
+/** A decrypted message of the room, split into its pieces; `pending` while this pod's own message is on its way. */
 interface ShownMessage {
   messageId: string;
   position: number;
@@ -23,7 +24,27 @@ interface ShownMessage {
   createdAt: string;
   pieces: Piece[];
   mine: boolean;
+  pending: boolean;
 }
+
+/** Messages by one sender within GROUP_MINUTES of each other on one day: the name once on top (someone else's, in a room that is not direct), the time once below. */
+interface Group {
+  senderAnopodId: string;
+  senderName: string;
+  mine: boolean;
+  showSender: boolean;
+  messages: ShownMessage[];
+  time: string;
+}
+
+/** What the thread draws: a day line, or a group of bubbles. */
+type ThreadItem = { kind: 'day'; key: string; label: string } | { kind: 'group'; key: string; group: Group };
+
+/** Messages this close in time by one sender share a group. */
+const GROUP_MINUTES = 5;
+
+/** A message that arrives scrolls the thread down only when the reader is this close to the bottom. */
+const FOLLOW_PX = 120;
 
 /**
  * One conversation (wallet spec 8.2, Chat), at /chat/:chatRoomId inside the
@@ -32,13 +53,18 @@ interface ShownMessage {
  * creator of a private or public room, Members, Leave for a member who is
  * not the creator); the thread, opened at the room's newest MESSAGES_PAGE
  * messages with Load older messages on top while a page came back full,
- * polled every 3 seconds after the newest shown position; the message box
- * and Send. Room keys come from ChatService; an account id in a message
- * shows in code font with a copy button (8.5).
+ * polled every 3 seconds after the newest shown position, the messages
+ * grouped by sender and five minutes with a day line between days; the
+ * message box that grows to five lines (Enter sends, Shift+Enter a new
+ * line) and the round Send. A sent message shows at once as a pale bubble
+ * marked "Sending" and gets its tick from the answer. Room keys come from
+ * ChatService; an account id in a message shows in code font with a copy
+ * button (8.5). The room is marked seen when it opens and when new
+ * messages show.
  */
 @Component({
   selector: 'app-chat-room-page',
-  imports: [FormsModule, RouterLink, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, MatMenuModule, AvatarComponent, CopyButtonComponent],
+  imports: [FormsModule, RouterLink, TextFieldModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, MatMenuModule, AvatarComponent, CopyButtonComponent],
   template: `
     @if (room(); as room) {
       <header class="head">
@@ -86,23 +112,48 @@ interface ShownMessage {
           }
         </div>
       }
-      <div class="thread" #thread>
+      <div class="thread" #threadBox>
         @if (canLoadOlder()) {
           <button mat-button type="button" class="older" (click)="loadOlder()" [disabled]="busy()">Load older messages</button>
         }
-        @for (m of messages(); track m.messageId) {
-          <div class="bubble" [class.mine]="m.mine">
-            <span class="sender">{{ senderName(room, m.senderAnopodId) }}</span>
-            <span class="text">
-              @for (piece of m.pieces; track $index) {
-                @if (piece.accountId) {
-                  <code>{{ piece.text }}</code><app-copy-button [text]="piece.text" label="Copy the account id" />
-                } @else {
-                  <span class="plain">{{ piece.text }}</span>
-                }
+        @for (item of thread(); track item.key) {
+          @if (item.kind === 'day') {
+            <div class="day"><span>{{ item.label }}</span></div>
+          } @else {
+            <div class="group" [class.mine]="item.group.mine">
+              @if (item.group.showSender) {
+                <app-avatar class="face" [anopodId]="item.group.senderAnopodId" [username]="item.group.senderName" [size]="28" />
               }
-            </span>
-          </div>
+              <div class="bubbles">
+                @if (item.group.showSender) {
+                  <span class="sender">{{ item.group.senderName }}</span>
+                }
+                @for (m of item.group.messages; track m.messageId) {
+                  <div class="bubble" [class.pending]="m.pending">
+                    <span class="text">
+                      @for (piece of m.pieces; track $index) {
+                        @if (piece.accountId) {
+                          <code>{{ piece.text }}</code><app-copy-button [text]="piece.text" label="Copy the account id" />
+                        } @else {
+                          <span class="plain">{{ piece.text }}</span>
+                        }
+                      }
+                    </span>
+                    @if (m.mine) {
+                      <span class="state">
+                        @if (m.pending) {
+                          Sending
+                        } @else {
+                          <mat-icon class="tick">done</mat-icon>
+                        }
+                      </span>
+                    }
+                  </div>
+                }
+                <span class="time">{{ item.group.time }}</span>
+              </div>
+            </div>
+          }
         } @empty {
           <p class="muted empty">No messages yet.</p>
         }
@@ -111,8 +162,11 @@ interface ShownMessage {
         <p class="error note">{{ text }}</p>
       }
       <div class="composer">
-        <mat-form-field appearance="outline" class="grow" subscriptSizing="dynamic"><mat-label>Message</mat-label><input matInput [ngModel]="messageText()" (ngModelChange)="messageText.set($event)" (keyup.enter)="send()" /></mat-form-field>
-        <button mat-flat-button type="button" (click)="send()" [disabled]="busy() || !messageText().trim()">Send</button>
+        <mat-form-field appearance="outline" class="grow" subscriptSizing="dynamic">
+          <mat-label>Message</mat-label>
+          <textarea matInput cdkTextareaAutosize cdkAutosizeMinRows="1" cdkAutosizeMaxRows="5" [ngModel]="messageText()" (ngModelChange)="messageText.set($event)" (keydown.enter)="enter($event)"></textarea>
+        </mat-form-field>
+        <button mat-mini-fab type="button" class="send" (click)="send()" [disabled]="busy() || !messageText().trim()" aria-label="Send"><mat-icon>send</mat-icon></button>
       </div>
     } @else if (!loaded()) {
       <p class="muted note">Loading the chat.</p>
@@ -136,15 +190,27 @@ interface ShownMessage {
     .members { display: flex; flex-direction: column; gap: 6px; }
     .member { display: inline-flex; align-items: center; gap: 8px; }
     .selfie { width: 40px; height: 40px; object-fit: cover; border-radius: 50%; }
-    .thread { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 6px; padding: 12px; }
+    .thread { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 8px; padding: 12px; }
     .older { align-self: center; }
-    .bubble { display: flex; flex-direction: column; max-width: 80%; padding: 8px 12px; border-radius: 12px; background: var(--mat-sys-surface-container); align-self: flex-start; }
-    .bubble.mine { align-self: flex-end; background: var(--mat-sys-primary-container); }
+    .day { display: flex; justify-content: center; margin: 8px 0 0; }
+    .day span { font-size: 12px; color: var(--mat-sys-on-surface-variant); background: var(--mat-sys-surface-container); border-radius: 10px; padding: 2px 10px; }
+    .group { display: flex; align-items: flex-end; gap: 8px; max-width: 80%; align-self: flex-start; }
+    .group.mine { align-self: flex-end; }
+    .face { margin-bottom: 18px; }
+    .bubbles { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+    .group.mine .bubbles { align-items: flex-end; }
+    .bubble { padding: 8px 12px; border-radius: 16px; background: var(--mat-sys-surface-container); overflow-wrap: anywhere; }
+    .group.mine .bubble { background: var(--mat-sys-primary-container); }
+    .bubble.pending { opacity: 0.6; }
     .bubble code { font-size: 12px; word-break: break-all; }
-    .plain { white-space: pre-wrap; overflow-wrap: anywhere; }
-    .sender { font-size: 11px; color: var(--mat-sys-on-surface-variant); }
-    .composer { display: flex; gap: 8px; align-items: center; padding: 8px 12px; border-top: 1px solid var(--mat-sys-outline-variant); }
+    .plain { white-space: pre-wrap; }
+    .state { display: inline-flex; align-items: center; margin-left: 6px; font-size: 11px; color: var(--mat-sys-on-surface-variant); vertical-align: bottom; }
+    .tick { font-size: 14px; width: 14px; height: 14px; }
+    .sender { font-size: 11px; color: var(--mat-sys-on-surface-variant); margin: 0 0 2px 8px; }
+    .time { font-size: 11px; color: var(--mat-sys-on-surface-variant); margin: 2px 8px 0; }
+    .composer { display: flex; gap: 8px; align-items: flex-end; padding: 8px 12px; border-top: 1px solid var(--mat-sys-outline-variant); }
     .grow { flex: 1; min-width: 0; }
+    .send { flex: none; margin-bottom: 4px; }
     .note { padding: 12px; margin: 0; }
     .empty { text-align: center; margin: auto; }
     .muted { color: var(--mat-sys-on-surface-variant); }
@@ -163,7 +229,7 @@ export class ChatRoomPage {
   private readonly crypto = inject(CryptoService);
   private readonly router = inject(Router);
   private readonly injector = inject(Injector);
-  private readonly thread = viewChild<ElementRef<HTMLElement>>('thread');
+  private readonly threadBox = viewChild<ElementRef<HTMLElement>>('threadBox');
 
   /** True once the room list has arrived; the room is the one of the route, null when the pod is not in it. */
   protected readonly loaded = computed(() => this.session.chatRooms() !== null);
@@ -180,11 +246,46 @@ export class ChatRoomPage {
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
 
+  /** The messages as the thread draws them: a day line before each day, the messages of one sender within GROUP_MINUTES in one group. */
+  protected readonly thread = computed<ThreadItem[]>(() => {
+    const room = this.room();
+    if (!room) return [];
+    const direct = this.chat.kind(room) === 'direct';
+    const items: ThreadItem[] = [];
+    let group: Group | null = null;
+    let lastDay = '';
+    for (const m of this.messages()) {
+      const day = dayKey(m.createdAt);
+      if (day !== lastDay) {
+        items.push({ kind: 'day', key: `day-${day}`, label: this.chat.dayLabel(m.createdAt) });
+        lastDay = day;
+        group = null;
+      }
+      const previous = group ? group.messages[group.messages.length - 1] : null;
+      if (group && previous && group.senderAnopodId === m.senderAnopodId && minutesBetween(previous.createdAt, m.createdAt) < GROUP_MINUTES) {
+        group.messages.push(m);
+        group.time = this.chat.timeOf(m.createdAt);
+      } else {
+        group = {
+          senderAnopodId: m.senderAnopodId,
+          senderName: this.senderName(room, m.senderAnopodId),
+          mine: m.mine,
+          showSender: !m.mine && !direct,
+          messages: [m],
+          time: this.chat.timeOf(m.createdAt),
+        };
+        items.push({ kind: 'group', key: m.messageId, group });
+      }
+    }
+    return items;
+  });
+
   /** The room the thread shows, whether its opening read is done, and the positions of the oldest and newest shown. */
   private openedFor: string | null = null;
   private ready = false;
   private oldest = 0;
   private newest = 0;
+  private pendingCount = 0;
 
   constructor() {
     // The route's room, once the list has it: opened when it changes.
@@ -205,6 +306,13 @@ export class ChatRoomPage {
   /** The members' usernames, then the invited as "(invited)". */
   protected membersLine(room: RoomItem): string {
     return [...room.members.map((m) => m.username), ...room.invited.map((m) => `${m.username} (invited)`)].join(', ');
+  }
+
+  /** Enter sends; Shift+Enter is left to the textarea, a new line. */
+  protected enter(event: Event): void {
+    if ((event as KeyboardEvent).shiftKey) return;
+    event.preventDefault();
+    void this.send();
   }
 
   /** The room's newest page; whatever was shown before is dropped. */
@@ -231,6 +339,7 @@ export class ChatRoomPage {
     this.newest = shown.length > 0 ? shown[shown.length - 1].position : 0;
     this.canLoadOlder.set(res.body.messages.length === MESSAGES_PAGE);
     this.ready = true;
+    this.session.markSeen(room.chatRoomId, this.newest);
     this.scrollToBottom();
   }
 
@@ -243,7 +352,7 @@ export class ChatRoomPage {
       if (!res.ok || this.openedFor !== room.chatRoomId) return res;
       const shown = await this.shown(room, res.body.messages);
       if (shown.length > 0) {
-        const el = this.thread()?.nativeElement;
+        const el = this.threadBox()?.nativeElement;
         const heightBefore = el?.scrollHeight ?? 0;
         this.oldest = shown[0].position;
         this.messages.update((list) => [...shown, ...list.filter((m) => !shown.some((s) => s.messageId === m.messageId))]);
@@ -259,7 +368,7 @@ export class ChatRoomPage {
     });
   }
 
-  /** New messages after the newest shown: quiet from the timer, logged after a send. */
+  /** New messages after the newest shown: quiet from the timer, logged after a send. The thread follows them only when the reader is near the bottom. */
   private async poll(quiet: boolean): Promise<void> {
     const room = this.room();
     if (!room || !this.ready || this.openedFor !== room.chatRoomId || !this.session.hasSession() || (quiet && this.busy())) return;
@@ -267,10 +376,12 @@ export class ChatRoomPage {
     if (!res.ok || this.openedFor !== room.chatRoomId || res.body.messages.length === 0) return;
     const shown = await this.shown(room, res.body.messages);
     if (this.openedFor !== room.chatRoomId) return;
+    const follow = this.nearBottom();
     this.messages.update((list) => [...list.filter((m) => !shown.some((s) => s.messageId === m.messageId)), ...shown]);
     this.newest = Math.max(this.newest, shown[shown.length - 1].position);
     if (this.oldest === 0) this.oldest = shown[0].position;
-    this.scrollToBottom();
+    this.session.markSeen(room.chatRoomId, this.newest);
+    if (follow) this.scrollToBottom();
   }
 
   /** The messages decrypted with the room key and split into pieces; the two reasons a text cannot show, as before. */
@@ -280,22 +391,62 @@ export class ChatRoomPage {
     const list: ShownMessage[] = [];
     for (const m of items) {
       const text = (await this.chat.decryptMessage(room, m.message)) ?? (hasKey ? '(cannot decrypt)' : '(no room key)');
-      list.push({ messageId: m.messageId, position: m.position, senderAnopodId: m.senderAnopodId, createdAt: m.createdAt, pieces: piecesOf(text), mine: m.senderAnopodId === me });
+      list.push({
+        messageId: m.messageId,
+        position: m.position,
+        senderAnopodId: m.senderAnopodId,
+        createdAt: m.createdAt,
+        pieces: piecesOf(text),
+        mine: m.senderAnopodId === me,
+        pending: false,
+      });
     }
     return list;
   }
 
+  /**
+   * The message shows at once as a pending bubble and the box empties; the
+   * answer gives the bubble its id and position, and the poll that follows
+   * brings in whatever else arrived. A refusal, or a key that fails, takes
+   * the bubble away and puts the text back.
+   */
   protected send(): Promise<void> {
+    const text = this.messageText().trim();
+    if (!text) return Promise.resolve();
     return this.run(async () => {
       const room = this.room();
       if (!room) throw new Error('This chat is not open');
       const key = await this.chat.roomKeyOf(room);
       if (!key) throw new Error('No room key for this room');
-      const res = await this.api.sendMessage(room.chatRoomId, await this.crypto.encryptText(key, this.messageText().trim()));
-      if (res.ok) {
-        this.messageText.set('');
-        await this.poll(false);
+      const pending: ShownMessage = {
+        messageId: `pending-${++this.pendingCount}`,
+        position: 0,
+        senderAnopodId: this.session.anopodId() ?? '',
+        createdAt: new Date().toISOString(),
+        pieces: piecesOf(text),
+        mine: true,
+        pending: true,
+      };
+      this.messages.update((list) => [...list, pending]);
+      this.messageText.set('');
+      this.scrollToBottom();
+      let res: ApiResponse<{ messageId: string; position: number }>;
+      try {
+        res = await this.api.sendMessage(room.chatRoomId, await this.crypto.encryptText(key, text));
+      } catch (err) {
+        this.messages.update((list) => list.filter((m) => m !== pending));
+        this.messageText.set(text);
+        throw err;
       }
+      if (!res.ok) {
+        this.messages.update((list) => list.filter((m) => m !== pending));
+        this.messageText.set(text);
+        return res;
+      }
+      const sent: ShownMessage = { ...pending, messageId: res.body.messageId, position: res.body.position, pending: false };
+      this.messages.update((list) => list.map((m) => (m === pending ? sent : m)));
+      this.session.markSeen(room.chatRoomId, res.body.position);
+      await this.poll(false);
       return res;
     });
   }
@@ -340,10 +491,17 @@ export class ChatRoomPage {
     });
   }
 
+  /** True when the reader is within FOLLOW_PX of the thread's bottom, or the thread is not drawn. */
+  private nearBottom(): boolean {
+    const el = this.threadBox()?.nativeElement;
+    if (!el) return true;
+    return el.scrollHeight - el.scrollTop - el.clientHeight <= FOLLOW_PX;
+  }
+
   private scrollToBottom(): void {
     afterNextRender(
       () => {
-        const el = this.thread()?.nativeElement;
+        const el = this.threadBox()?.nativeElement;
         if (el) el.scrollTop = el.scrollHeight;
       },
       { injector: this.injector },
@@ -363,4 +521,14 @@ export class ChatRoomPage {
       this.busy.set(false);
     }
   }
+}
+
+/** The local calendar day of a time, as a key. */
+function dayKey(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+function minutesBetween(fromIso: string, toIso: string): number {
+  return Math.abs(Date.parse(toIso) - Date.parse(fromIso)) / 60_000;
 }

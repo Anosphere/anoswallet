@@ -389,7 +389,8 @@ as in the test apps; a new tab unlocks again.
 A guard sends anyone without a session to /. Which pages the navigation
 shows follows the status: vouching until vouched; identity and setup
 until setup is complete; wallet, chat, marketplace and account once it
-is; seed when isSeed.
+is; seed when isSeed. The Chat entry carries the number of unread rooms
+(8.2, Chat; 2026-11-05, section 11).
 
 The next-step rule, applied after an unlock and after each step
 finishes:
@@ -686,7 +687,8 @@ kind's icon (group, public, storefront); the title; the newest message
 decrypted as one line, "You: " before this pod's own, "No messages yet"
 without one, "(cannot read)" when it will not open; and the time (today
 the time, yesterday "Yesterday", within six days the weekday, else the
-date). A room's title: a public room's name; a listing room's "Sell 50
+date); an unread room (below) has a dot under the time and a bold
+title. A room's title: a public room's name; a listing room's "Sell 50
 anos for THB" from the listing summary the masterpod sends; a private
 room's other people, the invited as "mai (invited)", or "Just you". The
 rooms are the latest /list-chat-rooms answer kept in the session, which
@@ -703,13 +705,24 @@ room key is dropped and the list opens). The thread opens at the room's
 newest 50 messages (/list-messages with beforePosition, MESSAGES_PAGE)
 and shows "Load older messages" on top while a page came back full; the
 3-second poll reads after the newest shown position; the thread scrolls
-to the bottom after opening and after a send. Bubbles as before: this
-pod's on the right, the sender's name on the others'; a run of exactly
-64 hex characters with no hex character on either side (an account id)
-shows in code font with a copy button (8.5) after it; the rest of the
-text shows as written, line breaks kept. The message box and Send at
-the bottom. "You are not in this chat." for a room that is not in the
-list.
+to the bottom after opening and after a send, and for a message that
+arrives only while the reader is within 120 px of the bottom. Messages
+by one sender within five minutes of each other, on one day, form a
+group: this pod's on the right, the others' on the left with, in a room
+that is not a direct chat, the sender's avatar and name once on top; the
+time once under the group's last bubble; a day line ("Today",
+"Yesterday", else the date) between days. A run of exactly 64 hex
+characters with no hex character on either side (an account id) shows in
+code font with a copy button (8.5) after it; the rest of the text shows
+as written, line breaks kept. The message box at the bottom grows to
+five lines; Enter sends and Shift+Enter makes a new line; Send is a
+round button. A sent message shows at once as a pale bubble with
+"Sending" where the tick goes; /send-message's answer gives it its id
+and position and the bubble turns normal with a small tick; a refusal
+removes the bubble, puts the text back in the box and shows the error
+line. The room is marked seen (Unread, below) when it opens and when
+new messages show. "You are not in this chat." for a room that is not in
+the list.
 
 Requests, at /chat/requests: the invites to this pod (the inviter's
 username, then `invited you to "<the public room's name>"` or `invited
@@ -729,6 +742,18 @@ Create, the room opens. Find public rooms: /list-public-chat-rooms when
 the tab first opens and on Refresh, each room with its name, "by
 <username> · N members" and Open (this pod is in it), Requested (asked
 from this tab) or Request to join.
+
+Unread: the last message position seen in each room is kept on this
+device, in localStorage under `anopod-wallet.chat-seen.<anopodId>`, read
+when the session opens and raised by the conversation when it opens,
+when new messages show and after a send (`markSeen`). A room is unread
+when its newest message is by someone else and above that position (0
+when the room was never opened here); the count of unread rooms shows at
+the right of the Chat entry in the side navigation, and the room's row
+shows a dot and a bold title. The count is per device: a new phone shows
+every room with messages as unread until each is opened once. A count of
+messages is not possible, since positions count across all rooms
+(2026-11-05, section 11).
 
 Marketplace: the masterpod test app's section, ported to Material lists
 and forms, the same calls, listings with filters and sort, a listing's
@@ -757,15 +782,16 @@ excepted, with the keyholder and anos calls included.
                             while needed, the encryption key, the chat keys, the PLID and lookup id, the status
                             from /check-anopod-status, the keyholder receiving keys, the wallet public keys, the
                             accounts (keyBlob ciphertext and creation, never open keys), the chat rooms (the
-                            latest /list-chat-rooms answer, 2026-11-05); the next-step rule
+                            latest /list-chat-rooms answer), the seen positions with markSeen and the unread
+                            rooms (2026-11-05); the next-step rule
     masterpod-api.service   the keyholder test app's api.service.ts, base path /api/masterpod, the two changed
                             routes and the four new ones added
     keyholder-api.service   the keyholder test app's, base path /api/keyholder/<n>
     anos-api.service        the anos test app's account-api.service.ts, base path /api/anos/<defaultValidator>,
                             plus the three signed reads (listEscrows added 2026-11-05)
     chat.service            what the chat pages share (2026-11-05): room keys (roomKeyOf, wrapFor), decryptMessage,
-                            piecesOf, a room's title, kind, icon and other person, the order by activity, shortWhen
-                            and dayLabel, requestedRooms, refreshRooms
+                            piecesOf, a room's title, kind, icon and other person, the order by activity, shortWhen,
+                            timeOf and dayLabel, requestedRooms, refreshRooms
     profile-cache.service   one /get-anopod-profile per pod per tab, quiet, as a signal: undefined while it loads,
                             null when there is no such pod (2026-11-05)
     signing.service         /api/sign/public-keys and /api/sign
@@ -1440,6 +1466,53 @@ Built in the same round as step 2.
 - Spec: 8.1 (/chat/new), 8.2 Chat (New chat), Marketplace and
   Notifications (the links), this note.
 - `npx ng build` clean.
+
+### The chat as a messenger, step 4 (2026-11-05)
+
+Steps 4 and 5 of forclaude/wallet-chat-plan-1.md, built as one round.
+The bubbles were one per message with the sender's name on every one,
+the box a single line, and the thread always jumped to the bottom.
+
+- `chat-room.page.ts`: `thread`, a computed over the messages, groups
+  them (`Group`: one sender, five minutes, one day; `ThreadItem` a day
+  line or a group); the template draws a day line, then a group with the
+  avatar (28 px) and the name on top for someone else's group in a room
+  that is not direct, the bubbles, and the time once below. The box is a
+  textarea with `cdkTextareaAutosize` (`TextFieldModule`, one to five
+  rows); `enter()` sends on Enter without Shift; Send is a
+  `mat-mini-fab`. `nearBottom()` (120 px) is measured before new polled
+  messages are added and decides the scroll. `send()` appends a pending
+  bubble (`pending: true`, a `pending-N` id) and clears the box at once;
+  the answer turns it into the real message by id and position, and the
+  poll after the send replaces it with the server's row; a refusal or a
+  thrown error removes it and puts the text back. `ShownMessage` gains
+  `pending`. The thread's element reference is `threadBox`, since
+  `thread` is the computed.
+- `chat.service.ts`: `timeOf(iso)`, the time of a group.
+- Spec: 8.2 Chat (the conversation), 8.3, this note.
+- `npx ng build` clean.
+
+### The chat as a messenger, step 5 (2026-11-05)
+
+Built in the same round as step 4.
+
+- `session.service.ts`: `seenPositions` (room id to position), read from
+  localStorage under `anopod-wallet.chat-seen.<anopodId>` in `open()`
+  and cleared in `close()`; `markSeen(chatRoomId, position)` raises and
+  writes it (a browser that refuses leaves the copy in memory);
+  `unreadRooms` and `unreadRoomCount`; the three helpers `seenKey`,
+  `readSeen` and `writeSeen` at the end of the file.
+- `chat-room.page.ts`: `markSeen` after opening, after new polled
+  messages and after a send.
+- `chat.page.ts`: `unreadIds`; an unread row has the class `unread`
+  (bold title, the preview in the surface colour) and a 10 px dot under
+  the time (`.meta`).
+- `app.ts`, `app.html` and `app.css`: `NavItem.badge`; the Chat entry's
+  badge is `unreadRoomCount()`, drawn as a pill (`matListItemMeta`,
+  `.badge`) when above zero.
+- Spec: 8.1 (the navigation), 8.2 Chat (the list row, the conversation's
+  marking, Unread), 8.3, this note.
+- `npx ng build` clean (1.49 MB initial).
 
 ## 12. Recovery and the moderator edition
 

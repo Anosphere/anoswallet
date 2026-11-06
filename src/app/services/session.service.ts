@@ -90,6 +90,17 @@ export class SessionService {
   readonly unread = computed(() => this.notifications().filter((n) => !n.read));
   /** The latest /list-chat-rooms answer (the rooms, the invites to this pod, the join requests on its rooms): the shell's poll once setup is complete, and the chat pages. */
   readonly chatRooms = signal<RoomsAnswer | null>(null);
+  /** The last message position seen in each room on this device (wallet spec 8.2, Chat), kept in localStorage per pod. */
+  readonly seenPositions = signal<Record<string, number>>({});
+  /** The rooms whose newest message is by someone else and above the seen position (0 when the room was never opened here). */
+  readonly unreadRooms = computed(() => {
+    const me = this.anopodId();
+    const seen = this.seenPositions();
+    return (this.chatRooms()?.rooms ?? []).filter(
+      (r) => r.lastMessage !== null && r.lastMessage.senderAnopodId !== me && r.lastMessage.position > (seen[r.chatRoomId] ?? 0),
+    );
+  });
+  readonly unreadRoomCount = computed(() => this.unreadRooms().length);
 
   readonly hasSession = computed(() => this.anopodId() !== null);
   readonly vouched = computed(() => this.status()?.vouched ?? false);
@@ -107,6 +118,7 @@ export class SessionService {
     this.sessionKeys = keys;
     this.anopodId.set(anopodId);
     this.username.set(username);
+    this.seenPositions.set(readSeen(anopodId));
   }
 
   /** Drops everything: a closed tab does the same. */
@@ -131,6 +143,7 @@ export class SessionService {
     this.accounts.set([]);
     this.notifications.set([]);
     this.chatRooms.set(null);
+    this.seenPositions.set({});
   }
 
   /**
@@ -184,6 +197,17 @@ export class SessionService {
     return this.identity;
   }
 
+  // --- what was seen in chat (wallet spec 8.2, Chat) --------------------------
+
+  /** A newer position seen in the room: kept, and written to this device. */
+  markSeen(chatRoomId: string, position: number): void {
+    const anopodId = this.anopodId();
+    if (anopodId === null || position <= (this.seenPositions()[chatRoomId] ?? 0)) return;
+    const next = { ...this.seenPositions(), [chatRoomId]: position };
+    this.seenPositions.set(next);
+    writeSeen(anopodId, next);
+  }
+
   // --- the next-step rule (wallet spec 8.1) ---------------------------------
 
   /**
@@ -203,4 +227,31 @@ export class SessionService {
 
 function emptyStatus(): StatusAnswer {
   return { anopodId: '', vouched: false, vouchCount: 0, setupComplete: false, isSeed: false, isSuperSeed: false, bucketOneImages: 0, bucketTwoImages: 0, bucketTwoInfos: 0 };
+}
+
+/** The localStorage key of a pod's seen positions. */
+function seenKey(anopodId: string): string {
+  return `anopod-wallet.chat-seen.${anopodId}`;
+}
+
+/** The seen positions kept on this device for the pod: empty when there are none, or the browser refuses. */
+function readSeen(anopodId: string): Record<string, number> {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(seenKey(anopodId)) ?? '{}');
+    if (typeof parsed !== 'object' || parsed === null) return {};
+    const map: Record<string, number> = {};
+    for (const [key, value] of Object.entries(parsed)) if (typeof value === 'number') map[key] = value;
+    return map;
+  } catch {
+    return {};
+  }
+}
+
+/** Writes the seen positions; a browser that refuses leaves the copy in memory for the tab. */
+function writeSeen(anopodId: string, map: Record<string, number>): void {
+  try {
+    localStorage.setItem(seenKey(anopodId), JSON.stringify(map));
+  } catch {
+    // Private mode or blocked storage: the tab keeps its copy.
+  }
 }

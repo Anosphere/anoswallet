@@ -152,6 +152,11 @@ export class ChatService {
     return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: sameYear(date) ? undefined : 'numeric' });
   }
 
+  /** A group's time in a conversation: hours and minutes, the browser's locale. */
+  timeOf(iso: string): string {
+    return new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  }
+
   /** A conversation's day line: "Today", "Yesterday", else the date in full, with the year when it is another year. */
   dayLabel(iso: string): string {
     const date = new Date(iso);

@@ -25,6 +25,9 @@
           <a mat-list-item [routerLink]="item.path" routerLinkActive="active" (click)="navigated()">
             <mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
             <span matListItemTitle>{{ item.label }}</span>
+            @if (item.badge) {
+              <span matListItemMeta class="badge">{{ item.badge }}</span>
+            }
           </a>
         }
       </mat-nav-list>

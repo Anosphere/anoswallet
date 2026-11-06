@@ -17,7 +17,8 @@ import { SessionService } from '../services/session.service';
  * the other person's avatar or the kind's icon, the title, the newest
  * message decrypted as a one-line preview, the time; newest activity first;
  * a Requests row on top while invites or join requests wait; a pencil to
- * /chat/new. The rooms are session.chatRooms, which the shell's poll
+ * /chat/new. An unread room (session.unreadRooms) has a dot under its
+ * time and a bold title. The rooms are session.chatRooms, which the shell's poll
  * refreshes every 5 seconds; the page refreshes them once when it opens.
  */
 @Component({
@@ -47,7 +48,7 @@ import { SessionService } from '../services/session.service';
             </a>
           }
           @for (room of rooms(); track room.chatRoomId) {
-            <a class="row" [routerLink]="['/chat', room.chatRoomId]" routerLinkActive="open">
+            <a class="row" [routerLink]="['/chat', room.chatRoomId]" routerLinkActive="open" [class.unread]="unreadIds().has(room.chatRoomId)">
               @if (chat.otherPerson(room); as other) {
                 <app-avatar [anopodId]="other.anopodId" [username]="other.username" [size]="48" />
               } @else {
@@ -57,7 +58,12 @@ import { SessionService } from '../services/session.service';
                 <span class="title">{{ chat.title(room) }}</span>
                 <span class="line">{{ preview(room) }}</span>
               </span>
-              <span class="when">{{ chat.shortWhen(chat.activityAt(room)) }}</span>
+              <span class="meta">
+                <span class="when">{{ chat.shortWhen(chat.activityAt(room)) }}</span>
+                @if (unreadIds().has(room.chatRoomId)) {
+                  <span class="dot"></span>
+                }
+              </span>
             </a>
           } @empty {
             @if (session.chatRooms() === null) {
@@ -92,7 +98,11 @@ import { SessionService } from '../services/session.service';
     .texts { flex: 1; min-width: 0; display: flex; flex-direction: column; }
     .title { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .line { font-size: 13px; color: var(--mat-sys-on-surface-variant); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .when { font-size: 12px; color: var(--mat-sys-on-surface-variant); flex: none; align-self: flex-start; margin-top: 4px; }
+    .meta { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: none; align-self: flex-start; margin-top: 4px; }
+    .when { font-size: 12px; color: var(--mat-sys-on-surface-variant); }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--mat-sys-primary); }
+    .row.unread .title { font-weight: 700; }
+    .row.unread .line { color: var(--mat-sys-on-surface); }
     .fab { display: none; position: absolute; right: 16px; bottom: 16px; }
     .placeholder { margin: auto; }
     .note { padding: 8px 16px; margin: 0; }
@@ -127,6 +137,7 @@ export class ChatPage {
   protected readonly childOpen = computed(() => this.url().startsWith('/chat/'));
 
   protected readonly rooms = computed(() => this.chat.sorted(this.session.chatRooms()?.rooms ?? []));
+  protected readonly unreadIds = computed(() => new Set(this.session.unreadRooms().map((r) => r.chatRoomId)));
   protected readonly requestCount = computed(() => {
     const answer = this.session.chatRooms();
     return answer ? answer.invites.length + answer.joinRequests.length : 0;

@@ -13,11 +13,12 @@ import { ConfigService } from './services/config.service';
 import { MasterpodApiService } from './services/masterpod-api.service';
 import { SessionService } from './services/session.service';
 
-/** One entry of the side navigation. */
+/** One entry of the side navigation; `badge` is a count drawn at its right (Chat: the unread rooms, wallet spec 8.2). */
 interface NavItem {
   path: string;
   label: string;
   icon: string;
+  badge?: number;
 }
 
 /**
@@ -60,7 +61,7 @@ export class App {
       items.push(
         { path: '/wallet', label: 'Wallet', icon: 'account_balance_wallet' },
         { path: '/cases', label: 'Cases', icon: 'folder_shared' },
-        { path: '/chat', label: 'Chat', icon: 'chat' },
+        { path: '/chat', label: 'Chat', icon: 'chat', badge: this.session.unreadRoomCount() },
         { path: '/marketplace', label: 'Marketplace', icon: 'storefront' },
         { path: '/account', label: 'Account', icon: 'manage_accounts' },
       );
