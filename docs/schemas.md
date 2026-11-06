@@ -254,9 +254,10 @@ with their comments pointed at this server, and require-account.js:
 ### 5.4 The two reads
 
 src/reads/ (router, handlers, service, queries), wired in app.js. All
-answer the signer's own account only; nothing about anyone else. The
-third, /list-escrows, was added 2026-11-05 for the escrow trades
-(anossoftware spec section 16).
+four answer the signer's own account only; nothing about anyone else.
+The third, /list-escrows, was added 2026-11-05 for the escrow trades
+(anossoftware spec section 16); the fourth, /get-assisted-transfer, on
+2026-11-06 for the assisted transfer (anossoftware spec section 17).
 
     POST /get-account (account)
     body { }
@@ -290,6 +291,22 @@ third, /list-escrows, was added 2026-11-05 for the escrow trades
       the seller's success on it; cancelling with the buyer's cancel on it; disputed with a dispute on it,
       which only verdicts move. disputedBy is the signer of the dispute. verdicts carry what each verdict
       says and whether every validator accepted it, never the attestor's id.
+
+    POST /get-assisted-transfer (account)
+    body { }
+    answer: 200 { transfer: { transactionId, accountId, accountIdTo, amount: string, createdAt,
+      stage: waiting | attesting | writing | cancelling, attestations: 0 | 1 | 2 } | null }
+    transfer: the assisted_transfers row whose account_id is the signer, or null when there is none. There is
+      at most one: account_id is unique there, and the validator holds one transaction per account. The
+      sender's only: the receiver can do nothing with the transfer and sees it in the history when it lands.
+      The held transfer only, nothing from logs or archives: a written transfer is on the chain under the
+      same id, so /list-transactions shows it for good; a cancelled one leaves no trace the wallet reads.
+      stage is named by the validator from the row's columns (anossoftware spec 17.2): waiting until every
+      validator accepted the transfer (no follow-up is accepted on it yet); cancelling with the sender's
+      cancel on it; writing with both attestations approved, until the next round writes it (the sender may
+      still cancel); attesting otherwise, accepted and waiting for two approved attestations. attestations
+      counts the attestation slots holding one; the two reach the validator together, posted by the
+      deciding attestor's app, so it is nearly always 0 or 2.
 
 Refusals are 400 or 401 + { error }, logged "failed: <reason>" like
 every other route. The 1 MB JSON limit stays.
@@ -376,6 +393,7 @@ as in the test apps; a new tab unlocks again.
     /wallet                  the anos accounts and Create anos account
     /wallet/:accountId       one account: balance, send, pending, escrow trades, follow-ups, fund proposal
     /wallet/:accountId/escrow/:transactionId   one escrow trade: the details, the buttons for your side, the closed view
+    /wallet/:accountId/assisted/:transactionId   one assisted transfer: the details, the stage, the case, Cancel transfer, the closed view
     /wallet/:accountId/history   the transaction history: the list, newest first, Load more
     /chat                    the list of chats; on a desktop the pane beside it shows the child route
     /chat/requests           invites to me and join requests on my rooms
@@ -576,16 +594,20 @@ seconds until it is on the ledger.
 
 Account. The account id in the title with a copy button (8.5). Then, in
 this order: balance, type, the latest transaction id, created; Refresh,
-and a 5-second poll while something is pending or an escrow trade is
-open; Send; Pending, the pending transaction if any; Escrow trades, the
-open trades from /list-escrows (section 5.4); a "Transaction history"
-button to the history page below; then the follow-ups and the fund
-proposal panels. The transaction list left this page for the history
-page on 2026-11-05 (section 11); /list-transactions is still read here,
-for the pending list. Under the balance, while this account is the
+and a 5-second poll while something is pending, an escrow trade is open
+or an assisted transfer is waiting; Send; Pending, the pending
+transaction if any; Escrow trades, the open trades from /list-escrows
+(section 5.4); Assisted transfer, on an assisted account, the held
+transfer from /get-assisted-transfer (section 5.4); a "Transaction
+history" button to the history page below; then the follow-ups and the
+fund proposal panels. The transaction list left this page for the
+history page on 2026-11-05 (section 11); /list-transactions is still read
+here, for the pending list. Under the balance, while this account is the
 seller of an open escrow trade, one line: "5 anos of this are in an open
-escrow trade." The validator moves a balance only when the trade is
-written, so the balance stays whole while the anos are spoken for.
+escrow trade."; while an assisted transfer of this account is held, "5
+anos of this are waiting in an assisted transfer." (2026-11-06, section
+11). The validator moves a balance only when the trade or the transfer
+is written, so the balance stays whole while the anos are spoken for.
 
 Escrow trades (2026-11-05, section 11), after Pending: one row per
 open trade, "5 anos to <buyer>" when this
@@ -599,6 +621,18 @@ and "Waiting for the seller to release the anos" to the buyer;
 releasing, "Being released"; cancelling, "Being cancelled"; disputed,
 "In dispute, attestors are deciding"; a word the wallet does not know,
 "Open". A row opens the trade page.
+
+Assisted transfer (2026-11-06, section 11), after Escrow trades, on an
+assisted account only: the held transfer from /get-assisted-transfer as
+one row, "5 anos to <receiver>", the stage in words and the date; "No
+transfer is waiting." when there is none; the read's refusal in red when
+it fails (a validator or doorman without the route), the rest of the
+page unharmed. The stage words, from the validator's stage (anossoftware
+spec 17.2): waiting, "Waiting for the validators"; attesting, "Waiting
+for attestors"; writing, "Attested, being written"; cancelling, "Being
+cancelled"; a word the wallet does not know, "Open". The row opens the
+transfer page. On any other account type nothing is read and nothing
+shows.
 
 Send: recipient account id (typed, or by the paste button at the right
 end of the box, which reads the clipboard and takes the run of exactly 64
@@ -615,15 +649,21 @@ assistedAnosTransfer. previousTransactionId is /get-account's
 latestTransactionId, fetched right before building. The payload is
 signed by pair one (keyBlob opened for the signature and dropped),
 /api/sign adds the wallet pair, the validator gets it, the page
-refreshes. Send is disabled while the account has a pending transaction
-or is the seller of an open escrow trade (one held transaction per
-account; the validator refuses a second), the latter with the line "An
-escrow trade is open. This account can send again when it closes."
-Follow-ups (attestation, assisted transfer cancel, guardian vote) and
-the fund proposal form are the test wallet's, ported with the same
-fields and the same signing path; the escrow follow-ups (success,
-cancel, dispute, verdict) left this form on 2026-11-05 for the trade
-page.
+refreshes. Send is disabled while the account has a pending transaction,
+is the seller of an open escrow trade or holds an assisted transfer (one
+held transaction per account; the validator refuses a second), with the
+line "An escrow trade is open. This account can send again when it
+closes." or "An assisted transfer is waiting. This account can send
+again when it is written or cancelled." Under Send, an assisted account
+reads "An assisted transfer waits until two attestors have checked it.
+An attestor will open a case and ask for your lookup id. You can cancel
+it until it is written." where a guarded or vault account reads its lock
+line. Follow-ups (the guardian vote only) and the fund proposal form are
+the test wallet's, ported with the same fields and the same signing
+path; the escrow follow-ups (success, cancel, dispute, verdict) left
+this form on 2026-11-05 for the trade page, and the attestation and
+assisted transfer cancel forms on 2026-11-06: the attestor's trade case
+page posts the attestation (13.3), the transfer page the cancel.
 
 Transaction history, at /wallet/:accountId/history, opened by the
 button on the account page (2026-11-05, section 11). Titled
@@ -675,6 +715,53 @@ attestors decided" when the last stage seen was disputed; a transactions
 read that fails says only that the trade is closed. A trade the page
 never saw open (an old link) reads "This trade is not open. Released
 trades are in the account's transactions."
+
+Assisted transfer, at /wallet/:accountId/assisted/:transactionId, opened
+from the row of the account page's Assisted transfer section or from
+"See the transfer" on the My case page of its trade case (2026-11-06,
+section 11). Titled "Assisted transfer", the subtitle "Held" while the
+transfer is held ("Closed", "Loading" or "Not held" otherwise), Back to
+the account. /get-assisted-transfer is read when the page opens and
+every 5 seconds while the transfer is held; its transfer is this page's
+when the id is the route's, and null or another id means the transfer is
+not held. The summary: the amount, To (the receiver's account id), when
+it was made, the stage in the words of the Account paragraph,
+Attestations ("0 of 2 on the validators") and the transaction id; then
+one sentence of what the stage means (waiting: the validators are still
+accepting it; attesting: two attestors have to check it, an attestor
+opens a case and meets you on a video call, you can cancel until it is
+written; writing: both attestations are on the validators, the next
+write moves the anos, you can still cancel; cancelling: you cancelled
+it, the anos stay; an unknown word: held, nothing offered). The case,
+one paragraph from /list-my-cases (quiet, on each refresh while held),
+the newest trade case with this transaction id: "No case yet. An
+attestor will open one and ask for your lookup id."; open, "An attestor
+opened a case. Share your lookup id on the case page."; in review, "An
+attestor is checking your trade."; decided, "Two attestors signed. The
+attestations go to the validators and the transfer is written in the
+next round."; dismissed, "The case was dismissed: <reason>. The anos
+stay held until you cancel the transfer or an attestor opens a new
+case.", the reason in the My case page's words from /get-my-case (quiet,
+once per case), "another reason" when the event has none. The buttons:
+"Go to the case" (to /cases/:caseId) when there is a case, and "Cancel
+transfer" while the stage is attesting or writing, which asks once in
+place ("Cancel this transfer? The 5 anos stay in this account. It cannot
+be undone."), then "Yes, cancel the transfer" or Back. Yes builds the
+assistedTransferCancel follow-up as the removed form did (crypto
+buildFollowUp, pair one from the keyBlob), /api/sign adds the wallet
+pair, /assisted-transfer-cancel takes it, then "Sent. The transfer is
+being cancelled; the anos stay in this account." in green or the
+validator's refusal in plain words (not all accepted yet; already being
+cancelled; no longer held; not this account's to cancel), the rest as
+"/assisted-transfer-cancel: <reason>", and the page refreshes. The
+closed view, for someone on the page when the transfer leaves the
+validator: the first page of /list-transactions is read, and the id on
+it means "Done. The 5 anos went to <receiver>.", not on it "Cancelled.
+The anos stayed in this account."; a transactions read that fails says
+"This transfer is no longer held. Check the account's transactions to
+see whether the anos moved." The poll stops once the transfer is closed.
+A transfer the page never saw held (an old link) reads "This transfer is
+not held. A written transfer is in the account's transactions."
 
 Chat (rebuilt as a messenger 2026-11-05, section 11): two panes. The
 list of chats on the left, 360 px on a desktop, and the pane for the
@@ -911,7 +998,8 @@ excepted, with the keyholder and anos calls included.
                             createListing, the fuller RoomListing and the listing on an invite
     keyholder-api.service   the keyholder test app's, base path /api/keyholder/<n>
     anos-api.service        the anos test app's account-api.service.ts, base path /api/anos/<defaultValidator>,
-                            plus the three signed reads (listEscrows added 2026-11-05)
+                            plus the four signed reads (listEscrows added 2026-11-05, getAssistedTransfer
+                            2026-11-06)
     chat.service            what the chat pages share (2026-11-05): room keys (roomKeyOf, wrapFor), decryptMessage,
                             piecesOf, a room's title, kind, icon and other person, the order by activity, shortWhen,
                             timeOf and dayLabel, requestedRooms, refreshRooms; listingWords, a listing in a few
@@ -1041,8 +1129,10 @@ point at the real servers through the committed network/wallet.env
 - Keyholder discovery and ceremonies: the proxy's list is the truth.
 - A retry of a failed keyholder deposit: the step restarts with a new
   secret.
-- Reads of the other holding tables; the wallet shows a guarded or vault
-  transfer only when it lands.
+- Reads of the other holding tables: the open escrows have /list-escrows
+  (2026-11-05) and the assisted transfer /get-assisted-transfer
+  (2026-11-06); the wallet shows a guarded or vault transfer only when
+  it lands.
 - Any check by a validator that walletKey in a creation is the signing
   server's key: the binding check with the masterpod is the check.
 - Several passkeys, push delivery, languages other than English, a custom
@@ -1768,6 +1858,93 @@ changes.
 - Spec: 8.2 Chat (the pinned card), 8.6, 8.7, this note.
 - `npx ng build` clean (1.61 MB initial).
 
+### The assisted transfer, step 2 (2026-11-06)
+
+Step 2 of forclaude/wallet-assisted-plan-1.md, the account page. Step 1,
+the validator read /get-assisted-transfer (anossoftware section 17) and
+the doorman's route line, was built and committed first; steps 2 and 3
+were built together on the user's word. Why: the only way to see from
+the wallet that an assisted account had a transfer waiting was the Cases
+page, once an attestor had opened a case, and the cancel needed the
+transaction id pasted into the follow-ups form.
+
+- `anos-api.service.ts`: `getAssistedTransfer(pairOne, accountId,
+  quiet)`, the account envelope as `getAccount` builds it, with
+  `HeldAssistedTransfer` and `AssistedStage`; `stage` is typed as the four
+  words or any string, so a word added on the validator later compiles
+  here and reads "Open".
+- `src/app/assisted-stage.ts`: `assistedStageWords(stage)`, the words of
+  the plan's decision 8, shared by the account page's row and the
+  transfer page as `escrow-stage.ts` is.
+- `account.page.ts`: on an assisted account the read joins `refresh()`
+  beside the other three, decided after `pairOne()` has run, since that
+  reloads the accounts when the page's account is not in the session;
+  its refusal kept apart (`assistedError`) so the balance and the rest
+  still show while a validator or doorman runs without the route (the
+  doorman answers 404, shown as "/get-assisted-transfer: HTTP 404: Not
+  Found"). On any other account type no call is made. The Assisted
+  transfer section, one row linking to the transfer page (the link from
+  this step, since the steps were built together); the balance line; the
+  Send rule and its line; the line under Send for an assisted account;
+  the 5-second poll while a transfer is held. The attestation form and
+  the assisted cancel form left the follow-ups panel with their three
+  signals, `sendAttestation()` and `sendCancel()`; the guardian vote
+  form, `followUp()`, `sendVote()` and the fund proposal panel stay.
+  `AnosApiService` keeps `attestation()` (the attestor's trade case page)
+  and `assistedTransferCancel()` (the transfer page).
+- Readings where the plan left a detail open: the section's row is a
+  one-item `mat-list`, as the Escrow trades rows are; the stage words
+  reach the template as the function itself (`assistedStageWords`), as
+  `millionthsToAnos` does, since no side is needed; a refused read leaves
+  the last answer in place and shows the refusal, as the escrow read
+  does.
+- Spec: 5.4, 8.2 Account (the refresh line, the balance line, the
+  Assisted transfer section, the Send rule and the line under Send, the
+  follow-ups sentence), 8.3, 10, this note.
+
+### The assisted transfer, step 3 (2026-11-06)
+
+- `src/app/pages/assisted-transfer.page.ts` (`AssistedTransferPage`,
+  inputs `accountId` and `transactionId` bound from the route), in the
+  frame of `escrow-trade.page.ts`: the summary grid, the ask-once
+  question, the progress bar, the closed view, the 5-second poll with
+  `ACCOUNT_POLL_MS`. The route in `app.routes.ts` behind the session
+  guard.
+- The page reads /get-assisted-transfer and takes the answer's transfer
+  when its id is the route's; null or another id means not held. A
+  transfer seen held and then gone is the closed view (the first page of
+  /list-transactions: the id on it is "Done. The 5 anos went to
+  <receiver>.", not on it "Cancelled."); one never seen held is "not
+  held". The poll stops once the transfer is closed. The case is looked
+  up (/list-my-cases, quiet) on each refresh while held, the newest trade
+  case with the transaction id; a dismissed case's reason comes from
+  /get-my-case once per case id, in the words of `DISMISS_WORDS`, now
+  exported from `my-case.page.ts`.
+- The cancel is built and signed exactly as the removed form did
+  (`buildFollowUp` with pair one, `/api/sign`,
+  `/assisted-transfer-cancel`); the validator's refusals are mapped to
+  plain sentences by their reason text (`plainReason`), the rest shown as
+  "/assisted-transfer-cancel: HTTP <status>: <reason>".
+- `my-case.page.ts`: "See the transfer" under the transaction id of a
+  trade case, to the transfer page of the sending account;
+  `DISMISS_WORDS` exported; nothing else changed. `cases.page.ts`:
+  `knownTransactions` also reads /get-assisted-transfer (quiet) for each
+  of this pod's assisted accounts on the cases, so a trade row reads
+  "Assisted trade · 5 anos · with <receiver>…" through the template as
+  it is.
+- Readings where the plan left a detail open: Go to the case hides with
+  Cancel transfer while the question is asked, as the trade page's
+  buttons do; "Go to the case" is an `<a mat-flat-button>` with a
+  routerLink; a dismissed case whose /get-my-case read fails reads
+  "another reason" and is not asked again (once per case id); the
+  assisted read in `knownTransactions` runs before /list-transactions,
+  so a list read that fails does not skip it; the closed view keeps the
+  transfer as last seen, for the amount and the receiver of "Done".
+- Spec: 8.1, 8.2 (the Assisted transfer page paragraph), 13.3 (Cases, My
+  case), this note.
+- `npx ng build` clean (1.63 MB initial). Not run against a validator
+  here; the user tests on the testnet.
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`
@@ -2326,17 +2503,23 @@ zeroed when the page is left; a refresh fetches and opens them again.
 **Cases** (`/cases`), every edition. `/list-my-cases`: the trades and the
 disputes where this pod is a party, newest first, each row the kind, the
 amount and the other account when the account page's transaction list
-knows the transaction (otherwise the transaction id), the status in words
-and when it was opened. A row opens `/cases/:caseId`. The notifications
-page's labels for the five case kinds (13.4) link here.
+knows the transaction or, on an assisted account, its held transfer does
+(`/get-assisted-transfer`, 2026-11-06, so a trade row reads "Assisted
+trade · 5 anos · with <receiver>" while the transfer waits), otherwise
+the transaction id, the status in words and when it was opened. A row
+opens `/cases/:caseId`. The notifications page's labels for the five
+case kinds (13.4) link here.
 
 **My case** (`/cases/:caseId`), from `/get-my-case`, refreshed by a button
 and every 15 s. For a trade: "An attestor is checking your trade", the
-status in words, the timeline the person may see (case opened, scheduled
-with the meeting link, decided, dismissed with the reason in words, sent),
-and Share my lookup id: one button, disabled once shared, which opens the
-identity blob in session (`SessionService.getIdentity`) and runs
-`/share-lookup-id`; "Nothing but the lookup id leaves this device". For a
+status in words, "See the transfer" under the transaction id, to the
+transfer page of the sending account
+(`/wallet/:accountId/assisted/:transactionId`, 2026-11-06), the timeline
+the person may see (case opened, scheduled with the meeting link,
+decided, dismissed with the reason in words, sent), and Share my lookup
+id: one button, disabled once shared, which opens the identity blob in
+session (`SessionService.getIdentity`) and runs `/share-lookup-id`;
+"Nothing but the lookup id leaves this device". For a
 dispute: the same frame with "Attestors are looking at this escrow", your
 side (seller or buyer), and Evidence: a file input (images and PDFs,
 several at once) with Upload, which for each file makes a content key,

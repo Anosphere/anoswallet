@@ -12,10 +12,11 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { RouterLink } from '@angular/router';
 import { anosToMillionths, millionthsToAnos } from '../amounts';
+import { assistedStageWords } from '../assisted-stage';
 import { CopyButtonComponent } from '../components/copy-button.component';
 import { ACCOUNT_POLL_MS, GUARDED_LOCK_MINUTES, LOCK_OFFSET_MINUTES, VAULT_LOCK_MINUTES } from '../constants';
 import { escrowStageWords } from '../escrow-stage';
-import { AccountAnswer, Accepted, AnosApiService, EscrowItem, PendingItem } from '../services/anos-api.service';
+import { AccountAnswer, Accepted, AnosApiService, EscrowItem, HeldAssistedTransfer, PendingItem } from '../services/anos-api.service';
 import {
   AccountType,
   CryptoService,
@@ -63,9 +64,10 @@ interface Outcome {
 /**
  * One account (wallet spec 8.2, Account), in this order: the id in the
  * title with a copy button (8.5); balance, type, the latest transaction id,
- * created; Refresh, and a 5-second poll while something is pending or an
- * escrow trade is open; Send; Pending; Escrow trades; a Transaction history
- * button to /wallet/:accountId/history (2026-11-05, section 11: the
+ * created; Refresh, and a 5-second poll while something is pending, an
+ * escrow trade is open or an assisted transfer is waiting; Send; Pending;
+ * Escrow trades; Assisted transfer, on an assisted account; a Transaction
+ * history button to /wallet/:accountId/history (2026-11-05, section 11: the
  * transaction list moved there; /list-transactions is still read here for
  * the pending list); then the follow-ups and the fund proposal panels.
  * Send: recipient account id (typed, or the 64 hex characters on the
@@ -75,13 +77,19 @@ interface Outcome {
  * right before building. The payload is signed by pair one (keyBlob opened
  * for the signature and dropped), /api/sign adds the wallet pair, the
  * validator gets it, the page refreshes. Send is disabled while the account
- * has a pending transaction or is the seller of an open escrow trade (one
- * held transaction per account). Escrow trades (2026-11-05, section 11):
- * /list-escrows is read with the other two, the open trades are listed
- * with the stage in words from this account's side, and a line under the
- * balance says what is held as the seller; the escrow follow-ups left the
- * follow-ups form for the trade page. The other follow-ups and the fund
- * proposal form are the test wallet's.
+ * has a pending transaction, is the seller of an open escrow trade or holds
+ * an assisted transfer (one held transaction per account). Escrow trades
+ * (2026-11-05, section 11): /list-escrows is read with the other two, the
+ * open trades are listed with the stage in words from this account's side,
+ * and a line under the balance says what is held as the seller; the escrow
+ * follow-ups left the follow-ups form for the trade page. Assisted transfer
+ * (2026-11-06, section 11): on an assisted account /get-assisted-transfer
+ * is read with the other three, the held transfer is one row linking to
+ * its page, with the stage in words, and a line under the balance says
+ * what is waiting; the attestation and the assisted cancel forms left the
+ * follow-ups panel too (the attestor's trade case page posts the
+ * attestation, the transfer page the cancel). The guardian vote form and
+ * the fund proposal form are the test wallet's.
  */
 @Component({
   selector: 'app-account-page',
@@ -103,6 +111,9 @@ interface Outcome {
             @if (heldAsSeller(); as held) {
               <div><span class="label"></span><span class="value muted">{{ held }} anos of this are in an open escrow trade.</span></div>
             }
+            @if (assisted(); as t) {
+              <div><span class="label"></span><span class="value muted">{{ millionthsToAnos(t.amount) }} anos of this are waiting in an assisted transfer.</span></div>
+            }
             <div><span class="label">Type</span><span class="value">{{ a.type }}</span></div>
             <div><span class="label">Latest transaction</span><code class="value">{{ a.latestTransactionId ?? 'none' }}</code></div>
             <div><span class="label">Created</span><span class="value">{{ a.createdAt | date: 'medium' }}</span></div>
@@ -118,6 +129,8 @@ interface Outcome {
             <span class="muted">A transaction is pending; refreshing every 5 seconds.</span>
           } @else if (escrows().length > 0) {
             <span class="muted">An escrow trade is open; refreshing every 5 seconds.</span>
+          } @else if (assisted()) {
+            <span class="muted">An assisted transfer is waiting; refreshing every 5 seconds.</span>
           }
         </div>
 
@@ -152,13 +165,18 @@ interface Outcome {
               <mat-label>Amount (anos)</mat-label>
               <input matInput [ngModel]="amount()" (ngModelChange)="amount.set($event)" placeholder="1 or 0.5" />
             </mat-form-field>
-            <button mat-flat-button type="button" (click)="send()" [disabled]="busy() || pending().length > 0 || sellerEscrowOpen() || !canSend()">Send {{ transferType() }}</button>
+            <button mat-flat-button type="button" (click)="send()" [disabled]="busy() || pending().length > 0 || sellerEscrowOpen() || assisted() !== null || !canSend()">Send {{ transferType() }}</button>
           </div>
           @if (sellerEscrowOpen()) {
             <p class="muted">An escrow trade is open. This account can send again when it closes.</p>
           }
+          @if (assisted()) {
+            <p class="muted">An assisted transfer is waiting. This account can send again when it is written or cancelled.</p>
+          }
           @if (item.accountType === 'guarded' || item.accountType === 'vault') {
             <p class="muted">A {{ item.accountType }} transfer is dated {{ minutesAhead(item.accountType) }} minutes ahead and waits out its lock on the validators.</p>
+          } @else if (item.accountType === 'assisted') {
+            <p class="muted">An assisted transfer waits until two attestors have checked it. An attestor will open a case and ask for your lookup id. You can cancel it until it is written.</p>
           }
           @if (sendOutcome(); as o) { <p [class.error]="!o.ok" [class.ok]="o.ok">{{ o.text }}</p> }
         }
@@ -194,20 +212,28 @@ interface Outcome {
           }
         </mat-list>
 
+        @if (item()?.accountType === 'assisted') {
+          <h3>Assisted transfer</h3>
+          @if (assistedError(); as text) {
+            <p class="error">{{ text }}</p>
+          } @else if (assisted(); as t) {
+            <mat-list>
+              <mat-list-item lines="2">
+                <mat-icon matListItemIcon>call_made</mat-icon>
+                <a matListItemTitle [routerLink]="['/wallet', accountId(), 'assisted', t.transactionId]">{{ millionthsToAnos(t.amount) }} anos to <code>{{ t.accountIdTo }}</code></a>
+                <span matListItemLine>{{ assistedStageWords(t.stage) }} · {{ t.createdAt | date: 'medium' }}</span>
+              </mat-list-item>
+            </mat-list>
+          } @else {
+            <p class="muted">No transfer is waiting.</p>
+          }
+        }
+
         <p><a mat-stroked-button [routerLink]="['/wallet', accountId(), 'history']"><mat-icon>history</mat-icon> Transaction history</a></p>
 
         <mat-accordion class="followups">
           <mat-expansion-panel>
             <mat-expansion-panel-header><mat-panel-title>Follow-ups, signed by this account</mat-panel-title></mat-expansion-panel-header>
-            <div class="form">
-              <mat-form-field appearance="outline" class="wide"><mat-label>Assisted transfer transactionId</mat-label><input matInput [ngModel]="attestTransactionId()" (ngModelChange)="attestTransactionId.set($event)" /></mat-form-field>
-              <mat-form-field appearance="outline" class="wide"><mat-label>Sender accountId</mat-label><input matInput [ngModel]="attestAccountId()" (ngModelChange)="attestAccountId.set($event)" /></mat-form-field>
-              <button mat-stroked-button type="button" (click)="sendAttestation()" [disabled]="busy() || !attestTransactionId().trim() || !attestAccountId().trim()">Send attestation</button>
-            </div>
-            <div class="form">
-              <mat-form-field appearance="outline" class="wide"><mat-label>This account's assisted transfer transactionId</mat-label><input matInput [ngModel]="cancelTransactionId()" (ngModelChange)="cancelTransactionId.set($event)" /></mat-form-field>
-              <button mat-stroked-button type="button" (click)="sendCancel()" [disabled]="busy() || !cancelTransactionId().trim()">Send assistedTransferCancel</button>
-            </div>
             <div class="form">
               <mat-form-field appearance="outline" class="wide"><mat-label>Fund proposal transactionId</mat-label><input matInput [ngModel]="voteTransactionId()" (ngModelChange)="voteTransactionId.set($event)" /></mat-form-field>
               <mat-form-field appearance="outline"><mat-label>Vote</mat-label>
@@ -272,6 +298,7 @@ export class AccountPage {
   private readonly signing = inject(SigningService);
 
   protected readonly millionthsToAnos = millionthsToAnos;
+  protected readonly assistedStageWords = assistedStageWords;
   protected readonly spendingKinds = SPENDING_KINDS;
   protected readonly stakePurposes = STAKE_PURPOSES;
 
@@ -280,6 +307,8 @@ export class AccountPage {
   protected readonly pending = signal<PendingItem[]>([]);
   protected readonly escrows = signal<EscrowItem[]>([]);
   protected readonly escrowsError = signal<string | null>(null);
+  protected readonly assisted = signal<HeldAssistedTransfer | null>(null);
+  protected readonly assistedError = signal<string | null>(null);
   protected readonly readError = signal<string | null>(null);
   protected readonly busy = signal(false);
 
@@ -290,9 +319,6 @@ export class AccountPage {
   protected readonly amount = signal('1');
   protected readonly sendOutcome = signal<Outcome | null>(null);
 
-  protected readonly attestTransactionId = signal('');
-  protected readonly attestAccountId = signal('');
-  protected readonly cancelTransactionId = signal('');
   protected readonly voteTransactionId = signal('');
   protected readonly vote = signal<Vote>('for');
   protected readonly followUpOutcome = signal<Outcome | null>(null);
@@ -330,7 +356,7 @@ export class AccountPage {
       untracked(() => void this.refresh());
     });
     const timer = setInterval(() => {
-      if ((this.pending().length > 0 || this.escrows().length > 0) && !this.busy()) void this.refresh(true);
+      if ((this.pending().length > 0 || this.escrows().length > 0 || this.assisted() !== null) && !this.busy()) void this.refresh(true);
     }, ACCOUNT_POLL_MS);
     inject(DestroyRef).onDestroy(() => clearInterval(timer));
   }
@@ -358,15 +384,17 @@ export class AccountPage {
     return this.crypto.pairOneFromKeyBlob(this.crypto.fromHex(item.keyBlob), encryptionKey);
   }
 
-  /** /get-account, the first page of /list-transactions (for the pending list; the history page shows the transactions) and /list-escrows. A refused escrow read is shown on its own, so the rest of the page still shows. */
+  /** /get-account, the first page of /list-transactions (for the pending list; the history page shows the transactions), /list-escrows and, on an assisted account, /get-assisted-transfer. A refused escrow or assisted read is shown on its own, so the rest of the page still shows. */
   protected async refresh(quiet = false): Promise<void> {
     this.readError.set(null);
     try {
       const pairOne = await this.pairOne();
-      const [account, list, escrows] = await Promise.all([
+      const assistedAccount = this.item()?.accountType === 'assisted';
+      const [account, list, escrows, assisted] = await Promise.all([
         this.anos.getAccount(pairOne, this.accountId(), quiet),
         this.anos.listTransactions(pairOne, this.accountId(), {}, quiet),
         this.anos.listEscrows(pairOne, this.accountId(), quiet),
+        assistedAccount ? this.anos.getAssistedTransfer(pairOne, this.accountId(), quiet) : null,
       ]);
       if (!account.ok) {
         this.readError.set(account.status === 401 && /unknown account/.test(reasonOf(account)) ? 'Not on the ledger yet: the creation has not landed.' : `/get-account: ${reasonOf(account)}`);
@@ -379,6 +407,14 @@ export class AccountPage {
         this.escrowsError.set(null);
       } else {
         this.escrowsError.set(`/list-escrows: ${reasonOf(escrows)}`);
+      }
+      if (assisted !== null) {
+        if (assisted.ok) {
+          this.assisted.set(assisted.body.transfer);
+          this.assistedError.set(null);
+        } else {
+          this.assistedError.set(`/get-assisted-transfer: ${reasonOf(assisted)}`);
+        }
       }
     } catch (err) {
       this.readError.set(err instanceof Error ? err.message : String(err));
@@ -428,14 +464,6 @@ export class AccountPage {
       return `accepted: ${res.body.transactionId}`;
     });
     await this.refresh(true);
-  }
-
-  protected sendAttestation(): Promise<void> {
-    return this.followUp((pairOne, own) => this.crypto.buildFollowUp(pairOne, { type: 'attestation', transactionId: this.attestTransactionId().trim(), accountId: this.attestAccountId().trim(), attestorId: own }), (f) => this.anos.attestation(f));
-  }
-
-  protected sendCancel(): Promise<void> {
-    return this.followUp((pairOne, own) => this.crypto.buildFollowUp(pairOne, { type: 'assistedTransferCancel', transactionId: this.cancelTransactionId().trim(), accountId: own }), (f) => this.anos.assistedTransferCancel(f));
   }
 
   protected sendVote(): Promise<void> {

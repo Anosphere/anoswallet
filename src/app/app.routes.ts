@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 import { AccountHomePage } from './pages/account-home.page';
 import { AccountPage } from './pages/account.page';
 import { AccountRecoveryPage } from './pages/account-recovery.page';
+import { AssistedTransferPage } from './pages/assisted-transfer.page';
 import { AttestingDisputeCasePage } from './pages/attesting-dispute-case.page';
 import { AttestingTradeCasePage } from './pages/attesting-trade-case.page';
 import { AttestingPage } from './pages/attesting.page';
@@ -60,6 +61,7 @@ export const routes: Routes = [
   { path: 'wallet', component: WalletPage, canActivate: [sessionGuard], title: 'Wallet' },
   { path: 'wallet/:accountId', component: AccountPage, canActivate: [sessionGuard], title: 'Account' },
   { path: 'wallet/:accountId/escrow/:transactionId', component: EscrowTradePage, canActivate: [sessionGuard], title: 'Escrow trade' },
+  { path: 'wallet/:accountId/assisted/:transactionId', component: AssistedTransferPage, canActivate: [sessionGuard], title: 'Assisted transfer' },
   { path: 'wallet/:accountId/history', component: TransactionHistoryPage, canActivate: [sessionGuard], title: 'Transaction history' },
   {
     path: 'chat',
