@@ -78,7 +78,10 @@ export class LandingPage {
     this.error.set(null);
     try {
       const status = await unlockWithPasskey({ api: this.api, crypto: this.crypto, passkey: this.passkey, session: this.session });
-      await this.router.navigateByUrl(this.session.nextStep(status));
+      // An unlock with everything done lands on Home; the rule's own answer
+      // stays Wallet, so the setup steps end there (wallet spec 8.1).
+      const next = this.session.nextStep(status);
+      await this.router.navigateByUrl(next === '/wallet' ? '/home' : next);
     } catch (err) {
       this.error.set(err instanceof Error ? err.message : String(err));
     } finally {

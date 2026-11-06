@@ -16,7 +16,8 @@ import { assistedStageWords } from '../assisted-stage';
 import { CopyButtonComponent } from '../components/copy-button.component';
 import { ACCOUNT_POLL_MS, GUARDED_LOCK_MINUTES, LOCK_OFFSET_MINUTES, VAULT_LOCK_MINUTES } from '../constants';
 import { escrowStageWords } from '../escrow-stage';
-import { AccountAnswer, Accepted, AnosApiService, EscrowItem, HeldAssistedTransfer, PendingItem } from '../services/anos-api.service';
+import { lockedStageWords } from '../locked-stage';
+import { AccountAnswer, Accepted, AnosApiService, EscrowItem, HeldAssistedTransfer, HeldLockedTransfer, PendingItem } from '../services/anos-api.service';
 import {
   AccountType,
   CryptoService,
@@ -88,8 +89,13 @@ interface Outcome {
  * its page, with the stage in words, and a line under the balance says
  * what is waiting; the attestation and the assisted cancel forms left the
  * follow-ups panel too (the attestor's trade case page posts the
- * attestation, the transfer page the cancel). The guardian vote form and
- * the fund proposal form are the test wallet's.
+ * attestation, the transfer page the cancel). Locked transfer (2026-11-06,
+ * section 11): on a guarded or vault account /get-locked-transfer is read
+ * with the others; the transfer waiting out its lock is one row with no
+ * link, since nothing can be done with it, with the stage in words and
+ * its unlock moment, and a line under the balance says what is waiting
+ * out the lock. The guardian vote form and the fund proposal form are the
+ * test wallet's.
  */
 @Component({
   selector: 'app-account-page',
@@ -114,6 +120,9 @@ interface Outcome {
             @if (assisted(); as t) {
               <div><span class="label"></span><span class="value muted">{{ millionthsToAnos(t.amount) }} anos of this are waiting in an assisted transfer.</span></div>
             }
+            @if (locked(); as t) {
+              <div><span class="label"></span><span class="value muted">{{ millionthsToAnos(t.amount) }} anos of this are waiting out a lock.</span></div>
+            }
             <div><span class="label">Type</span><span class="value">{{ a.type }}</span></div>
             <div><span class="label">Latest transaction</span><code class="value">{{ a.latestTransactionId ?? 'none' }}</code></div>
             <div><span class="label">Created</span><span class="value">{{ a.createdAt | date: 'medium' }}</span></div>
@@ -131,6 +140,8 @@ interface Outcome {
             <span class="muted">An escrow trade is open; refreshing every 5 seconds.</span>
           } @else if (assisted()) {
             <span class="muted">An assisted transfer is waiting; refreshing every 5 seconds.</span>
+          } @else if (locked()) {
+            <span class="muted">A transfer is waiting out its lock; refreshing every 5 seconds.</span>
           }
         </div>
 
@@ -165,13 +176,16 @@ interface Outcome {
               <mat-label>Amount (anos)</mat-label>
               <input matInput [ngModel]="amount()" (ngModelChange)="amount.set($event)" placeholder="1 or 0.5" />
             </mat-form-field>
-            <button mat-flat-button type="button" (click)="send()" [disabled]="busy() || pending().length > 0 || sellerEscrowOpen() || assisted() !== null || !canSend()">Send {{ transferType() }}</button>
+            <button mat-flat-button type="button" (click)="send()" [disabled]="busy() || pending().length > 0 || sellerEscrowOpen() || assisted() !== null || locked() !== null || !canSend()">Send {{ transferType() }}</button>
           </div>
           @if (sellerEscrowOpen()) {
             <p class="muted">An escrow trade is open. This account can send again when it closes.</p>
           }
           @if (assisted()) {
             <p class="muted">An assisted transfer is waiting. This account can send again when it is written or cancelled.</p>
+          }
+          @if (locked()) {
+            <p class="muted">A transfer is waiting out its lock. This account can send again when it is written.</p>
           }
           @if (item.accountType === 'guarded' || item.accountType === 'vault') {
             <p class="muted">A {{ item.accountType }} transfer is dated {{ minutesAhead(item.accountType) }} minutes ahead and waits out its lock on the validators.</p>
@@ -222,6 +236,29 @@ interface Outcome {
                 <mat-icon matListItemIcon>call_made</mat-icon>
                 <a matListItemTitle [routerLink]="['/wallet', accountId(), 'assisted', t.transactionId]">{{ millionthsToAnos(t.amount) }} anos to <code>{{ t.accountIdTo }}</code></a>
                 <span matListItemLine>{{ assistedStageWords(t.stage) }} · {{ t.createdAt | date: 'medium' }}</span>
+              </mat-list-item>
+            </mat-list>
+          } @else {
+            <p class="muted">No transfer is waiting.</p>
+          }
+        }
+
+        @if (item()?.accountType === 'guarded' || item()?.accountType === 'vault') {
+          <h3>Locked transfer</h3>
+          @if (lockedError(); as text) {
+            <p class="error">{{ text }}</p>
+          } @else if (locked(); as t) {
+            <mat-list>
+              <mat-list-item lines="2">
+                <mat-icon matListItemIcon>lock_clock</mat-icon>
+                <span matListItemTitle>{{ millionthsToAnos(t.amount) }} anos to <code>{{ t.accountIdTo }}</code></span>
+                <span matListItemLine>
+                  @if (t.stage === 'locked') {
+                    Waiting out the lock · until {{ t.unlocksAt | date: 'medium' }}
+                  } @else {
+                    {{ lockedStageWords(t.stage) }} · {{ t.createdAt | date: 'medium' }}
+                  }
+                </span>
               </mat-list-item>
             </mat-list>
           } @else {
@@ -299,6 +336,7 @@ export class AccountPage {
 
   protected readonly millionthsToAnos = millionthsToAnos;
   protected readonly assistedStageWords = assistedStageWords;
+  protected readonly lockedStageWords = lockedStageWords;
   protected readonly spendingKinds = SPENDING_KINDS;
   protected readonly stakePurposes = STAKE_PURPOSES;
 
@@ -309,6 +347,8 @@ export class AccountPage {
   protected readonly escrowsError = signal<string | null>(null);
   protected readonly assisted = signal<HeldAssistedTransfer | null>(null);
   protected readonly assistedError = signal<string | null>(null);
+  protected readonly locked = signal<HeldLockedTransfer | null>(null);
+  protected readonly lockedError = signal<string | null>(null);
   protected readonly readError = signal<string | null>(null);
   protected readonly busy = signal(false);
 
@@ -356,7 +396,7 @@ export class AccountPage {
       untracked(() => void this.refresh());
     });
     const timer = setInterval(() => {
-      if ((this.pending().length > 0 || this.escrows().length > 0 || this.assisted() !== null) && !this.busy()) void this.refresh(true);
+      if ((this.pending().length > 0 || this.escrows().length > 0 || this.assisted() !== null || this.locked() !== null) && !this.busy()) void this.refresh(true);
     }, ACCOUNT_POLL_MS);
     inject(DestroyRef).onDestroy(() => clearInterval(timer));
   }
@@ -384,17 +424,20 @@ export class AccountPage {
     return this.crypto.pairOneFromKeyBlob(this.crypto.fromHex(item.keyBlob), encryptionKey);
   }
 
-  /** /get-account, the first page of /list-transactions (for the pending list; the history page shows the transactions), /list-escrows and, on an assisted account, /get-assisted-transfer. A refused escrow or assisted read is shown on its own, so the rest of the page still shows. */
+  /** /get-account, the first page of /list-transactions (for the pending list; the history page shows the transactions), /list-escrows and, on an assisted account, /get-assisted-transfer, or, on a guarded or vault account, /get-locked-transfer. A refused escrow, assisted or locked read is shown on its own, so the rest of the page still shows. */
   protected async refresh(quiet = false): Promise<void> {
     this.readError.set(null);
     try {
       const pairOne = await this.pairOne();
-      const assistedAccount = this.item()?.accountType === 'assisted';
-      const [account, list, escrows, assisted] = await Promise.all([
+      const type = this.item()?.accountType;
+      const assistedAccount = type === 'assisted';
+      const lockedAccount = type === 'guarded' || type === 'vault';
+      const [account, list, escrows, assisted, locked] = await Promise.all([
         this.anos.getAccount(pairOne, this.accountId(), quiet),
         this.anos.listTransactions(pairOne, this.accountId(), {}, quiet),
         this.anos.listEscrows(pairOne, this.accountId(), quiet),
         assistedAccount ? this.anos.getAssistedTransfer(pairOne, this.accountId(), quiet) : null,
+        lockedAccount ? this.anos.getLockedTransfer(pairOne, this.accountId(), quiet) : null,
       ]);
       if (!account.ok) {
         this.readError.set(account.status === 401 && /unknown account/.test(reasonOf(account)) ? 'Not on the ledger yet: the creation has not landed.' : `/get-account: ${reasonOf(account)}`);
@@ -414,6 +457,14 @@ export class AccountPage {
           this.assistedError.set(null);
         } else {
           this.assistedError.set(`/get-assisted-transfer: ${reasonOf(assisted)}`);
+        }
+      }
+      if (locked !== null) {
+        if (locked.ok) {
+          this.locked.set(locked.body.transfer);
+          this.lockedError.set(null);
+        } else {
+          this.lockedError.set(`/get-locked-transfer: ${reasonOf(locked)}`);
         }
       }
     } catch (err) {

@@ -1,5 +1,5 @@
 import { BreakpointObserver, Breakpoints } from '@angular/cdk/layout';
-import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -11,25 +11,21 @@ import { map } from 'rxjs';
 import { NOTIFICATIONS_POLL_MS } from './constants';
 import { ConfigService } from './services/config.service';
 import { MasterpodApiService } from './services/masterpod-api.service';
+import { NavigationService } from './services/navigation.service';
 import { SessionService } from './services/session.service';
-
-/** One entry of the side navigation; `badge` is a count drawn at its right (Chat: the unread rooms, wallet spec 8.2). */
-interface NavItem {
-  path: string;
-  label: string;
-  icon: string;
-  badge?: number;
-}
 
 /**
  * The shell (wallet spec 8 and 8.1): a toolbar and a side navigation on a
- * desktop, the navigation collapsing behind a menu button on a phone. Which
- * pages the navigation shows follows the status: vouching until vouched;
- * identity and setup until setup is complete; wallet, chat, marketplace and
- * account once it is, and Cases with them (wallet spec 13.1); seed when
- * the pod is a seed; Moderation in the moderator edition (wallet spec 12.1),
- * which also names the app "Moderator wallet" in the toolbar; Attesting in
- * the attestor edition (wallet spec 13.1), named "Attestor wallet".
+ * desktop, the navigation collapsing behind a menu button on a phone. The
+ * navigation's list lives in navigation.service.ts, shared with the Home
+ * tiles: Home is first once setup is complete, and which pages show
+ * follows the status (vouching until vouched; identity and setup until
+ * setup is complete; home, wallet, chat, marketplace and account once it
+ * is, and Cases with them, wallet spec 13.1; seed when the pod is a seed;
+ * Moderation in the moderator edition, wallet spec 12.1, which also names
+ * the app "Moderator wallet" in the toolbar; Attesting in the attestor
+ * edition, wallet spec 13.1, named "Attestor wallet"). The toolbar's name
+ * is a link to Home once setup is complete.
  */
 @Component({
   selector: 'app-root',
@@ -42,6 +38,7 @@ export class App {
   protected readonly config = inject(ConfigService);
   private readonly router = inject(Router);
   private readonly api = inject(MasterpodApiService);
+  private readonly navigation = inject(NavigationService);
 
   /** True on a narrow screen: the navigation hides behind the menu button. */
   protected readonly handset = toSignal(
@@ -50,29 +47,7 @@ export class App {
   );
   protected readonly menuOpen = signal(false);
 
-  protected readonly navItems = computed<NavItem[]>(() => {
-    const status = this.session.status();
-    if (!this.session.hasSession()) return [];
-    const items: NavItem[] = [];
-    if (!status?.vouched) items.push({ path: '/vouching', label: 'Vouching', icon: 'how_to_reg' });
-    if (!status?.setupComplete) {
-      items.push({ path: '/identity', label: 'Identity', icon: 'badge' }, { path: '/setup', label: 'Setup', icon: 'key' });
-    } else {
-      items.push(
-        { path: '/wallet', label: 'Wallet', icon: 'account_balance_wallet' },
-        { path: '/cases', label: 'Cases', icon: 'folder_shared' },
-        { path: '/chat', label: 'Chat', icon: 'chat', badge: this.session.unreadRoomCount() },
-        { path: '/marketplace', label: 'Marketplace', icon: 'storefront' },
-        { path: '/account', label: 'Account', icon: 'manage_accounts' },
-      );
-    }
-    if (this.config.moderatorEdition()) items.push({ path: '/moderation', label: 'Moderation', icon: 'gavel' });
-    if (this.config.attestorEdition()) items.push({ path: '/attesting', label: 'Attesting', icon: 'fact_check' });
-    items.push({ path: '/notifications', label: 'Notifications', icon: 'notifications' });
-    if (status?.isSeed || status?.isSuperSeed) items.push({ path: '/seed', label: 'Vouch requests', icon: 'verified_user' });
-    items.push({ path: '/log', label: 'Log', icon: 'receipt_long' });
-    return items;
-  });
+  protected readonly navItems = this.navigation.items;
 
   constructor() {
     void this.config.load().catch(() => undefined);

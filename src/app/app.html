@@ -4,7 +4,11 @@
       <mat-icon>menu</mat-icon>
     </button>
   }
-  <span class="brand">{{ config.attestorEdition() ? 'Attestor wallet' : config.moderatorEdition() ? 'Moderator wallet' : 'anoPod wallet' }}</span>
+  @if (session.setupComplete()) {
+    <a class="brand" routerLink="/home">{{ config.attestorEdition() ? 'Attestor wallet' : config.moderatorEdition() ? 'Moderator wallet' : 'anoPod wallet' }}</a>
+  } @else {
+    <span class="brand">{{ config.attestorEdition() ? 'Attestor wallet' : config.moderatorEdition() ? 'Moderator wallet' : 'anoPod wallet' }}</span>
+  }
   <span class="spacer"></span>
   @if (session.hasSession()) {
     <span class="who">{{ session.username() }}</span>

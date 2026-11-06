@@ -1,0 +1,148 @@
+import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { MatIconModule } from '@angular/material/icon';
+import { MatListModule } from '@angular/material/list';
+import { RouterLink } from '@angular/router';
+import { accountNames } from '../account-names';
+import { AvatarComponent } from '../components/avatar.component';
+import { BalanceCardComponent } from '../components/balance-card.component';
+import { ACCOUNT_POLL_MS } from '../constants';
+import { BalancesService } from '../services/balances.service';
+import { reasonOf } from '../services/log.service';
+import { MasterpodApiService } from '../services/masterpod-api.service';
+import { NavigationService } from '../services/navigation.service';
+import { SessionService } from '../services/session.service';
+
+/** One line of Things to do: where it goes, its icon and its words. */
+interface TodoLine {
+  path: string;
+  icon: string;
+  words: string;
+}
+
+/**
+ * Home (wallet spec 8.2), at /home, where an unlock lands once setup is
+ * complete; no outer card, the pieces sit on the page. The greeting with
+ * the avatar (8.6) and the first name, the username when it is empty; the
+ * balance card (balance-card.component over balances.service, shared with
+ * the Wallet page); "Things to do", a short list of links, hidden when
+ * none applies; the tiles, one per side-panel entry except Home itself
+ * and Log, drawn from navigation.service so the two cannot drift apart,
+ * Chat and Notifications carrying their unread counts. On open the
+ * accounts are listed (/list-anos-accounts, quiet) into the session and
+ * the balances read; every 5 seconds they are read again while an account
+ * is not on the ledger yet or any anos are held or pending, as the Wallet
+ * page does.
+ */
+@Component({
+  selector: 'app-home-page',
+  imports: [RouterLink, MatListModule, MatIconModule, AvatarComponent, BalanceCardComponent],
+  template: `
+    <div class="greeting">
+      <app-avatar [anopodId]="session.anopodId() ?? ''" [username]="session.username()" [size]="56" />
+      <h2>Hello, {{ session.firstName() || session.username() }}</h2>
+    </div>
+    @if (listError(); as text) {
+      <p class="error">{{ text }}</p>
+    }
+    <app-balance-card />
+    @if (todo().length > 0) {
+      <h3>Things to do</h3>
+      <mat-nav-list>
+        @for (line of todo(); track $index) {
+          <a mat-list-item [routerLink]="line.path">
+            <mat-icon matListItemIcon>{{ line.icon }}</mat-icon>
+            <span matListItemTitle>{{ line.words }}</span>
+          </a>
+        }
+      </mat-nav-list>
+    }
+    <div class="tiles">
+      @for (tile of tiles(); track tile.path) {
+        <a class="tile" [routerLink]="tile.path">
+          @if (tile.badge) {
+            <span class="badge">{{ tile.badge }}</span>
+          }
+          <mat-icon>{{ tile.icon }}</mat-icon>
+          <span class="label">{{ tile.label }}</span>
+        </a>
+      }
+    </div>
+  `,
+  styles: `
+    :host { display: block; }
+    .greeting { display: flex; align-items: center; gap: 16px; margin: 8px 0 16px; }
+    .greeting h2 { margin: 0; font-size: 24px; font-weight: 500; }
+    h3 { margin: 24px 0 4px; }
+    .error { color: var(--mat-sys-error); }
+    .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-top: 24px; }
+    .tile { position: relative; aspect-ratio: 1; border-radius: 16px; background: var(--mat-sys-surface-container); color: var(--mat-sys-on-surface); text-decoration: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+    .tile mat-icon { font-size: 36px; width: 36px; height: 36px; color: var(--mat-sys-primary); }
+    .label { font-weight: 500; }
+    .badge { position: absolute; top: 12px; right: 12px; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--mat-sys-primary); color: var(--mat-sys-on-primary); font-size: 12px; font-weight: 500; display: inline-flex; align-items: center; justify-content: center; }
+  `,
+})
+export class HomePage {
+  protected readonly session = inject(SessionService);
+  private readonly navigation = inject(NavigationService);
+  private readonly balances = inject(BalancesService);
+  private readonly masterpod = inject(MasterpodApiService);
+
+  protected readonly listError = signal<string | null>(null);
+  /** True once /list-anos-accounts answered, so "Open your first anos account" waits for the list. */
+  private readonly accountsLoaded = signal(false);
+
+  /** The tiles: the side panel's entries except Home itself and Log. */
+  protected readonly tiles = computed(() => this.navigation.items().filter((i) => i.path !== '/home' && i.path !== '/log'));
+
+  /** The Things to do lines, in the plan's order, each only when it applies. */
+  protected readonly todo = computed((): TodoLine[] => {
+    const lines: TodoLine[] = [];
+    const status = this.session.status();
+    if (status?.bucketOneImages === 0) lines.push({ path: '/account/recovery/selfie', icon: 'photo_camera', words: 'Add a recovery selfie' });
+    if (status && (status.bucketTwoImages === 0 || status.bucketTwoInfos < 3)) {
+      lines.push({ path: '/account/recovery/details', icon: 'badge', words: 'Add your recovery details' });
+    }
+    const accounts = this.session.accounts();
+    if (this.accountsLoaded() && accounts.length === 0) lines.push({ path: '/wallet', icon: 'account_balance_wallet', words: 'Open your first anos account' });
+    const names = accountNames(accounts);
+    for (const account of accounts) {
+      if (!account.submittedAt) lines.push({ path: '/wallet', icon: 'error', words: `Finish creating your ${names.get(account.accountId)}` });
+    }
+    const unreadRooms = this.session.unreadRoomCount();
+    if (unreadRooms > 0) lines.push({ path: '/chat', icon: 'chat', words: count(unreadRooms, 'unread chat') });
+    const rooms = this.session.chatRooms();
+    const requests = rooms ? rooms.invites.length + rooms.joinRequests.length : 0;
+    if (requests > 0) lines.push({ path: '/chat/requests', icon: 'mail', words: count(requests, 'chat request') });
+    const unread = this.session.unread().length;
+    if (unread > 0) lines.push({ path: '/notifications', icon: 'notifications', words: count(unread, 'unread notification') });
+    return lines;
+  });
+
+  constructor() {
+    void this.load();
+    // The balances are read again every 5 seconds while an account is not
+    // on the ledger yet or any anos are held or pending, as the Wallet page does.
+    const timer = setInterval(() => {
+      if (this.balances.needsPoll() && !this.balances.busy()) void this.balances.refresh(true);
+    }, ACCOUNT_POLL_MS);
+    inject(DestroyRef).onDestroy(() => clearInterval(timer));
+  }
+
+  /** The accounts from the masterpod into the session (a refusal shown in red), then the balances. */
+  private async load(): Promise<void> {
+    this.listError.set(null);
+    const res = await this.masterpod.listAnosAccounts(true);
+    if (res.ok) {
+      this.session.accounts.set(res.body.accounts);
+      this.accountsLoaded.set(true);
+    } else {
+      this.listError.set(`/list-anos-accounts: ${reasonOf(res)}`);
+    }
+    await this.balances.refresh();
+  }
+}
+
+/** "3 unread chats", "1 unread chat". */
+function count(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? '' : 's'}`;
+}
