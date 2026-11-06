@@ -401,8 +401,13 @@ The user may navigate anywhere the navigation shows at any time.
 
 ### 8.2 The screens
 
-Landing. Unlock: /challenge (unlock), the passkey assertion with the PRF
-salt, /unlock; opens blob1, chatPrivateKeyBlob and identityBlob; then
+Landing. Above the card, in every edition, the test-site notice: a wide
+red-tinted box (the theme's error-container colours) with a warning
+icon, "This is just a test site." in large bold letters, then "There are
+no real Anos here, do not pay money to anyone in order to buy Anos. This
+is for testing purposes only.", then the same in Thai. Then the card.
+Unlock: /challenge (unlock), the passkey assertion with the PRF salt,
+/unlock; opens blob1, chatPrivateKeyBlob and identityBlob; then
 /check-anopod-status and the next-step rule. The platform's passkey
 picker is what says whether a passkey exists; with none, the
 authenticator's own message shows and the page suggests Create. Create
@@ -420,12 +425,21 @@ Create, a linear Material stepper
    Continue to /vouching. If the registration returned a PRF output it is
    kept; otherwise setup will unlock first, as the test app does.
 
-Vouching. "Pick one or two or more to vouch for you. You'll have to check
-back after you've been vouched for." A username search (/search-usernames)
-showing the profile card with the selfie and the seed flags, a Send
-request button (/send-vouch-request). The requests sent this session
-listed. The status line (vouchCount, vouched) refreshed by the
-notification poll (every 5 s, as today); when vouched, Continue to
+Vouching. Title "Get vouched". Until vouched: the subtitle "Someone who
+already has an anoPod confirms they know you."; the status line
+(vouchCount) refreshed by the notification poll (every 5 s, as today);
+the instructions in three parts, "How vouching works" (every anoPod is
+vouched for by a real person who already has one; two vouches from seeds
+or one from a super seed, which also makes the pod a seed), "What to do"
+(ask a couple of people in the anoSphere for their username, search each
+one, check the photo and the tag, Send request) and "While you wait" (the
+page changes by itself, Unlock brings the pod back here until vouched, a
+decline shows under Notifications); then a username search
+(/search-usernames) showing the profile card with the selfie and the seed
+flags, a Send request button (/send-vouch-request), and the requests sent
+this session. Once vouched, all of that is gone and the card shows only a
+big "You've been vouched", "N people vouched for you. You can continue to
+the next step." (1 person when it is one) and a big Continue to
 /identity. A seed approving or declining uses /seed.
 
 Identity, three panes
@@ -1241,6 +1255,46 @@ it.
 - Spec: 8.1 (the two route lines), 8.2 Account (the order, the Escrow
   trades and Send sentences) and the new Transaction history paragraph,
   this note.
+- `npx ng build` clean.
+
+### The vouched screen and the vouching instructions (2026-11-05)
+
+Step 1 of the vouching upgrade: being vouched was easy to miss (one small
+line and a Continue button above the seed search), and the page said
+nothing about what vouching is or what to do.
+
+- `src/app/pages/vouching.page.ts`: once `session.vouched()` is true the
+  card shows only a centred block, "You've been vouched" as a 2 rem
+  headline, "N people vouched for you. You can continue to the next
+  step." ("1 person" when it is one) and a 52 px Continue; the subtitle,
+  the status line, the instructions, the search, the profile card and the
+  sent-requests list are all inside the `@else`. Until then: the one-line
+  subtitle "Someone who already has an anoPod confirms they know you.",
+  the status line, the instruction block (`section.how`: "How vouching
+  works", "What to do" as a four-point list, "While you wait"), then the
+  search and the lists as they were, one indent level deeper. New
+  `vouchCount` computed (the status's vouchCount, 0 without a status),
+  used by the status line and the vouched block. The class comment
+  rewritten.
+- The wording of the instructions was agreed line by line in the planning
+  chat; the old "check back" sentence lives on in "While you wait".
+- Spec: 8.2 Vouching, this note.
+- `npx ng build` clean.
+
+### The test-site notice (2026-11-05)
+
+Step 2 of the vouching upgrade: the live site is a testnet, and the
+landing page said nothing about it.
+
+- `src/app/pages/landing.page.ts`: a `div.notice` above the card, in
+  every edition, the full width of `main`: a 40 px warning icon
+  (`MatIconModule` imported), "This is just a test site." at 1.75 rem
+  bold, the rest of the English, then the Thai translation in a
+  `lang="th"` paragraph. Error-container background and text colours
+  from the theme. The class comment names it.
+- The Thai text is the planning chat's translation, to be checked by a
+  Thai reader before deploy.
+- Spec: 8.2 Landing, this note.
 - `npx ng build` clean.
 
 ## 12. Recovery and the moderator edition
