@@ -9,6 +9,7 @@ import { MatMenuModule } from '@angular/material/menu';
 import { Router, RouterLink } from '@angular/router';
 import { AvatarComponent } from '../components/avatar.component';
 import { CopyButtonComponent } from '../components/copy-button.component';
+import { FoundAccountId, PinnedListingComponent } from '../components/pinned-listing.component';
 import { MESSAGES_PAGE, MESSAGES_POLL_MS } from '../constants';
 import { ChatService, Piece, piecesOf } from '../services/chat.service';
 import { CryptoService } from '../services/crypto.service';
@@ -60,11 +61,13 @@ const FOLLOW_PX = 120;
  * marked "Sending" and gets its tick from the answer. Room keys come from
  * ChatService; an account id in a message shows in code font with a copy
  * button (8.5). The room is marked seen when it opens and when new
- * messages show.
+ * messages show. A private room about a listing shows the pinned listing
+ * card (8.7) between the header and the thread, fed with the account ids
+ * found in the messages (2026-11-06).
  */
 @Component({
   selector: 'app-chat-room-page',
-  imports: [FormsModule, RouterLink, TextFieldModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, MatMenuModule, AvatarComponent, CopyButtonComponent],
+  imports: [FormsModule, RouterLink, TextFieldModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, MatMenuModule, AvatarComponent, CopyButtonComponent, PinnedListingComponent],
   template: `
     @if (room(); as room) {
       <header class="head">
@@ -111,6 +114,9 @@ const FOLLOW_PX = 120;
             <span class="member"><app-avatar [anopodId]="m.anopodId" [username]="m.username" [size]="28" /> {{ m.username }} <span class="muted">(invited)</span></span>
           }
         </div>
+      }
+      @if (room.type === 'private' && room.listing) {
+        <app-pinned-listing [room]="room" [accountIds]="accountIds()" />
       }
       <div class="thread" #threadBox>
         @if (canLoadOlder()) {
@@ -278,6 +284,17 @@ export class ChatRoomPage {
       }
     }
     return items;
+  });
+
+  /** The account ids in the decrypted messages (the 64-hex pieces), each with its sender and position, newest first: what the pinned listing card works from (8.7). */
+  protected readonly accountIds = computed<FoundAccountId[]>(() => {
+    const found: FoundAccountId[] = [];
+    for (const m of this.messages()) {
+      for (const piece of m.pieces) {
+        if (piece.accountId) found.push({ accountId: piece.text.toLowerCase(), senderAnopodId: m.senderAnopodId, position: m.position });
+      }
+    }
+    return found.sort((a, b) => b.position - a.position);
   });
 
   /** The room the thread shows, whether its opening read is done, and the positions of the oldest and newest shown. */

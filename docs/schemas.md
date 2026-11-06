@@ -729,6 +729,48 @@ line. The room is marked seen (Unread, below) when it opens and when
 new messages show. "You are not in this chat." for a room that is not in
 the list.
 
+The pinned card (2026-11-06, section 11), in a private room about a
+listing, under the header and its panels and above the thread: the
+listing in one line, "Selling 100 anos · 35.50 THB each · 3,550 THB",
+with the other person's avatar (8.6) and Closed when the listing is
+closed; the roles from the listing (the owner of a sell listing and the
+other person of a buy listing are the seller). The buyer's "Share an
+account": a menu of this pod's accounts (the id shortened, the type); one
+tap posts "Please send the anos to this account: <the account id>" into
+the chat, encrypted like any message, so the thread shows the id in code
+font with its copy button (8.5). The seller's "Start the escrow trade",
+disabled with the hint "Ask them to share an account first" until the
+other person has posted an account id: a small form in the card, From
+(this pod's spending accounts; one is fixed, more is a select), To (the
+other person's account ids in the chat, newest first; one is fixed),
+Amount in anos (the listing's quantity at first), the total at the
+listing's price, Start and Cancel; Start asks once in place ("Put 100
+anos into escrow for somchai? You release them once you have been paid.
+Only the buyer can cancel; either side can dispute.", Yes or Back), and
+Yes builds the escrowTransfer as the account page's Send does (pair one
+from the account's keyBlob and the encryption key, /get-account for the
+latest transaction id, buildAnosTransferTransaction with type
+escrowTransfer, /api/sign, /anos-transfer), posts "Escrow trade started:
+100 anos from <my account id> to <their account id>. Transaction <id>."
+and shows the stage; a refusal shows the validator's reason as the
+account page shows it. The stage: every 5 seconds while the conversation
+is open, /list-escrows on each of this pod's accounts named in the chat
+(an id in the messages that is one of session.accounts, pair one from its
+keyBlob); the newest trade whose other side is an account named in the
+chat shows as "Escrow trade: 100 anos · Waiting for the seller to release
+the anos" (escrow-stage.ts, by this pod's side) with "See the trade" to
+/wallet/<my account>/escrow/<transactionId>; Release, Cancel and Dispute
+stay on that page. A trade seen open here and then gone from the list is
+closed: its id on the first page of /list-transactions of my account
+means "Released: 100 anos went to the buyer.", otherwise "Cancelled: the
+seller kept the anos." (the trade page's rule); after a release the owner
+of an open listing gets "Close the listing", which asks once and calls
+/close-listing, and the card reads Closed once the room list is
+refreshed. Share and Start show until a trade has started, and again
+after a cancelled one; a closed listing's card shows only the stage of a
+trade when there is one. A room whose listing the masterpod does not give
+shows no card.
+
 Requests, at /chat/requests: the invites to this pod (the inviter's
 username, then `invited you to "<the public room's name>"`, `invited you
 to a private chat` or, for a room about one of this pod's listings,
@@ -924,12 +966,12 @@ else a round disc in the primary-container colour with the first letter
 of the username. The profile comes from profile-cache.service (8.3), one
 /get-anopod-profile per pod per tab. In the chat list, the conversation
 header, the members panel and the chat requests; since 2026-11-06 also on
-the listing cards (24 px), the listing page (56 px) and the people who
-connected (8.7).
+the listing cards (24 px), the listing page (56 px), the people who
+connected and the pinned listing card (8.7).
 
 ### 8.7 The marketplace components
 
-Four small components (2026-11-06, section 11), under
+Five small components (2026-11-06, section 11), under
 src/app/components/:
 
 - listing-card.component.ts (`<app-listing-card [listing]>`): the card of
@@ -959,6 +1001,15 @@ src/app/components/:
   range (least and most anos) and the price range (least and most,
   disabled with the hint "Pick a currency first" while Browse has no
   currency), Apply and Clear.
+- pinned-listing.component.ts (`<app-pinned-listing [room]
+  [accountIds]>`): the pinned card of a private room about a listing (8.2,
+  Chat), drawn by chat-room.page.ts under its header, above the thread.
+  `accountIds` is the page's computed of the account ids found in the
+  decrypted messages (the 64-hex pieces of `piecesOf`), each with its
+  sender and position, newest first; the page changes only to draw the
+  card and feed it. The card posts its own messages (Share an account,
+  Escrow trade started) encrypted with the room key, and the thread's poll
+  shows them. It exports `FoundAccountId`.
 
 ## 9. Configuration, and running it on this machine
 
@@ -1683,6 +1734,39 @@ per listing.
 - Spec: 8.1, 8.2 (Marketplace rewritten; Chat, the title and the
   Requests wording), 8.3, 8.6, the new 8.7, this note.
 - `npx ng build` clean (1.60 MB initial).
+
+### The marketplace, step 3 (2026-11-06)
+
+Step 3 of forclaude/wallet-marketplace-plan-1.md, the trade from the chat:
+the pinned card of 8.7 and its paragraph in 8.2 Chat. Only one page
+changes.
+
+- `src/app/components/pinned-listing.component.ts`
+  (`PinnedListingComponent`): the card. The roles come from
+  `MarketplaceService.mySide(room.listing)`; the first line from
+  `formatPrice` and `totalOf`; the stage words from `escrowStageWords`.
+  `start()` copies the account page's Send for the escrowTransfer, with
+  `createdAt` now (a spending account has no lock); a refusal shows as
+  "The validator refused the trade: " and the reason as `reasonOf` gives
+  it, the account page's words. `poll()` runs when one of this pod's
+  accounts is first named in the chat and every ACCOUNT_POLL_MS; a quiet
+  read that fails keeps the card as it is. `post()` sends an encrypted
+  message with the room key from `ChatService.roomKeyOf`; the thread's
+  3-second poll shows it.
+- `chat-room.page.ts`: `accountIds`, a computed over `messages()`
+  (lower-cased ids, newest position first), and the card drawn under the
+  panels when the room is private and has a listing. The thread and the
+  composer are untouched.
+- Readings where the plan left a detail open: the card carries the other
+  person's avatar at the left of its first line (8.6 names the card as an
+  avatar's use); Share and Start come back after a cancelled trade, so a
+  second trade can be started in the same chat, and stay away after a
+  release; Close the listing refreshes the room list at once rather than
+  waiting for the shell's poll; the seller's From starts as the first
+  spending account and the To as the newest account id the other person
+  posted.
+- Spec: 8.2 Chat (the pinned card), 8.6, 8.7, this note.
+- `npx ng build` clean (1.61 MB initial).
 
 ## 12. Recovery and the moderator edition
 
