@@ -19,10 +19,12 @@ interface SentRequest {
 }
 
 /**
- * The vouching page (wallet spec 8.2): a username search showing the
- * profile card with the selfie and the seed flags, a Send request button,
- * the requests sent this session, and the status line (vouchCount, vouched)
- * the notification poll refreshes; when vouched, Continue to /identity.
+ * The vouching page (wallet spec 8.2). Until vouched: the status line
+ * (vouchCount) the notification poll refreshes, the instructions (how
+ * vouching works, what to do, while you wait), a username search showing
+ * the profile card with the selfie and the seed flags, a Send request
+ * button, and the requests sent this session. Once vouched, only a big
+ * "You've been vouched", the count and a big Continue to /identity.
  */
 @Component({
   selector: 'app-vouching-page',
@@ -31,70 +33,92 @@ interface SentRequest {
     <mat-card appearance="outlined">
       <mat-card-header>
         <mat-card-title>Get vouched</mat-card-title>
-        <mat-card-subtitle>Pick one or two or more to vouch for you. You'll have to check back after you've been vouched for.</mat-card-subtitle>
+        @if (!session.vouched()) {
+          <mat-card-subtitle>Someone who already has an anoPod confirms they know you.</mat-card-subtitle>
+        }
       </mat-card-header>
       <mat-card-content>
-        <p class="status">
-          @if (session.vouched()) {
-            You are vouched ({{ session.status()?.vouchCount }} {{ session.status()?.vouchCount === 1 ? 'vouch' : 'vouches' }}).
-          } @else {
-            Not vouched yet: {{ session.status()?.vouchCount ?? 0 }} of 2 vouches, or one by a super seed. This line refreshes every few seconds.
-          }
-        </p>
         @if (session.vouched()) {
-          <button mat-flat-button type="button" (click)="continue()">Continue</button>
-        }
+          <div class="vouched">
+            <h2 class="headline">You've been vouched</h2>
+            <p class="lead">{{ vouchCount() }} {{ vouchCount() === 1 ? 'person' : 'people' }} vouched for you. You can continue to the next step.</p>
+            <button mat-flat-button type="button" class="big" (click)="continue()">Continue</button>
+          </div>
+        } @else {
+          <p class="status">Not vouched yet: {{ vouchCount() }} of 2 vouches, or one by a super seed. This line refreshes every few seconds.</p>
 
-        <h3>Find a seed</h3>
-        <div class="row">
-          <mat-form-field appearance="outline">
-            <mat-label>Username</mat-label>
-            <input matInput [ngModel]="searchName()" (ngModelChange)="searchName.set($event)" (keyup.enter)="search()" />
-          </mat-form-field>
-          <button mat-stroked-button type="button" (click)="search()" [disabled]="busy() || !searchName().trim()">Search</button>
-        </div>
-        @if (searchError(); as text) {
-          <p class="error">{{ text }}</p>
-        }
-        @if (found(); as profile) {
-          <mat-card appearance="outlined" class="profile">
-            <mat-card-content class="profile-body">
-              @if (profile.selfie; as selfie) {
-                <img class="selfie" [src]="'data:' + selfie.contentType + ';base64,' + selfie.image" alt="selfie" />
-              }
-              <div>
-                <div class="name">{{ profile.firstName }} {{ profile.lastName }} <code>{{ profile.username }}</code></div>
-                <mat-chip-set>
-                  @if (profile.isSuperSeed) { <mat-chip>super seed</mat-chip> }
-                  @if (profile.isSeed) { <mat-chip>seed</mat-chip> }
-                  @if (!foundCanVouch()) { <mat-chip>cannot vouch</mat-chip> }
-                </mat-chip-set>
-                @if (!foundCanVouch()) {
-                  <p class="muted">{{ profile.username }} exists but is not a seed or super seed, so they cannot vouch for you.</p>
-                }
-              </div>
-            </mat-card-content>
-            <mat-card-actions>
-              <button mat-flat-button type="button" (click)="sendRequest()" [disabled]="busy() || !foundCanVouch() || session.vouched()">Send request</button>
-            </mat-card-actions>
-          </mat-card>
-        }
+          <section class="how">
+            <h3>How vouching works</h3>
+            <p>Every anoPod is vouched for by a real person who already has one. That person confirms they know you. This keeps the anoSphere safe, because nobody can join without someone real standing behind them.</p>
+            <p>You need two vouches from seeds, or one vouch from a super seed. A seed is someone a super seed has vouched for. If a super seed vouches for you, you become a seed too, and you can then vouch for other people.</p>
+            <h3>What to do</h3>
+            <ol>
+              <li>Ask a couple people you know who are a part of the anoSphere for their username.</li>
+              <li>For each person, type their username into the box below and press Search.</li>
+              <li>Check the photo. It should be the person you know. The tag under the name shows whether they can vouch for you.</li>
+              <li>Press Send request. They will see your name and your photo, and they approve you.</li>
+            </ol>
+            <h3>While you wait</h3>
+            <p>This page checks every few seconds and changes by itself once you are vouched. You can close the site and come back later. Unlock brings you back here until you are vouched. If someone declines, it shows under Notifications. Ask someone else.</p>
+          </section>
 
-        <h3>Requests sent this session</h3>
-        <mat-list>
-          @for (r of sent(); track $index) {
-            <mat-list-item>
-              <span matListItemTitle>{{ r.username }}</span>
-              <span matListItemLine>{{ r.time }} · {{ r.result }}</span>
-            </mat-list-item>
-          } @empty {
-            <p class="muted">None yet.</p>
+          <h3>Find a seed</h3>
+          <div class="row">
+            <mat-form-field appearance="outline">
+              <mat-label>Username</mat-label>
+              <input matInput [ngModel]="searchName()" (ngModelChange)="searchName.set($event)" (keyup.enter)="search()" />
+            </mat-form-field>
+            <button mat-stroked-button type="button" (click)="search()" [disabled]="busy() || !searchName().trim()">Search</button>
+          </div>
+          @if (searchError(); as text) {
+            <p class="error">{{ text }}</p>
           }
-        </mat-list>
+          @if (found(); as profile) {
+            <mat-card appearance="outlined" class="profile">
+              <mat-card-content class="profile-body">
+                @if (profile.selfie; as selfie) {
+                  <img class="selfie" [src]="'data:' + selfie.contentType + ';base64,' + selfie.image" alt="selfie" />
+                }
+                <div>
+                  <div class="name">{{ profile.firstName }} {{ profile.lastName }} <code>{{ profile.username }}</code></div>
+                  <mat-chip-set>
+                    @if (profile.isSuperSeed) { <mat-chip>super seed</mat-chip> }
+                    @if (profile.isSeed) { <mat-chip>seed</mat-chip> }
+                    @if (!foundCanVouch()) { <mat-chip>cannot vouch</mat-chip> }
+                  </mat-chip-set>
+                  @if (!foundCanVouch()) {
+                    <p class="muted">{{ profile.username }} exists but is not a seed or super seed, so they cannot vouch for you.</p>
+                  }
+                </div>
+              </mat-card-content>
+              <mat-card-actions>
+                <button mat-flat-button type="button" (click)="sendRequest()" [disabled]="busy() || !foundCanVouch() || session.vouched()">Send request</button>
+              </mat-card-actions>
+            </mat-card>
+          }
+
+          <h3>Requests sent this session</h3>
+          <mat-list>
+            @for (r of sent(); track $index) {
+              <mat-list-item>
+                <span matListItemTitle>{{ r.username }}</span>
+                <span matListItemLine>{{ r.time }} · {{ r.result }}</span>
+              </mat-list-item>
+            } @empty {
+              <p class="muted">None yet.</p>
+            }
+          </mat-list>
+        }
       </mat-card-content>
     </mat-card>
   `,
   styles: `
+    .vouched { text-align: center; padding: 24px 0; }
+    .headline { font-size: 2rem; font-weight: 500; margin: 0 0 8px; }
+    .lead { font-size: 1.125rem; margin: 0 0 24px; }
+    .big { height: 52px; font-size: 1.125rem; padding: 0 40px; }
+    .how ol { padding-left: 20px; }
+    .how li { margin-bottom: 4px; }
     .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .profile { max-width: 520px; margin-top: 8px; }
     .profile-body { display: flex; gap: 16px; align-items: flex-start; }
@@ -114,6 +138,7 @@ export class VouchingPage {
   protected readonly searchError = signal<string | null>(null);
   protected readonly sent = signal<SentRequest[]>([]);
   protected readonly busy = signal(false);
+  protected readonly vouchCount = computed(() => this.session.status()?.vouchCount ?? 0);
   protected readonly foundCanVouch = computed(() => {
     const profile = this.found();
     return profile !== null && (profile.isSeed || profile.isSuperSeed);
