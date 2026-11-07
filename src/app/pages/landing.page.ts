@@ -50,7 +50,7 @@ import { unlockWithPasskey } from '../unlock';
       <mat-card-actions class="actions">
         <button mat-flat-button type="button" (click)="unlock()" [disabled]="busy()">{{ t().landing.unlock }}</button>
         <a mat-stroked-button routerLink="/create" [class.disabled]="busy()">{{ t().landing.create }}</a>
-        <a mat-button routerLink="/recover">{{ t().landing.recover }}</a>
+        <a mat-button routerLink="/recover">{{ t().common.recoverAccount }}</a>
       </mat-card-actions>
     </mat-card>
     @if (lang.language() === 'th') {

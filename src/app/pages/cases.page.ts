@@ -1,4 +1,3 @@
-import { DatePipe } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -9,10 +8,11 @@ import { RouterLink } from '@angular/router';
 import { millionthsToAnos } from '../amounts';
 import { AnosApiService } from '../services/anos-api.service';
 import { CryptoService } from '../services/crypto.service';
+import { LanguageService } from '../services/language.service';
 import { reasonOf } from '../services/log.service';
 import { AttestorCaseStatus, MasterpodApiService } from '../services/masterpod-api.service';
 import { SessionService } from '../services/session.service';
-import { STATUS_ICONS, STATUS_WORDS } from './attesting.page';
+import { STATUS_ICONS } from './attesting.page';
 
 /** One row: a trade or dispute case this pod is a party to, with what the account's transaction list knows of the transaction. */
 interface CaseRow {
@@ -49,16 +49,16 @@ interface KnownTransaction {
  */
 @Component({
   selector: 'app-cases-page',
-  imports: [DatePipe, RouterLink, MatCardModule, MatButtonModule, MatListModule, MatIconModule, MatProgressBarModule],
+  imports: [RouterLink, MatCardModule, MatButtonModule, MatListModule, MatIconModule, MatProgressBarModule],
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
-        <mat-card-title>Cases</mat-card-title>
-        <mat-card-subtitle>Your side of a trade an attestor is checking, or of an escrow in dispute.</mat-card-subtitle>
+        <mat-card-title>{{ t().cases.title }}</mat-card-title>
+        <mat-card-subtitle>{{ t().cases.subtitle }}</mat-card-subtitle>
       </mat-card-header>
       <mat-card-content>
         <div class="row">
-          <button mat-stroked-button type="button" (click)="load()" [disabled]="busy()">Refresh</button>
+          <button mat-stroked-button type="button" (click)="load()" [disabled]="busy()">{{ t().common.refresh }}</button>
         </div>
         @if (busy()) {
           <mat-progress-bar mode="indeterminate"></mat-progress-bar>
@@ -71,15 +71,15 @@ interface KnownTransaction {
             <mat-list-item lines="3">
               <mat-icon matListItemIcon>{{ c.kind === 'trade' ? 'group' : 'balance' }}</mat-icon>
               <a matListItemTitle [routerLink]="['/cases', c.caseId]">
-                {{ c.kind === 'trade' ? 'Assisted trade' : 'Escrow dispute' }}
-                @if (c.amount !== null) { · {{ millionthsToAnos(c.amount) }} anos @if (c.otherAccountId) { · with <code>{{ c.otherAccountId.slice(0, 16) }}…</code> } } @else { · transaction <code>{{ c.transactionId.slice(0, 16) }}…</code> }
+                {{ c.kind === 'trade' ? t().cases.assistedTrade : t().cases.escrowDispute }}
+                @if (c.amount !== null) { {{ t().cases.anos(millionthsToAnos(c.amount)) }} @if (c.otherAccountId) { {{ t().cases.with }} <code>{{ c.otherAccountId.slice(0, 16) }}…</code> } } @else { {{ t().cases.transaction }} <code>{{ c.transactionId.slice(0, 16) }}…</code> }
               </a>
-              <span matListItemLine><mat-icon class="inline">{{ icons[c.status] }}</mat-icon> {{ words[c.status] }} · {{ c.role }} · opened {{ c.createdAt | date: 'medium' }}</span>
+              <span matListItemLine><mat-icon class="inline">{{ icons[c.status] }}</mat-icon> {{ t().cases.line(t().caseStatus[c.status] ?? c.status, c.role, lang.dateTime(c.createdAt)) }}</span>
               <span matListItemLine><code>{{ c.caseId }}</code></span>
             </mat-list-item>
           } @empty {
             @if (!busy() && !error()) {
-              <p class="muted">No case concerns you.</p>
+              <p class="muted">{{ t().cases.none }}</p>
             }
           }
         </mat-list>
@@ -99,9 +99,10 @@ export class CasesPage {
   private readonly masterpod = inject(MasterpodApiService);
   private readonly anos = inject(AnosApiService);
   private readonly crypto = inject(CryptoService);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
   protected readonly millionthsToAnos = millionthsToAnos;
-  protected readonly words = STATUS_WORDS;
   protected readonly icons = STATUS_ICONS;
   protected readonly rows = signal<CaseRow[]>([]);
   protected readonly busy = signal(false);
@@ -122,8 +123,8 @@ export class CasesPage {
         return;
       }
       const rows: CaseRow[] = [
-        ...res.body.trades.map((t): CaseRow => ({ kind: 'trade', caseId: t.caseId, status: t.status, createdAt: t.createdAt, transactionId: t.transactionId, myAccountId: t.accountId, role: 'you sent the trade', amount: null, otherAccountId: null })),
-        ...res.body.disputes.map((d): CaseRow => ({ kind: 'dispute', caseId: d.caseId, status: d.status, createdAt: d.createdAt, transactionId: d.transactionId, myAccountId: d.side === 'seller' ? d.accountId : d.accountIdTo, role: `you are the ${d.side}`, amount: null, otherAccountId: null })),
+        ...res.body.trades.map((t): CaseRow => ({ kind: 'trade', caseId: t.caseId, status: t.status, createdAt: t.createdAt, transactionId: t.transactionId, myAccountId: t.accountId, role: this.t().cases.youSent, amount: null, otherAccountId: null })),
+        ...res.body.disputes.map((d): CaseRow => ({ kind: 'dispute', caseId: d.caseId, status: d.status, createdAt: d.createdAt, transactionId: d.transactionId, myAccountId: d.side === 'seller' ? d.accountId : d.accountIdTo, role: this.t().cases.youAre(this.t().sides[d.side]), amount: null, otherAccountId: null })),
       ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
       const known = await this.knownTransactions([...new Set(rows.map((r) => r.myAccountId))]);
       for (const row of rows) {

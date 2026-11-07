@@ -133,7 +133,7 @@ export class CreatePage {
           this.usernameHint.set(this.t().create.usernameRule);
           return;
         }
-        this.usernameHint.set(this.t().create.checking);
+        this.usernameHint.set(this.t().common.checking);
         timer = setTimeout(() => void this.checkUsername(typed), USERNAME_DEBOUNCE_MS);
       });
     });

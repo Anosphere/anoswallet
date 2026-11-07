@@ -7,10 +7,11 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { RouterLink } from '@angular/router';
 import { CASES_POLL_MS } from '../constants';
 import { CryptoService } from '../services/crypto.service';
+import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
 import { EvidenceFile, ExistingEvidence, MasterpodApiService, MyCaseAnswer, MyCaseEvent, MyEvidenceItem } from '../services/masterpod-api.service';
 import { SessionService } from '../services/session.service';
-import { REVIEW_STATUSES, STATUS_ICONS, STATUS_WORDS } from './attesting.page';
+import { REVIEW_STATUSES, STATUS_ICONS } from './attesting.page';
 
 /** The four content types the masterpod takes as evidence (masterpod 13.3). */
 const CONTENT_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
@@ -18,16 +19,6 @@ const CONTENT_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf
 /** The masterpod's MAX_IMAGES_PER_REQUEST (5) and MAX_IMAGE_BYTES (10 MB, the ciphertext: 28 bytes over the plaintext). */
 const FILES_PER_REQUEST = 5;
 const MAX_FILE_BYTES = 10_485_760 - 28;
-
-/** A dismissal's preset reason in words, as the person reads it (masterpod 13.4.4). */
-export const DISMISS_WORDS: Record<string, string> = {
-  selfieMismatch: 'the selfie did not match',
-  documentsMismatch: 'the documents did not match',
-  noShow: 'you did not join the call',
-  withdrawn: 'the request was withdrawn',
-  settled: 'the parties settled',
-  other: 'another reason',
-};
 
 /** One line of the timeline. */
 interface TimelineItem {
@@ -74,17 +65,17 @@ interface Outcome {
       <mat-card-header>
         <mat-card-title>{{ title() }}</mat-card-title>
         <mat-card-subtitle class="subtitle">
-          <span>Case {{ shortCaseId() }}</span>
-          <button mat-icon-button type="button" (click)="copyCaseId()" aria-label="Copy the case id"><mat-icon>content_copy</mat-icon></button>
+          <span>{{ t().common.caseId(shortCaseId()) }}</span>
+          <button mat-icon-button type="button" (click)="copyCaseId()" [attr.aria-label]="t().common.copyCaseId"><mat-icon>content_copy</mat-icon></button>
           @if (copied()) {
-            <span class="muted">copied</span>
+            <span class="muted">{{ t().copy.copied }}</span>
           }
         </mat-card-subtitle>
       </mat-card-header>
       <mat-card-content>
         <div class="row">
-          <a mat-button routerLink="/cases"><mat-icon>arrow_back</mat-icon> Cases</a>
-          <button mat-stroked-button type="button" (click)="refresh()" [disabled]="busy()">Refresh</button>
+          <a mat-button routerLink="/cases"><mat-icon>arrow_back</mat-icon> {{ t().nav.cases }}</a>
+          <button mat-stroked-button type="button" (click)="refresh()" [disabled]="busy()">{{ t().common.refresh }}</button>
         </div>
         @if (busy()) {
           <mat-progress-bar mode="indeterminate"></mat-progress-bar>
@@ -95,34 +86,31 @@ interface Outcome {
         @if (data(); as d) {
           <p class="status"><mat-icon class="inline">{{ icons[d.case.status] }}</mat-icon> {{ statusText() }}</p>
           @if (d.kind === 'dispute') {
-            <p>You are the {{ d.case.side }} of this escrow.</p>
+            <p>{{ t().myCase.youAre(t().sides[d.case.side]) }}</p>
           }
-          <p class="muted">Transaction <code>{{ d.case.transactionId }}</code></p>
+          <p class="muted">{{ t().common.transaction }} <code>{{ d.case.transactionId }}</code></p>
 
           @if (d.kind === 'trade') {
-            <p><a mat-stroked-button [routerLink]="['/wallet', d.case.accountId, 'assisted', d.case.transactionId]"><mat-icon>call_made</mat-icon> See the transfer</a></p>
-            <h3>Share my lookup id</h3>
-            <p>
-              The attestor checks your security buckets against you on a video call. For that they need your lookup id: the one-way hash of your
-              birth record you made at setup. Nothing but the lookup id leaves this device.
-            </p>
+            <p><a mat-stroked-button [routerLink]="['/wallet', d.case.accountId, 'assisted', d.case.transactionId]"><mat-icon>call_made</mat-icon> {{ t().myCase.seeTransfer }}</a></p>
+            <h3>{{ t().myCase.shareLookupId }}</h3>
+            <p>{{ t().myCase.shareText }}</p>
             <div class="row">
               <button mat-flat-button type="button" (click)="shareLookupId()" [disabled]="busy() || d.case.lookupIdShared || final()">
-                {{ d.case.lookupIdShared ? 'Lookup id shared' : 'Share my lookup id' }}
+                {{ d.case.lookupIdShared ? t().myCase.lookupIdShared : t().myCase.shareLookupId }}
               </button>
             </div>
             @if (shareOutcome(); as o) { <p [class.error]="!o.ok" [class.ok]="o.ok">{{ o.text }}</p> }
           }
 
           @if (d.kind === 'dispute') {
-            <h3>Evidence</h3>
+            <h3>{{ t().common.evidence }}</h3>
             @if (final()) {
-              <p class="muted">The attestors' copies have been deleted; your copies stay.</p>
+              <p class="muted">{{ t().myCase.copiesDeleted }}</p>
             } @else {
-              <p>Screenshots, photos of receipts, PDFs: each file is encrypted on this device, once for you and once for the attestors of this case.</p>
+              <p>{{ t().myCase.evidenceText }}</p>
               <div class="row">
                 <input #picker type="file" multiple accept="image/jpeg,image/png,image/webp,application/pdf" (change)="picked.set(filesOf($event))" />
-                <button mat-flat-button type="button" (click)="upload(picker)" [disabled]="uploadBusy() || picked().length === 0">Upload {{ picked().length || '' }}</button>
+                <button mat-flat-button type="button" (click)="upload(picker)" [disabled]="uploadBusy() || picked().length === 0">{{ t().myCase.upload(picked().length) }}</button>
               </div>
               @if (uploadBusy()) {
                 <mat-progress-bar mode="indeterminate"></mat-progress-bar>
@@ -130,7 +118,7 @@ interface Outcome {
               }
               @if (uploadOutcome(); as o) { <p [class.error]="!o.ok" [class.ok]="o.ok">{{ o.text }}</p> }
             }
-            <h4>Your files ({{ mine().length }})</h4>
+            <h4>{{ t().myCase.yourFiles(mine().length) }}</h4>
             <div class="files">
               @for (f of mine(); track f.evidenceId) {
                 <div class="file">
@@ -138,7 +126,7 @@ interface Outcome {
                     @if (f.isPdf) {
                       <a [href]="f.url" target="_blank" rel="noopener" class="pdf"><mat-icon>picture_as_pdf</mat-icon> PDF</a>
                     } @else {
-                      <a [href]="f.url" target="_blank" rel="noopener"><img [src]="f.url" alt="your evidence" /></a>
+                      <a [href]="f.url" target="_blank" rel="noopener"><img [src]="f.url" [alt]="t().myCase.yourEvidence" /></a>
                     }
                   } @else {
                     <mat-icon class="locked">lock</mat-icon>
@@ -146,12 +134,12 @@ interface Outcome {
                   <div class="muted">{{ f.contentType }} · {{ f.when }}</div>
                 </div>
               } @empty {
-                <p class="muted">Nothing uploaded yet.</p>
+                <p class="muted">{{ t().myCase.nothingUploaded }}</p>
               }
             </div>
             @if (!final() && others().length > 0) {
-              <h4>Your files from other cases</h4>
-              <p class="muted">Supplying one again wraps its key for this case's attestors; nothing is uploaded twice.</p>
+              <h4>{{ t().myCase.otherFiles }}</h4>
+              <p class="muted">{{ t().myCase.supplyText }}</p>
               <div class="files">
                 @for (f of others(); track f.evidenceId) {
                   <div class="file">
@@ -159,22 +147,22 @@ interface Outcome {
                       @if (f.isPdf) {
                         <a [href]="f.url" target="_blank" rel="noopener" class="pdf"><mat-icon>picture_as_pdf</mat-icon> PDF</a>
                       } @else {
-                        <a [href]="f.url" target="_blank" rel="noopener"><img [src]="f.url" alt="your evidence" /></a>
+                        <a [href]="f.url" target="_blank" rel="noopener"><img [src]="f.url" [alt]="t().myCase.yourEvidence" /></a>
                       }
                     } @else {
                       <mat-icon class="locked">lock</mat-icon>
                     }
-                    <div class="muted">{{ f.contentType }} · {{ f.when }} · case {{ f.caseId.slice(0, 8) }}…</div>
-                    <button mat-stroked-button type="button" (click)="supplyAgain(f)" [disabled]="uploadBusy() || !f.url">Supply again</button>
+                    <div class="muted">{{ f.contentType }} · {{ f.when }} {{ t().myCase.fromCase(f.caseId.slice(0, 8)) }}</div>
+                    <button mat-stroked-button type="button" (click)="supplyAgain(f)" [disabled]="uploadBusy() || !f.url">{{ t().myCase.supplyAgain }}</button>
                   </div>
                 }
               </div>
             }
           }
 
-          <h3>Timeline</h3>
+          <h3>{{ t().common.timeline }}</h3>
           @if (timeline().length === 0) {
-            <p class="muted">Nothing yet.</p>
+            <p class="muted">{{ t().common.nothingYet }}</p>
           }
           <mat-list dense>
             @for (item of timeline(); track item.key) {
@@ -183,7 +171,7 @@ interface Outcome {
                 <span matListItemTitle>
                   {{ item.text }}
                   @if (item.link) {
-                    <a [href]="item.link" target="_blank" rel="noopener">Meeting link</a>
+                    <a [href]="item.link" target="_blank" rel="noopener">{{ t().common.meetingLink }}</a>
                   }
                 </span>
                 <span matListItemLine>{{ item.when }}</span>
@@ -216,8 +204,9 @@ export class MyCasePage {
   private readonly session = inject(SessionService);
   private readonly masterpod = inject(MasterpodApiService);
   private readonly crypto = inject(CryptoService);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
-  protected readonly words = STATUS_WORDS;
   protected readonly icons = STATUS_ICONS;
 
   protected readonly data = signal<MyCaseAnswer | null>(null);
@@ -240,8 +229,8 @@ export class MyCasePage {
 
   protected readonly title = computed(() => {
     const d = this.data();
-    if (!d) return 'My case';
-    return d.kind === 'trade' ? 'An attestor is checking your trade' : 'Attestors are looking at this escrow';
+    if (!d) return this.t().myCase.title;
+    return d.kind === 'trade' ? this.t().myCase.tradeTitle : this.t().myCase.disputeTitle;
   });
 
   protected readonly final = computed(() => {
@@ -251,22 +240,21 @@ export class MyCasePage {
 
   protected readonly statusText = computed(() => {
     const d = this.data();
-    if (!d) return 'Loading your case…';
+    if (!d) return this.t().common.loadingCase;
+    const words = this.t().myCase;
     const trade = d.kind === 'trade';
     switch (d.case.status) {
       case 'open':
-        return trade
-          ? 'Open: an attestor opened a case on your trade and will meet you on a video call. Share your lookup id below.'
-          : 'Open: attestors opened a case on this escrow. Upload your evidence below.';
+        return trade ? words.openTrade : words.openDispute;
       case 'inReview':
-        return trade ? 'In review: an attestor is checking your trade.' : 'In review: attestors are looking at the evidence.';
+        return trade ? words.inReviewTrade : words.inReviewDispute;
       case 'decided': {
-        if (trade) return 'Decided: two attestors signed. The attestations go to the validators and the trade completes in the next round.';
+        if (trade) return words.decidedTrade;
         const verdict = this.decidedVerdict(d.events);
-        return `Decided: ${verdict === 'success' ? 'success, the escrow is released to the seller' : verdict === 'cancel' ? 'cancel, the escrow returns to the buyer' : 'the attestors agreed'}.`;
+        return words.decidedDispute(verdict === 'success' ? words.decidedSuccess : verdict === 'cancel' ? words.decidedCancel : words.decidedAgreed);
       }
       case 'dismissed':
-        return `Dismissed: ${this.dismissReason(d.events)}.`;
+        return words.statusDismissed(this.dismissReason(d.events));
     }
   });
 
@@ -276,7 +264,7 @@ export class MyCasePage {
       icon: this.iconOf(event),
       text: this.textOf(event),
       link: event.kind === 'scheduled' && typeof event.details['meetLink'] === 'string' ? event.details['meetLink'] : null,
-      when: new Date(event.createdAt).toLocaleString(),
+      when: this.lang.dateTime(event.createdAt),
     })),
   );
 
@@ -309,7 +297,7 @@ export class MyCasePage {
   private async load(quiet: boolean): Promise<void> {
     const res = await this.masterpod.getMyCase(this.caseId(), quiet);
     if (!res.ok) {
-      this.error.set(res.status === 404 ? 'No case of yours with this id.' : `/get-my-case: ${reasonOf(res)}`);
+      this.error.set(res.status === 404 ? this.t().myCase.notFound : `/get-my-case: ${reasonOf(res)}`);
       return;
     }
     this.data.set(res.body);
@@ -351,7 +339,7 @@ export class MyCasePage {
         views.push(seen);
         continue;
       }
-      const view: FileView = { evidenceId: row.evidenceId, caseId, contentType: row.contentType, isPdf: row.contentType === 'application/pdf', url: null, when: new Date(row.createdAt).toLocaleString() };
+      const view: FileView = { evidenceId: row.evidenceId, caseId, contentType: row.contentType, isPdf: row.contentType === 'application/pdf', url: null, when: this.lang.dateTime(row.createdAt) };
       if (encryptionKey) {
         try {
           const contentKey = await this.crypto.decrypt(encryptionKey, this.crypto.fromHex(row.keyForMe));
@@ -383,10 +371,10 @@ export class MyCasePage {
     this.shareOutcome.set(null);
     try {
       const identity = this.session.getIdentity();
-      if (!identity) throw new Error('Your identity is not in RAM: unlock again. Setup must be complete.');
+      if (!identity) throw new Error(this.t().myCase.noIdentity);
       const res = await this.masterpod.shareLookupId(this.caseId(), identity.lookupId);
       if (!res.ok) throw new Error(this.refusal(res, '/share-lookup-id'));
-      this.shareOutcome.set({ ok: true, text: 'Shared. The attestor can now pull your bucket keys from the keyholders and meet you on the call.' });
+      this.shareOutcome.set({ ok: true, text: this.t().myCase.shared });
     } catch (err) {
       this.shareOutcome.set({ ok: false, text: err instanceof Error ? err.message : String(err) });
     } finally {
@@ -414,13 +402,13 @@ export class MyCasePage {
     this.uploadOutcome.set(null);
     try {
       const encryptionKey = this.session.getEncryptionKey();
-      if (!encryptionKey) throw new Error('Your encryption key is not in RAM: unlock again.');
+      if (!encryptionKey) throw new Error(this.t().myCase.noKeyInRam);
       const aad = this.crypto.fromHex(d.case.caseId);
       const entries: EvidenceFile[] = [];
       for (const file of this.picked()) {
-        if (!CONTENT_TYPES.includes(file.type)) throw new Error(`${file.name}: only JPEG, PNG and WebP images and PDFs are taken.`);
-        if (file.size > MAX_FILE_BYTES) throw new Error(`${file.name}: larger than 10 MB.`);
-        this.uploadStep.set(`Encrypting ${file.name}…`);
+        if (!CONTENT_TYPES.includes(file.type)) throw new Error(this.t().myCase.badType(file.name));
+        if (file.size > MAX_FILE_BYTES) throw new Error(this.t().myCase.tooLarge(file.name));
+        this.uploadStep.set(this.t().myCase.encrypting(file.name));
         const contentKey = this.crypto.newContentKey();
         entries.push({
           contentType: file.type,
@@ -431,13 +419,13 @@ export class MyCasePage {
         contentKey.fill(0);
       }
       for (let i = 0; i < entries.length; i += FILES_PER_REQUEST) {
-        this.uploadStep.set(`Uploading ${Math.min(i + FILES_PER_REQUEST, entries.length)} of ${entries.length}…`);
+        this.uploadStep.set(this.t().myCase.uploading(Math.min(i + FILES_PER_REQUEST, entries.length), entries.length));
         const res = await this.masterpod.addDisputeEvidence(this.caseId(), entries.slice(i, i + FILES_PER_REQUEST));
         if (!res.ok) throw new Error(this.refusal(res, '/add-dispute-evidence'));
       }
       this.picked.set([]);
       picker.value = '';
-      this.uploadOutcome.set({ ok: true, text: `Uploaded ${entries.length} file${entries.length === 1 ? '' : 's'}. The attestors of this case can open them; you keep your copies.` });
+      this.uploadOutcome.set({ ok: true, text: this.t().myCase.uploaded(entries.length) });
     } catch (err) {
       this.uploadOutcome.set({ ok: false, text: err instanceof Error ? err.message : String(err) });
     } finally {
@@ -455,16 +443,16 @@ export class MyCasePage {
     this.uploadOutcome.set(null);
     try {
       const encryptionKey = this.session.getEncryptionKey();
-      if (!encryptionKey) throw new Error('Your encryption key is not in RAM: unlock again.');
+      if (!encryptionKey) throw new Error(this.t().myCase.noKeyInRam);
       const source = await this.masterpod.getMyCase(file.caseId, true);
       const row = source.ok && source.body.kind === 'dispute' ? source.body.evidence.find((e) => e.evidenceId === file.evidenceId) : undefined;
-      if (!row) throw new Error('That file is no longer among your cases.');
+      if (!row) throw new Error(this.t().myCase.fileGone);
       const contentKey = await this.crypto.decrypt(encryptionKey, this.crypto.fromHex(row.keyForMe));
       const existing: ExistingEvidence[] = [{ evidenceId: row.evidenceId, keyForCase: this.crypto.toHex(await this.crypto.encryptToHybrid(d.case.caseKey, contentKey, this.crypto.fromHex(d.case.caseId))) }];
       contentKey.fill(0);
       const res = await this.masterpod.addDisputeEvidence(this.caseId(), [], existing);
       if (!res.ok) throw new Error(this.refusal(res, '/add-dispute-evidence'));
-      this.uploadOutcome.set({ ok: true, text: 'Supplied again: the attestors of this case can open it now.' });
+      this.uploadOutcome.set({ ok: true, text: this.t().myCase.suppliedAgain });
     } catch (err) {
       this.uploadOutcome.set({ ok: false, text: err instanceof Error ? err.message : String(err) });
     } finally {
@@ -476,10 +464,11 @@ export class MyCasePage {
   /** A person route's refusal in words (masterpod 13.4.5). */
   private refusal(res: ApiResponse<unknown>, path: string): string {
     const reason = reasonOf(res);
-    if (res.status === 409 && /already shared/.test(reason)) return 'Your lookup id is already shared on this case.';
-    if (res.status === 409 && /case closed/.test(reason)) return 'This case is closed: nothing more can be added to it.';
-    if (res.status === 404 && /unknown evidence/.test(reason)) return 'That file is not one of yours any more.';
-    if (res.status === 400) return `${path}: the masterpod refused the values (${reason}).`;
+    const words = this.t().myCase;
+    if (res.status === 409 && /already shared/.test(reason)) return words.alreadyShared;
+    if (res.status === 409 && /case closed/.test(reason)) return words.caseClosed;
+    if (res.status === 404 && /unknown evidence/.test(reason)) return words.fileNotYours;
+    if (res.status === 400) return words.refusedValues(path, reason);
     return `${path}: ${reason}`;
   }
 
@@ -491,7 +480,7 @@ export class MyCasePage {
       this.copied.set(true);
       setTimeout(() => this.copied.set(false), 2000);
     } catch {
-      this.error.set('Could not copy; select the id by hand.');
+      this.error.set(this.t().common.couldNotCopyId);
     }
   }
 
@@ -502,7 +491,7 @@ export class MyCasePage {
 
   private dismissReason(events: MyCaseEvent[]): string {
     const reason = [...events].reverse().find((e) => e.kind === 'dismissed')?.details['reason'];
-    return typeof reason === 'string' ? (DISMISS_WORDS[reason] ?? reason) : 'another reason';
+    return typeof reason === 'string' ? (this.t().dismissReasons[reason] ?? reason) : this.t().common.anotherReason;
   }
 
   private iconOf(event: MyCaseEvent): string {
@@ -524,27 +513,28 @@ export class MyCasePage {
   private textOf(event: MyCaseEvent): string {
     const d = event.details;
     const files = Array.isArray(d['evidenceIds']) ? d['evidenceIds'].length : 0;
+    const words = this.t().myCase;
     switch (event.kind) {
       case 'opened':
-        return 'Case opened by an attestor';
+        return words.eventOpened;
       case 'lookupIdShared':
-        return 'You shared your lookup id';
+        return words.eventShared;
       case 'evidenceAdded':
-        return `You added ${files} file${files === 1 ? '' : 's'}`;
+        return words.eventAdded(files);
       case 'scheduled': {
-        const at = typeof d['at'] === 'string' ? new Date(d['at']).toLocaleString() : 'a time to be confirmed';
-        return `Video call scheduled for ${at}.`;
+        const at = typeof d['at'] === 'string' ? this.lang.dateTime(d['at']) : this.t().common.timeToBeConfirmed;
+        return this.t().common.videoCallScheduled(at);
       }
       case 'decided':
-        return typeof d['verdict'] === 'string' ? `Decided: ${d['verdict']}` : 'Decided: two attestors signed';
+        return typeof d['verdict'] === 'string' ? words.eventDecided(d['verdict']) : words.eventDecidedSigned;
       case 'lookupIdCleared':
-        return 'Your lookup id was cleared from the case';
+        return words.eventCleared;
       case 'evidenceDeleted':
-        return "The attestors' copies of the evidence were deleted; your copies stay";
+        return words.eventDeleted;
       case 'sent':
-        return 'The decision was sent to the validators';
+        return words.eventSent;
       case 'dismissed':
-        return `Dismissed: ${typeof d['reason'] === 'string' ? (DISMISS_WORDS[d['reason']] ?? d['reason']) : 'another reason'}`;
+        return this.t().common.dismissed(typeof d['reason'] === 'string' ? (this.t().dismissReasons[d['reason']] ?? d['reason']) : this.t().common.anotherReason);
       default:
         return event.kind;
     }

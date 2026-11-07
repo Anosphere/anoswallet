@@ -1334,6 +1334,9 @@ The pages done so far, a list the later steps extend:
   listing and Your listings, with the five components (the card, the
   people, the pinned card, the filters and the picker sheets), the
   marketplace service's words and the currency names.
+- step 7 (2026-11-06): the recovery flow (the Recover page, the
+  locked-out stepper, My recovery) and the cases (the list, My case),
+  with the case statuses.
 
 ## 9. Configuration, and running it on this machine
 
@@ -2858,6 +2861,89 @@ names and the words follow now.
 - Spec: 8.8 (the list), this note; 8.7 is not reworded, it quotes the
   English.
 - `npx ng build` clean (1.80 MB initial). Not run in a browser here;
+  the user tests with `ng serve`.
+
+### The languages, step 7 (2026-11-06)
+
+Step 7 of forclaude/wallet-languages-plan-1.md: the recovery flow (the
+Recover page, the locked-out stepper and My recovery) and the cases (the
+list and My case). Why: after step 6 the pages of every day were Thai;
+these are the pages of a bad day, a lost device or a dispute, where a
+Thai reader needs the words most.
+
+- `i18n/en.ts` and `th.ts`: the sections `recover`, `recoverOpen`,
+  `recoverCase`, `cases`, `myCase` and `caseStatus` (the four case
+  statuses of `attesting.page.ts`'s `STATUS_WORDS`), and the `common`
+  entries "I'm locked out", "Recover account" (moved from `landing`,
+  since My recovery links to it), "checking…" (moved from `create`,
+  since the locked-out stepper's username hint reads it), "I have
+  written it down, complete" (moved from `setup`, since the new backup
+  code's button reads it), "Case <id>" (a function), "Copy the case id",
+  "Could not copy; select the id by hand.", Timeline, "Nothing yet.",
+  "Meeting link", Evidence, "Loading your case…", "Video call scheduled
+  for <at>." and "a time to be confirmed", and "Dismissed: <reason>" (a
+  function; the status line of My case, which ends with a period, has
+  its own). The sentences with a number, a name, an amount or a date are
+  functions (`found`, `statusOpen`, `statusDelivering`,
+  `noCodeRebuilt`, `notTakingFinish`, `retryDeposits`, the plurals
+  `codesRecovered`, `seedsRecovered`, `sharesSkipped`, `seedsUnmatched`
+  and `storedOn`; the cases' `anos`, `line` and `youAre`; My case's
+  `youAre`, `upload`, `yourFiles`, `fromCase`, `decidedDispute`,
+  `statusDismissed`, `badType`, `tooLarge`, `encrypting`, `uploading`,
+  `uploaded`, `refusedValues`, `eventAdded` and `eventDecided`).
+- `pages/recover.page.ts`: its eight pieces and the thrown sentence from
+  the dictionary. `pages/recover-open.page.ts`: the three step labels as
+  `[label]`; the username hint's three states ("the username of the
+  anoPod you lost", "checking…", "<username> found") and the thrown
+  sentences; the hint still shows the server's reason as it comes.
+  `pages/recover-case.page.ts`: `DISMISS_REASONS` left the file for
+  `recoverCase.dismissReasons`; `statusText`, `combinedText`,
+  `breakGlassText`, `dismissReason` and `textOf` read entries and
+  functions; the five step labels as `[label]`, Done from `common`; the
+  two `toLocaleString` calls are `lang.dateTime`.
+- `pages/cases.page.ts`: the row's pieces from `cases` (the "· N anos",
+  "· with" and "· transaction" fragments before their ids, the status
+  line as a function with `lang.dateTime`; `DatePipe` left); the status
+  words from `t().caseStatus`, the `STATUS_WORDS` import gone, the icons
+  still imported. `pages/my-case.page.ts`: its `DISMISS_WORDS` table and
+  export gone (the assisted transfer page reads `t().dismissReasons`
+  since step 4, and this page now does too); the status words from
+  `t().caseStatus`; `title`, `statusText`, `refusal`, `dismissReason`
+  and `textOf` read entries and functions; "You are the <side> of this
+  escrow." a function of `t().sides`; the three `toLocaleString` calls
+  are `lang.dateTime`. `pages/create.page.ts`, `pages/landing.page.ts`
+  and `pages/setup.page.ts`: the one line each that now reads the moved
+  `common` entry.
+- Tables typed `Record<string, string>` added to the dictionaries (the
+  type cannot check their keys in Thai): `caseStatus` (open, inReview,
+  decided, dismissed) and `recoverCase.dismissReasons` (selfieMismatch,
+  documentsMismatch, unknownLookupId, noShow, other: the "you" wording
+  of the recovery, whose keys differ from the trade cases'
+  `dismissReasons` of step 4).
+- Readings where the plan left a detail open: the Cases page's title is
+  `cases.title` and My case's back link reads `nav.cases`, as a page
+  title equal to its navigation label lives in the page's section (step
+  2) and a back link reads the label (step 4); the status words are
+  read with a fallback to the raw status (`t().caseStatus[c.status] ??
+  c.status`), as the other `Record` tables are, though the typed table
+  of `attesting.page.ts` had none; "Dismissed: <reason>" without a
+  period, in three places, is `common.dismissed`, and My case's status
+  line with the period is `myCase.statusDismissed`; "no anoPod has that
+  username" (the hint) and "No anoPod has that username" (thrown) are
+  two entries, each letter for letter; "Upload <n>" keeps today's shape
+  as a function of the count, `Upload ${n || ''}`, so the button reads
+  "Upload" with nothing picked; the " · " before the skipped shares and
+  the unmatched seeds stays in the code; "Combine", "Get back in" and
+  "Open my case" are one entry each for the step label and its button;
+  "copied" reads the copy button's `copy.copied`; the file link text
+  "PDF", a format name, and the raw verdict and event kinds stay as
+  they are. Thai: Combine reads รวมส่วนแบ่ง, the shares named as Thai
+  needs; the bankers read นายธนาคาร; "break-glass keys" reads
+  กุญแจฉุกเฉิน after step 3's seed ฉุกเฉิน; Timeline reads ไทม์ไลน์;
+  Dismissed reads ถูกยกคำร้อง, the glossary's word. No sentence read odd.
+- Spec: 8.8 (the list), this note; 12.3 is not reworded, it quotes the
+  English.
+- `npx ng build` clean (1.85 MB initial). Not run in a browser here;
   the user tests with `ng serve`.
 
 ## 12. Recovery and the moderator edition

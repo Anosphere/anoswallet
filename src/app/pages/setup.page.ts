@@ -67,7 +67,7 @@ interface Step {
             <h3>{{ t().setup.codeTitle }}</h3>
             <p>{{ t().setup.codeHint }}</p>
             <p class="code">{{ code }}</p>
-            <button mat-flat-button type="button" (click)="complete()" [disabled]="busy()">{{ t().setup.complete }}</button>
+            <button mat-flat-button type="button" (click)="complete()" [disabled]="busy()">{{ t().common.writtenDown }}</button>
           }
           @if (phase() === 'failed') {
             <button mat-flat-button type="button" (click)="start()" [disabled]="busy()">{{ t().common.retry }}</button>
