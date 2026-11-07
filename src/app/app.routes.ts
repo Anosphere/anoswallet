@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import { AccountHomePage } from './pages/account-home.page';
 import { AccountPage } from './pages/account.page';
+import { AccountProtectPage } from './pages/account-protect.page';
 import { AccountRecoveryPage } from './pages/account-recovery.page';
 import { AssistedTransferPage } from './pages/assisted-transfer.page';
 import { AttestingDisputeCasePage } from './pages/attesting-dispute-case.page';
@@ -24,6 +25,7 @@ import { ModerationCasePage } from './pages/moderation-case.page';
 import { ModerationPage } from './pages/moderation.page';
 import { MyCasePage } from './pages/my-case.page';
 import { MyListingsPage } from './pages/my-listings.page';
+import { NotedTransactionsPage } from './pages/noted-transactions.page';
 import { NotificationsPage } from './pages/notifications.page';
 import { RecoverCasePage } from './pages/recover-case.page';
 import { RecoverOpenPage } from './pages/recover-open.page';
@@ -57,10 +59,12 @@ export const routes: Routes = [
   { path: 'account', component: AccountHomePage, canActivate: [sessionGuard], title: 'Your account' },
   { path: 'account/recovery/selfie', component: AccountRecoveryPage, canActivate: [sessionGuard], data: { start: 'selfie' }, title: 'Recovery selfie' },
   { path: 'account/recovery/details', component: AccountRecoveryPage, canActivate: [sessionGuard], data: { start: 'details' }, title: 'Recovery details' },
+  { path: 'account/protect', component: AccountProtectPage, canActivate: [sessionGuard], title: 'Protect your passkey' },
   { path: 'security/bucket-one', redirectTo: 'account/recovery/selfie', pathMatch: 'full' },
   { path: 'security/bucket-two', redirectTo: 'account/recovery/details', pathMatch: 'full' },
   { path: 'home', component: HomePage, canActivate: [sessionGuard], title: 'Home' },
   { path: 'wallet', component: WalletPage, canActivate: [sessionGuard], title: 'Wallet' },
+  { path: 'wallet/notes', component: NotedTransactionsPage, canActivate: [sessionGuard], title: 'Noted transactions' },
   { path: 'wallet/:accountId', component: AccountPage, canActivate: [sessionGuard], title: 'Account' },
   { path: 'wallet/:accountId/escrow/:transactionId', component: EscrowTradePage, canActivate: [sessionGuard], title: 'Escrow trade' },
   { path: 'wallet/:accountId/assisted/:transactionId', component: AssistedTransferPage, canActivate: [sessionGuard], title: 'Assisted transfer' },

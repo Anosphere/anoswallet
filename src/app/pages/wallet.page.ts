@@ -34,8 +34,9 @@ const ALREADY_THERE = /already (exists|pending|in the garlic chain)/;
 
 /**
  * The wallet page (wallet spec 8.2, Wallet): the balance card on top
- * (balance-card.component over balances.service, shared with Home); then
- * the accounts from /list-anos-accounts as cards, each named by its type
+ * (balance-card.component over balances.service, shared with Home), then a
+ * button to the Noted transactions page (2026-11-07); then the accounts
+ * from /list-anos-accounts as cards, each named by its type
  * (account-names.ts), with its balance in large type once it is on the
  * ledger, what is available and held while something is held, its state
  * while it is not on the ledger, the id in short form with a copy button
@@ -57,6 +58,7 @@ const ALREADY_THERE = /already (exists|pending|in the garlic chain)/;
           <p class="error">{{ text }}</p>
         }
         <app-balance-card />
+        <p><a mat-stroked-button routerLink="/wallet/notes"><mat-icon>sticky_note_2</mat-icon> {{ t().notes.pageTitle }}</a></p>
 
         <h3>{{ t().wallet.accountsTitle }}</h3>
         <div class="cards">

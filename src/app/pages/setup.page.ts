@@ -6,12 +6,14 @@ import { MatListModule } from '@angular/material/list';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatRadioModule } from '@angular/material/radio';
 import { Router, RouterLink } from '@angular/router';
+import { ADVANCED_PROTECTION_URL } from '../constants';
 import { ChatKeys, CryptoService } from '../services/crypto.service';
 import { LanguageService } from '../services/language.service';
 import { reasonOf } from '../services/log.service';
 import { MasterpodApiService, SetupFields } from '../services/masterpod-api.service';
 import { Bytes, PasskeyService } from '../services/passkey.service';
 import { SessionService } from '../services/session.service';
+import { SettingsService } from '../services/settings.service';
 import { DepositError, SharesService } from '../services/shares.service';
 import { unlockWithPasskey } from '../unlock';
 
@@ -20,9 +22,6 @@ interface Step {
   label: string;
   state: 'todo' | 'doing' | 'done' | 'failed';
 }
-
-/** Google's Advanced Protection page, opened in a new tab by the Protect your passkey pane (wallet spec 8.2, Setup). */
-const ADVANCED_PROTECTION_URL = 'https://landing.google.com/advancedprotection/';
 
 /**
  * The setup page (wallet spec 8.2): Start runs the progress list (an unlock
@@ -35,8 +34,9 @@ const ADVANCED_PROTECTION_URL = 'https://landing.google.com/advancedprotection/'
  * leaving: Google's Advanced Protection strongly recommended for the Google
  * account that keeps the passkey, a link to Google's page, two choices, I
  * turned it on or Skip for now, and Continue, which goes on by the next-step
- * rule; the answer is kept nowhere (2026-11-07, section 11). A failed
- * deposit shows Retry, which starts over with a fresh secret. 409 setup
+ * rule; the answer is recorded in the wallet settings on the masterpod
+ * (2026-11-07, section 11). A failed deposit shows Retry, which starts
+ * over with a fresh secret. 409 setup
  * already complete means a dropped answer earlier: the status is checked
  * and, if setup is complete, the flow carries on.
  */
@@ -59,16 +59,16 @@ const ADVANCED_PROTECTION_URL = 'https://landing.google.com/advancedprotection/'
           }
           <button mat-flat-button type="button" (click)="start()">{{ t().common.start }}</button>
         } @else if (phase() === 'done' && android) {
-          <h3>{{ t().setup.protectTitle }}</h3>
-          <p><strong>{{ t().setup.protectRecommended }}</strong> {{ t().setup.protectBenefits }}</p>
-          <p>{{ t().setup.protectWhy }}</p>
-          <p>{{ t().setup.protectWhat }}</p>
-          <p>{{ t().setup.protectCaution }}</p>
-          <a mat-flat-button [href]="advancedProtectionUrl" target="_blank" rel="noopener">{{ t().setup.protectOpen }}</a>
-          <p>{{ t().setup.protectThen }}</p>
+          <h3>{{ t().common.protectTitle }}</h3>
+          <p><strong>{{ t().common.protectRecommended }}</strong> {{ t().common.protectBenefits }}</p>
+          <p>{{ t().common.protectWhy }}</p>
+          <p>{{ t().common.protectWhat }}</p>
+          <p>{{ t().common.protectCaution }}</p>
+          <a mat-flat-button [href]="advancedProtectionUrl" target="_blank" rel="noopener">{{ t().common.protectOpen }}</a>
+          <p>{{ t().common.protectThen }}</p>
           <mat-radio-group class="choices" [value]="choice()" (change)="choice.set($event.value)">
-            <mat-radio-button value="done">{{ t().setup.protectDone }}</mat-radio-button>
-            <mat-radio-button value="skip">{{ t().setup.protectSkip }}</mat-radio-button>
+            <mat-radio-button value="done">{{ t().common.protectDone }}</mat-radio-button>
+            <mat-radio-button value="skip">{{ t().common.protectSkip }}</mat-radio-button>
           </mat-radio-group>
           <button mat-flat-button type="button" (click)="goOn()" [disabled]="!choice()">{{ t().common.continue }}</button>
         } @else {
@@ -111,6 +111,7 @@ export class SetupPage {
   private readonly crypto = inject(CryptoService);
   private readonly passkey = inject(PasskeyService);
   private readonly shares = inject(SharesService);
+  private readonly settings = inject(SettingsService);
   private readonly router = inject(Router);
   protected readonly lang = inject(LanguageService);
   protected readonly t = this.lang.words;
@@ -123,7 +124,7 @@ export class SetupPage {
   /** An Android phone, where the passkey is usually kept by Google: the Protect your passkey pane shows once setup is complete (wallet spec 8.2). */
   protected readonly android = /Android/.test(navigator.userAgent);
   protected readonly advancedProtectionUrl = ADVANCED_PROTECTION_URL;
-  /** The pane's choice, kept nowhere: Continue is off until one is picked. */
+  /** The pane's choice, recorded in the wallet settings by Continue, which is off until one is picked. */
   protected readonly choice = signal<'done' | 'skip' | null>(null);
   /** Where Continue goes: the next-step rule's page, set when setup completed. */
   private nextUrl: string | null = null;
@@ -249,8 +250,16 @@ export class SetupPage {
     }
   }
 
-  /** Continue on the Protect your passkey pane: on by the next-step rule, as Complete goes on elsewhere. The choice is kept nowhere. */
+  /** Continue on the Protect your passkey pane: the answer recorded in the wallet settings (settings.service), then on by the next-step rule. A failed save does not hold the person up. */
   protected async goOn(): Promise<void> {
+    const choice = this.choice();
+    if (choice) {
+      try {
+        await this.settings.save({ protect: choice === 'done' ? 'on' : 'skipped' });
+      } catch {
+        // Logged by the API service; the answer can be given again on the protect page.
+      }
+    }
     await this.router.navigateByUrl(this.nextUrl ?? this.session.nextStep());
   }
 

@@ -58,8 +58,9 @@ src/app/
   i18n/en.ts, th.ts        the words of each language, one section per page (spec 8.8)
   unlock.ts                the unlock flow, shared by the landing page and setup
   components/camera.component.ts   the camera: live preview, Take photo, a file input as the fallback
+  components/note-form.component.ts   the note form under a history row: the kind, the money and the currency, the memo (spec 8.2)
   pages/                   one file per route: landing, create, recover, vouching, identity, setup,
-                           bucket-one, bucket-two, wallet, account, chat, marketplace, notifications, seed, log
+                           bucket-one, bucket-two, wallet, noted-transactions, account, account-protect, chat, marketplace, notifications, seed, log
   services/
     config.service.ts      GET /api/config once
     language.service.ts    the language on screen: Thai when the browser's first language is Thai,
@@ -71,6 +72,8 @@ src/app/
     passkey.service.ts     the two WebAuthn ceremonies with the PRF extension
     shares.service.ts      the deposit rule of spec section 6: deposit(secret, shareType)
     log.service.ts         the activity log, and the HTTP plumbing every call goes through
+    notes.service.ts      the noted transactions: the last list read, the blobs opened on the phone, add, update, remove (spec 8.2)
+    settings.service.ts   the wallet settings on the masterpod, one encrypted object: the Protect your passkey answer (spec 8.2)
 docs/                      schemas.md (the spec, build notes in section 11), public-ledger-id.md, build-plan.md
 proxy.conf.json            ng serve forwards /api to the proxy
 ```

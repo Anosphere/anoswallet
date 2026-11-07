@@ -4,7 +4,8 @@
  * eight decimals, as the masterpod keeps it; a quantity is millionths of an
  * anos. Everything is done on the digits, never through a float, as
  * amounts.ts does amounts; the browser gives only the group and decimal
- * marks of its locale and the names of the currencies.
+ * marks of its locale and the names of the currencies. The notes' price
+ * per anos comes from here too (wallet spec 8.2; 2026-11-07).
  */
 
 const PRICE_DECIMALS = 8;
@@ -65,6 +66,23 @@ export function totalOf(quantityMillionths: string | bigint, price: string): str
   const whole = cents / 100n;
   const rest = cents % 100n;
   return rest === 0n ? `${whole}` : `${whole}.${rest.toString().padStart(2, '0')}`;
+}
+
+/**
+ * The price per anos behind a total: `money` (a decimal string, up to eight
+ * decimals) over `amountMillionths` anos, rounded down to eight decimals on
+ * the digits, trailing zeros trimmed: "35.5" for 3550 over 100 anos. Null
+ * when the money is not a number or the amount is zero.
+ */
+export function perAnosOf(money: string, amountMillionths: string | bigint): string | null {
+  const units = priceUnits(money);
+  const amount = BigInt(amountMillionths);
+  if (units === null || amount === 0n) return null;
+  const per = (units * 1_000_000n) / amount;
+  const whole = per / PRICE_UNITS;
+  const rest = per % PRICE_UNITS;
+  if (rest === 0n) return `${whole}`;
+  return `${whole}.${rest.toString().padStart(PRICE_DECIMALS, '0').replace(/0+$/, '')}`;
 }
 
 /**

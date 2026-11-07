@@ -28,5 +28,8 @@ export const LOG_MAX_ENTRIES = 40;
 /** Strings longer than this are cut in the log, so a selfie does not fill the page. */
 export const LOG_STRING_MAX = 120;
 
+/** Google's Advanced Protection page, opened in a new tab by the Protect your passkey pane and page (wallet spec 8.2). */
+export const ADVANCED_PROTECTION_URL = 'https://landing.google.com/advancedprotection/';
+
 /** Millionths of an anos in one anos: every amount on the wire is millionths as a decimal string. */
 export const MILLIONTHS_PER_ANOS = 1_000_000n;

@@ -217,6 +217,131 @@ cannot be added by db:setup), then the genesis super seed again with
 make-super-seed once the first pod exists. The README, docs/schemas.md
 section 11 and the records change with the code.
 
+### 4.6 noted_transactions
+
+Added 2026-11-07 (forclaude/wallet-notes-plan-1.md; section 11): the
+wallet's memory of what a transaction was for, on the masterpod under
+the person's pod. One row per ledger transaction the person noted for
+their tax records: the ledger's facts in the clear (the masterpod already
+links a pod to its accounts and every validator holds the chain, so they
+are no secret from a snooper, and in the clear they let the database
+sort, cut a date range and refuse a double note) and the private part,
+the kind, the money, the currency, the memo and a typed tag, as one blob
+under the pod's encryption key (section 7), which the masterpod cannot
+open. The masterpod learns which transactions were noted and nothing of
+the money. One note per pod and transaction, enforced by the database; a
+note's ledger facts never change once written, only its blob; the row is
+deleted when the person removes the note. A feature folder
+src/wallet-memory/ on the masterpod (router, handlers, service, the two
+tables' queries), in the shape of src/anos-accounts/.
+
+    CREATE TABLE IF NOT EXISTS noted_transactions (
+      note_id          BYTEA       PRIMARY KEY CHECK (octet_length(note_id) = 32),
+      anopod_id        BYTEA       NOT NULL CHECK (octet_length(anopod_id) = 32),
+      transaction_id   BYTEA       NOT NULL CHECK (octet_length(transaction_id) = 32),
+      account_id       BYTEA       NOT NULL CHECK (octet_length(account_id) = 32),
+      other_account_id BYTEA       CHECK (octet_length(other_account_id) = 32),
+      position         BIGINT      NOT NULL CHECK (position >= 0),
+      transacted_at    TIMESTAMPTZ NOT NULL,
+      amount           BIGINT      NOT NULL CHECK (amount >= 0),
+      sent             BOOLEAN     NOT NULL,
+      note_blob        BYTEA       NOT NULL CHECK (octet_length(note_blob) <= 4096),
+      created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (anopod_id, transaction_id)
+    );
+    CREATE INDEX IF NOT EXISTS noted_transactions_anopod_id_transacted_at_idx ON noted_transactions (anopod_id, transacted_at DESC);
+
+note_id is random, minted by /add-noted-transaction; anopod_id the pod
+that noted it; transaction_id the transaction's id on the validators;
+account_id the pod's anos account the transaction belongs to (an
+anos_accounts row of the pod's); other_account_id the other side as the
+wallet shows it (the receiver when the pod sent, the sender when it
+received), or null when there is none; position the transaction's
+position on the ledger, as /list-transactions answers it; transacted_at
+when the validators wrote it (createdAt); amount millionths of an anos,
+as the ledger says it; sent true when the anos left the pod's account,
+false when they came in or nothing moved; note_blob the ciphertext of the
+private part (iv || ciphertext || tag), at most 4096 bytes, a few hundred
+in practice; created_at and updated_at as every table, with the
+set_updated_at trigger.
+
+    POST /add-noted-transaction (setup)
+    body { transactionId: hex, accountId: hex, otherAccountId: hex | null, position: integer, transactedAt: ISO 8601,
+           amount: decimal string of millionths, sent: boolean, noteBlob: hex }
+    checks, in order: the shape (400 bad request shape: the five strings, otherAccountId a string or null, position a
+      number, sent a boolean); transactionId 32 bytes (400 invalid transactionId); accountId 32 bytes (400 invalid
+      accountId); otherAccountId 32 bytes when not null (400 invalid otherAccountId); position an integer of 0 or more
+      (400 invalid position); transactedAt parses (400 invalid transactedAt); amount digits only that fit a BIGINT (400
+      invalid amount); noteBlob 1 to 4096 bytes (400 invalid noteBlob); an anos_accounts row with this accountId and
+      this pod (403 not your account); no note of this pod for this transaction (409 already noted), the unique rule
+      as the backstop (a unique violation on the insert answers the same 409)
+    writes: INSERT noted_transactions with a fresh note_id
+    answer: 201 { noteId }
+
+    POST /update-noted-transaction (setup)
+    body { noteId: hex, noteBlob: hex }
+    checks: the shape (400 bad request shape); noteId 32 bytes (400 invalid noteId); noteBlob 1 to 4096 bytes (400
+      invalid noteBlob); the row exists and is this pod's (404 note not found)
+    writes: UPDATE note_blob; the ledger facts never change
+    answer: 200 { noteId, updatedAt: ISO 8601 }
+
+    POST /remove-noted-transaction (setup)
+    body { noteId: hex }
+    checks: the shape (400 bad request shape); noteId 32 bytes (400 invalid noteId); the row is this pod's (404 note not
+      found)
+    writes: DELETE the row
+    answer: 200 { noteId, removed: true }
+
+    POST /list-noted-transactions (setup)
+    body { from?: ISO 8601, to?: ISO 8601 }, both optional; null counts as absent
+    checks: the shape (400 bad request shape); from parses when given (400 invalid from); to parses when given (400
+      invalid to)
+    reads: the pod's rows with transacted_at at or after from and before to, newest transacted_at first, then the
+      highest position, 1001 rows at most
+    answer: 200 { notes: [ { noteId, transactionId, accountId, otherAccountId, position, transactedAt, amount, sent,
+      noteBlob, createdAt, updatedAt } ], more: boolean }: the first 1000, and more true when a 1001st row exists
+
+The proxy forwards them as any masterpod path (section 2): the wallet
+posts to /api/masterpod/add-noted-transaction and signs
+/add-noted-transaction. The wallet's side is notes.service (8.3) and the
+note form on the transaction history page (8.2).
+
+### 4.7 wallet_settings
+
+Added 2026-11-07 (forclaude/wallet-notes-plan-1.md; section 11): one row
+per pod, one encrypted JSON object holding the small things the wallet
+should remember, the Protect your passkey answer first; a later thing is
+one more field inside the object, with no masterpod change. Written whole
+by /set-wallet-settings, which inserts the row or replaces its blob in
+place; never deleted. The masterpod cannot open it.
+
+    CREATE TABLE IF NOT EXISTS wallet_settings (
+      anopod_id     BYTEA       PRIMARY KEY CHECK (octet_length(anopod_id) = 32),
+      settings_blob BYTEA       NOT NULL CHECK (octet_length(settings_blob) <= 16384),
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+anopod_id the pod; settings_blob the ciphertext of the settings object
+(iv || ciphertext || tag), at most 16384 bytes, a few dozen in practice,
+under the pod's encryption key (section 7); created_at and updated_at as
+every table, with the set_updated_at trigger.
+
+    POST /get-wallet-settings (setup)
+    body { }
+    answer: 200 { settingsBlob: hex | null, updatedAt: ISO 8601 | null }, null before the first set
+
+    POST /set-wallet-settings (setup)
+    body { settingsBlob: hex }
+    checks: the shape (400 bad request shape); settingsBlob 1 to 16384 bytes (400 invalid settingsBlob)
+    writes: INSERT or UPDATE the pod's one row, whole
+    answer: 200 { updatedAt: ISO 8601 }
+
+The proxy forwards them as any masterpod path (section 2). The wallet's
+side is settings.service (8.3), the setup page's Continue and the Protect
+your passkey page (8.2).
+
 ## 5. Validator changes (anossoftware)
 
 ### 5.1 A nonces table and two variables
@@ -399,6 +524,11 @@ flows/how_a_wallet_builds_a_transaction.md). New or changed:
     the backup code     shown once as base32 in groups of four, with a Complete button; never typed back.
     the wallet pair of the test wallet
                         wallet-keys.ts is not carried over.
+    noteBlob (2026-11-07)
+                        AES-256-GCM under the encryption key of the UTF-8 JSON { v: 1, kind, money, currency, memo, tag }:
+                        a few hundred bytes; wrapJson / unwrapJson (crypto.service)
+    settingsBlob (2026-11-07)
+                        the same of { v: 1, protect }
 
 ## 8. The web app (src/)
 
@@ -419,6 +549,7 @@ as in the test apps; a new tab unlocks again.
     /account                 your account: Recovery selfie and Recovery details, with what is on file
     /account/recovery/selfie    the account recovery walkthrough, opened at the selfie
     /account/recovery/details   the walkthrough opened at the ID
+    /account/protect         the Protect your passkey page: the setup pane again, Save records the answer
     /security/bucket-one     forwards to /account/recovery/selfie
     /security/bucket-two     forwards to /account/recovery/details
     /home                    home: the greeting, the balance card, things to do, the tiles
@@ -427,6 +558,7 @@ as in the test apps; a new tab unlocks again.
     /wallet/:accountId/escrow/:transactionId   one escrow trade: the details, the buttons for your side, the closed view
     /wallet/:accountId/assisted/:transactionId   one assisted transfer: the details, the stage, the case, Cancel transfer, the closed view
     /wallet/:accountId/history   the transaction history: the rows in plain words by day, a date range, Show more
+    /wallet/notes            the noted transactions: every account's notes, a date range, the kind chips, the totals, Download as CSV
     /chat                    the list of chats; on a desktop the pane beside it shows the child route
     /chat/requests           invites to me and join requests on my rooms
     /chat/new                start a chat: Message someone, New public room, Find public rooms
@@ -560,9 +692,10 @@ explains it before you turn it on."; the button "Open Google's Advanced
 Protection", which opens https://landing.google.com/advancedprotection/
 in a new tab; "Then choose one:" over two radio choices, "I turned it
 on" and "Skip for now"; and Continue, off until one is picked, which
-goes on by the next-step rule. The answer is kept nowhere, on the device
-or the masterpod, and the wallet cannot check it; the pane shows once,
-at setup, and never on an iPhone or a computer. Google's Advanced
+goes on by the next-step rule. The answer is recorded in the wallet
+settings on the masterpod (4.7; 2026-11-07, section 11), 'on' or
+'skipped'; the wallet cannot check what the person did; the pane shows
+once, at setup, and never on an iPhone or a computer. Google's Advanced
 Protection for the Google account is meant, not Android 16's device
 setting of the same name. A /complete-setup refused with 409 leaves at
 once, as before, without the pane. A failed deposit shows Retry (section
@@ -634,6 +767,17 @@ status counts on file ("1 selfie on file", "2 photos and 4 details on
 file", "None on file yet"). The status only counts, since everything is
 encrypted, so the rows say how many, never which.
 
+Protect your passkey (2026-11-07, section 11), at /account/protect,
+reached from Home's Things to do on an Android phone while the recorded
+answer is skipped: the setup pane again, titled "Protect your passkey",
+Back to Home, then the pane's lines from `common` ("Strongly
+recommended." in bold with the benefits, the why, what it does, the
+caution, the button "Open Google's Advanced Protection" to Google's page
+in a new tab, "Then choose one:" over "I turned it on" and "Skip for
+now") and Save, off until one is picked, which records the answer in the
+wallet settings (4.7, settings.service) as 'on' or 'skipped' and goes to
+Home; a refusal in red. No row under Account.
+
 Home (2026-11-06, section 11), at /home, where an unlock lands once
 setup is complete, first in the navigation; no outer card. Top to
 bottom: the greeting, the person's avatar (8.6, 56 px) and "Hello,
@@ -643,7 +787,9 @@ a short list of links, the heading and the list hidden when none
 applies, in this order, each only when it applies: "Add a recovery
 selfie" (bucketOneImages 0, to /account/recovery/selfie); "Add your
 recovery details" (bucketTwoImages 0 or bucketTwoInfos under 3, to
-/account/recovery/details); "Open your first anos account" (the
+/account/recovery/details); "Protect your passkey" (an Android phone,
+the recorded answer skipped, to /account/protect; 2026-11-07, section
+11); "Open your first anos account" (the
 accounts read and none, to /wallet); "Finish creating your Spending
 account 2" (an account not submitted to the validator, by its name, to
 /wallet); "3 unread chats" (to /chat); "2 chat requests" (the invites to
@@ -669,7 +815,8 @@ account is not on the ledger yet" and "1 account could not be read"
 (plural likewise); "No anos account yet." without an account; "Reading…"
 until the first read finished. The validator moves a balance only when a
 transfer is written, so Total stays whole while anos are spoken for.
-Then "Accounts": one card per account from /list-anos-accounts, in the
+Then (2026-11-07, section 11) a button "Noted transactions" to
+/wallet/notes. Then "Accounts": one card per account from /list-anos-accounts, in the
 masterpod's order (oldest first), in a grid; "No anos account yet. Open
 one below." when there are none. A card is named by its type, "Spending
 account", or "Spending account 1" and "Spending account 2" when the pod
@@ -840,6 +987,73 @@ copy button, Position, When the full date and time. "Nothing on the
 ledger for this account yet." when empty without a range, "No
 transactions between these dates." with one; a failed read in red. Read
 when opened, by Refresh and by a range change only, no poll.
+
+A note per row (2026-11-07, section 11), the person's own record of what
+money a transaction was for, kept on the masterpod under the pod (4.6):
+the details end with "Add a note", which opens the note form under the
+row: three radio choices, "Bought", "Sold" and "Received as income", a
+drop-down "Other kinds" of "Transferred to stake", "Received from stake",
+"Transferred to own account", "Transferred from own account" and "Other",
+which shows a "Tag" box; the row presets the kind (received, Bought;
+sent, Sold; a stake, Transferred to stake; a payout received from the
+fund, Received as income; a transfer between two of the pod's own
+accounts, the own-account kind; nothing moving, Other); "Money", the
+total paid or received, with the currency button beside it (the picker
+sheet, 8.7; the newest note's currency at first, else the one the
+marketplace remembers on this device), the price per anos under them
+("35.50 THB per anos") once both are in, required for the three radio
+kinds and optional for the others ("Enter the money as a number, like
+3550 or 3550.50, and pick the currency." while Save is off for that); an
+optional "Memo"; Save and Cancel. The ledger's facts go in the clear and
+the kind, the money, the currency, the memo and the tag in one blob under
+the encryption key (7). A noted row shows its note in short after the
+time ("3:50:12 PM · Sold · 3,550.00 THB") and whole in the details
+("Note", the memo), with Edit, which opens the form filled, and Remove,
+which asks "Remove this note?" (Yes, Back). The notes are read once when
+the page opens (/list-noted-transactions, quiet); one note per
+transaction (the masterpod refuses a second with 409).
+
+Noted transactions (2026-11-07, section 11), at /wallet/notes, opened by
+the "Noted transactions" button on the Wallet page: the pod's notes over
+every account, newest transaction first, read from the masterpod
+(/list-noted-transactions, with from and to as the history page sends
+them, the start of the first day and the start of the day after the
+last; the accounts are listed into the session first when it has none).
+Back to the wallet; the date range field ("Dates", From and To, the
+toggle and the clear button), Refresh and "Download as CSV". Then the
+chips "All", "Bought", "Sold", "Income" and "Other" (the other chip is
+every kind of the drop-down and every tag, and a note that cannot be
+read), applied on the phone since the kind is inside the blob; the
+totals per currency over the rows shown, one line per currency in the
+order they first appear ("Bought 3,550.00 THB · Sold 1,200.00 THB ·
+Income 0.00 THB", each sum on the digits); "Only the newest 1,000 notes
+are shown. Narrow the dates to see older ones." when the read hit the
+masterpod's cap; a failed read in red. The rows in day headings as the
+history page's: an icon by sent or received, the title (the kind's
+words, the tag for other, "(cannot read)" for a blob that did not open),
+the anos with the account's name and the time ("−100 anos · Spending
+account 1 · 3:50:12 PM"), the money at the right ("3,550.00 THB"). A tap
+opens the details: Price per anos when there is one, Memo when there is
+one, Account (the name and the short id), To or From the other account's
+full id with a copy button (8.5) when there is one, Transaction with a
+copy button, Position, When; then Edit, which opens the note form
+(Transaction history above) filled, and Remove, which asks "Remove this
+note?" (Yes, Back). "No notes yet. Open an account's transaction history
+and add one." when empty without a range, "No notes between these
+dates." with one. The CSV, built on the phone with no package: the
+header "Date,Kind,Anos,Sent or received,Money,Currency,Price per
+anos,Memo,Account,Other account,Transaction id,Position", then one line
+per shown note, newest first: the date as ISO 8601, the kind's words as
+on screen, the anos as a decimal, "sent" or "received", the money as
+typed, the currency code, the price per anos, the memo, the account's
+name, the other account's full id, the transaction id, the position,
+each empty when there is none; a field holding a comma, a double quote,
+a line break or a leading or trailing space is wrapped in double quotes
+with its double quotes doubled; lines end with CR LF and the text starts
+with the UTF-8 byte order mark, so a spreadsheet opens Thai letters
+right; the file is noted-transactions.csv, or
+noted-transactions-<from>-<to>.csv with a range, the dates as
+YYYY-MM-DD.
 
 Escrow trade, at /wallet/:accountId/escrow/:transactionId, opened from a
 row of the Escrow trades list (2026-11-05, section 11). Titled "Escrow
@@ -1165,7 +1379,8 @@ excepted, with the keyholder and anos calls included.
     masterpod-api.service   the keyholder test app's api.service.ts, base path /api/masterpod, the two changed
                             routes and the four new ones added; the marketplace routes of 2026-11-06: getListing,
                             listingId on createChatRoom, mine and status any on listListings, no hpkeKey on
-                            createListing, the fuller RoomListing and the listing on an invite
+                            createListing, the fuller RoomListing and the listing on an invite; the four noted
+                            transaction routes and the two settings routes (2026-11-07)
     keyholder-api.service   the keyholder test app's, base path /api/keyholder/<n>
     anos-api.service        the anos test app's account-api.service.ts, base path /api/anos/<defaultValidator>,
                             plus the five signed reads (listEscrows added 2026-11-05, getAssistedTransfer and
@@ -1176,6 +1391,10 @@ excepted, with the keyholder and anos calls included.
                             held-transfer read of the account's type, every account at once; the totals over
                             the session's accounts; needsPoll while an account is not on the ledger yet or
                             any anos are held or pending
+    notes.service           the noted transactions (2026-11-07): the last list read with its blobs opened,
+                            byTransaction, add, update and remove, the preset kind and the starting currency
+    settings.service        the wallet settings (2026-11-07): one encrypted object on the masterpod (4.7), read once
+                            per session (Home, quiet) and saved whole (setup's Continue, the protect page's Save)
     navigation.service      the one navigation list (2026-11-06): NavItem (path, label, icon, badge) and items,
                             the side panel's entries by the status and the edition, Home first once setup is
                             complete, Chat and Notifications with their unread counts; the side panel and the
@@ -1193,7 +1412,8 @@ excepted, with the keyholder and anos calls included.
                             null when there is no such pod (2026-11-05)
     signing.service         /api/sign/public-keys and /api/sign
     crypto.service          the keyholder test app's crypto.service.ts plus the anos test app's (keys, the
-                            builders, signing), plus section 7 and the public ledger id
+                            builders, signing), plus section 7 and the public ledger id; wrapJson and
+                            unwrapJson (2026-11-07)
     passkey.service         the keyholder test app's, unchanged
     shares.service          the deposit rule of section 6, one function: deposit(secret, shareType)
     log.service             the activity log
@@ -1365,7 +1585,9 @@ The pages done so far, a list the later steps extend:
 
 Later changes add their words to the section of the page they change, in
 both files at once: the Protect your passkey pane of setup, in `setup`
-(2026-11-07, section 11).
+(2026-11-07, section 11); the note form and the notes of the history
+page, in `notes` (2026-11-07, section 11); the Noted transactions page,
+in `notes`; the protect page and the Home line, in `common` and `home`.
 
 ## 9. Configuration, and running it on this machine
 
@@ -1430,16 +1652,22 @@ network/testnet.env numbers (2026-11-06, section 11).
   Thai web font; blocking Google Translate or marking pieces
   untranslatable; right-to-left languages.
 - From the protect plan (forclaude/wallet-protect-plan-1.md,
-  2026-11-07): remembering whether the person turned Advanced Protection
-  on or skipped it (the wallet keeps nothing; a later upgrade gives it
-  memory on the masterpod); a row under Account or a Things to do item
-  on Home for someone who skipped; a second ask on Skip; the pane on an
+  2026-11-07): a second ask on Skip; the pane on an
   iPhone (the passkey is in iCloud Keychain, end to end encrypted behind
   the Apple ID's two-factor, nothing to sign up for) or on a computer
   (Chrome there may keep the passkey with Google too); knowing whether
   the passkey really is with Google (the user agent says Android, no
   more; a Samsung or password-manager passkey reads the same pane, hence
   "usually"); Android 16's device setting of the same name.
+- From the notes plan (forclaude/wallet-notes-plan-1.md, 2026-11-07): a
+  note on a pending transaction; the masterpod checking that a noted
+  transaction is on the ledger; gift kinds (a buy or a sale at zero); a
+  note's ledger facts changing after it is written; filtering the notes
+  by account or by currency on the page (the CSV and a spreadsheet do
+  that); paging past the newest 1,000 notes; a nickname or any setting
+  beyond the Protect answer (the settings blob is ready for them); the
+  Protect line for a pod with no recorded answer; the Protect pane on an
+  iPhone or a computer.
 - Several passkeys, push delivery, a custom theme, rate limits.
 
 ## 11. Build notes
@@ -3145,6 +3373,183 @@ can pass without choosing, will get many of them to do it.
   here; the user tests with `ng serve` (Chrome's device toolbar
   emulating a Pixel sends an Android user agent, so the pane shows on
   the Mac too) and on an Android phone on the testnet, after Complete.
+
+### The wallet memory, step 2 (2026-11-07)
+
+Step 2 of forclaude/wallet-notes-plan-1.md: the wallet's side of the
+notes, on the transaction history page. Why: people who report income
+or capital gains need, for every transaction, what money they paid or
+received and in which currency; the ledger knows the anos, the time and
+the other account, not the money, and until now the wallet kept nothing
+of its own. Step 1 gave the masterpod the two tables and the six routes
+(4.6, 4.7); this step gives the history page a note per row, the private
+part encrypted on the phone before it leaves.
+
+- `services/crypto.service.ts`: `wrapJson` and `unwrapJson`, a JSON
+  value as UTF-8 under a key (section 7), after the identity blob
+  methods.
+- `services/masterpod-api.service.ts`: `NoteFields`,
+  `NotedTransactionItem` and `NoteRange`, and the four noted transaction
+  methods in a group after the anos accounts.
+- `services/notes.service.ts`, new: `NOTE_KINDS`, `MONEY_KINDS`,
+  `OTHER_KINDS`, `NoteDetails` and `Note`; the `notes` and `more`
+  signals and `byTransaction`; `load`, `add`, `update` and `remove`,
+  each wrapping or opening the private part under the encryption key;
+  `presetKind`, `startingCurrency` and `clearOf`.
+- `prices.ts`: `perAnosOf`, the price per anos behind a total, rounded
+  down to eight decimals on the digits.
+- `components/note-form.component.ts`, new: the form of 8.2, used under
+  a history row now and under a Noted transactions row from step 3; the
+  currency through the picker sheet as the new-listing page opens it.
+- `pages/transaction-history.page.ts`: the notes loaded once, quiet; the
+  note in short after the time; the Note and Memo lines in the details;
+  Add a note, Edit and Remove with its ask, and the form under the grid.
+- `i18n/en.ts` and `th.ts`: the section `notes`, after `history`;
+  `kinds` typed by its keys, so a missing Thai kind fails the build.
+  Reused from `common`: Note, Save, Cancel, Remove, Yes, Back, Currency
+  and "per anos". Nothing goes to `common`.
+- Tables typed `Record<string, string>` added to the dictionaries (the
+  type cannot check their keys in Thai): none in this step.
+- Readings where the plan left a detail open: the notes are loaded
+  inside the constructor's effect, so a change of the account input
+  reloads them with the rows, and `load` checks the encryption key
+  before the call, so a tab without it makes none; "the newest note" for
+  the starting currency is the note made last (`createdAt`), not the one
+  on the newest transaction; the plan's one `@if (noteOf(row))` block is
+  split in two, the Note and Memo lines inside the details grid (whose
+  children are `display: contents`) and the buttons after it, with the
+  form in a `div.form` of the same left padding; the history page
+  imports `perAnosOf` beside `formatPrice` for the per-anos part of the
+  Note line; a note's money shows only with its currency, on the row and
+  in the details (a drop-down kind may be saved with money and no
+  currency, as the plan's Save rule allows); the Remove ask closes
+  whether the remove succeeded or failed, a failure in red under the row;
+  the form takes the amount from the note when editing and from the row
+  otherwise; a price shows with two decimals as every price does, so the
+  row reads "Sold · 3,550.00 THB". Thai: a "note", the record the person
+  keeps of a transaction, reads บันทึก ("Add a note" เพิ่มบันทึก,
+  "Remove this note?" ลบบันทึกนี้หรือไม่), while the details label is
+  `common.note`, หมายเหตุ, as the moderation pages have it; "Memo" reads
+  บันทึกช่วยจำ, as Thai banking apps name the free text on a transfer;
+  "Tag" reads แท็ก; "Money" reads จำนวนเงิน; "Received as income" reads
+  ได้รับเป็นรายได้; "Transferred to stake" โอนไปวางหลักประกัน and
+  "Received from stake" ได้รับจากหลักประกัน; "own account" reads
+  บัญชีของตนเอง; "Other" reads อื่น ๆ and "Other kinds" ชนิดอื่น ๆ (Kind
+  ชนิด, as settled); "Edit" reads แก้ไข, as the identity page's. No
+  sentence read odd.
+- Spec: 4.6, 4.7, 7, 8.2 (Transaction history), 8.3, 8.8, 10, this note;
+  README: the layout block (the note form, the notes service).
+- `npx ng build` clean (1.94 MB initial). Not run in a browser here; the
+  user tests with `ng serve` against a masterpod with the step 1 tables
+  (locally `npm run db:setup` in the masterpod folder adds them).
+
+### The wallet memory, step 3 (2026-11-07)
+
+Step 3 of forclaude/wallet-notes-plan-1.md: the Noted transactions page,
+every account's notes in one place for the tax return. Why: the history
+page shows a note on its own row, account by account; the person doing
+their taxes needs all of a year's notes together, the totals per
+currency, and a file a spreadsheet opens.
+
+- `app.routes.ts`: `/wallet/notes` before `/wallet/:accountId`, since
+  the router takes the first match.
+- `pages/wallet.page.ts`: a "Noted transactions" button under the
+  balance card.
+- `pages/noted-transactions.page.ts`, new: the history page's card
+  layout; the Dates field, Refresh and "Download as CSV"; the chips All,
+  Bought, Sold, Income and Other; the totals per currency; the capped
+  line; the rows in day headings with the details, Edit (the note form,
+  the amount from the note) and Remove; the CSV of the plan's 3.4 built
+  on the phone.
+- `pages/marketplace.page.ts`: the All chip reads `common.all`.
+- `i18n/en.ts` and `th.ts`: eleven entries in `notes` after `withMoney`;
+  `marketplace.all` moved to `common.all`, the house rule for a sentence
+  two pages share; nothing else goes to `common`.
+- Tables typed `Record<string, string>` added to the dictionaries (the
+  type cannot check their keys in Thai): none in this step.
+- Readings where the plan left a detail open: the Other chip is every
+  note whose kind is not bought, sold or income, a note that cannot be
+  read among them, so no note hides from every chip but All; the rows
+  keep the masterpod's order (newest transacted_at, then the highest
+  position) and the day headings group them as the history page does; a
+  note with money contributes a totals line for its currency even when
+  its kind adds to none of the three sums, which then read 0; the sums
+  are in price units (10^-8, as `priceUnits` counts them) and a private
+  `unitsToText` in the page turns a sum into the decimal string
+  `formatPrice` takes, since prices.ts is not among the step's files;
+  `startOfDay` is repeated from the history page for the same reason;
+  the page's per-anos method is `priceOf`, since `perAnosOf` is the
+  imported function; the account's name falls back to "Account" for an
+  account the session does not hold; the CSV's kind column is the row's
+  title, so a blob that did not open writes "(cannot read)"; the Remove
+  ask closes whether the remove succeeded or failed, as on the history
+  page. Thai: "Noted transactions" reads ธุรกรรมที่บันทึกไว้; "Income",
+  the chip, reads รายได้; "Download as CSV" reads ดาวน์โหลดเป็น CSV;
+  "sent" and "received" in the CSV read ส่ง and รับ; the CSV header is
+  translated as a whole, its commas kept, with "Other account" as
+  บัญชีอีกฝ่าย (the other side's account) and "Anos" kept in Latin
+  letters; "Narrow the dates" reads จำกัดช่วงวันที่ให้แคบลง. No sentence
+  read odd.
+- Spec: 8.1, 8.2 (Wallet, Noted transactions), 8.8, this note; README:
+  the pages line.
+- `npx ng build` clean (1.95 MB initial). Not run in a browser here; the
+  user tests with `ng serve`: the Wallet page's button, the chips, a
+  range, the download.
+
+### The wallet memory, step 4 (2026-11-07)
+
+Step 4 of forclaude/wallet-notes-plan-1.md, the last: the wallet
+settings in use, the Protect your passkey answer first. Why: the Protect
+pane of setup (2026-11-07, above) could keep no answer, so nothing could
+remind someone who skipped it; with the masterpod's wallet_settings row
+(4.7) the wallet remembers the answer under the pod's encryption key and
+Home can show "Protect your passkey" until it is on.
+
+- `services/masterpod-api.service.ts`: `getWalletSettings` and
+  `setWalletSettings` in a group after the noted transaction methods.
+- `services/settings.service.ts`, new: `WalletSettings` ({ v: 1,
+  protect? }); the `settings` signal, null until read; `load`, quiet by
+  default, which gives { v: 1 } for a null blob, a refusal or a blob that
+  does not open and skips the read without the encryption key; `save`,
+  the merged object wrapped under the encryption key and sent whole,
+  after a load when nothing was read.
+- `constants.ts`: `ADVANCED_PROTECTION_URL`, from the setup page.
+- `pages/setup.page.ts`: the constant imported; `SettingsService`
+  injected; the ten `t().setup.protect*` reads are `t().common.protect*`;
+  Continue (`goOn`) records 'on' or 'skipped' before leaving, a failed
+  save logged by the API service and not holding the person up.
+- `pages/account-protect.page.ts`, new, at `/account/protect` after the
+  two recovery routes: the pane's lines from `common`, the button to
+  Google's page, the two choices and Save, which records the answer and
+  goes to Home.
+- `pages/home.page.ts`: `SettingsService` injected; `android`, the setup
+  page's test; the "Protect your passkey" line after the two recovery
+  lines while the recorded answer is skipped; `load` reads the settings
+  after the accounts.
+- `i18n/en.ts` and `th.ts`: `home.protectPasskey`; the ten
+  `setup.protect*` entries moved to `common` under the same keys, the
+  English and the Thai as they were, since the setup page and the
+  protect page share them.
+- Tables typed `Record<string, string>` added to the dictionaries (the
+  type cannot check their keys in Thai): none in this step.
+- Readings where the plan left a detail open: a refused
+  `/get-wallet-settings` goes to the browser's console, since the read is
+  quiet and so not in the activity log; the API service's class comment
+  now names 4.7 beside 4.6; the Android comment on Home speaks of the
+  line, not the pane; the protect page has an `.error` style line beside
+  `.choices`, for the refusal in red; the ten entries sit at the end of
+  `common`, after `all`; `home.protectPasskey` and `common.protectTitle`
+  are the same English, as the plan lists them; the Home line sits after
+  `addDetails` in the dictionary, in the order of the list. Thai: the
+  Home line reads ปกป้องพาสคีย์ของคุณ, the pane's title; nothing else is
+  new, the ten sentences moved as they were. No sentence read odd.
+- Spec: 4.7 (the wallet's side), 8.1, 8.2 (Home, Setup, Protect your
+  passkey), 8.3, 8.8, 10 (the protect bullet), this note; README: the
+  pages and services lines.
+- `npx ng build` clean (1.96 MB initial). Not run in a browser here; the
+  user tests with `ng serve`: a pod set up on a Pixel-emulating Chrome
+  that picks "Skip for now" sees "Protect your passkey" under Things to
+  do on Home, and the page's Save with "I turned it on" removes it.
 
 ## 12. Recovery and the moderator edition
 

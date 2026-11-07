@@ -12,6 +12,7 @@ import { reasonOf } from '../services/log.service';
 import { MasterpodApiService } from '../services/masterpod-api.service';
 import { NavigationService } from '../services/navigation.service';
 import { SessionService } from '../services/session.service';
+import { SettingsService } from '../services/settings.service';
 
 /** One line of Things to do: where it goes, its icon and its words. */
 interface TodoLine {
@@ -26,7 +27,9 @@ interface TodoLine {
  * the avatar (8.6) and the first name, the username when it is empty; the
  * balance card (balance-card.component over balances.service, shared with
  * the Wallet page); "Things to do", a short list of links, hidden when
- * none applies; the tiles, one per side-panel entry except Home itself
+ * none applies, "Protect your passkey" among them on an Android phone
+ * while the recorded answer is skipped (2026-11-07); the tiles, one per
+ * side-panel entry except Home itself
  * and Log, drawn from navigation.service so the two cannot drift apart,
  * Chat and Notifications carrying their unread counts. On open the
  * accounts are listed (/list-anos-accounts, quiet) into the session and
@@ -87,12 +90,15 @@ export class HomePage {
   private readonly navigation = inject(NavigationService);
   private readonly balances = inject(BalancesService);
   private readonly masterpod = inject(MasterpodApiService);
+  private readonly settings = inject(SettingsService);
   protected readonly lang = inject(LanguageService);
   protected readonly t = this.lang.words;
 
   protected readonly listError = signal<string | null>(null);
   /** True once /list-anos-accounts answered, so "Open your first anos account" waits for the list. */
   private readonly accountsLoaded = signal(false);
+  /** An Android phone, where the passkey is usually kept by Google: the Protect your passkey line shows while the recorded answer is skipped (wallet spec 8.2). */
+  private readonly android = /Android/.test(navigator.userAgent);
 
   /** The tiles: the side panel's entries except Home itself and Log. */
   protected readonly tiles = computed(() => this.navigation.items().filter((i) => i.path !== '/home' && i.path !== '/log'));
@@ -106,6 +112,7 @@ export class HomePage {
     if (status && (status.bucketTwoImages === 0 || status.bucketTwoInfos < 3)) {
       lines.push({ path: '/account/recovery/details', icon: 'badge', words: home.addDetails });
     }
+    if (this.android && this.settings.settings()?.protect === 'skipped') lines.push({ path: '/account/protect', icon: 'security', words: home.protectPasskey });
     const accounts = this.session.accounts();
     if (this.accountsLoaded() && accounts.length === 0) lines.push({ path: '/wallet', icon: 'account_balance_wallet', words: home.openFirst });
     const names = accountNames(accounts, this.t().accountKinds);
@@ -142,6 +149,7 @@ export class HomePage {
     } else {
       this.listError.set(`/list-anos-accounts: ${reasonOf(res)}`);
     }
+    void this.settings.load();
     await this.balances.refresh();
   }
 }

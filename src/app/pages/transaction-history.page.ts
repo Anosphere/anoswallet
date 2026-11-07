@@ -10,14 +10,17 @@ import { RouterLink } from '@angular/router';
 import { accountNames } from '../account-names';
 import { millionthsToAnos } from '../amounts';
 import { CopyButtonComponent } from '../components/copy-button.component';
+import { NoteFormComponent } from '../components/note-form.component';
 import { HISTORY_PAGE } from '../constants';
 import { HistoryWords, historyWords } from '../history-words';
+import { formatPrice, perAnosOf } from '../prices';
 import { AnosApiService, TransactionItem } from '../services/anos-api.service';
 import { ChatService } from '../services/chat.service';
 import { CryptoService, PairOne } from '../services/crypto.service';
 import { LanguageService } from '../services/language.service';
 import { reasonOf } from '../services/log.service';
 import { MasterpodApiService } from '../services/masterpod-api.service';
+import { Note, NotesService } from '../services/notes.service';
 import { SessionService } from '../services/session.service';
 import { shortId } from '../short-id';
 
@@ -46,11 +49,14 @@ interface ListBody {
  * under day headings in the words of ChatService.dayLabel, with the time
  * and the signed amount, and the details under a tapped row. Read when
  * opened, by Refresh and by a range change; no poll. The reads are signed
- * by pair one, opened from the keyBlob and dropped.
+ * by pair one, opened from the keyBlob and dropped. A note per row
+ * (2026-11-07, section 11): the Add a note button in the details opens the
+ * note form (note-form.component); a noted row shows its note in short on
+ * the row and whole in the details, with Edit and Remove.
  */
 @Component({
   selector: 'app-transaction-history-page',
-  imports: [RouterLink, MatCardModule, MatButtonModule, MatIconModule, MatProgressBarModule, MatFormFieldModule, MatInputModule, MatDatepickerModule, CopyButtonComponent],
+  imports: [RouterLink, MatCardModule, MatButtonModule, MatIconModule, MatProgressBarModule, MatFormFieldModule, MatInputModule, MatDatepickerModule, CopyButtonComponent, NoteFormComponent],
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
@@ -88,7 +94,7 @@ interface ListBody {
               <mat-icon>{{ w.icon }}</mat-icon>
               <span class="text">
                 <span class="title">{{ w.title }}</span>
-                <span class="muted">{{ chat.timeOf(row.createdAt) }}</span>
+                <span class="muted">{{ chat.timeOf(row.createdAt) }}@if (noteOf(row); as note) { · {{ noteShort(note) }} }</span>
               </span>
               <span class="amount" [class.plus]="w.sign === '+'" [class.muted]="w.sign === ''">{{ amountWords(row, w) }}</span>
             </button>
@@ -101,7 +107,32 @@ interface ListBody {
                 <div><span class="label">{{ t().common.transaction }}</span><span><code>{{ row.transactionId }}</code> <app-copy-button [text]="row.transactionId" [label]="t().common.copyTransactionId" /></span></div>
                 <div><span class="label">{{ t().history.position }}</span><span>#{{ row.position }}</span></div>
                 <div><span class="label">{{ t().history.when }}</span><span>{{ lang.dateTime(row.createdAt) }}</span></div>
+                @if (noteOf(row); as note) {
+                  <div><span class="label">{{ t().common.note }}</span><span>{{ noteLine(note) }}</span></div>
+                  @if (note.details?.memo) {
+                    <div><span class="label">{{ t().notes.memo }}</span><span>{{ note.details!.memo }}</span></div>
+                  }
+                }
               </div>
+              @if (noteOf(row); as note) {
+                @if (confirmRemove() === note.noteId) {
+                  <div class="buttons"><span>{{ t().notes.askRemove }}</span>
+                    <button mat-flat-button type="button" (click)="removeNote(note)" [disabled]="noteBusy()">{{ t().common.yes }}</button>
+                    <button mat-button type="button" (click)="confirmRemove.set(null)">{{ t().common.back }}</button></div>
+                } @else if (noting() !== row.transactionId) {
+                  <div class="buttons">
+                    <button mat-stroked-button type="button" (click)="noting.set(row.transactionId)">{{ t().notes.edit }}</button>
+                    <button mat-button type="button" (click)="confirmRemove.set(note.noteId)">{{ t().common.remove }}</button></div>
+                }
+              } @else if (noting() !== row.transactionId) {
+                <div class="buttons"><button mat-stroked-button type="button" (click)="noting.set(row.transactionId)">{{ t().notes.add }}</button></div>
+              }
+              @if (noting() === row.transactionId) {
+                <div class="form"><app-note-form [row]="row" [accountId]="accountId()" [note]="noteOf(row)" (saved)="noting.set(null)" (cancelled)="noting.set(null)" /></div>
+              }
+              @if (noteError(); as text) {
+                <p class="error">{{ text }}</p>
+              }
             }
           }
         } @empty {
@@ -127,6 +158,8 @@ interface ListBody {
     .plus { color: var(--mat-sys-primary); }
     .details { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; padding: 8px 4px 12px 48px; border-bottom: 1px solid var(--mat-sys-outline-variant); }
     .details div { display: contents; }
+    .buttons { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 0 4px 12px 48px; }
+    .form { padding: 0 4px 12px 48px; }
     .label { color: var(--mat-sys-on-surface-variant); }
     .muted { color: var(--mat-sys-on-surface-variant); }
     .error { color: var(--mat-sys-error); }
@@ -142,6 +175,7 @@ export class TransactionHistoryPage {
   private readonly crypto = inject(CryptoService);
   /** For dayLabel and timeOf, so days read the same here and in Chat. */
   protected readonly chat = inject(ChatService);
+  protected readonly notes = inject(NotesService);
   protected readonly lang = inject(LanguageService);
   protected readonly t = this.lang.words;
 
@@ -155,6 +189,12 @@ export class TransactionHistoryPage {
   protected readonly to = signal<Date | null>(null);
   /** The transaction id whose details are open, or null. */
   protected readonly expanded = signal<string | null>(null);
+  /** The transaction whose note form is open, or null. */
+  protected readonly noting = signal<string | null>(null);
+  /** The note id whose Remove asks, or null. */
+  protected readonly confirmRemove = signal<string | null>(null);
+  protected readonly noteBusy = signal(false);
+  protected readonly noteError = signal<string | null>(null);
 
   /** The account's name by its type (account-names.ts); "Account" until the account is in the session. */
   protected readonly name = computed(() => accountNames(this.session.accounts(), this.t().accountKinds).get(this.accountId()) ?? this.t().common.account);
@@ -174,7 +214,11 @@ export class TransactionHistoryPage {
   constructor() {
     effect(() => {
       this.accountId();
-      untracked(() => void this.refresh());
+      untracked(() => {
+        void this.refresh();
+        // The notes, quiet: a masterpod without the routes shows no marks and no error.
+        void this.notes.load().catch(() => undefined);
+      });
     });
   }
 
@@ -192,6 +236,42 @@ export class TransactionHistoryPage {
     if (w.sign === '+') return this.t().history.plus(millionthsToAnos(t.amount));
     if (w.sign === '-') return this.t().history.minus(millionthsToAnos(t.amount));
     return BigInt(t.amount) > 0n ? this.t().common.anos(millionthsToAnos(t.amount)) : '';
+  }
+
+  /** The note on the row, or null (notes.service, byTransaction). */
+  protected noteOf(t: TransactionItem): Note | null {
+    return this.notes.byTransaction().get(t.transactionId) ?? null;
+  }
+
+  /** A note in short, for the row's time line: the kind's words (the tag for other) with the money when there is one; "(cannot read)" for a blob that did not open. */
+  protected noteShort(note: Note): string {
+    const details = note.details;
+    if (!details) return this.t().notes.cannotRead;
+    const kind = details.kind === 'other' && details.tag !== '' ? details.tag : this.t().notes.kinds[details.kind];
+    return details.money !== null && details.currency !== null ? this.t().notes.withMoney(kind, formatPrice(details.money, details.currency)) : kind;
+  }
+
+  /** The note whole, for the details: the short form, then the price per anos when the money and the amount allow it. */
+  protected noteLine(note: Note): string {
+    const short = this.noteShort(note);
+    const details = note.details;
+    if (!details || details.money === null || details.currency === null) return short;
+    const per = perAnosOf(details.money, note.amount);
+    return per === null ? short : `${short} · ${this.t().common.perAnos(formatPrice(per, details.currency))}`;
+  }
+
+  /** Remove, after the ask: notes.remove; the ask closes, a refusal shows in red. */
+  protected async removeNote(note: Note): Promise<void> {
+    this.noteBusy.set(true);
+    this.noteError.set(null);
+    try {
+      await this.notes.remove(note);
+    } catch (err) {
+      this.noteError.set(err instanceof Error ? err.message : String(err));
+    } finally {
+      this.confirmRemove.set(null);
+      this.noteBusy.set(false);
+    }
   }
 
   protected toggle(transactionId: string): void {
