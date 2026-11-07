@@ -4,6 +4,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatListModule } from '@angular/material/list';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatRadioModule } from '@angular/material/radio';
 import { Router, RouterLink } from '@angular/router';
 import { ChatKeys, CryptoService } from '../services/crypto.service';
 import { LanguageService } from '../services/language.service';
@@ -20,19 +21,28 @@ interface Step {
   state: 'todo' | 'doing' | 'done' | 'failed';
 }
 
+/** Google's Advanced Protection page, opened in a new tab by the Protect your passkey pane (wallet spec 8.2, Setup). */
+const ADVANCED_PROTECTION_URL = 'https://landing.google.com/advancedprotection/';
+
 /**
  * The setup page (wallet spec 8.2): Start runs the progress list (an unlock
  * first when the PRF output is not in RAM); the backup code is shown once in
  * groups of four with "I have written it down, complete"; Complete deposits
  * the backup code with the keyholders (section 6, backupcode), then
  * /complete-setup with the eight fields; on 200 the code is dropped and the
- * next-step rule runs. A failed deposit shows Retry, which starts over with
- * a fresh secret. 409 setup already complete means a dropped answer earlier:
- * the status is checked and, if setup is complete, the flow carries on.
+ * next-step rule runs. On an Android phone (the user agent string says
+ * Android) the page then shows the Protect your passkey pane instead of
+ * leaving: Google's Advanced Protection strongly recommended for the Google
+ * account that keeps the passkey, a link to Google's page, two choices, I
+ * turned it on or Skip for now, and Continue, which goes on by the next-step
+ * rule; the answer is kept nowhere (2026-11-07, section 11). A failed
+ * deposit shows Retry, which starts over with a fresh secret. 409 setup
+ * already complete means a dropped answer earlier: the status is checked
+ * and, if setup is complete, the flow carries on.
  */
 @Component({
   selector: 'app-setup-page',
-  imports: [MatCardModule, MatButtonModule, MatListModule, MatIconModule, MatProgressBarModule, RouterLink],
+  imports: [MatCardModule, MatButtonModule, MatListModule, MatIconModule, MatProgressBarModule, MatRadioModule, RouterLink],
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
@@ -48,6 +58,19 @@ interface Step {
             <p>{{ t().setup.unlockHint }}</p>
           }
           <button mat-flat-button type="button" (click)="start()">{{ t().common.start }}</button>
+        } @else if (phase() === 'done' && android) {
+          <h3>{{ t().setup.protectTitle }}</h3>
+          <p><strong>{{ t().setup.protectRecommended }}</strong> {{ t().setup.protectBenefits }}</p>
+          <p>{{ t().setup.protectWhy }}</p>
+          <p>{{ t().setup.protectWhat }}</p>
+          <p>{{ t().setup.protectCaution }}</p>
+          <a mat-flat-button [href]="advancedProtectionUrl" target="_blank" rel="noopener">{{ t().setup.protectOpen }}</a>
+          <p>{{ t().setup.protectThen }}</p>
+          <mat-radio-group class="choices" [value]="choice()" (change)="choice.set($event.value)">
+            <mat-radio-button value="done">{{ t().setup.protectDone }}</mat-radio-button>
+            <mat-radio-button value="skip">{{ t().setup.protectSkip }}</mat-radio-button>
+          </mat-radio-group>
+          <button mat-flat-button type="button" (click)="goOn()" [disabled]="!choice()">{{ t().common.continue }}</button>
         } @else {
           <mat-list dense>
             @for (step of steps(); track step.label) {
@@ -79,6 +102,7 @@ interface Step {
   styles: `
     .code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 18px; letter-spacing: 1px; line-height: 1.6; max-width: 560px; word-break: break-word; padding: 12px; border-radius: 8px; background: var(--mat-sys-surface-container); }
     .error { color: var(--mat-sys-error); }
+    .choices { display: flex; flex-direction: column; gap: 4px; margin: 8px 0 16px; }
   `,
 })
 export class SetupPage {
@@ -96,6 +120,13 @@ export class SetupPage {
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly backupCodeText = computed(() => (this.backupCode ? this.crypto.backupCodeText(this.backupCode) : null));
+  /** An Android phone, where the passkey is usually kept by Google: the Protect your passkey pane shows once setup is complete (wallet spec 8.2). */
+  protected readonly android = /Android/.test(navigator.userAgent);
+  protected readonly advancedProtectionUrl = ADVANCED_PROTECTION_URL;
+  /** The pane's choice, kept nowhere: Continue is off until one is picked. */
+  protected readonly choice = signal<'done' | 'skip' | null>(null);
+  /** Where Continue goes: the next-step rule's page, set when setup completed. */
+  private nextUrl: string | null = null;
 
   // The secrets of this run, in plain fields, dropped when setup is complete.
   private encryptionKey: Bytes | null = null;
@@ -207,13 +238,20 @@ export class SetupPage {
       this.phase.set('done');
       const status = await this.api.checkAnopodStatus();
       if (status.ok) this.session.status.set(status.body);
-      await this.router.navigateByUrl(this.session.nextStep(status.ok ? status.body : undefined));
+      this.nextUrl = this.session.nextStep(status.ok ? status.body : undefined);
+      if (this.android) return; // the Protect your passkey pane shows; Continue (goOn) leaves
+      await this.router.navigateByUrl(this.nextUrl);
     } catch (err) {
       this.error.set(err instanceof Error ? err.message : String(err));
       this.phase.set('failed');
     } finally {
       this.busy.set(false);
     }
+  }
+
+  /** Continue on the Protect your passkey pane: on by the next-step rule, as Complete goes on elsewhere. The choice is kept nowhere. */
+  protected async goOn(): Promise<void> {
+    await this.router.navigateByUrl(this.nextUrl ?? this.session.nextStep());
   }
 
   private dropSecrets(): void {
