@@ -465,6 +465,9 @@ walkthrough's "Go to wallet") still end at Wallet, the next thing to do
 
 The user may navigate anywhere the navigation shows at any time.
 
+The toolbar's words and the navigation's labels come from the
+dictionary and follow the language (8.8; 2026-11-06, section 11).
+
 ### 8.2 The screens
 
 Landing. Above the card, in every edition, the test-site notice: a wide
@@ -472,12 +475,13 @@ red-tinted box (the theme's error-container colours) with a warning
 icon, "This is just a test site." in large bold letters, then "There are
 no real Anos here, do not pay money to anyone in order to buy Anos. This
 is for testing purposes only.", then the same in Thai. Then the card.
-Unlock: /challenge (unlock), the passkey assertion with the PRF salt,
-/unlock; opens blob1, chatPrivateKeyBlob and identityBlob; then
-/check-anopod-status and the next-step rule. The platform's passkey
-picker is what says whether a passkey exists; with none, the
-authenticator's own message shows and the page suggests Create. Create
-goes to /create, Recover to /recover.
+The headline follows the language; under the card, while the app is in
+Thai, the button "Switch to English" (8.8). Unlock: /challenge (unlock),
+the passkey assertion with the PRF salt, /unlock; opens blob1,
+chatPrivateKeyBlob and identityBlob; then /check-anopod-status and the
+next-step rule. The platform's passkey picker is what says whether a
+passkey exists; with none, the authenticator's own message shows and
+the page suggests Create. Create goes to /create, Recover to /recover.
 
 Create, a linear Material stepper
 1. "Step 1 of creating your anoPod is to become vouched. We do this to
@@ -1126,6 +1130,10 @@ excepted, with the keyholder and anos calls included.
 
     config.service          GET /api/config once; the counts, the threshold, the edition, rpId and the three lock
                             numbers (2026-11-06)
+    language.service        the language on screen (Thai when the browser's first language is Thai, else
+                            English; English for the tab after Switch to English), words, tag, dateTime and
+                            time; sets the page's lang, the date adapter's locale and Material's Optional
+                            (2026-11-06)
     session.service         signals: anopodId, username, firstName, lastName, the session keys, the PRF output
                             while needed, the encryption key, the chat keys, the PLID and lookup id, the status
                             from /check-anopod-status, the keyholder receiving keys, the wallet public keys, the
@@ -1252,6 +1260,61 @@ src/app/components/:
   Escrow trade started) encrypted with the room key, and the thread's poll
   shows them. It exports `FoundAccountId`.
 
+### 8.8 The languages
+
+The app speaks two languages, English and Thai (2026-11-06, section 11;
+the plan is forclaude/wallet-languages-plan-1.md). English is the
+default: the language is Thai when the browser's first preferred
+language (the first entry of navigator.languages, else
+navigator.language) begins with "th", else English; nothing is stored.
+One button, "Switch to English", always in those English words, under
+the landing card while the app is in Thai: after it the app is English
+for as long as the tab lives, like the unlock itself, and a new tab
+follows the browser again. There is no button to Thai and no language
+toggle anywhere else.
+
+The words live in a dictionary, src/app/i18n/en.ts and th.ts, no
+package: one section per page or component, `common` for the sentences
+several pages share, `dates` for the day words, `material` for
+Material's visible word "Optional". `Words` is the English object's
+shape and th.ts must match it, so a sentence missing in Thai fails the
+build. A sentence with a number, a name, an amount, a date or an id in
+it is a function, so each language keeps its own grammar (English its
+plurals, Thai none). language.service (8.3) holds the language in a
+signal; a page reads `t = this.lang.words` and writes `t().page.key`,
+a sentence with a variable as `t().page.sentence(n)`. The page's `lang`
+attribute follows the language, so Chrome sees a Thai page as Thai and
+does not offer to translate it; nothing is blocked and nothing is
+marked untranslatable. Dates and times go through the service's
+dateTime ("Nov 6, 2026, 3:50:12 PM"; "6 พ.ย. 2026 15:50:12") and time
+("3:50:12 PM"; "15:50:12"), or pass its tag to the browser's own
+formatting: en-US, and th-TH-u-ca-gregory for Thai, so a Thai date
+reads with Thai month names and the Western year, never the Buddhist
+one; "Today" and "Yesterday" come from the dictionary; the date
+pickers' calendar and Material's "Optional" follow the language.
+
+The English on screen does not change: every English sentence moves
+into en.ts letter for letter, and this spec's descriptions quote it.
+In both languages these stay as they are: the messages of the servers
+(the validators, the doormen, the masterpod), shown inside the Thai
+page as they come, and the wallet's pattern checks on them; every wire
+word, id, code, path, field name and key ("Send guardedAnosTransfer",
+"Fund proposal transactionId"); the product names, in Latin letters
+(anoPod, anos, anoSphere, masterpod, seed, super seed, PRF); the
+browser tab's titles; Material's screen-reader labels ("Open calendar"
+and the like); the developer-worded errors of crypto.service.ts; the
+test-site notice's two paragraphs, English and Thai, whatever the
+language on screen (only its headline follows it). Every edition
+speaks both languages, the staff pages of the moderator and attestor
+editions too. The Thai was written by the build chat from the plan's
+style and glossary, for Thai readers to correct; a correction is an
+edit of th.ts.
+
+The pages done so far, a list the later steps extend:
+
+- step 1 (2026-11-06): the shell (the toolbar), the navigation (the
+  labels of the side panel and the Home tiles), the landing page.
+
 ## 9. Configuration, and running it on this machine
 
 What runs, who starts it
@@ -1305,8 +1368,16 @@ network/testnet.env numbers (2026-11-06, section 11).
   changed together.
 - Any check by a validator that walletKey in a creation is the signing
   server's key: the binding check with the masterpod is the check.
-- Several passkeys, push delivery, languages other than English, a custom
-  theme, rate limits.
+- From the languages plan (forclaude/wallet-languages-plan-1.md,
+  2026-11-06): languages other than English and Thai (one more
+  dictionary file each); remembering the language on the device; a
+  button to switch to Thai; translating the servers' reasons (needs
+  error codes on the validator, the doorman and the masterpod); the
+  browser tab's titles; Material's screen-reader labels; the
+  developer-worded errors of crypto.service.ts; the Buddhist year; a
+  Thai web font; blocking Google Translate or marking pieces
+  untranslatable; right-to-left languages.
+- Several passkeys, push delivery, a custom theme, rate limits.
 
 ## 11. Build notes
 
@@ -2327,6 +2398,62 @@ guarded transfer on the testnet was dated 2 minutes ahead where 10 to
   this note.
 - `npx ng build` clean (1.67 MB initial). Not run against a proxy or a
   validator here; the user tests on the testnet.
+
+### The languages, step 1 (2026-11-06)
+
+Step 1 of forclaude/wallet-languages-plan-1.md: the dictionary, the
+language service, the shell, the navigation and the landing page. Why:
+the app was English only, about 1,300 pieces of English across 34
+pages, and the first people to use it are Thai. Their only help was
+Chrome's page translation, which rewrites every piece of text behind
+Angular's back, so a changed amount or status can show stale or mixed
+words; a wallet cannot rely on it. From this step the app speaks both
+languages, Thai when the browser's first language is Thai, and each
+later step turns its pages Thai.
+
+- `src/app/i18n/en.ts`: the English words, the sections `shell`, `nav`,
+  `landing`, `material` and `dates` and an empty `common`, every
+  sentence moved letter for letter; `Words`, the object's shape.
+  `src/app/i18n/th.ts`: the Thai, the same shape, typed `Words`, so a
+  sentence missing in Thai fails the build; written from the plan's
+  style and glossary (its 1.6) for the Thai readers to correct.
+- `services/language.service.ts`: `LanguageService`, root-provided:
+  `language`, a signal, Thai when the browser's first preferred
+  language begins with "th", else English; `words`, the dictionary of
+  that language; `tag`, en-US or th-TH-u-ca-gregory; `useEnglish()`;
+  `dateTime` and `time`, what `date: 'medium'` and `date:
+  'mediumTime'` gave. An effect sets the page's `lang` attribute, the
+  date adapter's locale (the native adapter app.config.ts provides)
+  and MatStepperIntl's `optionalLabel`, and fires its `changes`: once
+  at start and again after Switch to English.
+- `app.ts`: `lang` and `t` after `config`, so the service is created
+  with the shell. `app.html`: the menu button's aria label, the two
+  brand lines and Lock from `t().shell`.
+- `services/navigation.service.ts`: the fourteen labels from
+  `t().nav`, read inside `items`, so the side panel and the Home tiles
+  follow the language.
+- `pages/landing.page.ts`: the notice's headline and the card's words
+  from `t().landing`; the English paragraph of the notice carries
+  `lang="en"`, the Thai one stays as it was; under the card, in Thai
+  only, the button "Switch to English" (a literal, English in every
+  language), which calls `useEnglish()`.
+- `index.html` is not changed: its `lang="en"` is the start value the
+  service overwrites.
+- Tables typed `Record<string, string>` added to the dictionaries (the
+  type cannot check their keys in Thai): none in this step.
+- Readings where the plan left a detail open: the landing page's
+  `lang` and `t` sit after its five private injections, protected,
+  since the template reads them; the README's `language.service.ts`
+  line wraps onto a second line, as the block's other long lines do;
+  the 8.2 Landing paragraph was re-wrapped from the new sentence on.
+  No sentence of this step read odd.
+- Spec: 8.1 (the dictionary paragraph), 8.2 Landing (the headline and
+  the button), 8.3 (language.service), 8.8 (new), 10, this note;
+  README (the layout block, the languages paragraph).
+- `npx ng build` clean (1.67 MB initial). Not run in a browser here;
+  the user tests with `ng serve`: a browser whose first language is
+  Thai shows the Thai shell, navigation and landing page and the
+  button, any other shows English.
 
 ## 12. Recovery and the moderator edition
 
