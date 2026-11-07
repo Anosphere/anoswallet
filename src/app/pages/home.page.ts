@@ -7,6 +7,7 @@ import { AvatarComponent } from '../components/avatar.component';
 import { BalanceCardComponent } from '../components/balance-card.component';
 import { ACCOUNT_POLL_MS } from '../constants';
 import { BalancesService } from '../services/balances.service';
+import { LanguageService } from '../services/language.service';
 import { reasonOf } from '../services/log.service';
 import { MasterpodApiService } from '../services/masterpod-api.service';
 import { NavigationService } from '../services/navigation.service';
@@ -39,14 +40,14 @@ interface TodoLine {
   template: `
     <div class="greeting">
       <app-avatar [anopodId]="session.anopodId() ?? ''" [username]="session.username()" [size]="56" />
-      <h2>Hello, {{ session.firstName() || session.username() }}</h2>
+      <h2>{{ t().home.hello(session.firstName() || session.username()) }}</h2>
     </div>
     @if (listError(); as text) {
       <p class="error">{{ text }}</p>
     }
     <app-balance-card />
     @if (todo().length > 0) {
-      <h3>Things to do</h3>
+      <h3>{{ t().home.todoTitle }}</h3>
       <mat-nav-list>
         @for (line of todo(); track $index) {
           <a mat-list-item [routerLink]="line.path">
@@ -86,6 +87,8 @@ export class HomePage {
   private readonly navigation = inject(NavigationService);
   private readonly balances = inject(BalancesService);
   private readonly masterpod = inject(MasterpodApiService);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
   protected readonly listError = signal<string | null>(null);
   /** True once /list-anos-accounts answered, so "Open your first anos account" waits for the list. */
@@ -96,25 +99,26 @@ export class HomePage {
 
   /** The Things to do lines, in the plan's order, each only when it applies. */
   protected readonly todo = computed((): TodoLine[] => {
+    const home = this.t().home;
     const lines: TodoLine[] = [];
     const status = this.session.status();
-    if (status?.bucketOneImages === 0) lines.push({ path: '/account/recovery/selfie', icon: 'photo_camera', words: 'Add a recovery selfie' });
+    if (status?.bucketOneImages === 0) lines.push({ path: '/account/recovery/selfie', icon: 'photo_camera', words: home.addSelfie });
     if (status && (status.bucketTwoImages === 0 || status.bucketTwoInfos < 3)) {
-      lines.push({ path: '/account/recovery/details', icon: 'badge', words: 'Add your recovery details' });
+      lines.push({ path: '/account/recovery/details', icon: 'badge', words: home.addDetails });
     }
     const accounts = this.session.accounts();
-    if (this.accountsLoaded() && accounts.length === 0) lines.push({ path: '/wallet', icon: 'account_balance_wallet', words: 'Open your first anos account' });
-    const names = accountNames(accounts);
+    if (this.accountsLoaded() && accounts.length === 0) lines.push({ path: '/wallet', icon: 'account_balance_wallet', words: home.openFirst });
+    const names = accountNames(accounts, this.t().accountKinds);
     for (const account of accounts) {
-      if (!account.submittedAt) lines.push({ path: '/wallet', icon: 'error', words: `Finish creating your ${names.get(account.accountId)}` });
+      if (!account.submittedAt) lines.push({ path: '/wallet', icon: 'error', words: home.finishCreating(names.get(account.accountId) ?? '') });
     }
     const unreadRooms = this.session.unreadRoomCount();
-    if (unreadRooms > 0) lines.push({ path: '/chat', icon: 'chat', words: count(unreadRooms, 'unread chat') });
+    if (unreadRooms > 0) lines.push({ path: '/chat', icon: 'chat', words: home.unreadChats(unreadRooms) });
     const rooms = this.session.chatRooms();
     const requests = rooms ? rooms.invites.length + rooms.joinRequests.length : 0;
-    if (requests > 0) lines.push({ path: '/chat/requests', icon: 'mail', words: count(requests, 'chat request') });
+    if (requests > 0) lines.push({ path: '/chat/requests', icon: 'mail', words: home.chatRequests(requests) });
     const unread = this.session.unread().length;
-    if (unread > 0) lines.push({ path: '/notifications', icon: 'notifications', words: count(unread, 'unread notification') });
+    if (unread > 0) lines.push({ path: '/notifications', icon: 'notifications', words: home.unreadNotifications(unread) });
     return lines;
   });
 
@@ -140,9 +144,4 @@ export class HomePage {
     }
     await this.balances.refresh();
   }
-}
-
-/** "3 unread chats", "1 unread chat". */
-function count(n: number, word: string): string {
-  return `${n} ${word}${n === 1 ? '' : 's'}`;
 }

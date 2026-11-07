@@ -1321,6 +1321,9 @@ The pages done so far, a list the later steps extend:
   server, the no-session answer of the two API services, the log's
   network error); the country names, in the identity form and the
   marketplace.
+- step 3 (2026-11-06): Home, the Wallet page, the Account page and the
+  recovery walkthrough, the balance card, the balances service and the
+  account names.
 
 ## 9. Configuration, and running it on this machine
 
@@ -2544,6 +2547,73 @@ the first visit, from Create to Setup.
 - `npx ng build` clean (1.71 MB initial). Not run in a browser here;
   the user tests with `ng serve`, a browser set to Thai for the Thai
   pages, any other for English.
+
+### The languages, step 3 (2026-11-06)
+
+Step 3 of forclaude/wallet-languages-plan-1.md: Home, the Wallet page,
+the Account pages and the balance card. Why: after step 2 the pages of
+the first visit were Thai, while Home, the Wallet page and the Account
+pages, the pages of every day after it, were still English.
+
+- `i18n/en.ts` and `th.ts`: the sections `home`, `wallet`,
+  `accountHome`, `recovery`, `balanceCard` and `accountKinds`, and the
+  `common` entries "Reading…", "<n> anos" (a function), "Copy the
+  account id", 'The encryption key is not in RAM: unlock again', Done,
+  Remove, "Account recovery" and the step label "Selfie". The sentences
+  with a count, a name or an amount are functions (`hello`,
+  `finishCreating`, the three unread counts; the wallet's `available`
+  and the four held kinds; `selfiesOnFile`, `detailsOnFile`;
+  `doneOnFile`, `onFile`; the card's `available`, its four held lines,
+  `notLanded`, `notRead`; the two `retryFresh`).
+- `account-names.ts`: `accountNames(accounts, kinds)`; the name of one
+  of a type is `kinds[type]`, else the type word and "account"; the
+  numbering as it was. The callers pass `t().accountKinds`: Home, the
+  Wallet page and, with its `lang` injection, the history page, whose
+  sentences wait for step 4.
+- `home.page.ts`: the greeting and the to-do lines from functions;
+  `count()` gone. `wallet.page.ts`: `STEPS` left the file for
+  `wallet.steps`; the type select shows `typeOption(type)`, the raw word
+  in English and the glossary's in Thai; `balanceWords` and `heldWords`
+  from functions; the sentences from the dictionary.
+- `account-home.page.ts`: the two rows' counts from functions; the
+  `count` import gone. `account-recovery.page.ts`: the seven step labels
+  as `[label]`, the six long paragraphs, `onFile` a function of the
+  three counts, `finishLabel` from entries, the five progress sentences,
+  the alt and aria words; the exported `count()` gone with its last
+  importer. The two optional steps show Material's "Optional" from the
+  service (step 1).
+- `components/balance-card.component.ts`: the `lines` computed from
+  functions, the aria label as a binding. `services/balances.service.ts`:
+  `common.noKeyInRam`.
+- Tables typed `Record<string, string>` added to the dictionaries (the
+  type cannot check their keys in Thai): `accountKinds`, the four types.
+  `wallet.steps` is a `string[]` of six, its length unchecked.
+- Readings where the plan left a detail open: the Wallet page's 'The
+  encryption key is not in RAM: unlock again.' ends with a period where
+  the balances service's does not, so it is `wallet.noKeyInRam`, its own
+  entry, and `common.noKeyInRam` is the one without, each English letter
+  for letter; 'This account is not one of this anoPod's accounts', named
+  by the plan among this step's `common` entries, has no reader in this
+  step's files and is added in step 4, the first step that meets it;
+  "<n> anos" (the card's total, an account card's balance) is one
+  function, `common.anos`; the Account page's subtitle and the
+  walkthrough's title, both "Account recovery", are
+  `common.accountRecovery`; "Remove" (the aria label, also on the
+  account page) is `common.remove`; "Done" is `common.done` as the plan
+  says, though only the walkthrough shows it today; the step label
+  "Selfie" moved from `create.stepSelfie` to `common.selfieStep`, one
+  line of `create.page.ts`, since this step met it on a second page
+  (the rule of the plan's 1.1); `finishCreating` takes the account's
+  name with `?? ''`, since `Map.get` is typed as possibly undefined
+  though every account has a name; the walkthrough's "Email", a step
+  label and a field label, is one entry. Thai: "Finish" and "Done" both
+  read เสร็จสิ้น; the progress lines keep bucket in Latin letters, the
+  security buckets' name; "break-glass seed" reads seed ฉุกเฉิน; "Up
+  to five photos" reads สูงสุด 5 รูป, digits by the style rule. No
+  sentence read odd.
+- Spec: 8.8 (the list), this note.
+- `npx ng build` clean (1.73 MB initial). Not run in a browser here;
+  the user tests with `ng serve`.
 
 ## 12. Recovery and the moderator edition
 

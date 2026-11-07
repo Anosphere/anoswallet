@@ -16,6 +16,7 @@ import { HistoryWords, historyWords } from '../history-words';
 import { AnosApiService, TransactionItem } from '../services/anos-api.service';
 import { ChatService } from '../services/chat.service';
 import { CryptoService, PairOne } from '../services/crypto.service';
+import { LanguageService } from '../services/language.service';
 import { reasonOf } from '../services/log.service';
 import { MasterpodApiService } from '../services/masterpod-api.service';
 import { SessionService } from '../services/session.service';
@@ -142,6 +143,7 @@ export class TransactionHistoryPage {
   private readonly crypto = inject(CryptoService);
   /** For dayLabel and timeOf, so days read the same here and in Chat. */
   protected readonly chat = inject(ChatService);
+  protected readonly lang = inject(LanguageService);
 
   protected readonly shortId = shortId;
   protected readonly transactions = signal<TransactionItem[]>([]);
@@ -155,7 +157,7 @@ export class TransactionHistoryPage {
   protected readonly expanded = signal<string | null>(null);
 
   /** The account's name by its type (account-names.ts); "Account" until the account is in the session. */
-  protected readonly name = computed(() => accountNames(this.session.accounts()).get(this.accountId()) ?? 'Account');
+  protected readonly name = computed(() => accountNames(this.session.accounts(), this.lang.words().accountKinds).get(this.accountId()) ?? 'Account');
 
   /** The rows under day headings, newest first: the rows come in position order, so a day's rows sit together. */
   protected readonly days = computed((): Day[] => {

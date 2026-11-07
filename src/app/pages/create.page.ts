@@ -58,7 +58,7 @@ import { SessionService } from '../services/session.service';
             </div>
           </mat-step>
 
-          <mat-step [completed]="selfie() !== null" [label]="t().create.stepSelfie">
+          <mat-step [completed]="selfie() !== null" [label]="t().common.selfieStep">
             <p>{{ t().create.selfieHint }}</p>
             @if (stepper.selectedIndex === 2) {
               <app-camera quality="normal" (photo)="selfie.set($event)" (cleared)="selfie.set(null)" />
