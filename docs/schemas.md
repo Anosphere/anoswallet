@@ -543,10 +543,32 @@ blob1, blob2, chatPrivateKeyBlob, identityBlob (if the PRF output is not
 in RAM, an unlock first); show the backup code in groups of four with "I
 have written it down, complete"; on Complete: deposit the backup code
 (section 6, backupcode), then /complete-setup with the eight fields; on
-200 drop the code and go on by the next-step rule. A failed deposit shows
-Retry (section 6, step 3). A /complete-setup refused with 409 setup
-already complete means a dropped answer earlier: /check-anopod-status,
-and if setup is complete, carry on.
+200 drop the code and go on by the next-step rule. On an Android phone
+(the browser's user agent string says Android; 2026-11-07, section 11)
+the page does not leave yet: once /complete-setup has answered, the card
+shows "Protect your passkey" in place of the progress list: "Strongly
+recommended." in bold, then "It is free, it takes a few minutes, and it
+makes your anoPod much harder to steal."; the why, "On an Android phone
+your passkey is usually kept by Google, under your Google account. If
+someone takes over that Google account, your passkey is within their
+reach."; what it does, "Google's Advanced Protection makes that takeover
+very hard: signing in to Google needs your passkey or a security key,
+account recovery is slow and strict, and most outside apps are kept
+out."; the caution, "It changes how you sign in to Google, and a few
+apps that use your Google account may stop working. Google's page
+explains it before you turn it on."; the button "Open Google's Advanced
+Protection", which opens https://landing.google.com/advancedprotection/
+in a new tab; "Then choose one:" over two radio choices, "I turned it
+on" and "Skip for now"; and Continue, off until one is picked, which
+goes on by the next-step rule. The answer is kept nowhere, on the device
+or the masterpod, and the wallet cannot check it; the pane shows once,
+at setup, and never on an iPhone or a computer. Google's Advanced
+Protection for the Google account is meant, not Android 16's device
+setting of the same name. A /complete-setup refused with 409 leaves at
+once, as before, without the pane. A failed deposit shows Retry (section
+6, step 3). A /complete-setup refused with 409 setup already complete
+means a dropped answer earlier: /check-anopod-status, and if setup is
+complete, carry on.
 
 Account recovery, one linear Material stepper, at
 /account/recovery/selfie (opened at step 1) and /account/recovery/details
@@ -1341,6 +1363,10 @@ The pages done so far, a list the later steps extend:
   attesting page and its trade and dispute case pages, with the
   attesting service's words. Every page of every edition is done.
 
+Later changes add their words to the section of the page they change, in
+both files at once: the Protect your passkey pane of setup, in `setup`
+(2026-11-07, section 11).
+
 ## 9. Configuration, and running it on this machine
 
 What runs, who starts it
@@ -1403,6 +1429,17 @@ network/testnet.env numbers (2026-11-06, section 11).
   developer-worded errors of crypto.service.ts; the Buddhist year; a
   Thai web font; blocking Google Translate or marking pieces
   untranslatable; right-to-left languages.
+- From the protect plan (forclaude/wallet-protect-plan-1.md,
+  2026-11-07): remembering whether the person turned Advanced Protection
+  on or skipped it (the wallet keeps nothing; a later upgrade gives it
+  memory on the masterpod); a row under Account or a Things to do item
+  on Home for someone who skipped; a second ask on Skip; the pane on an
+  iPhone (the passkey is in iCloud Keychain, end to end encrypted behind
+  the Apple ID's two-factor, nothing to sign up for) or on a computer
+  (Chrome there may keep the passkey with Google too); knowing whether
+  the passkey really is with Google (the user agent says Android, no
+  more; a Samsung or password-manager passkey reads the same pane, hence
+  "usually"); Android 16's device setting of the same name.
 - Several passkeys, push delivery, a custom theme, rate limits.
 
 ## 11. Build notes
@@ -3044,6 +3081,70 @@ page of every edition speaks both languages, and the plan is built.
   it quotes the English.
 - `npx ng build` clean (1.89 MB initial). Not run in a browser here;
   the user tests with `ng serve`.
+
+### Protect your passkey, step 1 (2026-11-07)
+
+Step 1 of forclaude/wallet-protect-plan-1.md, its only step: the Protect
+your passkey pane at the end of setup on an Android phone. Why: on an
+Android phone the wallet's passkey is usually kept by Google Password
+Manager, under the person's Google account, so whoever takes over that
+Google account is within reach of the passkey and of the anoPod it
+opens. Google's Advanced Protection Program makes a Google account very
+hard to take over: signing in needs a passkey or a security key, account
+recovery is slow and strict, and most outside apps are kept out; a
+person can enrol with a passkey on the phone itself, free, in a few
+minutes. Nothing in the wallet told people this. A step at the end of
+setup, strongly recommended with the why and the benefits, that nobody
+can pass without choosing, will get many of them to do it.
+
+- `pages/setup.page.ts`: `MatRadioModule`, new to the app (the identity
+  page's checkbox was the only such control); the module constant
+  `ADVANCED_PROTECTION_URL`, Google's page; the fields `android` (the
+  user agent string contains "Android"), `advancedProtectionUrl`,
+  `choice` (a signal: done, skip or null) and `nextUrl`; a new template
+  branch for `phase() === 'done'` on Android, between the idle branch
+  and the progress list: the title, "Strongly recommended." in bold with
+  the benefits, the why, what it does, the caution, the button to
+  Google's page (a new tab, `rel="noopener"`), "Then choose one:", a
+  radio group of the two choices and Continue, off until one is picked;
+  `complete()` keeps the next-step rule's page in `nextUrl` and on
+  Android returns instead of leaving, so the pane shows in place of the
+  progress list; `goOn()`, Continue, goes to that page. The 409 path
+  leaves at once, as before, without the pane; on an iPhone or a
+  computer nothing changes. One style line, `.choices`.
+- `i18n/en.ts` and `th.ts`: ten entries in `setup`, after
+  `alreadyComplete`: `protectTitle`, `protectRecommended`,
+  `protectBenefits`, `protectWhy`, `protectWhat`, `protectCaution`,
+  `protectOpen`, `protectThen`, `protectDone` and `protectSkip`; the
+  English the plan's 1.2 letter for letter, the Thai written from the
+  glossary and style of the languages plan's 1.6 and the Thai settled in
+  the notes above. Continue is `common.continue`, already there; nothing
+  goes to `common`. No entry is a function.
+- Tables typed `Record<string, string>` added to the dictionaries (the
+  type cannot check their keys in Thai): none in this step.
+- Readings where the plan left a detail open: the template branch and
+  the fields take the file's own indentation, the plan's snippets being
+  relative; the `.choices` line is the last of the styles block; the new
+  fields sit right after `backupCodeText`, before the comment over the
+  secrets' fields, with no blank line between; the class comment was
+  re-wrapped from the new sentence on, and the 8.2 Setup paragraph
+  likewise. Thai: "Strongly recommended." reads แนะนำอย่างยิ่ง;
+  "security key" reads คีย์ความปลอดภัย, as Google's Thai pages write it;
+  "takes over" reads เข้าควบคุม and "that takeover" การเข้าควบคุมนั้น;
+  "within their reach" reads เขาก็เข้าถึงพาสคีย์ของคุณได้ (they can then
+  get at your passkey); "It is free" reads ไม่มีค่าใช้จ่าย; "Then choose
+  one:" reads จากนั้นเลือกข้อใดข้อหนึ่ง:; "I turned it on" reads
+  ฉันเปิดใช้แล้ว and "Skip for now" ข้ามไปก่อน; the button reads
+  เปิดหน้า Advanced Protection ของ Google, "open the page", since เปิด
+  alone also means "turn on" and would read like the choice under it;
+  Google, Android and Advanced Protection stay in Latin letters with a
+  space on each side. No sentence read odd.
+- Spec: 8.2 Setup (the pane), 8.8 (the paragraph after the list), 10
+  (the bullet), this note; README: nothing to change.
+- `npx ng build` clean (1.92 MB initial). Not run in a browser
+  here; the user tests with `ng serve` (Chrome's device toolbar
+  emulating a Pixel sends an Android user agent, so the pane shows on
+  the Mac too) and on an Android phone on the testnet, after Complete.
 
 ## 12. Recovery and the moderator edition
 
