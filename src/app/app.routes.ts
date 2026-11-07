@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import { AccountHomePage } from './pages/account-home.page';
 import { AccountPage } from './pages/account.page';
+import { AccountProtectPage } from './pages/account-protect.page';
 import { AccountRecoveryPage } from './pages/account-recovery.page';
 import { AssistedTransferPage } from './pages/assisted-transfer.page';
 import { AttestingDisputeCasePage } from './pages/attesting-dispute-case.page';
@@ -58,6 +59,7 @@ export const routes: Routes = [
   { path: 'account', component: AccountHomePage, canActivate: [sessionGuard], title: 'Your account' },
   { path: 'account/recovery/selfie', component: AccountRecoveryPage, canActivate: [sessionGuard], data: { start: 'selfie' }, title: 'Recovery selfie' },
   { path: 'account/recovery/details', component: AccountRecoveryPage, canActivate: [sessionGuard], data: { start: 'details' }, title: 'Recovery details' },
+  { path: 'account/protect', component: AccountProtectPage, canActivate: [sessionGuard], title: 'Protect your passkey' },
   { path: 'security/bucket-one', redirectTo: 'account/recovery/selfie', pathMatch: 'full' },
   { path: 'security/bucket-two', redirectTo: 'account/recovery/details', pathMatch: 'full' },
   { path: 'home', component: HomePage, canActivate: [sessionGuard], title: 'Home' },

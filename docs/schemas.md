@@ -339,7 +339,8 @@ every table, with the set_updated_at trigger.
     answer: 200 { updatedAt: ISO 8601 }
 
 The proxy forwards them as any masterpod path (section 2). The wallet's
-side comes with step 4 of the notes plan.
+side is settings.service (8.3), the setup page's Continue and the Protect
+your passkey page (8.2).
 
 ## 5. Validator changes (anossoftware)
 
@@ -548,6 +549,7 @@ as in the test apps; a new tab unlocks again.
     /account                 your account: Recovery selfie and Recovery details, with what is on file
     /account/recovery/selfie    the account recovery walkthrough, opened at the selfie
     /account/recovery/details   the walkthrough opened at the ID
+    /account/protect         the Protect your passkey page: the setup pane again, Save records the answer
     /security/bucket-one     forwards to /account/recovery/selfie
     /security/bucket-two     forwards to /account/recovery/details
     /home                    home: the greeting, the balance card, things to do, the tiles
@@ -690,9 +692,10 @@ explains it before you turn it on."; the button "Open Google's Advanced
 Protection", which opens https://landing.google.com/advancedprotection/
 in a new tab; "Then choose one:" over two radio choices, "I turned it
 on" and "Skip for now"; and Continue, off until one is picked, which
-goes on by the next-step rule. The answer is kept nowhere, on the device
-or the masterpod, and the wallet cannot check it; the pane shows once,
-at setup, and never on an iPhone or a computer. Google's Advanced
+goes on by the next-step rule. The answer is recorded in the wallet
+settings on the masterpod (4.7; 2026-11-07, section 11), 'on' or
+'skipped'; the wallet cannot check what the person did; the pane shows
+once, at setup, and never on an iPhone or a computer. Google's Advanced
 Protection for the Google account is meant, not Android 16's device
 setting of the same name. A /complete-setup refused with 409 leaves at
 once, as before, without the pane. A failed deposit shows Retry (section
@@ -764,6 +767,17 @@ status counts on file ("1 selfie on file", "2 photos and 4 details on
 file", "None on file yet"). The status only counts, since everything is
 encrypted, so the rows say how many, never which.
 
+Protect your passkey (2026-11-07, section 11), at /account/protect,
+reached from Home's Things to do on an Android phone while the recorded
+answer is skipped: the setup pane again, titled "Protect your passkey",
+Back to Home, then the pane's lines from `common` ("Strongly
+recommended." in bold with the benefits, the why, what it does, the
+caution, the button "Open Google's Advanced Protection" to Google's page
+in a new tab, "Then choose one:" over "I turned it on" and "Skip for
+now") and Save, off until one is picked, which records the answer in the
+wallet settings (4.7, settings.service) as 'on' or 'skipped' and goes to
+Home; a refusal in red. No row under Account.
+
 Home (2026-11-06, section 11), at /home, where an unlock lands once
 setup is complete, first in the navigation; no outer card. Top to
 bottom: the greeting, the person's avatar (8.6, 56 px) and "Hello,
@@ -773,7 +787,9 @@ a short list of links, the heading and the list hidden when none
 applies, in this order, each only when it applies: "Add a recovery
 selfie" (bucketOneImages 0, to /account/recovery/selfie); "Add your
 recovery details" (bucketTwoImages 0 or bucketTwoInfos under 3, to
-/account/recovery/details); "Open your first anos account" (the
+/account/recovery/details); "Protect your passkey" (an Android phone,
+the recorded answer skipped, to /account/protect; 2026-11-07, section
+11); "Open your first anos account" (the
 accounts read and none, to /wallet); "Finish creating your Spending
 account 2" (an account not submitted to the validator, by its name, to
 /wallet); "3 unread chats" (to /chat); "2 chat requests" (the invites to
@@ -1364,7 +1380,7 @@ excepted, with the keyholder and anos calls included.
                             routes and the four new ones added; the marketplace routes of 2026-11-06: getListing,
                             listingId on createChatRoom, mine and status any on listListings, no hpkeKey on
                             createListing, the fuller RoomListing and the listing on an invite; the four noted
-                            transaction routes (2026-11-07)
+                            transaction routes and the two settings routes (2026-11-07)
     keyholder-api.service   the keyholder test app's, base path /api/keyholder/<n>
     anos-api.service        the anos test app's account-api.service.ts, base path /api/anos/<defaultValidator>,
                             plus the five signed reads (listEscrows added 2026-11-05, getAssistedTransfer and
@@ -1377,6 +1393,8 @@ excepted, with the keyholder and anos calls included.
                             any anos are held or pending
     notes.service           the noted transactions (2026-11-07): the last list read with its blobs opened,
                             byTransaction, add, update and remove, the preset kind and the starting currency
+    settings.service        the wallet settings (2026-11-07): one encrypted object on the masterpod (4.7), read once
+                            per session (Home, quiet) and saved whole (setup's Continue, the protect page's Save)
     navigation.service      the one navigation list (2026-11-06): NavItem (path, label, icon, badge) and items,
                             the side panel's entries by the status and the edition, Home first once setup is
                             complete, Chat and Notifications with their unread counts; the side panel and the
@@ -1569,7 +1587,7 @@ Later changes add their words to the section of the page they change, in
 both files at once: the Protect your passkey pane of setup, in `setup`
 (2026-11-07, section 11); the note form and the notes of the history
 page, in `notes` (2026-11-07, section 11); the Noted transactions page,
-in `notes`.
+in `notes`; the protect page and the Home line, in `common` and `home`.
 
 ## 9. Configuration, and running it on this machine
 
@@ -1634,10 +1652,7 @@ network/testnet.env numbers (2026-11-06, section 11).
   Thai web font; blocking Google Translate or marking pieces
   untranslatable; right-to-left languages.
 - From the protect plan (forclaude/wallet-protect-plan-1.md,
-  2026-11-07): remembering whether the person turned Advanced Protection
-  on or skipped it (the wallet keeps nothing; a later upgrade gives it
-  memory on the masterpod); a row under Account or a Things to do item
-  on Home for someone who skipped; a second ask on Skip; the pane on an
+  2026-11-07): a second ask on Skip; the pane on an
   iPhone (the passkey is in iCloud Keychain, end to end encrypted behind
   the Apple ID's two-factor, nothing to sign up for) or on a computer
   (Chrome there may keep the passkey with Google too); knowing whether
@@ -3480,6 +3495,61 @@ currency, and a file a spreadsheet opens.
 - `npx ng build` clean (1.95 MB initial). Not run in a browser here; the
   user tests with `ng serve`: the Wallet page's button, the chips, a
   range, the download.
+
+### The wallet memory, step 4 (2026-11-07)
+
+Step 4 of forclaude/wallet-notes-plan-1.md, the last: the wallet
+settings in use, the Protect your passkey answer first. Why: the Protect
+pane of setup (2026-11-07, above) could keep no answer, so nothing could
+remind someone who skipped it; with the masterpod's wallet_settings row
+(4.7) the wallet remembers the answer under the pod's encryption key and
+Home can show "Protect your passkey" until it is on.
+
+- `services/masterpod-api.service.ts`: `getWalletSettings` and
+  `setWalletSettings` in a group after the noted transaction methods.
+- `services/settings.service.ts`, new: `WalletSettings` ({ v: 1,
+  protect? }); the `settings` signal, null until read; `load`, quiet by
+  default, which gives { v: 1 } for a null blob, a refusal or a blob that
+  does not open and skips the read without the encryption key; `save`,
+  the merged object wrapped under the encryption key and sent whole,
+  after a load when nothing was read.
+- `constants.ts`: `ADVANCED_PROTECTION_URL`, from the setup page.
+- `pages/setup.page.ts`: the constant imported; `SettingsService`
+  injected; the ten `t().setup.protect*` reads are `t().common.protect*`;
+  Continue (`goOn`) records 'on' or 'skipped' before leaving, a failed
+  save logged by the API service and not holding the person up.
+- `pages/account-protect.page.ts`, new, at `/account/protect` after the
+  two recovery routes: the pane's lines from `common`, the button to
+  Google's page, the two choices and Save, which records the answer and
+  goes to Home.
+- `pages/home.page.ts`: `SettingsService` injected; `android`, the setup
+  page's test; the "Protect your passkey" line after the two recovery
+  lines while the recorded answer is skipped; `load` reads the settings
+  after the accounts.
+- `i18n/en.ts` and `th.ts`: `home.protectPasskey`; the ten
+  `setup.protect*` entries moved to `common` under the same keys, the
+  English and the Thai as they were, since the setup page and the
+  protect page share them.
+- Tables typed `Record<string, string>` added to the dictionaries (the
+  type cannot check their keys in Thai): none in this step.
+- Readings where the plan left a detail open: a refused
+  `/get-wallet-settings` goes to the browser's console, since the read is
+  quiet and so not in the activity log; the API service's class comment
+  now names 4.7 beside 4.6; the Android comment on Home speaks of the
+  line, not the pane; the protect page has an `.error` style line beside
+  `.choices`, for the refusal in red; the ten entries sit at the end of
+  `common`, after `all`; `home.protectPasskey` and `common.protectTitle`
+  are the same English, as the plan lists them; the Home line sits after
+  `addDetails` in the dictionary, in the order of the list. Thai: the
+  Home line reads ปกป้องพาสคีย์ของคุณ, the pane's title; nothing else is
+  new, the ten sentences moved as they were. No sentence read odd.
+- Spec: 4.7 (the wallet's side), 8.1, 8.2 (Home, Setup, Protect your
+  passkey), 8.3, 8.8, 10 (the protect bullet), this note; README: the
+  pages and services lines.
+- `npx ng build` clean (1.96 MB initial). Not run in a browser here; the
+  user tests with `ng serve`: a pod set up on a Pixel-emulating Chrome
+  that picks "Skip for now" sees "Protect your passkey" under Things to
+  do on Home, and the page's Save with "I turned it on" removes it.
 
 ## 12. Recovery and the moderator edition
 

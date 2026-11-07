@@ -565,7 +565,7 @@ export interface ExistingEvidence {
  * keyholder test app's api.service.ts, base path /api/masterpod, the two
  * changed routes and the four new ones added, then the recovery routes of
  * masterpod 12.4, the attesting routes of masterpod 13.4 and the wallet
- * memory routes of wallet spec 4.6 (2026-11-07)), so no page builds URLs
+ * memory routes of wallet spec 4.6 and 4.7 (2026-11-07)), so no page builds URLs
  * or envelopes. The session service holds the session and signs.
  */
 @Injectable({ providedIn: 'root' })
@@ -788,6 +788,16 @@ export class MasterpodApiService {
 
   listNotedTransactions(range: NoteRange = {}, quiet = false): Promise<ApiResponse<{ notes: NotedTransactionItem[]; more: boolean }>> {
     return this.signed('/list-noted-transactions', range, quiet);
+  }
+
+  // --- level setup: the wallet settings (wallet spec 4.7) ---------------------
+
+  getWalletSettings(quiet = false): Promise<ApiResponse<{ settingsBlob: string | null; updatedAt: string | null }>> {
+    return this.signed('/get-wallet-settings', {}, quiet);
+  }
+
+  setWalletSettings(settingsBlob: string): Promise<ApiResponse<{ updatedAt: string }>> {
+    return this.signed('/set-wallet-settings', { settingsBlob });
   }
 
   // --- level setup: after a recovery (masterpod 12.4.5) -----------------------
