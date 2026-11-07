@@ -468,7 +468,7 @@ export class MyCasePage {
     if (res.status === 409 && /already shared/.test(reason)) return words.alreadyShared;
     if (res.status === 409 && /case closed/.test(reason)) return words.caseClosed;
     if (res.status === 404 && /unknown evidence/.test(reason)) return words.fileNotYours;
-    if (res.status === 400) return words.refusedValues(path, reason);
+    if (res.status === 400) return this.t().common.refusedValues(path, reason);
     return `${path}: ${reason}`;
   }
 
@@ -526,7 +526,7 @@ export class MyCasePage {
         return this.t().common.videoCallScheduled(at);
       }
       case 'decided':
-        return typeof d['verdict'] === 'string' ? words.eventDecided(d['verdict']) : words.eventDecidedSigned;
+        return typeof d['verdict'] === 'string' ? words.eventDecided(d['verdict']) : this.t().common.decidedSigned;
       case 'lookupIdCleared':
         return words.eventCleared;
       case 'evidenceDeleted':

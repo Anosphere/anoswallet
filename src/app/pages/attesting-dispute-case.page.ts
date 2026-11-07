@@ -1,4 +1,3 @@
-import { DatePipe } from '@angular/common';
 import { Component, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -16,6 +15,7 @@ import { AnosApiService } from '../services/anos-api.service';
 import { AttestingService, attestingError } from '../services/attesting.service';
 import { ConfigService } from '../services/config.service';
 import { CryptoService, EscrowVerdictPayload, FollowUp, HybridKeys, Verdict } from '../services/crypto.service';
+import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
 import {
   ATTESTOR_DISMISS_REASONS,
@@ -30,7 +30,7 @@ import {
 } from '../services/masterpod-api.service';
 import { SessionService } from '../services/session.service';
 import { SigningService } from '../services/signing.service';
-import { DISMISS_WORDS, REVIEW_STATUSES, STATUS_ICONS, STATUS_WORDS } from './attesting.page';
+import { REVIEW_STATUSES, STATUS_ICONS } from './attesting.page';
 
 /** One line of the timeline. */
 interface TimelineItem {
@@ -103,23 +103,23 @@ function accepted(result: SentResult): boolean {
  */
 @Component({
   selector: 'app-attesting-dispute-case-page',
-  imports: [DatePipe, FormsModule, RouterLink, MatCardModule, MatButtonModule, MatListModule, MatIconModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatProgressBarModule],
+  imports: [FormsModule, RouterLink, MatCardModule, MatButtonModule, MatListModule, MatIconModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatProgressBarModule],
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
-        <mat-card-title>Dispute case <code class="id">{{ caseId() }}</code></mat-card-title>
+        <mat-card-title>{{ t().disputeCase.title }} <code class="id">{{ caseId() }}</code></mat-card-title>
         <mat-card-subtitle>
           @if (data(); as d) {
-            <mat-icon class="inline">{{ icons[d.case.status] }}</mat-icon> {{ words[d.case.status] }}
+            <mat-icon class="inline">{{ icons[d.case.status] }}</mat-icon> {{ t().caseStatus[d.case.status] ?? d.case.status }}
           } @else {
-            Loading the case…
+            {{ t().common.loadingTheCase }}
           }
         </mat-card-subtitle>
       </mat-card-header>
       <mat-card-content>
         <div class="row">
-          <a mat-button routerLink="/attesting"><mat-icon>arrow_back</mat-icon> Attesting</a>
-          <button mat-stroked-button type="button" (click)="refresh()" [disabled]="busy()">Refresh</button>
+          <a mat-button routerLink="/attesting"><mat-icon>arrow_back</mat-icon> {{ t().nav.attesting }}</a>
+          <button mat-stroked-button type="button" (click)="refresh()" [disabled]="busy()">{{ t().common.refresh }}</button>
           @if (busy()) {
             <mat-progress-bar mode="indeterminate" class="grow"></mat-progress-bar>
           }
@@ -129,67 +129,67 @@ function accepted(result: SentResult): boolean {
         }
 
         @if (data(); as d) {
-          <h3>The parties</h3>
+          <h3>{{ t().disputeCase.theParties }}</h3>
           <div class="parties">
             @for (party of parties(); track party.side) {
               <div class="person">
                 @if (party.profile?.selfie; as selfie) {
-                  <img class="selfie" [src]="'data:' + selfie.contentType + ';base64,' + selfie.image" [alt]="party.side" />
+                  <img class="selfie" [src]="'data:' + selfie.contentType + ';base64,' + selfie.image" [alt]="t().sides[party.side]" />
                 }
                 <div class="facts">
-                  <div><span class="label">Side</span><span class="value">{{ party.side }}{{ party.disputed ? ' · disputed the escrow' : '' }}</span></div>
-                  <div><span class="label">Username</span><span class="value">{{ party.profile?.username ?? 'unknown pod' }}</span></div>
-                  <div><span class="label">Name</span><span class="value">{{ party.profile?.firstName }} {{ party.profile?.lastName }}</span></div>
-                  <div><span class="label">Account</span><span class="value"><code>{{ party.accountId }}</code></span></div>
+                  <div><span class="label">{{ t().common.side }}</span><span class="value">{{ t().sides[party.side] }}{{ party.disputed ? t().disputeCase.disputedTheEscrow : '' }}</span></div>
+                  <div><span class="label">{{ t().common.username }}</span><span class="value">{{ party.profile?.username ?? t().common.unknownPod }}</span></div>
+                  <div><span class="label">{{ t().common.name }}</span><span class="value">{{ party.profile?.firstName }} {{ party.profile?.lastName }}</span></div>
+                  <div><span class="label">{{ t().common.account }}</span><span class="value"><code>{{ party.accountId }}</code></span></div>
                 </div>
               </div>
             }
           </div>
-          <p class="muted">{{ words[d.case.status] }} · opened {{ d.case.createdAt | date: 'medium' }}</p>
+          <p class="muted">{{ t().common.statusOpened(t().caseStatus[d.case.status] ?? d.case.status, lang.dateTime(d.case.createdAt)) }}</p>
 
-          <h3>The escrow</h3>
+          <h3>{{ t().disputeCase.theEscrow }}</h3>
           <div class="facts">
             <div>
-              <span class="label">Amount</span>
+              <span class="label">{{ t().common.amount }}</span>
               <span class="value">
-                @if (escrow(); as e) { {{ millionthsToAnos(e.amount) }} anos · made {{ e.createdAt | date: 'medium' }} } @else { not on the validator's list of disputed escrows (decided, or settled) }
+                @if (escrow(); as e) { {{ t().attesting.amountMade(millionthsToAnos(e.amount), lang.dateTime(e.createdAt)) }} } @else { {{ t().disputeCase.notListed }} }
               </span>
             </div>
             <div>
-              <span class="label">Transaction</span>
-              <span class="value"><code>{{ d.case.transactionId }}</code> <button mat-icon-button type="button" (click)="copy('transaction', d.case.transactionId)" aria-label="Copy the transaction id"><mat-icon>content_copy</mat-icon></button>@if (copied() === 'transaction') { <span class="muted">copied</span> }</span>
+              <span class="label">{{ t().common.transaction }}</span>
+              <span class="value"><code>{{ d.case.transactionId }}</code> <button mat-icon-button type="button" (click)="copy('transaction', d.case.transactionId)" [attr.aria-label]="t().common.copyTransactionId"><mat-icon>content_copy</mat-icon></button>@if (copied() === 'transaction') { <span class="muted">{{ t().copy.copied }}</span> }</span>
             </div>
           </div>
 
-          <h3>The case key</h3>
+          <h3>{{ t().disputeCase.theCaseKey }}</h3>
           @if (keyHeld()) {
-            <p class="ok">You hold this case's key: the evidence below is opened with it.</p>
+            <p class="ok">{{ t().disputeCase.keyHeld }}</p>
             @if (!final()) {
               <div class="form">
                 <mat-form-field appearance="outline" class="wide">
-                  <mat-label>Share the case key with</mat-label>
+                  <mat-label>{{ t().disputeCase.shareWith }}</mat-label>
                   <mat-select [value]="shareTo()" (valueChange)="shareTo.set($event)">
                     @for (a of shareable(); track a.anopodId) {
-                      <mat-option [value]="a.anopodId">{{ a.username }} · {{ a.firstName }} {{ a.lastName }}</mat-option>
+                      <mat-option [value]="a.anopodId">{{ t().common.personLine(a.username, a.firstName, a.lastName) }}</mat-option>
                     }
                   </mat-select>
                 </mat-form-field>
-                <button mat-stroked-button type="button" (click)="share()" [disabled]="busy() || !shareTo()">Share</button>
+                <button mat-stroked-button type="button" (click)="share()" [disabled]="busy() || !shareTo()">{{ t().disputeCase.share }}</button>
                 @if (shareable().length === 0) {
-                  <span class="muted">Every attestor holds the key.</span>
+                  <span class="muted">{{ t().disputeCase.everyoneHolds }}</span>
                 }
               </div>
               @if (shareOutcome(); as o) { <p [class.error]="!o.ok" [class.ok]="o.ok">{{ o.text }}</p> }
             }
           } @else if (final()) {
-            <p class="muted">The case is closed: the attestors' copies of the key were deleted.</p>
+            <p class="muted">{{ t().disputeCase.keyDeleted }}</p>
           } @else if (keyError(); as text) {
             <p class="error">{{ text }}</p>
           } @else {
-            <p class="error">You hold no key for this case; ask one of: {{ holderNames() }}.</p>
+            <p class="error">{{ t().disputeCase.noKeyAsk(holderNames()) }}</p>
           }
 
-          <h3>Timeline</h3>
+          <h3>{{ t().common.timeline }}</h3>
           <mat-list dense>
             @for (item of timeline(); track item.key) {
               <mat-list-item [lines]="item.note ? 3 : 2">
@@ -197,7 +197,7 @@ function accepted(result: SentResult): boolean {
                 <span matListItemTitle>
                   {{ item.text }}
                   @if (item.link) {
-                    <a [href]="item.link" target="_blank" rel="noopener">Meeting link</a>
+                    <a [href]="item.link" target="_blank" rel="noopener">{{ t().common.meetingLink }}</a>
                   }
                 </span>
                 @if (item.note) {
@@ -208,91 +208,91 @@ function accepted(result: SentResult): boolean {
             }
           </mat-list>
 
-          <h3>Evidence</h3>
+          <h3>{{ t().common.evidence }}</h3>
           @if (final()) {
-            <p class="muted">The attestors' copies were deleted when the case closed; the parties keep their own.</p>
+            <p class="muted">{{ t().disputeCase.copiesDeleted }}</p>
           } @else if (!keyHeld()) {
-            <p class="muted">Without the case key the files are counted, not shown.</p>
+            <p class="muted">{{ t().disputeCase.countedNotShown }}</p>
           }
           <div class="columns">
             @for (side of sides; track side) {
               <div class="column">
-                <h4>The {{ side }}'s files ({{ evidenceOf(side).length }})</h4>
+                <h4>{{ t().disputeCase.sideFiles(t().sides[side], evidenceOf(side).length) }}</h4>
                 @for (e of evidenceOf(side); track e.evidenceId) {
                   <div class="file">
                     @if (e.url) {
                       @if (e.isPdf) {
                         <a [href]="e.url" target="_blank" rel="noopener" class="pdf"><mat-icon>picture_as_pdf</mat-icon> PDF</a>
                       } @else {
-                        <a [href]="e.url" target="_blank" rel="noopener"><img [src]="e.url" alt="evidence" /></a>
+                        <a [href]="e.url" target="_blank" rel="noopener"><img [src]="e.url" [alt]="t().disputeCase.evidenceAlt" /></a>
                       }
                     } @else {
                       <mat-icon class="locked">{{ e.deleted ? 'delete' : 'lock' }}</mat-icon>
                     }
-                    <div class="muted">{{ e.contentType }} · {{ e.who }} · {{ e.when }}{{ e.deleted ? ' · the attestors\\' copy was deleted' : '' }}</div>
+                    <div class="muted">{{ e.contentType }} · {{ e.who }} · {{ e.when }}{{ e.deleted ? t().disputeCase.copyDeleted : '' }}</div>
                   </div>
                 } @empty {
-                  <p class="muted">Nothing uploaded.</p>
+                  <p class="muted">{{ t().disputeCase.nothingUploaded }}</p>
                 }
               </div>
             }
           </div>
 
-          <h3>Schedule</h3>
+          <h3>{{ t().common.schedule }}</h3>
           <div class="form">
             <mat-form-field appearance="outline">
-              <mat-label>Video call</mat-label>
+              <mat-label>{{ t().common.videoCall }}</mat-label>
               <input matInput type="datetime-local" [ngModel]="scheduleAt()" (ngModelChange)="scheduleAt.set($event)" />
             </mat-form-field>
             <mat-form-field appearance="outline" class="wide">
-              <mat-label>Meeting link (https)</mat-label>
+              <mat-label>{{ t().common.meetingLinkHttps }}</mat-label>
               <input matInput [ngModel]="meetLink()" (ngModelChange)="meetLink.set($event)" placeholder="https://meet.example/…" />
             </mat-form-field>
-            <button mat-flat-button type="button" (click)="schedule()" [disabled]="busy() || final() || !canSchedule()">Save</button>
+            <button mat-flat-button type="button" (click)="schedule()" [disabled]="busy() || final() || !canSchedule()">{{ t().common.save }}</button>
           </div>
           @if (scheduleOutcome(); as o) { <p [class.error]="!o.ok" [class.ok]="o.ok">{{ o.text }}</p> }
 
-          <h3>Your account</h3>
-          <p class="muted">The spending account that holds your attestor stake signs the verdict.</p>
+          <h3>{{ t().common.yourAccount }}</h3>
+          <p class="muted">{{ t().disputeCase.accountText }}</p>
           <div class="form">
             <mat-form-field appearance="outline" class="wide">
-              <mat-label>Anos account</mat-label>
+              <mat-label>{{ t().common.anosAccount }}</mat-label>
               <mat-select [value]="attesting.accountId()" (valueChange)="attesting.accountId.set($event)">
                 @for (account of session.accounts(); track account.accountId) {
-                  <mat-option [value]="account.accountId">{{ account.accountType }} · {{ account.accountId }}</mat-option>
+                  <mat-option [value]="account.accountId">{{ t().wallet.typeOption(account.accountType) }} · {{ account.accountId }}</mat-option>
                 }
               </mat-select>
             </mat-form-field>
             @if (session.accounts().length === 0) {
-              <span class="muted">No anos account: create one on the Wallet page and stake it for attestor.</span>
+              <span class="muted">{{ t().attesting.noAccount }}</span>
             }
           </div>
 
-          <h3>Verdict</h3>
+          <h3>{{ t().common.verdict }}</h3>
           @if (signOffs().length > 0) {
-            <p class="muted">Verdicts so far: {{ signOffs().join(', ') }}.</p>
+            <p class="muted">{{ t().disputeCase.verdictsSoFar(signOffs().join(', ')) }}</p>
           }
-          <p class="muted">Success releases the escrow to the seller, cancel returns it to the buyer. Two agreeing verdicts from different attestors decide; a third may sign while two disagree.</p>
+          <p class="muted">{{ t().disputeCase.verdictText }}</p>
           <div class="form">
             <mat-form-field appearance="outline">
-              <mat-label>Verdict</mat-label>
+              <mat-label>{{ t().common.verdict }}</mat-label>
               <mat-select [value]="verdict()" (valueChange)="verdict.set($event)">
-                <mat-option value="success">Success</mat-option>
-                <mat-option value="cancel">Cancel</mat-option>
+                <mat-option value="success">{{ t().disputeCase.success }}</mat-option>
+                <mat-option value="cancel">{{ t().common.cancel }}</mat-option>
               </mat-select>
             </mat-form-field>
-            <button mat-flat-button type="button" (click)="sign()" [disabled]="busy() || final() || !attesting.accountId()">Sign the verdict</button>
+            <button mat-flat-button type="button" (click)="sign()" [disabled]="busy() || final() || !attesting.accountId()">{{ t().disputeCase.signVerdict }}</button>
           </div>
           @if (verdictOutcome(); as o) { <p [class.error]="!o.ok" [class.ok]="o.ok">{{ o.text }}</p> }
 
           @if (sending(); as s) {
-            <h3>Send to the validators</h3>
+            <h3>{{ t().attesting.sendTitle }}</h3>
             @if (s.pending.length === 0) {
-              <p class="ok">Sent: both {{ s.verdict }} verdicts were accepted by the validator. The escrow is settled by its rule.</p>
+              <p class="ok">{{ t().disputeCase.sentAll(s.verdict) }}</p>
             } @else {
-              <p class="muted">Decided: {{ s.verdict }}. {{ s.pending.length }} of {{ s.verdicts.length }} verdicts still to send to the default validator.</p>
+              <p class="muted">{{ t().disputeCase.stillToSend(s.verdict, s.pending.length, s.verdicts.length) }}</p>
               <div class="form">
-                <button mat-flat-button type="button" (click)="send()" [disabled]="sendBusy()">{{ s.tried ? 'Retry' : 'Send to the validators' }}</button>
+                <button mat-flat-button type="button" (click)="send()" [disabled]="sendBusy()">{{ s.tried ? t().common.retry : t().attesting.sendTitle }}</button>
               </div>
             }
             @if (sendBusy()) {
@@ -301,36 +301,36 @@ function accepted(result: SentResult): boolean {
             @if (s.lastResults.length > 0) {
               <ul class="texts">
                 @for (r of s.lastResults; track r.signer) {
-                  <li>Verdict by <code>{{ r.signer.slice(0, 16) }}…</code> → HTTP {{ r.status }}{{ r.error ? ': ' + r.error : ' accepted' }}</li>
+                  <li>{{ t().disputeCase.verdictBy }} <code>{{ r.signer.slice(0, 16) }}…</code> → HTTP {{ r.status }}{{ r.error ? ': ' + r.error : t().attesting.accepted }}</li>
                 }
               </ul>
             }
             @if (sendOutcome(); as o) { <p [class.error]="!o.ok" [class.ok]="o.ok">{{ o.text }}</p> }
           }
 
-          <h3>Dismiss</h3>
+          <h3>{{ t().common.dismiss }}</h3>
           <div class="form">
             <mat-form-field appearance="outline">
-              <mat-label>Reason</mat-label>
+              <mat-label>{{ t().common.reason }}</mat-label>
               <mat-select [value]="reason()" (valueChange)="reason.set($event)">
                 @for (r of reasons; track r) {
-                  <mat-option [value]="r">{{ reasonWords[r] }}</mat-option>
+                  <mat-option [value]="r">{{ t().dismissReasonsStaff[r] ?? r }}</mat-option>
                 }
               </mat-select>
             </mat-form-field>
             <mat-form-field appearance="outline" class="wide">
-              <mat-label>Note</mat-label>
+              <mat-label>{{ t().common.note }}</mat-label>
               <input matInput [ngModel]="dismissNote()" (ngModelChange)="dismissNote.set($event)" maxlength="2000" />
             </mat-form-field>
             @if (confirmingDismiss()) {
-              <button mat-flat-button type="button" class="danger" (click)="dismiss()" [disabled]="busy()">Confirm dismissal</button>
-              <button mat-button type="button" (click)="confirmingDismiss.set(false)">Cancel</button>
+              <button mat-flat-button type="button" class="danger" (click)="dismiss()" [disabled]="busy()">{{ t().common.confirmDismissal }}</button>
+              <button mat-button type="button" (click)="confirmingDismiss.set(false)">{{ t().common.cancel }}</button>
             } @else {
-              <button mat-stroked-button type="button" (click)="confirmingDismiss.set(true)" [disabled]="busy() || final()">Dismiss</button>
+              <button mat-stroked-button type="button" (click)="confirmingDismiss.set(true)" [disabled]="busy() || final()">{{ t().common.dismiss }}</button>
             }
           </div>
           @if (confirmingDismiss()) {
-            <p class="error">Dismissing is final: the case closes, the attestors' copies of the evidence and the key are deleted, and the escrow stays held on the validators.</p>
+            <p class="error">{{ t().disputeCase.dismissWarning }}</p>
           }
           @if (dismissOutcome(); as o) { <p [class.error]="!o.ok" [class.ok]="o.ok">{{ o.text }}</p> }
         }
@@ -376,12 +376,12 @@ export class AttestingDisputeCasePage {
   private readonly signing = inject(SigningService);
   private readonly config = inject(ConfigService);
   private readonly crypto = inject(CryptoService);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
   protected readonly millionthsToAnos = millionthsToAnos;
-  protected readonly words = STATUS_WORDS;
   protected readonly icons = STATUS_ICONS;
   protected readonly reasons = ATTESTOR_DISMISS_REASONS;
-  protected readonly reasonWords = DISMISS_WORDS;
   protected readonly sides: ('seller' | 'buyer')[] = ['seller', 'buyer'];
 
   protected readonly data = signal<DisputeCaseAnswer | null>(null);
@@ -432,8 +432,8 @@ export class AttestingDisputeCasePage {
     const d = this.data();
     if (!d) return [];
     return [
-      { side: 'seller', profile: d.seller as Profile | null, accountId: d.case.accountId, disputed: d.case.disputedBy === d.case.accountId },
-      { side: 'buyer', profile: d.buyer as Profile | null, accountId: d.case.accountIdTo, disputed: d.case.disputedBy === d.case.accountIdTo },
+      { side: 'seller' as const, profile: d.seller as Profile | null, accountId: d.case.accountId, disputed: d.case.disputedBy === d.case.accountId },
+      { side: 'buyer' as const, profile: d.buyer as Profile | null, accountId: d.case.accountIdTo, disputed: d.case.disputedBy === d.case.accountIdTo },
     ];
   });
 
@@ -441,8 +441,8 @@ export class AttestingDisputeCasePage {
   protected readonly holderNames = computed(() => {
     const names = this.attestors();
     const holders = this.data()?.keyHolders ?? [];
-    if (holders.length === 0) return 'nobody (the key rows are gone)';
-    return holders.map((id) => names.find((a) => a.anopodId === id)?.username ?? `pod ${id.slice(0, 8)}…`).join(', ');
+    if (holders.length === 0) return this.t().disputeCase.nobodyHolds;
+    return holders.map((id) => names.find((a) => a.anopodId === id)?.username ?? this.t().common.podShort(id.slice(0, 8))).join(', ');
   });
 
   /** The attestors who hold no key yet, with chat keys to wrap to. */
@@ -455,7 +455,7 @@ export class AttestingDisputeCasePage {
 
   /** Each attestor's verdict, from the events: "attestorjoy: success, attestorsam: cancel". */
   protected readonly signOffs = computed(() =>
-    (this.data()?.events ?? []).filter((e) => e.kind === 'verdictSigned').map((e) => `${e.username ?? 'an attestor'}: ${String(e.details['verdict'] ?? '?')}`),
+    (this.data()?.events ?? []).filter((e) => e.kind === 'verdictSigned').map((e) => `${e.username ?? this.t().attesting.anAttestor}: ${String(e.details['verdict'] ?? '?')}`),
   );
 
   /** The sending, once the case is decided: the verdicts of the decided value, the ones not yet accepted by the validator, the last answers. */
@@ -508,7 +508,7 @@ export class AttestingDisputeCasePage {
   private async load(quiet: boolean): Promise<void> {
     const res = await this.masterpod.getDisputeCase(this.caseId(), quiet);
     if (!res.ok) {
-      this.error.set(res.status === 404 ? 'No dispute case with this id.' : attestingError(res, '/get-dispute-case'));
+      this.error.set(res.status === 404 ? this.t().disputeCase.notFound : attestingError(res, '/get-dispute-case', this.t()));
       return;
     }
     this.data.set(res.body);
@@ -539,7 +539,7 @@ export class AttestingDisputeCasePage {
     }
     const chat = this.session.getChatKeys();
     if (!chat) {
-      this.keyError.set('Your chat keys are not in RAM: unlock again to open the case key.');
+      this.keyError.set(this.t().disputeCase.noChatKeys);
       return null;
     }
     try {
@@ -550,7 +550,7 @@ export class AttestingDisputeCasePage {
       this.keyError.set(null);
       return keys;
     } catch {
-      this.keyError.set('The wrapped case key did not open with your chat keys.');
+      this.keyError.set(this.t().disputeCase.keyNoOpen);
       return null;
     }
   }
@@ -586,8 +586,8 @@ export class AttestingDisputeCasePage {
     const view: EvidenceView = {
       evidenceId: row.evidenceId,
       side: row.side,
-      who: row.username ?? `pod ${row.anopodId.slice(0, 8)}…`,
-      when: new Date(row.createdAt).toLocaleString(),
+      who: row.username ?? this.t().common.podShort(row.anopodId.slice(0, 8)),
+      when: this.lang.dateTime(row.createdAt),
       contentType: row.contentType,
       isPdf: row.contentType === 'application/pdf',
       url: null,
@@ -600,7 +600,7 @@ export class AttestingDisputeCasePage {
       contentKey.fill(0);
       view.url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: row.contentType }));
     } catch {
-      view.who += ' · did not open with the case key';
+      view.who += this.t().disputeCase.didNotOpen;
     }
     return view;
   }
@@ -621,8 +621,8 @@ export class AttestingDisputeCasePage {
     return this.act(this.shareOutcome, async () => {
       const pair = this.attesting.getCasePair(this.caseId());
       const target = this.attestors().find((a) => a.anopodId === this.shareTo());
-      if (!pair) throw new Error('You hold no key for this case.');
-      if (!target?.chatPublicKey || !target.chatPublicKeyPq) throw new Error('Pick an attestor with chat keys.');
+      if (!pair) throw new Error(this.t().disputeCase.noKey);
+      if (!target?.chatPublicKey || !target.chatPublicKeyPq) throw new Error(this.t().disputeCase.pickAttestor);
       const secret = new Uint8Array(96);
       secret.set(pair.x25519Secret, 0);
       secret.set(pair.kemSeed, 32);
@@ -634,7 +634,7 @@ export class AttestingDisputeCasePage {
         secret.fill(0);
       }
       this.shareTo.set('');
-      return `Shared with ${target.username}: they can open the evidence now.`;
+      return this.t().disputeCase.sharedWith(target.username);
     });
   }
 
@@ -643,10 +643,10 @@ export class AttestingDisputeCasePage {
   protected schedule(): Promise<void> {
     return this.act(this.scheduleOutcome, async () => {
       const at = new Date(this.scheduleAt());
-      if (Number.isNaN(at.getTime())) throw new Error('Enter the time of the call.');
+      if (Number.isNaN(at.getTime())) throw new Error(this.t().common.enterCallTime);
       const res = await this.masterpod.scheduleAttestorCase(this.caseId(), at.toISOString(), this.meetLink().trim());
       if (!res.ok) throw new Error(this.refusal(res, '/schedule-attestor-case'));
-      return `Scheduled for ${at.toLocaleString()}; both parties see the link on their case page.`;
+      return this.t().disputeCase.scheduled(this.lang.dateTime(at));
     });
   }
 
@@ -661,16 +661,14 @@ export class AttestingDisputeCasePage {
     let decided = false;
     await this.act(this.verdictOutcome, async () => {
       const d = this.data();
-      if (!d) throw new Error('The case has not loaded yet.');
+      if (!d) throw new Error(this.t().common.caseNotLoaded);
       const { account, pairOne } = await this.attesting.pairOne();
       const followUp = this.crypto.buildFollowUp(pairOne, { type: 'escrowVerdict', transactionId: d.case.transactionId, arbitratorId: account.accountId, verdict: this.verdict() });
       const signed = await this.signing.sign(followUp);
       const res = await this.masterpod.signOffDisputeCase(this.caseId(), signed);
       if (!res.ok) throw new Error(this.refusal(res, '/sign-off-dispute-case'));
       decided = res.body.status === 'decided';
-      return decided
-        ? `Signed: two ${res.body.decidedVerdict} verdicts, the case is decided and the attestors' copies of the evidence are deleted. Sending both to the validators…`
-        : `Signed: ${this.verdict()}. ${res.body.signOffs} of 2 agreeing verdicts needed.`;
+      return decided ? this.t().disputeCase.signedDecided(String(res.body.decidedVerdict)) : this.t().disputeCase.signedCount(this.verdict(), res.body.signOffs);
     });
     if (decided) await this.send();
   }
@@ -687,7 +685,7 @@ export class AttestingDisputeCasePage {
     this.sendBusy.set(true);
     this.sendOutcome.set(null);
     try {
-      if (sending.pending.length === 0) throw new Error('Every verdict has been accepted already.');
+      if (sending.pending.length === 0) throw new Error(this.t().disputeCase.allAccepted);
       const results: SentResult[] = [];
       for (const { signer, object } of sending.pending) {
         const res = await this.anos.escrowSignature(object);
@@ -699,8 +697,8 @@ export class AttestingDisputeCasePage {
       const failed = results.filter((r) => !accepted(r));
       this.sendOutcome.set(
         failed.length === 0
-          ? { ok: true, text: `Sent: validator ${defaultValidator} accepted ${results.length === 1 ? 'the verdict' : 'both verdicts'}.` }
-          : { ok: false, text: `Validator ${defaultValidator} refused ${failed.length} of ${results.length}; the answers are recorded on the case. Retry sends the refused ones again.` },
+          ? { ok: true, text: this.t().attesting.sentAccepted(defaultValidator, results.length === 1 ? this.t().disputeCase.theVerdict : this.t().disputeCase.bothVerdicts) }
+          : { ok: false, text: this.t().attesting.validatorRefused(defaultValidator, failed.length, results.length) },
       );
     } catch (err) {
       this.sendOutcome.set({ ok: false, text: err instanceof Error ? err.message : String(err) });
@@ -715,25 +713,25 @@ export class AttestingDisputeCasePage {
     return this.act(this.dismissOutcome, async () => {
       const res = await this.masterpod.dismissAttestorCase(this.caseId(), this.reason(), this.dismissNote().trim());
       if (!res.ok) throw new Error(this.refusal(res, '/dismiss-attestor-case'));
-      return 'Dismissed. Both parties see the reason on their case page; the attestors\' copies of the evidence are deleted.';
+      return this.t().disputeCase.dismissed;
     });
   }
 
   /** An attestor route's refusal in words (masterpod 13.4.2, 13.4.4). */
   private refusal(res: ApiResponse<unknown>, path: string): string {
     const reason = reasonOf(res);
-    if (res.status === 409 && /already signed off/.test(reason)) return 'This anoPod already signed a verdict on this case.';
-    if (res.status === 409 && /case closed/.test(reason)) return 'This case is closed: nothing more can be done to it.';
-    if (res.status === 409 && /case not decided/.test(reason)) return 'The case is not decided yet: nothing to send.';
-    if (res.status === 409 && /key already shared/.test(reason)) return 'That attestor already holds the key.';
-    if (res.status === 403 && /no key for this case/.test(reason)) return 'You hold no key for this case: the masterpod refused the share.';
-    if (res.status === 403 && /a party to the escrow/.test(reason)) return 'This anoPod is a party to the escrow: it cannot sign a verdict on it.';
-    if (res.status === 403 && /not your account/.test(reason)) return 'This account is not one of this anoPod\'s accounts.';
-    if (res.status === 401 && /bad signature/.test(reason)) return 'The masterpod refused the signature: the account\'s stored keys do not match.';
-    if (res.status === 400 && /does not match the case/.test(reason)) return 'The verdict names another escrow than this case.';
-    if (res.status === 400 && /not an attestor/.test(reason)) return 'That pod is not an attestor.';
-    if (res.status === 400) return `${path}: the masterpod refused the values (${reason}).`;
-    return attestingError(res, path);
+    if (res.status === 409 && /already signed off/.test(reason)) return this.t().disputeCase.alreadySigned;
+    if (res.status === 409 && /case closed/.test(reason)) return this.t().common.caseClosedDone;
+    if (res.status === 409 && /case not decided/.test(reason)) return this.t().attesting.notDecided;
+    if (res.status === 409 && /key already shared/.test(reason)) return this.t().disputeCase.alreadyHolds;
+    if (res.status === 403 && /no key for this case/.test(reason)) return this.t().disputeCase.noKeyRefused;
+    if (res.status === 403 && /a party to the escrow/.test(reason)) return this.t().disputeCase.isParty;
+    if (res.status === 403 && /not your account/.test(reason)) return this.t().common.notMyAccountSentence;
+    if (res.status === 401 && /bad signature/.test(reason)) return this.t().common.badSignature;
+    if (res.status === 400 && /does not match the case/.test(reason)) return this.t().disputeCase.mismatch;
+    if (res.status === 400 && /not an attestor/.test(reason)) return this.t().disputeCase.notAttestor;
+    if (res.status === 400) return this.t().common.refusedValues(path, reason);
+    return attestingError(res, path, this.t());
   }
 
   private async act(outcome: ReturnType<typeof signal<Outcome | null>>, action: () => Promise<string>): Promise<void> {
@@ -757,48 +755,49 @@ export class AttestingDisputeCasePage {
       this.copied.set(what);
       setTimeout(() => this.copied.set(null), 2000);
     } catch {
-      this.error.set('Could not copy; select the text by hand.');
+      this.error.set(this.t().common.couldNotCopyText);
     }
   }
 
   private itemOf(event: CaseEvent): TimelineItem {
     const d = event.details;
-    const who = event.username ?? (event.anopodId ? `pod ${event.anopodId.slice(0, 8)}…` : 'an attestor');
-    const note = typeof d['note'] === 'string' && d['note'] !== '' ? `Note: ${d['note']}` : null;
+    const words = this.t().disputeCase;
+    const who = event.username ?? (event.anopodId ? this.t().common.podShort(event.anopodId.slice(0, 8)) : this.t().attesting.anAttestor);
+    const note = typeof d['note'] === 'string' && d['note'] !== '' ? this.t().common.notePrefix(d['note']) : null;
     const files = Array.isArray(d['evidenceIds']) ? d['evidenceIds'].length : 0;
     let icon = 'circle';
     let text = event.kind;
     let link: string | null = null;
     switch (event.kind) {
       case 'opened':
-        [icon, text] = ['flag', `${who} opened the case; the key went to ${String(d['keyHolders'] ?? '?')} attestor pod${d['keyHolders'] === 1 ? '' : 's'}`];
+        [icon, text] = ['flag', words.eventOpened(who, d['keyHolders'])];
         break;
       case 'evidenceAdded':
-        [icon, text] = ['upload_file', `${who} added ${files} evidence file${files === 1 ? '' : 's'}`];
+        [icon, text] = ['upload_file', words.eventAdded(who, files)];
         break;
       case 'scheduled':
-        [icon, text] = ['event', `${who} scheduled the video call for ${typeof d['at'] === 'string' ? new Date(d['at']).toLocaleString() : 'a time to be confirmed'}`];
+        [icon, text] = ['event', this.t().common.scheduledBy(who, typeof d['at'] === 'string' ? this.lang.dateTime(d['at']) : this.t().common.timeToBeConfirmed)];
         link = typeof d['meetLink'] === 'string' ? d['meetLink'] : null;
         break;
       case 'caseKeyShared':
-        [icon, text] = ['key', `${who} shared the case key with ${this.attestors().find((a) => a.anopodId === d['anopodId'])?.username ?? `pod ${String(d['anopodId'] ?? '').slice(0, 8)}…`}`];
+        [icon, text] = ['key', words.eventShared(who, this.attestors().find((a) => a.anopodId === d['anopodId'])?.username ?? this.t().common.podShort(String(d['anopodId'] ?? '').slice(0, 8)))];
         break;
       case 'verdictSigned':
-        [icon, text] = ['draw', `${who} signed the verdict ${String(d['verdict'] ?? '?')} with account ${typeof d['arbitratorId'] === 'string' ? d['arbitratorId'].slice(0, 8) + '…' : '?'}`];
+        [icon, text] = ['draw', words.eventSigned(who, String(d['verdict'] ?? '?'), typeof d['arbitratorId'] === 'string' ? d['arbitratorId'].slice(0, 8) + '…' : '?')];
         break;
       case 'decided':
-        [icon, text] = ['verified', `Decided: ${String(d['verdict'] ?? '?')}, two agreeing verdicts`];
+        [icon, text] = ['verified', words.eventDecided(String(d['verdict'] ?? '?'))];
         break;
       case 'evidenceDeleted':
-        [icon, text] = ['delete', `The attestors' copies were deleted: ${String(d['evidence'] ?? 0)} file${d['evidence'] === 1 ? '' : 's'}, ${String(d['keys'] ?? 0)} key row${d['keys'] === 1 ? '' : 's'}`];
+        [icon, text] = ['delete', words.eventDeleted(d['evidence'], d['keys'])];
         break;
       case 'sent':
-        [icon, text] = ['send', `${who} posted to validator ${String(d['validator'] ?? '?')}: ${resultsOf(event).map((r) => `${r.signer.slice(0, 8)}… HTTP ${r.status}${r.error ? ' ' + r.error : ''}`).join(', ')}`];
+        [icon, text] = ['send', this.t().attesting.eventSent(who, String(d['validator'] ?? '?'), resultsOf(event).map((r) => `${r.signer.slice(0, 8)}… HTTP ${r.status}${r.error ? ' ' + r.error : ''}`).join(', '))];
         break;
       case 'dismissed':
-        [icon, text] = ['block', `${who} dismissed the case: ${DISMISS_WORDS[d['reason'] as AttestorDismissReason] ?? String(d['reason'] ?? '')}`];
+        [icon, text] = ['block', this.t().common.dismissedBy(who, this.t().dismissReasonsStaff[String(d['reason'])] ?? String(d['reason'] ?? ''))];
         break;
     }
-    return { key: event.eventId, icon, text, note, link, when: new Date(event.createdAt).toLocaleString() };
+    return { key: event.eventId, icon, text, note, link, when: this.lang.dateTime(event.createdAt) };
   }
 }

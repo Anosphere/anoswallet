@@ -1,4 +1,3 @@
-import { DatePipe } from '@angular/common';
 import { Component, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -17,6 +16,7 @@ import { AttestingService, attestingError } from '../services/attesting.service'
 import { ConfigService } from '../services/config.service';
 import { AttestationPayload, CryptoService, FollowUp, PairOne } from '../services/crypto.service';
 import { BucketKeyAnswer, KeyholderApiService, ShareType } from '../services/keyholder-api.service';
+import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
 import {
   ATTESTOR_DISMISS_REASONS,
@@ -29,13 +29,13 @@ import {
 } from '../services/masterpod-api.service';
 import { SessionService } from '../services/session.service';
 import { SigningService } from '../services/signing.service';
-import { DISMISS_WORDS, REVIEW_STATUSES, STATUS_ICONS, STATUS_WORDS } from './attesting.page';
+import { REVIEW_STATUSES, STATUS_ICONS } from './attesting.page';
 
-/** The two buckets: the keyholder route, the share type and the masterpod's bucket number of each. */
+/** The two buckets: the keyholder route, the share type and the masterpod's bucket number of each; the titles are the dictionary's `buckets`. */
 type Bucket = 1 | 2;
-const BUCKETS: Record<Bucket, { title: string; path: string; shareType: ShareType }> = {
-  1: { title: 'Bucket one', path: '/get-security-bucket-one-key', shareType: 'securitybucket1' },
-  2: { title: 'Bucket two', path: '/get-security-bucket-two-key', shareType: 'securitybucket2' },
+const BUCKETS: Record<Bucket, { path: string; shareType: ShareType }> = {
+  1: { path: '/get-security-bucket-one-key', shareType: 'securitybucket1' },
+  2: { path: '/get-security-bucket-two-key', shareType: 'securitybucket2' },
 };
 
 /** One line of the timeline. */
@@ -111,23 +111,23 @@ function accepted(result: SentResult): boolean {
  */
 @Component({
   selector: 'app-attesting-trade-case-page',
-  imports: [DatePipe, FormsModule, RouterLink, MatCardModule, MatButtonModule, MatListModule, MatIconModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatProgressBarModule],
+  imports: [FormsModule, RouterLink, MatCardModule, MatButtonModule, MatListModule, MatIconModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatProgressBarModule],
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
-        <mat-card-title>Trade case <code class="id">{{ caseId() }}</code></mat-card-title>
+        <mat-card-title>{{ t().tradeCase.title }} <code class="id">{{ caseId() }}</code></mat-card-title>
         <mat-card-subtitle>
           @if (data(); as d) {
-            <mat-icon class="inline">{{ icons[d.case.status] }}</mat-icon> {{ words[d.case.status] }}
+            <mat-icon class="inline">{{ icons[d.case.status] }}</mat-icon> {{ t().caseStatus[d.case.status] ?? d.case.status }}
           } @else {
-            Loading the case…
+            {{ t().common.loadingTheCase }}
           }
         </mat-card-subtitle>
       </mat-card-header>
       <mat-card-content>
         <div class="row">
-          <a mat-button routerLink="/attesting"><mat-icon>arrow_back</mat-icon> Attesting</a>
-          <button mat-stroked-button type="button" (click)="refresh()" [disabled]="busy()">Refresh</button>
+          <a mat-button routerLink="/attesting"><mat-icon>arrow_back</mat-icon> {{ t().nav.attesting }}</a>
+          <button mat-stroked-button type="button" (click)="refresh()" [disabled]="busy()">{{ t().common.refresh }}</button>
           @if (busy()) {
             <mat-progress-bar mode="indeterminate" class="grow"></mat-progress-bar>
           }
@@ -137,40 +137,40 @@ function accepted(result: SentResult): boolean {
         }
 
         @if (data(); as d) {
-          <h3>The person</h3>
+          <h3>{{ t().common.thePerson }}</h3>
           <div class="person">
             @if (d.profile?.selfie; as selfie) {
-              <img class="selfie" [src]="'data:' + selfie.contentType + ';base64,' + selfie.image" alt="public selfie" />
+              <img class="selfie" [src]="'data:' + selfie.contentType + ';base64,' + selfie.image" [alt]="t().common.publicSelfie" />
             }
             <div class="facts">
-              <div><span class="label">Username</span><span class="value">{{ d.profile?.username ?? 'unknown pod' }}</span></div>
-              <div><span class="label">Name</span><span class="value">{{ d.profile?.firstName }} {{ d.profile?.lastName }}</span></div>
-              <div><span class="label">Status</span><span class="value">{{ words[d.case.status] }} · opened {{ d.case.createdAt | date: 'medium' }}</span></div>
+              <div><span class="label">{{ t().common.username }}</span><span class="value">{{ d.profile?.username ?? t().common.unknownPod }}</span></div>
+              <div><span class="label">{{ t().common.name }}</span><span class="value">{{ d.profile?.firstName }} {{ d.profile?.lastName }}</span></div>
+              <div><span class="label">{{ t().common.status }}</span><span class="value">{{ t().common.statusOpened(t().caseStatus[d.case.status] ?? d.case.status, lang.dateTime(d.case.createdAt)) }}</span></div>
             </div>
           </div>
 
-          <h3>The trade</h3>
+          <h3>{{ t().tradeCase.theTrade }}</h3>
           <div class="facts">
             <div>
-              <span class="label">Amount</span>
+              <span class="label">{{ t().common.amount }}</span>
               <span class="value">
-                @if (trade(); as t) { {{ millionthsToAnos(t.amount) }} anos · made {{ t.createdAt | date: 'medium' }} } @else { not on the validator's list of trades waiting for attestors (decided, or cancelled) }
+                @if (trade(); as held) { {{ t().attesting.amountMade(millionthsToAnos(held.amount), lang.dateTime(held.createdAt)) }} } @else { {{ t().tradeCase.notListed }} }
               </span>
             </div>
-            <div><span class="label">Sender account</span><span class="value"><code>{{ d.case.accountId }}</code></span></div>
-            @if (trade(); as t) {
+            <div><span class="label">{{ t().tradeCase.senderAccount }}</span><span class="value"><code>{{ d.case.accountId }}</code></span></div>
+            @if (trade(); as held) {
               <div>
-                <span class="label">Receiver account</span>
-                <span class="value"><code>{{ t.accountIdTo }}</code> <button mat-icon-button type="button" (click)="copy('receiver', t.accountIdTo)" aria-label="Copy the receiver's account id"><mat-icon>content_copy</mat-icon></button>@if (copied() === 'receiver') { <span class="muted">copied</span> }</span>
+                <span class="label">{{ t().tradeCase.receiverAccount }}</span>
+                <span class="value"><code>{{ held.accountIdTo }}</code> <button mat-icon-button type="button" (click)="copy('receiver', held.accountIdTo)" [attr.aria-label]="t().tradeCase.copyReceiver"><mat-icon>content_copy</mat-icon></button>@if (copied() === 'receiver') { <span class="muted">{{ t().copy.copied }}</span> }</span>
               </div>
             }
             <div>
-              <span class="label">Transaction</span>
-              <span class="value"><code>{{ d.case.transactionId }}</code> <button mat-icon-button type="button" (click)="copy('transaction', d.case.transactionId)" aria-label="Copy the transaction id"><mat-icon>content_copy</mat-icon></button>@if (copied() === 'transaction') { <span class="muted">copied</span> }</span>
+              <span class="label">{{ t().common.transaction }}</span>
+              <span class="value"><code>{{ d.case.transactionId }}</code> <button mat-icon-button type="button" (click)="copy('transaction', d.case.transactionId)" [attr.aria-label]="t().common.copyTransactionId"><mat-icon>content_copy</mat-icon></button>@if (copied() === 'transaction') { <span class="muted">{{ t().copy.copied }}</span> }</span>
             </div>
           </div>
 
-          <h3>Timeline</h3>
+          <h3>{{ t().common.timeline }}</h3>
           <mat-list dense>
             @for (item of timeline(); track item.key) {
               <mat-list-item [lines]="item.note ? 3 : 2">
@@ -178,7 +178,7 @@ function accepted(result: SentResult): boolean {
                 <span matListItemTitle>
                   {{ item.text }}
                   @if (item.link) {
-                    <a [href]="item.link" target="_blank" rel="noopener">Meeting link</a>
+                    <a [href]="item.link" target="_blank" rel="noopener">{{ t().common.meetingLink }}</a>
                   }
                 </span>
                 @if (item.note) {
@@ -189,49 +189,49 @@ function accepted(result: SentResult): boolean {
             }
           </mat-list>
 
-          <h3>Schedule</h3>
+          <h3>{{ t().common.schedule }}</h3>
           <div class="form">
             <mat-form-field appearance="outline">
-              <mat-label>Video call</mat-label>
+              <mat-label>{{ t().common.videoCall }}</mat-label>
               <input matInput type="datetime-local" [ngModel]="scheduleAt()" (ngModelChange)="scheduleAt.set($event)" />
             </mat-form-field>
             <mat-form-field appearance="outline" class="wide">
-              <mat-label>Meeting link (https)</mat-label>
+              <mat-label>{{ t().common.meetingLinkHttps }}</mat-label>
               <input matInput [ngModel]="meetLink()" (ngModelChange)="meetLink.set($event)" placeholder="https://meet.example/…" />
             </mat-form-field>
-            <button mat-flat-button type="button" (click)="schedule()" [disabled]="busy() || final() || !canSchedule()">Save</button>
+            <button mat-flat-button type="button" (click)="schedule()" [disabled]="busy() || final() || !canSchedule()">{{ t().common.save }}</button>
           </div>
           @if (scheduleOutcome(); as o) { <p [class.error]="!o.ok" [class.ok]="o.ok">{{ o.text }}</p> }
 
-          <h3>Your account</h3>
-          <p class="muted">The spending account that holds your attestor stake signs the key requests and the attestation.</p>
+          <h3>{{ t().common.yourAccount }}</h3>
+          <p class="muted">{{ t().tradeCase.accountText }}</p>
           <div class="form">
             <mat-form-field appearance="outline" class="wide">
-              <mat-label>Anos account</mat-label>
+              <mat-label>{{ t().common.anosAccount }}</mat-label>
               <mat-select [value]="attesting.accountId()" (valueChange)="attesting.accountId.set($event)">
                 @for (account of session.accounts(); track account.accountId) {
-                  <mat-option [value]="account.accountId">{{ account.accountType }} · {{ account.accountId }}</mat-option>
+                  <mat-option [value]="account.accountId">{{ t().wallet.typeOption(account.accountType) }} · {{ account.accountId }}</mat-option>
                 }
               </mat-select>
             </mat-form-field>
             @if (session.accounts().length === 0) {
-              <span class="muted">No anos account: create one on the Wallet page and stake it for attestor.</span>
+              <span class="muted">{{ t().attesting.noAccount }}</span>
             }
           </div>
 
-          <h3>The lookup id</h3>
+          <h3>{{ t().tradeCase.lookupIdTitle }}</h3>
           @if (d.case.lookupId; as lookupId) {
-            <p class="value"><code>{{ lookupId }}</code> <button mat-icon-button type="button" (click)="copy('lookupId', lookupId)" aria-label="Copy the lookup id"><mat-icon>content_copy</mat-icon></button>@if (copied() === 'lookupId') { <span class="muted">copied</span> }</p>
+            <p class="value"><code>{{ lookupId }}</code> <button mat-icon-button type="button" (click)="copy('lookupId', lookupId)" [attr.aria-label]="t().common.copyLookupId"><mat-icon>content_copy</mat-icon></button>@if (copied() === 'lookupId') { <span class="muted">{{ t().copy.copied }}</span> }</p>
           } @else if (final()) {
-            <p class="muted">The lookup id was cleared when the case closed.</p>
+            <p class="muted">{{ t().tradeCase.lookupIdCleared }}</p>
           } @else {
-            <p class="muted">Waiting for the person to share their lookup id from their Cases page.</p>
+            <p class="muted">{{ t().tradeCase.waitingLookupId }}</p>
           }
 
           @for (bucket of bucketNumbers; track bucket) {
             <h3>{{ bucketTitle(bucket) }}</h3>
             <div class="row">
-              <button mat-flat-button type="button" (click)="pull(bucket)" [disabled]="buckets[bucket].busy() || !attesting.accountId() || !d.case.lookupId">Pull key</button>
+              <button mat-flat-button type="button" (click)="pull(bucket)" [disabled]="buckets[bucket].busy() || !attesting.accountId() || !d.case.lookupId">{{ t().common.pullKey }}</button>
               @if (buckets[bucket].busy()) {
                 <span class="muted">{{ buckets[bucket].step() }}</span>
               }
@@ -244,13 +244,12 @@ function accepted(result: SentResult): boolean {
             }
             @if (buckets[bucket].view(); as view) {
               <p class="muted">
-                {{ view.answered }} keyholders answered · {{ view.keyIds.length }} key{{ view.keyIds.length === 1 ? '' : 's' }} combined ·
-                {{ view.images.length }} image{{ view.images.length === 1 ? '' : 's' }}, {{ view.texts.length }} text{{ view.texts.length === 1 ? '' : 's' }} opened
-                @if (view.locked > 0) { · {{ view.locked }} row{{ view.locked === 1 ? '' : 's' }} under other keys }
+                {{ t().common.bucketSummary(view.answered, view.keyIds.length, view.images.length, view.texts.length) }}
+                @if (view.locked > 0) { {{ t().common.bucketLocked(view.locked) }} }
               </p>
               <div class="thumbs">
                 @for (image of view.images; track image.url) {
-                  <a [href]="image.url" target="_blank" rel="noopener"><img [src]="image.url" alt="bucket image" /></a>
+                  <a [href]="image.url" target="_blank" rel="noopener"><img [src]="image.url" [alt]="t().common.bucketImage" /></a>
                 }
               </div>
               @if (view.texts.length > 0) {
@@ -263,24 +262,24 @@ function accepted(result: SentResult): boolean {
             }
           }
 
-          <h3>Attest</h3>
+          <h3>{{ t().tradeCase.attest }}</h3>
           @if (signOffs().length > 0) {
-            <p class="muted">Signed so far: {{ signOffs().join(', ') }}.</p>
+            <p class="muted">{{ t().tradeCase.signedSoFar(signOffs().join(', ')) }}</p>
           }
-          <p class="muted">Your attestation is the validators' own follow-up object, signed by pair one of your staked account and by the wallet pair; the masterpod keeps it and posts it once two attestors have signed.</p>
+          <p class="muted">{{ t().tradeCase.attestText }}</p>
           <div class="form">
-            <button mat-flat-button type="button" (click)="attest()" [disabled]="busy() || final() || !attesting.accountId()">Sign the attestation</button>
+            <button mat-flat-button type="button" (click)="attest()" [disabled]="busy() || final() || !attesting.accountId()">{{ t().tradeCase.signAttestation }}</button>
           </div>
           @if (attestOutcome(); as o) { <p [class.error]="!o.ok" [class.ok]="o.ok">{{ o.text }}</p> }
 
           @if (sending(); as s) {
-            <h3>Send to the validators</h3>
+            <h3>{{ t().attesting.sendTitle }}</h3>
             @if (s.pending.length === 0) {
-              <p class="ok">Sent: every attestation was accepted by the validator. The trade joins the next leader round.</p>
+              <p class="ok">{{ t().tradeCase.sentAll }}</p>
             } @else {
-              <p class="muted">{{ s.pending.length }} of {{ s.attestations.length }} attestations still to send to the default validator.</p>
+              <p class="muted">{{ t().tradeCase.stillToSend(s.pending.length, s.attestations.length) }}</p>
               <div class="form">
-                <button mat-flat-button type="button" (click)="send()" [disabled]="sendBusy()">{{ s.tried ? 'Retry' : 'Send to the validators' }}</button>
+                <button mat-flat-button type="button" (click)="send()" [disabled]="sendBusy()">{{ s.tried ? t().common.retry : t().attesting.sendTitle }}</button>
               </div>
             }
             @if (sendBusy()) {
@@ -289,36 +288,36 @@ function accepted(result: SentResult): boolean {
             @if (s.lastResults.length > 0) {
               <ul class="texts">
                 @for (r of s.lastResults; track r.signer) {
-                  <li>Attestation by <code>{{ r.signer.slice(0, 16) }}…</code> → HTTP {{ r.status }}{{ r.error ? ': ' + r.error : ' accepted' }}</li>
+                  <li>{{ t().tradeCase.attestationBy }} <code>{{ r.signer.slice(0, 16) }}…</code> → HTTP {{ r.status }}{{ r.error ? ': ' + r.error : t().attesting.accepted }}</li>
                 }
               </ul>
             }
             @if (sendOutcome(); as o) { <p [class.error]="!o.ok" [class.ok]="o.ok">{{ o.text }}</p> }
           }
 
-          <h3>Dismiss</h3>
+          <h3>{{ t().common.dismiss }}</h3>
           <div class="form">
             <mat-form-field appearance="outline">
-              <mat-label>Reason</mat-label>
+              <mat-label>{{ t().common.reason }}</mat-label>
               <mat-select [value]="reason()" (valueChange)="reason.set($event)">
                 @for (r of reasons; track r) {
-                  <mat-option [value]="r">{{ reasonWords[r] }}</mat-option>
+                  <mat-option [value]="r">{{ t().dismissReasonsStaff[r] ?? r }}</mat-option>
                 }
               </mat-select>
             </mat-form-field>
             <mat-form-field appearance="outline" class="wide">
-              <mat-label>Note</mat-label>
+              <mat-label>{{ t().common.note }}</mat-label>
               <input matInput [ngModel]="dismissNote()" (ngModelChange)="dismissNote.set($event)" maxlength="2000" />
             </mat-form-field>
             @if (confirmingDismiss()) {
-              <button mat-flat-button type="button" class="danger" (click)="dismiss()" [disabled]="busy()">Confirm dismissal</button>
-              <button mat-button type="button" (click)="confirmingDismiss.set(false)">Cancel</button>
+              <button mat-flat-button type="button" class="danger" (click)="dismiss()" [disabled]="busy()">{{ t().common.confirmDismissal }}</button>
+              <button mat-button type="button" (click)="confirmingDismiss.set(false)">{{ t().common.cancel }}</button>
             } @else {
-              <button mat-stroked-button type="button" (click)="confirmingDismiss.set(true)" [disabled]="busy() || final()">Dismiss</button>
+              <button mat-stroked-button type="button" (click)="confirmingDismiss.set(true)" [disabled]="busy() || final()">{{ t().common.dismiss }}</button>
             }
           </div>
           @if (confirmingDismiss()) {
-            <p class="error">Dismissing is final: the case closes, the lookup id is cleared, and the trade stays held on the validators until its sender cancels it.</p>
+            <p class="error">{{ t().tradeCase.dismissWarning }}</p>
           }
           @if (dismissOutcome(); as o) { <p [class.error]="!o.ok" [class.ok]="o.ok">{{ o.text }}</p> }
         }
@@ -360,12 +359,12 @@ export class AttestingTradeCasePage {
   private readonly signing = inject(SigningService);
   private readonly config = inject(ConfigService);
   private readonly crypto = inject(CryptoService);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
   protected readonly millionthsToAnos = millionthsToAnos;
-  protected readonly words = STATUS_WORDS;
   protected readonly icons = STATUS_ICONS;
   protected readonly reasons = ATTESTOR_DISMISS_REASONS;
-  protected readonly reasonWords = DISMISS_WORDS;
   protected readonly bucketNumbers: Bucket[] = [1, 2];
 
   protected readonly data = signal<TradeCaseAnswer | null>(null);
@@ -410,7 +409,7 @@ export class AttestingTradeCasePage {
 
   /** Who has signed, from the events: "attestorjoy, attestorsam". */
   protected readonly signOffs = computed(() =>
-    (this.data()?.events ?? []).filter((e) => e.kind === 'attestationSigned').map((e) => e.username ?? 'an attestor'),
+    (this.data()?.events ?? []).filter((e) => e.kind === 'attestationSigned').map((e) => e.username ?? this.t().attesting.anAttestor),
   );
 
   /** The sending, once the case is decided: the stored attestations, the ones not yet accepted by the validator, the last answers. */
@@ -447,7 +446,7 @@ export class AttestingTradeCasePage {
   }
 
   protected bucketTitle(bucket: Bucket): string {
-    return BUCKETS[bucket].title;
+    return bucket === 1 ? this.t().buckets.one : this.t().buckets.two;
   }
 
   // --- the case ----------------------------------------------------------------
@@ -471,9 +470,9 @@ export class AttestingTradeCasePage {
         await this.attesting.loadLists(true).catch(() => undefined);
       }
     } else if (res.status === 404) {
-      this.error.set('No trade case with this id.');
+      this.error.set(this.t().tradeCase.notFound);
     } else {
-      this.error.set(attestingError(res, '/get-trade-case'));
+      this.error.set(attestingError(res, '/get-trade-case', this.t()));
     }
   }
 
@@ -482,10 +481,10 @@ export class AttestingTradeCasePage {
   protected schedule(): Promise<void> {
     return this.act(this.scheduleOutcome, async () => {
       const at = new Date(this.scheduleAt());
-      if (Number.isNaN(at.getTime())) throw new Error('Enter the time of the call.');
+      if (Number.isNaN(at.getTime())) throw new Error(this.t().common.enterCallTime);
       const res = await this.masterpod.scheduleAttestorCase(this.caseId(), at.toISOString(), this.meetLink().trim());
       if (!res.ok) throw new Error(this.refusal(res, '/schedule-attestor-case'));
-      return `Scheduled for ${at.toLocaleString()}; the person sees the link on their case page.`;
+      return this.t().common.scheduledPerson(this.lang.dateTime(at));
     });
   }
 
@@ -506,16 +505,16 @@ export class AttestingTradeCasePage {
     state.error.set(null);
     try {
       const d = this.data();
-      if (!d) throw new Error('The case has not loaded yet.');
-      if (!d.case.lookupId) throw new Error('The person has not shared their lookup id yet.');
-      state.step.set('Opening pair one of your account…');
+      if (!d) throw new Error(this.t().common.caseNotLoaded);
+      if (!d.case.lookupId) throw new Error(this.t().tradeCase.noLookupIdYet);
+      state.step.set(this.t().common.openingPairOne);
       const { account, pairOne } = await this.attesting.pairOne();
-      state.step.set('Asking the keyholders for the bucket key…');
+      state.step.set(this.t().common.askingKeyholders);
       const { keys, answered } = await this.pullKeys(bucket, pairOne, account.accountId, d.case.lookupId);
-      state.step.set('Reading the rows from the masterpod…');
+      state.step.set(this.t().common.readingRows);
       const res = await this.masterpod.listTradeCaseSecurityRecords(this.caseId(), bucket);
-      if (!res.ok) throw new Error(attestingError(res, '/list-trade-case-security-records'));
-      state.step.set('Decrypting…');
+      if (!res.ok) throw new Error(attestingError(res, '/list-trade-case-security-records', this.t()));
+      state.step.set(this.t().common.decrypting);
       const view = await this.openRows(keys, answered, res.body);
       this.dropView(state.view());
       state.view.set(view);
@@ -553,7 +552,7 @@ export class AttestingTradeCasePage {
           try {
             share = await this.crypto.decryptFromHybrid(response, this.crypto.fromHex(item.share), this.crypto.shareAad(lookupId, shareType, item.keyId));
           } catch {
-            throw new Error(`A share from keyholder ${n} did not open with the response key.`);
+            throw new Error(this.t().common.shareNoOpen(n));
           }
           const group = groups.get(item.keyId) ?? { createdAt: item.createdAt, shares: [] };
           if (item.createdAt > group.createdAt) group.createdAt = item.createdAt;
@@ -563,7 +562,7 @@ export class AttestingTradeCasePage {
       }
       const complete = [...groups.entries()].filter(([, g]) => g.shares.length >= shareThreshold).sort((a, b) => b[1].createdAt.localeCompare(a[1].createdAt));
       if (complete.length === 0) {
-        throw new Error(groups.size === 0 ? 'The keyholders hold no key for this bucket.' : `No bucket key has ${shareThreshold} shares among the keyholders that answered.`);
+        throw new Error(groups.size === 0 ? this.t().common.noBucketKey : this.t().common.noBucketKeyShares(shareThreshold));
       }
       const keys = new Map<string, Uint8Array>();
       for (const [keyId, group] of bucket === 1 ? complete.slice(0, 1) : complete) {
@@ -581,10 +580,10 @@ export class AttestingTradeCasePage {
   /** The keyholders' refusals in words (wallet spec 13.3, keyholder 13.1). */
   private pullRefusal(res: ApiResponse<unknown>, refused: number, keyholders: number): string {
     const reason = reasonOf(res);
-    if (res.status === 403 && /not a moderator or attestor/.test(reason)) return 'This account holds no attestor stake: the keyholders refused it.';
-    if (res.status === 404 && /unknown lookup id/.test(reason)) return 'The keyholders know no identity with this lookup id.';
-    if (res.status === 401 && /unknown account/.test(reason)) return 'This account is not on the ledger yet.';
-    return `${refused} of ${keyholders} keyholders refused or did not answer (${reason}).`;
+    if (res.status === 403 && /not a moderator or attestor/.test(reason)) return this.t().tradeCase.noStake;
+    if (res.status === 404 && /unknown lookup id/.test(reason)) return this.t().common.unknownLookupId;
+    if (res.status === 401 && /unknown account/.test(reason)) return this.t().common.notOnLedger;
+    return this.t().common.keyholdersRefused(refused, keyholders, reason);
   }
 
   /** The rows under a combined key decrypted; the others counted; the keys wiped. */
@@ -632,14 +631,14 @@ export class AttestingTradeCasePage {
     let decided = false;
     await this.act(this.attestOutcome, async () => {
       const d = this.data();
-      if (!d) throw new Error('The case has not loaded yet.');
+      if (!d) throw new Error(this.t().common.caseNotLoaded);
       const { account, pairOne } = await this.attesting.pairOne();
       const followUp = this.crypto.buildFollowUp(pairOne, { type: 'attestation', transactionId: d.case.transactionId, accountId: d.case.accountId, attestorId: account.accountId });
       const signed = await this.signing.sign(followUp);
       const res = await this.masterpod.signOffTradeCase(this.caseId(), signed);
       if (!res.ok) throw new Error(this.refusal(res, '/sign-off-trade-case'));
       decided = res.body.status === 'decided';
-      return decided ? 'Signed: two attestations, the case is decided. Sending both to the validators…' : `Signed: ${res.body.signOffs} of 2 attestations.`;
+      return decided ? this.t().tradeCase.signedDecided : this.t().tradeCase.signedCount(res.body.signOffs);
     });
     if (decided) await this.send();
   }
@@ -656,7 +655,7 @@ export class AttestingTradeCasePage {
     this.sendBusy.set(true);
     this.sendOutcome.set(null);
     try {
-      if (sending.pending.length === 0) throw new Error('Every attestation has been accepted already.');
+      if (sending.pending.length === 0) throw new Error(this.t().tradeCase.allAccepted);
       const results: SentResult[] = [];
       for (const { signer, attestation } of sending.pending) {
         const res = await this.anos.attestation(attestation);
@@ -668,8 +667,8 @@ export class AttestingTradeCasePage {
       const failed = results.filter((r) => !accepted(r));
       this.sendOutcome.set(
         failed.length === 0
-          ? { ok: true, text: `Sent: validator ${defaultValidator} accepted ${results.length === 1 ? 'the attestation' : 'both attestations'}.` }
-          : { ok: false, text: `Validator ${defaultValidator} refused ${failed.length} of ${results.length}; the answers are recorded on the case. Retry sends the refused ones again.` },
+          ? { ok: true, text: this.t().attesting.sentAccepted(defaultValidator, results.length === 1 ? this.t().tradeCase.theAttestation : this.t().tradeCase.bothAttestations) }
+          : { ok: false, text: this.t().attesting.validatorRefused(defaultValidator, failed.length, results.length) },
       );
     } catch (err) {
       this.sendOutcome.set({ ok: false, text: err instanceof Error ? err.message : String(err) });
@@ -684,21 +683,21 @@ export class AttestingTradeCasePage {
     return this.act(this.dismissOutcome, async () => {
       const res = await this.masterpod.dismissAttestorCase(this.caseId(), this.reason(), this.dismissNote().trim());
       if (!res.ok) throw new Error(this.refusal(res, '/dismiss-attestor-case'));
-      return 'Dismissed. The person sees the reason on their case page; the trade stays held until its sender cancels it.';
+      return this.t().tradeCase.dismissed;
     });
   }
 
   /** An attestor route's refusal in words (masterpod 13.4.2, 13.4.4). */
   private refusal(res: ApiResponse<unknown>, path: string): string {
     const reason = reasonOf(res);
-    if (res.status === 409 && /already signed off/.test(reason)) return 'This anoPod already signed this case.';
-    if (res.status === 409 && /case closed/.test(reason)) return 'This case is closed: nothing more can be done to it.';
-    if (res.status === 409 && /case not decided/.test(reason)) return 'The case is not decided yet: nothing to send.';
-    if (res.status === 403 && /not your account/.test(reason)) return 'This account is not one of this anoPod\'s accounts.';
-    if (res.status === 401 && /bad signature/.test(reason)) return 'The masterpod refused the signature: the account\'s stored keys do not match.';
-    if (res.status === 400 && /does not match the case/.test(reason)) return 'The attestation names another trade or sender than this case.';
-    if (res.status === 400) return `${path}: the masterpod refused the values (${reason}).`;
-    return attestingError(res, path);
+    if (res.status === 409 && /already signed off/.test(reason)) return this.t().tradeCase.alreadySigned;
+    if (res.status === 409 && /case closed/.test(reason)) return this.t().common.caseClosedDone;
+    if (res.status === 409 && /case not decided/.test(reason)) return this.t().attesting.notDecided;
+    if (res.status === 403 && /not your account/.test(reason)) return this.t().common.notMyAccountSentence;
+    if (res.status === 401 && /bad signature/.test(reason)) return this.t().common.badSignature;
+    if (res.status === 400 && /does not match the case/.test(reason)) return this.t().tradeCase.mismatch;
+    if (res.status === 400) return this.t().common.refusedValues(path, reason);
+    return attestingError(res, path, this.t());
   }
 
   private async act(outcome: ReturnType<typeof signal<Outcome | null>>, action: () => Promise<string>): Promise<void> {
@@ -722,49 +721,50 @@ export class AttestingTradeCasePage {
       this.copied.set(what);
       setTimeout(() => this.copied.set(null), 2000);
     } catch {
-      this.error.set('Could not copy; select the text by hand.');
+      this.error.set(this.t().common.couldNotCopyText);
     }
   }
 
   private itemOf(event: CaseEvent): TimelineItem {
     const d = event.details;
-    const who = event.username ?? (event.anopodId ? `pod ${event.anopodId.slice(0, 8)}…` : 'an attestor');
-    const note = typeof d['note'] === 'string' && d['note'] !== '' ? `Note: ${d['note']}` : null;
+    const words = this.t().tradeCase;
+    const who = event.username ?? (event.anopodId ? this.t().common.podShort(event.anopodId.slice(0, 8)) : this.t().attesting.anAttestor);
+    const note = typeof d['note'] === 'string' && d['note'] !== '' ? this.t().common.notePrefix(d['note']) : null;
     const keys = Array.isArray(d['keyIds']) ? d['keyIds'].length : 0;
     let icon = 'circle';
     let text = event.kind;
     let link: string | null = null;
     switch (event.kind) {
       case 'opened':
-        [icon, text] = ['flag', `${who} opened the case`];
+        [icon, text] = ['flag', words.eventOpened(who)];
         break;
       case 'lookupIdShared':
-        [icon, text] = ['fingerprint', 'The person shared their lookup id'];
+        [icon, text] = ['fingerprint', words.eventShared];
         break;
       case 'scheduled':
-        [icon, text] = ['event', `${who} scheduled the video call for ${typeof d['at'] === 'string' ? new Date(d['at']).toLocaleString() : 'a time to be confirmed'}`];
+        [icon, text] = ['event', this.t().common.scheduledBy(who, typeof d['at'] === 'string' ? this.lang.dateTime(d['at']) : this.t().common.timeToBeConfirmed)];
         link = typeof d['meetLink'] === 'string' ? d['meetLink'] : null;
         break;
       case 'bucketOneViewed':
       case 'bucketTwoViewed':
-        [icon, text] = ['visibility', `${who} read bucket ${event.kind === 'bucketOneViewed' ? 'one' : 'two'} (${keys} key${keys === 1 ? '' : 's'})`];
+        [icon, text] = ['visibility', this.t().common.readBucket(who, event.kind === 'bucketOneViewed' ? 1 : 2, keys)];
         break;
       case 'attestationSigned':
-        [icon, text] = ['draw', `${who} signed an attestation with account ${typeof d['attestorId'] === 'string' ? d['attestorId'].slice(0, 8) + '…' : '?'}`];
+        [icon, text] = ['draw', words.eventSigned(who, typeof d['attestorId'] === 'string' ? d['attestorId'].slice(0, 8) + '…' : '?')];
         break;
       case 'decided':
-        [icon, text] = ['verified', 'Decided: two attestors signed'];
+        [icon, text] = ['verified', this.t().common.decidedSigned];
         break;
       case 'lookupIdCleared':
-        [icon, text] = ['delete', 'The lookup id was cleared from the case'];
+        [icon, text] = ['delete', words.eventCleared];
         break;
       case 'sent':
-        [icon, text] = ['send', `${who} posted to validator ${String(d['validator'] ?? '?')}: ${resultsOf(event).map((r) => `${r.signer.slice(0, 8)}… HTTP ${r.status}${r.error ? ' ' + r.error : ''}`).join(', ')}`];
+        [icon, text] = ['send', this.t().attesting.eventSent(who, String(d['validator'] ?? '?'), resultsOf(event).map((r) => `${r.signer.slice(0, 8)}… HTTP ${r.status}${r.error ? ' ' + r.error : ''}`).join(', '))];
         break;
       case 'dismissed':
-        [icon, text] = ['block', `${who} dismissed the case: ${DISMISS_WORDS[d['reason'] as AttestorDismissReason] ?? String(d['reason'] ?? '')}`];
+        [icon, text] = ['block', this.t().common.dismissedBy(who, this.t().dismissReasonsStaff[String(d['reason'])] ?? String(d['reason'] ?? ''))];
         break;
     }
-    return { key: event.eventId, icon, text, note, link, when: new Date(event.createdAt).toLocaleString() };
+    return { key: event.eventId, icon, text, note, link, when: this.lang.dateTime(event.createdAt) };
   }
 }

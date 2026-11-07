@@ -1,4 +1,3 @@
-import { DatePipe } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -8,6 +7,8 @@ import { MatListModule } from '@angular/material/list';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { RouterLink } from '@angular/router';
+import type { Words } from '../i18n/en';
+import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
 import { MasterpodApiService, RecoveryCaseItem } from '../services/masterpod-api.service';
 import { CaseStatus } from '../services/recovery.service';
@@ -15,16 +16,6 @@ import { CaseStatus } from '../services/recovery.service';
 /** The six statuses of a case (masterpod 12.5), the four in-progress ones first; the filter starts with those four. */
 export const CASE_STATUSES: CaseStatus[] = ['open', 'inReview', 'approved', 'delivering', 'completed', 'dismissed'];
 const DEFAULT_STATUSES: CaseStatus[] = ['open', 'inReview', 'approved', 'delivering'];
-
-/** A status in words, for the list and the case page. */
-export const STATUS_WORDS: Record<CaseStatus, string> = {
-  open: 'Open',
-  inReview: 'In review',
-  approved: 'Approved',
-  delivering: 'Delivering',
-  completed: 'Completed',
-  dismissed: 'Dismissed',
-};
 
 /** The icon of a status, for the list and the case page. */
 export const STATUS_ICONS: Record<CaseStatus, string> = {
@@ -36,9 +27,9 @@ export const STATUS_ICONS: Record<CaseStatus, string> = {
   dismissed: 'block',
 };
 
-/** The masterpod's 403 not a moderator in words (wallet spec 12.2); other refusals as they are. */
-export function moderationError(res: ApiResponse<unknown>, path: string): string {
-  if (res.status === 403 && /not a moderator/.test(reasonOf(res))) return 'This anoPod is not a moderator.';
+/** The masterpod's 403 not a moderator in words (wallet spec 12.2), from the dictionary `words`; other refusals as they are. */
+export function moderationError(res: ApiResponse<unknown>, path: string, words: Words): string {
+  if (res.status === 403 && /not a moderator/.test(reasonOf(res))) return words.moderation.notModerator;
   return `${path}: ${reasonOf(res)}`;
 }
 
@@ -51,24 +42,24 @@ export function moderationError(res: ApiResponse<unknown>, path: string): string
  */
 @Component({
   selector: 'app-moderation-page',
-  imports: [DatePipe, RouterLink, MatCardModule, MatButtonModule, MatListModule, MatIconModule, MatFormFieldModule, MatSelectModule, MatProgressBarModule],
+  imports: [RouterLink, MatCardModule, MatButtonModule, MatListModule, MatIconModule, MatFormFieldModule, MatSelectModule, MatProgressBarModule],
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
-        <mat-card-title>Moderation</mat-card-title>
-        <mat-card-subtitle>The recovery cases. Open one to schedule the call, read the buckets and sign off.</mat-card-subtitle>
+        <mat-card-title>{{ t().moderation.title }}</mat-card-title>
+        <mat-card-subtitle>{{ t().moderation.subtitle }}</mat-card-subtitle>
       </mat-card-header>
       <mat-card-content>
         <div class="row">
           <mat-form-field appearance="outline" class="filter">
-            <mat-label>Status</mat-label>
+            <mat-label>{{ t().common.status }}</mat-label>
             <mat-select multiple [value]="statuses()" (valueChange)="filter($event)">
               @for (status of allStatuses; track status) {
-                <mat-option [value]="status">{{ words[status] }}</mat-option>
+                <mat-option [value]="status">{{ t().recoveryStatus[status] ?? status }}</mat-option>
               }
             </mat-select>
           </mat-form-field>
-          <button mat-stroked-button type="button" (click)="load()" [disabled]="busy()">Refresh</button>
+          <button mat-stroked-button type="button" (click)="load()" [disabled]="busy()">{{ t().common.refresh }}</button>
         </div>
         @if (busy()) {
           <mat-progress-bar mode="indeterminate"></mat-progress-bar>
@@ -80,13 +71,13 @@ export function moderationError(res: ApiResponse<unknown>, path: string): string
           @for (c of cases(); track c.caseId) {
             <mat-list-item lines="3">
               <mat-icon matListItemIcon>{{ icons[c.status] }}</mat-icon>
-              <a matListItemTitle [routerLink]="['/moderation', c.caseId]">{{ c.username ?? 'unknown pod' }} · {{ c.firstName }} {{ c.lastName }}</a>
-              <span matListItemLine>{{ words[c.status] }} · {{ c.approvals }} of 2 approvals · opened {{ c.createdAt | date: 'medium' }}</span>
+              <a matListItemTitle [routerLink]="['/moderation', c.caseId]">{{ t().common.personLine(c.username ?? t().common.unknownPod, c.firstName, c.lastName) }}</a>
+              <span matListItemLine>{{ t().recoveryStatus[c.status] ?? c.status }} · {{ t().moderation.approvalsLine(c.approvals, lang.dateTime(c.createdAt)) }}</span>
               <span matListItemLine><code>{{ c.caseId }}</code></span>
             </mat-list-item>
           } @empty {
             @if (!busy() && !error()) {
-              <p class="muted">No cases with these statuses.</p>
+              <p class="muted">{{ t().moderation.none }}</p>
             }
           }
         </mat-list>
@@ -103,9 +94,10 @@ export function moderationError(res: ApiResponse<unknown>, path: string): string
 })
 export class ModerationPage {
   private readonly api = inject(MasterpodApiService);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
   protected readonly allStatuses = CASE_STATUSES;
-  protected readonly words = STATUS_WORDS;
   protected readonly icons = STATUS_ICONS;
   protected readonly statuses = signal<CaseStatus[]>(DEFAULT_STATUSES);
   protected readonly cases = signal<RecoveryCaseItem[]>([]);
@@ -127,7 +119,7 @@ export class ModerationPage {
     try {
       const res = await this.api.listRecoveryCases(this.statuses());
       if (res.ok) this.cases.set(res.body.cases);
-      else this.error.set(moderationError(res, '/list-recovery-cases'));
+      else this.error.set(moderationError(res, '/list-recovery-cases', this.t()));
     } finally {
       this.busy.set(false);
     }

@@ -72,7 +72,7 @@ interface KnownTransaction {
               <mat-icon matListItemIcon>{{ c.kind === 'trade' ? 'group' : 'balance' }}</mat-icon>
               <a matListItemTitle [routerLink]="['/cases', c.caseId]">
                 {{ c.kind === 'trade' ? t().cases.assistedTrade : t().cases.escrowDispute }}
-                @if (c.amount !== null) { {{ t().cases.anos(millionthsToAnos(c.amount)) }} @if (c.otherAccountId) { {{ t().cases.with }} <code>{{ c.otherAccountId.slice(0, 16) }}…</code> } } @else { {{ t().cases.transaction }} <code>{{ c.transactionId.slice(0, 16) }}…</code> }
+                @if (c.amount !== null) { {{ t().common.anosFragment(millionthsToAnos(c.amount)) }} @if (c.otherAccountId) { {{ t().cases.with }} <code>{{ c.otherAccountId.slice(0, 16) }}…</code> } } @else { {{ t().cases.transaction }} <code>{{ c.transactionId.slice(0, 16) }}…</code> }
               </a>
               <span matListItemLine><mat-icon class="inline">{{ icons[c.status] }}</mat-icon> {{ t().cases.line(t().caseStatus[c.status] ?? c.status, c.role, lang.dateTime(c.createdAt)) }}</span>
               <span matListItemLine><code>{{ c.caseId }}</code></span>

@@ -71,7 +71,7 @@ interface Outcome {
         @if (trade(); as open) {
           <div class="summary">
             <div><span class="label">{{ t().common.amount }}</span><span class="value">{{ t().common.anos(millionthsToAnos(open.amount)) }}</span></div>
-            <div><span class="label">{{ side() === 'seller' ? t().escrow.buyer : t().escrow.seller }}</span><code class="value">{{ side() === 'seller' ? open.accountIdTo : open.accountId }}</code></div>
+            <div><span class="label">{{ side() === 'seller' ? t().common.buyer : t().common.seller }}</span><code class="value">{{ side() === 'seller' ? open.accountIdTo : open.accountId }}</code></div>
             <div><span class="label">{{ t().common.made }}</span><span class="value">{{ lang.dateTime(open.createdAt) }}</span></div>
             <div><span class="label">{{ t().common.stage }}</span><span class="value">{{ words(open) }}</span></div>
             <div><span class="label">{{ t().common.transaction }}</span><code class="value">{{ open.transactionId }}</code></div>

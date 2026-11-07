@@ -221,7 +221,7 @@ export class WalletPage {
   protected async create(): Promise<void> {
     const encryptionKey = this.session.getEncryptionKey();
     if (!encryptionKey) {
-      this.error.set(this.t().wallet.noKeyInRam);
+      this.error.set(this.t().common.noKeyInRamSentence);
       return;
     }
     this.busy.set(true);

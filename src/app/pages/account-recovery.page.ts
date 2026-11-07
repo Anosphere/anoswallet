@@ -136,10 +136,10 @@ const ID = 1;
               </div>
             </mat-step>
 
-            <mat-step [completed]="emailDone()" [label]="t().recovery.email">
+            <mat-step [completed]="emailDone()" [label]="t().common.email">
               <p>{{ t().recovery.emailText }}</p>
               <mat-form-field appearance="outline">
-                <mat-label>{{ t().recovery.email }}</mat-label>
+                <mat-label>{{ t().common.email }}</mat-label>
                 <input matInput [ngModel]="email()" (ngModelChange)="email.set($event)" autocomplete="email" />
               </mat-form-field>
               <div class="row">

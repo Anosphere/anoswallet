@@ -1337,6 +1337,9 @@ The pages done so far, a list the later steps extend:
 - step 7 (2026-11-06): the recovery flow (the Recover page, the
   locked-out stepper, My recovery) and the cases (the list, My case),
   with the case statuses.
+- step 8 (2026-11-06): the moderation page and its case page, the
+  attesting page and its trade and dispute case pages, with the
+  attesting service's words. Every page of every edition is done.
 
 ## 9. Configuration, and running it on this machine
 
@@ -2944,6 +2947,102 @@ Thai reader needs the words most.
 - Spec: 8.8 (the list), this note; 12.3 is not reworded, it quotes the
   English.
 - `npx ng build` clean (1.85 MB initial). Not run in a browser here;
+  the user tests with `ng serve`.
+
+### The languages, step 8 (2026-11-06)
+
+Step 8 of forclaude/wallet-languages-plan-1.md, the last: the moderation
+and attesting pages of the staff editions, with the attesting service.
+Why: the staff pages were the last English in the app; with them every
+page of every edition speaks both languages, and the plan is built.
+
+- `i18n/en.ts` and `th.ts`: the sections `moderation`, `moderationCase`,
+  `attesting` (the attesting list page and the sentences the three
+  attesting pages and the attesting service share), `tradeCase`,
+  `disputeCase`, `recoveryStatus` (the six recovery statuses of
+  `moderation.page.ts`'s `STATUS_WORDS`), `dismissReasonsStaff` (the
+  "the person" wording, the union of the moderation case's five keys and
+  the attesting pages' six) and `buckets` (the two titles); and the
+  `common` entries the moderation and attesting pages share: Status,
+  "unknown pod", "The person", "public selfie", "Copy the lookup id",
+  "<status> · opened <date>", "Loading the case…", Schedule, "Video
+  call", "Meeting link (https)", Save, "Anos account", "Pull key", the
+  bucket summary and its locked-rows fragment, "bucket image", Verdict,
+  Note, Dismiss, "Confirm dismissal", "Pick one of your anos accounts
+  first.", "Enter the time of the call.", the scheduled line, the pull's
+  progress and refusal sentences, "This case is closed: nothing more can
+  be done to it.", the two signature refusals, "Could not copy; select
+  the text by hand.", "pod <id>…", "Note: <note>", "<who> scheduled the
+  video call for <at>", "<who> read bucket one/two (N keys)", "<who>
+  dismissed the case: <reason>" and "<username> · <first> <last>". Eight
+  words earlier steps put in page sections moved to `common`, since a
+  staff page shows them too: "Your account" (from `accountHome`), 'The
+  encryption key is not in RAM: unlock again.' with its period (from
+  `wallet`), Seller and Buyer (from `escrow`), Email (from `recovery`),
+  "· N anos" (from `cases`), the refused-values sentence and 'Decided:
+  two attestors signed' (from `myCase`); one line of each of those pages
+  changed.
+- `services/attesting.service.ts`: `attestingError` and
+  `validatorRefusal` take the dictionary (`words: Words`) as a third
+  parameter, since they are plain functions that cannot inject; every
+  caller passes `this.t()` or `this.lang.words()`; the regexes and the
+  `${path}: ${reason}` fallbacks stay. `pages/moderation.page.ts`:
+  `moderationError` likewise; `STATUS_WORDS` left the file for
+  `recoveryStatus`; the person line and the approvals line are
+  functions with `lang.dateTime`.
+- `pages/moderation-case.page.ts`: `DISMISS_WORDS` and the `BUCKETS`
+  titles left the file (the paths and share types stay); the status and
+  reason words from `recoveryStatus` and `dismissReasonsStaff`; the
+  sign-offs, the bucket summary, the timeline's `itemOf` and the
+  refusals read entries and functions; the two date pipes and three
+  `toLocaleString` calls are `lang.dateTime`; the note's placeholder
+  translates with its "14:00 UTC"; the URL placeholder and the native
+  `datetime-local` input stay.
+- `pages/attesting.page.ts`: `STATUS_WORDS` and `DISMISS_WORDS` left the
+  file; `CASE_STATUSES`, `REVIEW_STATUSES` and `STATUS_ICONS` stay
+  exported; the tab labels as `[label]` functions of the counts; the
+  attestations and verdicts plurals, the "disputed by" words and the
+  person line from the dictionary; `DisputeRow.disputedBy` is a string
+  of the dictionary's words; the three pipes are `lang.time` and
+  `lang.dateTime`. `pages/attesting-trade-case.page.ts` and
+  `pages/attesting-dispute-case.page.ts`: `BUCKETS` titles from
+  `t().buckets`; the explain switches, the plurals, "The <side>'s files",
+  the Success / Cancel and reason options, the sending lines and the
+  refusals from the dictionary; the English appended to a username after
+  a file that did not open is `disputeCase.didNotOpen`; the pipes and
+  `toLocaleString` calls as above.
+- Tables typed `Record<string, string>` added to the dictionaries (the
+  type cannot check their keys in Thai): `recoveryStatus` (six statuses)
+  and `dismissReasonsStaff` (seven reasons). `buckets` is typed by its
+  keys.
+- Readings where the plan left a detail open: the attesting service's
+  sentences live in `attesting`, the section the three attesting pages
+  share, as `market` holds the marketplace service's; sentences the
+  three attesting pages share ("Send to the validators", "an attestor",
+  the no-account hint, the validator's refusal line) live in `attesting`
+  too, while sentences the moderation pages share with them live in
+  `common`; the plan's `common.noKeyInRam` for the service is the
+  sentence with its period, so it is `common.noKeyInRamSentence`, moved
+  from `wallet`, and `common.noKeyInRam` without the period stays as it
+  was; "This account is not one of this anoPod's accounts." with its
+  period is `common.notMyAccountSentence` beside the step 4 entry
+  without one; the account pickers show `wallet.typeOption(type)` for
+  the raw type word, as the Wallet page's select does; the status words
+  are read with a fallback to the raw status, as the other `Record`
+  tables are; the trade case page's template variable `t` (the trade)
+  is now `held`, as the assisted transfer page's is; the dispute case
+  page's party sides are `'seller' as const` and `'buyer' as const`, so
+  the template can read `t().sides`; the moderation case's back link
+  "Cases" reads `nav.cases`; the "→ HTTP <status>" fragments, the
+  "data:" URL, the URL placeholder and the "…" after an id stay in the
+  templates; the person line prints an empty name where the masterpod
+  sends null, as the template did. Thai: "the bankers" read นายธนาคาร;
+  bucket stays Latin ("Bucket หนึ่ง", "Bucket สอง"); "sign off" reads
+  ลงนามรับรอง; "the person" reads บุคคล; Reject reads ไม่อนุมัติ. No
+  sentence read odd.
+- Spec: 8.8 (the list, now complete), this note; 13.3 is not reworded,
+  it quotes the English.
+- `npx ng build` clean (1.89 MB initial). Not run in a browser here;
   the user tests with `ng serve`.
 
 ## 12. Recovery and the moderator edition

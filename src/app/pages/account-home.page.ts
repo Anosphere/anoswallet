@@ -20,7 +20,7 @@ import { SessionService } from '../services/session.service';
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
-        <mat-card-title>{{ t().accountHome.title }}</mat-card-title>
+        <mat-card-title>{{ t().common.yourAccount }}</mat-card-title>
         <mat-card-subtitle>{{ t().common.accountRecovery }}</mat-card-subtitle>
       </mat-card-header>
       <mat-card-content>
