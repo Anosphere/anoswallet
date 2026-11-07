@@ -1,4 +1,3 @@
-import { DatePipe } from '@angular/common';
 import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -51,29 +50,29 @@ interface ListBody {
  */
 @Component({
   selector: 'app-transaction-history-page',
-  imports: [DatePipe, RouterLink, MatCardModule, MatButtonModule, MatIconModule, MatProgressBarModule, MatFormFieldModule, MatInputModule, MatDatepickerModule, CopyButtonComponent],
+  imports: [RouterLink, MatCardModule, MatButtonModule, MatIconModule, MatProgressBarModule, MatFormFieldModule, MatInputModule, MatDatepickerModule, CopyButtonComponent],
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
-        <mat-card-title>Transaction history</mat-card-title>
+        <mat-card-title>{{ t().common.transactionHistory }}</mat-card-title>
         <mat-card-subtitle>{{ name() }} · <code>{{ shortId(accountId()) }}</code></mat-card-subtitle>
       </mat-card-header>
       <mat-card-content>
-        <p><a mat-button [routerLink]="['/wallet', accountId()]"><mat-icon>arrow_back</mat-icon> Account</a></p>
+        <p><a mat-button [routerLink]="['/wallet', accountId()]"><mat-icon>arrow_back</mat-icon> {{ t().common.account }}</a></p>
         <div class="row">
           <mat-form-field appearance="outline" class="dates" subscriptSizing="dynamic">
-            <mat-label>Dates</mat-label>
+            <mat-label>{{ t().history.dates }}</mat-label>
             <mat-date-range-input [rangePicker]="rangePicker">
-              <input matStartDate placeholder="From" [value]="from()" (dateChange)="from.set($event.value); changed()" />
-              <input matEndDate placeholder="To" [value]="to()" (dateChange)="to.set($event.value); changed()" />
+              <input matStartDate [placeholder]="t().common.from" [value]="from()" (dateChange)="from.set($event.value); changed()" />
+              <input matEndDate [placeholder]="t().common.to" [value]="to()" (dateChange)="to.set($event.value); changed()" />
             </mat-date-range-input>
             <mat-datepicker-toggle matIconSuffix [for]="rangePicker" />
             @if (from() || to()) {
-              <button mat-icon-button matIconSuffix type="button" (click)="clearDates()" aria-label="Clear the dates"><mat-icon>close</mat-icon></button>
+              <button mat-icon-button matIconSuffix type="button" (click)="clearDates()" [attr.aria-label]="t().history.clearDates"><mat-icon>close</mat-icon></button>
             }
             <mat-date-range-picker #rangePicker />
           </mat-form-field>
-          <button mat-stroked-button type="button" (click)="refresh()" [disabled]="busy()">Refresh</button>
+          <button mat-stroked-button type="button" (click)="refresh()" [disabled]="busy()">{{ t().common.refresh }}</button>
         </div>
         @if (readError(); as text) {
           <p class="error">{{ text }}</p>
@@ -83,35 +82,35 @@ interface ListBody {
         }
         @for (day of days(); track day.label) {
           <h4 class="day">{{ day.label }}</h4>
-          @for (t of day.rows; track t.transactionId) {
-            @let w = words(t);
-            <button type="button" class="entry" (click)="toggle(t.transactionId)" [attr.aria-expanded]="expanded() === t.transactionId">
+          @for (row of day.rows; track row.transactionId) {
+            @let w = words(row);
+            <button type="button" class="entry" (click)="toggle(row.transactionId)" [attr.aria-expanded]="expanded() === row.transactionId">
               <mat-icon>{{ w.icon }}</mat-icon>
               <span class="text">
                 <span class="title">{{ w.title }}</span>
-                <span class="muted">{{ chat.timeOf(t.createdAt) }}</span>
+                <span class="muted">{{ chat.timeOf(row.createdAt) }}</span>
               </span>
-              <span class="amount" [class.plus]="w.sign === '+'" [class.muted]="w.sign === ''">{{ amountWords(t, w) }}</span>
+              <span class="amount" [class.plus]="w.sign === '+'" [class.muted]="w.sign === ''">{{ amountWords(row, w) }}</span>
             </button>
-            @if (expanded() === t.transactionId) {
+            @if (expanded() === row.transactionId) {
               <div class="details">
-                <div><span class="label">Kind</span><span>{{ w.kind }}</span></div>
-                @if (counterpart(t); as other) {
-                  <div><span class="label">{{ t.accountId === accountId() ? 'To' : 'From' }}</span><span><code>{{ other }}</code> <app-copy-button [text]="other" label="Copy the account id" /></span></div>
+                <div><span class="label">{{ t().common.kind }}</span><span>{{ w.kind }}</span></div>
+                @if (counterpart(row); as other) {
+                  <div><span class="label">{{ row.accountId === accountId() ? t().common.to : t().common.from }}</span><span><code>{{ other }}</code> <app-copy-button [text]="other" [label]="t().common.copyAccountId" /></span></div>
                 }
-                <div><span class="label">Transaction</span><span><code>{{ t.transactionId }}</code> <app-copy-button [text]="t.transactionId" label="Copy the transaction id" /></span></div>
-                <div><span class="label">Position</span><span>#{{ t.position }}</span></div>
-                <div><span class="label">When</span><span>{{ t.createdAt | date: 'medium' }}</span></div>
+                <div><span class="label">{{ t().common.transaction }}</span><span><code>{{ row.transactionId }}</code> <app-copy-button [text]="row.transactionId" [label]="t().common.copyTransactionId" /></span></div>
+                <div><span class="label">{{ t().history.position }}</span><span>#{{ row.position }}</span></div>
+                <div><span class="label">{{ t().history.when }}</span><span>{{ lang.dateTime(row.createdAt) }}</span></div>
               </div>
             }
           }
         } @empty {
           @if (!busy() && !readError()) {
-            <p class="muted">{{ from() && to() ? 'No transactions between these dates.' : 'Nothing on the ledger for this account yet.' }}</p>
+            <p class="muted">{{ from() && to() ? t().history.noneBetween : t().history.nothingYet }}</p>
           }
         }
         @if (canLoadMore()) {
-          <button mat-button type="button" (click)="loadMore()" [disabled]="busy()">Show more</button>
+          <button mat-button type="button" (click)="loadMore()" [disabled]="busy()">{{ t().history.showMore }}</button>
         }
       </mat-card-content>
     </mat-card>
@@ -144,6 +143,7 @@ export class TransactionHistoryPage {
   /** For dayLabel and timeOf, so days read the same here and in Chat. */
   protected readonly chat = inject(ChatService);
   protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
   protected readonly shortId = shortId;
   protected readonly transactions = signal<TransactionItem[]>([]);
@@ -157,7 +157,7 @@ export class TransactionHistoryPage {
   protected readonly expanded = signal<string | null>(null);
 
   /** The account's name by its type (account-names.ts); "Account" until the account is in the session. */
-  protected readonly name = computed(() => accountNames(this.session.accounts(), this.lang.words().accountKinds).get(this.accountId()) ?? 'Account');
+  protected readonly name = computed(() => accountNames(this.session.accounts(), this.t().accountKinds).get(this.accountId()) ?? this.t().common.account);
 
   /** The rows under day headings, newest first: the rows come in position order, so a day's rows sit together. */
   protected readonly days = computed((): Day[] => {
@@ -184,14 +184,14 @@ export class TransactionHistoryPage {
 
   /** The row in plain words (history-words.ts), from this account's side. */
   protected words(t: TransactionItem): HistoryWords {
-    return historyWords(t, this.accountId());
+    return historyWords(t, this.accountId(), this.t().historyWords);
   }
 
   /** The amount at the right: "+5 anos", "−5 anos", "5 anos" without a sign for a payout seen by its proposer, nothing for a creation or a proposal. */
   protected amountWords(t: TransactionItem, w: HistoryWords): string {
-    if (w.sign === '+') return `+${millionthsToAnos(t.amount)} anos`;
-    if (w.sign === '-') return `−${millionthsToAnos(t.amount)} anos`;
-    return BigInt(t.amount) > 0n ? `${millionthsToAnos(t.amount)} anos` : '';
+    if (w.sign === '+') return this.t().history.plus(millionthsToAnos(t.amount));
+    if (w.sign === '-') return this.t().history.minus(millionthsToAnos(t.amount));
+    return BigInt(t.amount) > 0n ? this.t().common.anos(millionthsToAnos(t.amount)) : '';
   }
 
   protected toggle(transactionId: string): void {
@@ -220,8 +220,8 @@ export class TransactionHistoryPage {
       item = this.session.accounts().find((a) => a.accountId === this.accountId());
     }
     const encryptionKey = this.session.getEncryptionKey();
-    if (!item) throw new Error('This account is not one of this anoPod\'s accounts');
-    if (!encryptionKey) throw new Error('The encryption key is not in RAM: unlock again');
+    if (!item) throw new Error(this.t().common.notMyAccount);
+    if (!encryptionKey) throw new Error(this.t().common.noKeyInRam);
     return this.crypto.pairOneFromKeyBlob(this.crypto.fromHex(item.keyBlob), encryptionKey);
   }
 

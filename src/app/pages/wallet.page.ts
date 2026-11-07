@@ -103,7 +103,7 @@ const ALREADY_THERE = /already (exists|pending|in the garlic chain)/;
         <h3>{{ t().wallet.openTitle }}</h3>
         <div class="row">
           <mat-form-field appearance="outline">
-            <mat-label>{{ t().wallet.type }}</mat-label>
+            <mat-label>{{ t().common.type }}</mat-label>
             <mat-select [value]="accountType()" (valueChange)="accountType.set($event)" [disabled]="busy()">
               @for (type of accountTypes; track type) {
                 <mat-option [value]="type">{{ t().wallet.typeOption(type) }}</mat-option>

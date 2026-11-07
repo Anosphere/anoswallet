@@ -13,6 +13,7 @@ import { formatPrice, totalOf } from '../prices';
 import { AnosApiService, EscrowItem } from '../services/anos-api.service';
 import { ChatService } from '../services/chat.service';
 import { CryptoService, PairOne } from '../services/crypto.service';
+import { LanguageService } from '../services/language.service';
 import { reasonOf } from '../services/log.service';
 import { MarketplaceService } from '../services/marketplace.service';
 import { MasterpodApiService, RoomItem } from '../services/masterpod-api.service';
@@ -199,6 +200,7 @@ export class PinnedListingComponent {
   private readonly anos = inject(AnosApiService);
   private readonly crypto = inject(CryptoService);
   private readonly signing = inject(SigningService);
+  protected readonly lang = inject(LanguageService);
 
   protected readonly millionthsToAnos = millionthsToAnos;
 
@@ -291,7 +293,7 @@ export class PinnedListingComponent {
 
   /** The stage in words from this pod's side of the trade (escrow-stage.ts). */
   protected stageWords(t: EscrowItem): string {
-    return escrowStageWords(t.stage, t.accountId === this.tradeAccount() ? 'seller' : 'buyer');
+    return escrowStageWords(t.stage, t.accountId === this.tradeAccount() ? 'seller' : 'buyer', this.lang.words().escrowStages);
   }
 
   protected endedText(e: Ended): string {

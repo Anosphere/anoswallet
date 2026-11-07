@@ -1,3 +1,4 @@
+import type { Words } from './i18n/en';
 import type { TransactionItem } from './services/anos-api.service';
 import { shortId } from './short-id';
 
@@ -9,51 +10,43 @@ export interface HistoryWords {
   icon: string;
 }
 
-/** The kind in words of the four transfers an account sends by its type. */
-const TRANSFER_KINDS: Record<string, string> = {
-  anosTransfer: 'plain transfer',
-  guardedAnosTransfer: 'guarded transfer',
-  vaultAnosTransfer: 'vault transfer',
-  assistedAnosTransfer: 'assisted transfer',
-};
-
 /**
  * A transaction in plain words (wallet spec 8.2, Transaction history),
- * from its type word and which side of it this account is on: "Sent to
- * a1b2c3d4…e5f6", "Received from …", "Account created", "Escrow released
- * to …", "Escrow received from …", "Staked with the fund", "Fund
- * proposal", "Received from the fund", "Fund payout to …". The other side
- * is accountIdTo when this account sent and accountId otherwise, shown
- * short; "to …" or "from …" is dropped when there is none. A type word
- * the wallet does not know keeps the raw word, with the sign by the side.
+ * from its type word and which side of it this account is on, the words
+ * from the dictionary, `words` (wallet spec 8.8): "Sent to a1b2c3d4…e5f6",
+ * "Received from …", "Account created", "Escrow released to …", "Escrow
+ * received from …", "Staked with the fund", "Fund proposal", "Received
+ * from the fund", "Fund payout to …". The other side is accountIdTo when
+ * this account sent and accountId otherwise, shown short; "to …" or
+ * "from …" is dropped when there is none. A type word the wallet does not
+ * know keeps the raw word, with the sign by the side.
  */
-export function historyWords(t: TransactionItem, accountId: string): HistoryWords {
+export function historyWords(t: TransactionItem, accountId: string, words: Words['historyWords']): HistoryWords {
   const sent = t.accountId === accountId;
   const other = sent ? t.accountIdTo : t.accountId;
-  const to = other === null ? '' : ` to ${shortId(other)}`;
-  const from = other === null ? '' : ` from ${shortId(other)}`;
+  const short = other === null ? null : shortId(other);
   switch (t.type) {
     case 'accountCreation':
-      return { title: 'Account created', kind: 'account creation', sign: '', icon: 'add_circle' };
+      return { title: words.accountCreated, kind: words.kinds.accountCreation, sign: '', icon: 'add_circle' };
     case 'anosTransfer':
     case 'guardedAnosTransfer':
     case 'vaultAnosTransfer':
     case 'assistedAnosTransfer':
       return sent
-        ? { title: `Sent${to}`, kind: TRANSFER_KINDS[t.type] ?? t.type, sign: '-', icon: 'call_made' }
-        : { title: `Received${from}`, kind: TRANSFER_KINDS[t.type] ?? t.type, sign: '+', icon: 'call_received' };
+        ? { title: short === null ? words.sent : words.sentTo(short), kind: words.transferKinds[t.type] ?? t.type, sign: '-', icon: 'call_made' }
+        : { title: short === null ? words.received : words.receivedFrom(short), kind: words.transferKinds[t.type] ?? t.type, sign: '+', icon: 'call_received' };
     case 'escrowTransfer':
       return sent
-        ? { title: `Escrow released${to}`, kind: 'escrow transfer', sign: '-', icon: 'handshake' }
-        : { title: `Escrow received${from}`, kind: 'escrow transfer', sign: '+', icon: 'handshake' };
+        ? { title: short === null ? words.escrowReleased : words.escrowReleasedTo(short), kind: words.kinds.escrowTransfer, sign: '-', icon: 'handshake' }
+        : { title: short === null ? words.escrowReceived : words.escrowReceivedFrom(short), kind: words.kinds.escrowTransfer, sign: '+', icon: 'handshake' };
     case 'transferToFund':
-      return { title: 'Staked with the fund', kind: 'stake', sign: '-', icon: 'savings' };
+      return { title: words.staked, kind: words.kinds.stake, sign: '-', icon: 'savings' };
     case 'fundProposal':
-      return { title: 'Fund proposal', kind: 'fund proposal', sign: '', icon: 'how_to_vote' };
+      return { title: words.fundProposal, kind: words.kinds.fundProposal, sign: '', icon: 'how_to_vote' };
     case 'transferFromFund':
       return t.accountIdTo === accountId
-        ? { title: 'Received from the fund', kind: 'fund payout', sign: '+', icon: 'account_balance' }
-        : { title: `Fund payout${to}`, kind: 'fund payout', sign: '', icon: 'account_balance' };
+        ? { title: words.receivedFromFund, kind: words.kinds.fundPayout, sign: '+', icon: 'account_balance' }
+        : { title: short === null ? words.fundPayout : words.fundPayoutTo(short), kind: words.kinds.fundPayout, sign: '', icon: 'account_balance' };
     default:
       return { title: t.type, kind: t.type, sign: sent ? '-' : t.accountIdTo === accountId ? '+' : '', icon: 'receipt_long' };
   }

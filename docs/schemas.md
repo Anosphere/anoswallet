@@ -1324,6 +1324,9 @@ The pages done so far, a list the later steps extend:
 - step 3 (2026-11-06): Home, the Wallet page, the Account page and the
   recovery walkthrough, the balance card, the balances service and the
   account names.
+- step 4 (2026-11-06): the account page, the transaction history, the
+  escrow trade and the assisted transfer, with the stage words, the
+  history words, the minutes in words and the chat's day and time words.
 
 ## 9. Configuration, and running it on this machine
 
@@ -2613,6 +2616,87 @@ pages, the pages of every day after it, were still English.
   sentence read odd.
 - Spec: 8.8 (the list), this note.
 - `npx ng build` clean (1.73 MB initial). Not run in a browser here;
+  the user tests with `ng serve`.
+
+### The languages, step 4 (2026-11-06)
+
+Step 4 of forclaude/wallet-languages-plan-1.md: the account page, the
+transaction history, the escrow trade, the assisted transfer, the three
+stage helpers, the history words, the minutes words and the chat
+service's day and time words. Why: these are the pages of sending and
+receiving anos, the heart of the wallet, and the last English pages a
+person meets before the chat and the marketplace.
+
+- `i18n/en.ts` and `th.ts`: the sections `account`, `history`,
+  `escrow`, `assisted`, `escrowStages`, `assistedStages`, `lockedStages`,
+  `historyWords`, `sides`, `dismissReasons` and `minutes` (a function of
+  the minutes: the English body of minutes-words.ts moved as it was, the
+  Thai "15 นาที", "1 ชั่วโมง 30 นาที", "7 วัน 10 นาที", the parts joined by
+  a space), and the `common` entries Account, Type (moved from `wallet`,
+  since the account page shows the same label), Kind, Amount, Made,
+  Stage, Transaction, To, From, Reason, Closed, Loading, "Copy the
+  transaction id", "Transaction history", "Assisted transfer", the two
+  "This page refreshes every 5 seconds…" sentences, 'This account is not
+  one of this anoPod's accounts' (left over from step 3) and "another
+  reason". th.ts gained a module-level `KINDS` table of the four account
+  types' words, read by `wallet.typeOption`, `account.title` and the
+  lock line.
+- `escrow-stage.ts`, `assisted-stage.ts`, `locked-stage.ts`: each
+  function takes `words`, the dictionary's table for it; the switches
+  stay. `history-words.ts`: `historyWords(t, accountId, words)`, the
+  titles as entries and functions of the short id, the kinds as entries,
+  `TRANSFER_KINDS` as `historyWords.transferKinds`; the signs, the icons
+  and the default branch stay. `minutes-words.ts` moved to the
+  scratchpad: `t().minutes(n)` replaces it.
+- `account.page.ts`: every sentence from `t().account`, `common` and
+  `nav` (the Wallet back link); the spending kinds, the stake purposes
+  and the votes show words from tables while their values stay; the lock
+  line a function of the type and `t().minutes(ahead)`; the five date
+  pipes are `lang.dateTime` and `DatePipe` left. Kept as they are, by
+  decision 14: the labels "Fund proposal transactionId" and "Recipient
+  accountId", the buttons "Send guardianVote" and "Send fundProposal",
+  the wire word after Send, the paths and reasons in thrown lines.
+- `transaction-history.page.ts`: its words, "To" / "From" from `common`,
+  the day headings and times from the chat service (below); `DatePipe`
+  left. `escrow-trade.page.ts`: `YES_LABELS` and `SENT` left the file
+  for `escrow.yes` and `escrow.sent`; `explain`, `verdictsText`,
+  `question`, `closedText` and `plainReason` read entries and functions;
+  "You are the seller" is `escrow.youAre(t().sides[side()])`.
+  `assisted-transfer.page.ts`: `caseText`, `explain` and `plainReason`
+  likewise; the dismissal reasons are read from `t().dismissReasons`,
+  the import from `my-case.page.ts` gone (that file keeps its own table
+  until step 7). `chat.service.ts`: `shortWhen`, `timeOf` and `dayLabel`
+  pass the service's tag and read Today and Yesterday from `dates`.
+  `pinned-listing.component.ts`: its `lang` injection and the words
+  passed to `escrowStageWords`; its sentences wait for step 6.
+- Tables typed `Record<string, string>` added to the dictionaries (the
+  type cannot check their keys in Thai): `historyWords.transferKinds`
+  (the four transfer types) and `dismissReasons` (the six reasons). The
+  stage tables, `sides`, the spending kinds, the stake purposes, the
+  votes and `historyWords.kinds` are typed by their keys, so the type
+  checks them.
+- Readings where the plan left a detail open: the templates of the
+  account, history, escrow and assisted pages named their block or loop
+  variable `t` (`@if (trade(); as t)`, `@for (t of day.rows)`), which
+  would shadow the dictionary's `t()` inside those blocks, so those
+  variables are now `open` (the trade), `held` (the assisted transfer),
+  `waiting` (the locked transfer) and `row` (a history row), nothing
+  else about them changed; the assisted page's closed sentence "Done.
+  The 5 anos went to <id>." keeps the id in code font, so it is two
+  entries, `doneWentTo` before the id and `doneEnd` after it (the
+  English period, nothing in Thai); "another reason" is both the
+  `dismissReasons.other` entry and `common.anotherReason`, the fallback
+  when a dismissal carries no reason; the account page's "Type" label
+  made `wallet.type` of step 3 a `common.type`, one line of
+  `wallet.page.ts`; the Wallet back link reads `nav.wallet`; the "Escrow
+  trade" title stays in `escrow`, since the pinned card's "Escrow
+  trade: …" is another sentence. Thai: the account types inside
+  sentences come from the `KINDS` table ("การโอนจากบัญชีหน่วงเวลา…");
+  "It cannot be undone" reads เปลี่ยนกลับไม่ได้; "Held" reads ถูกกันไว้;
+  the stake purpose daoVote reads โหวต DAO and masterPod stays as it
+  is. No sentence read odd.
+- Spec: 8.8 (the list), this note.
+- `npx ng build` clean (1.78 MB initial). Not run in a browser here;
   the user tests with `ng serve`.
 
 ## 12. Recovery and the moderator edition

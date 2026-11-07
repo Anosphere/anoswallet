@@ -1,6 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { millionthsToAnos } from '../amounts';
 import { CryptoService } from './crypto.service';
+import { LanguageService } from './language.service';
 import { ApiResponse } from './log.service';
 import { MasterpodApiService, RoomItem, RoomListing, RoomMember, RoomsAnswer } from './masterpod-api.service';
 import { Bytes } from './passkey.service';
@@ -45,6 +46,7 @@ export class ChatService {
   private readonly session = inject(SessionService);
   private readonly api = inject(MasterpodApiService);
   private readonly crypto = inject(CryptoService);
+  private readonly lang = inject(LanguageService);
 
   /** The rooms this tab asked to join (public rooms, listings), so their button reads "Requested". */
   readonly requestedRooms = signal<ReadonlySet<string>>(new Set());
@@ -153,28 +155,28 @@ export class ChatService {
     return [...rooms].sort((a, b) => this.activityAt(b).localeCompare(this.activityAt(a)));
   }
 
-  /** The list's time: today the time, yesterday "Yesterday", within six days the weekday, else the date, with the year when it is another year. */
+  /** The list's time, in the app's language (the language service's tag and day words): today the time, yesterday "Yesterday", within six days the weekday, else the date, with the year when it is another year. */
   shortWhen(iso: string): string {
     const date = new Date(iso);
     const days = daysAgo(date);
-    if (days <= 0) return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-    if (days === 1) return 'Yesterday';
-    if (days < 7) return date.toLocaleDateString(undefined, { weekday: 'short' });
-    return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: sameYear(date) ? undefined : 'numeric' });
+    if (days <= 0) return date.toLocaleTimeString(this.lang.tag(), { hour: '2-digit', minute: '2-digit' });
+    if (days === 1) return this.lang.words().dates.yesterday;
+    if (days < 7) return date.toLocaleDateString(this.lang.tag(), { weekday: 'short' });
+    return date.toLocaleDateString(this.lang.tag(), { day: 'numeric', month: 'short', year: sameYear(date) ? undefined : 'numeric' });
   }
 
-  /** A group's time in a conversation: hours and minutes, the browser's locale. */
+  /** A group's time in a conversation: hours and minutes, in the app's language. */
   timeOf(iso: string): string {
-    return new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    return new Date(iso).toLocaleTimeString(this.lang.tag(), { hour: '2-digit', minute: '2-digit' });
   }
 
-  /** A conversation's day line: "Today", "Yesterday", else the date in full, with the year when it is another year. */
+  /** A conversation's day line, in the app's language: "Today", "Yesterday", else the date in full, with the year when it is another year. */
   dayLabel(iso: string): string {
     const date = new Date(iso);
     const days = daysAgo(date);
-    if (days <= 0) return 'Today';
-    if (days === 1) return 'Yesterday';
-    return date.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: sameYear(date) ? undefined : 'numeric' });
+    if (days <= 0) return this.lang.words().dates.today;
+    if (days === 1) return this.lang.words().dates.yesterday;
+    return date.toLocaleDateString(this.lang.tag(), { day: 'numeric', month: 'long', year: sameYear(date) ? undefined : 'numeric' });
   }
 
   private otherMembers(room: RoomItem): RoomMember[] {
