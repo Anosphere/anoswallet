@@ -11,6 +11,7 @@ import { AvatarComponent } from '../components/avatar.component';
 import { ListingPeopleComponent } from '../components/listing-people.component';
 import { countryName } from '../countries';
 import { formatPrice, totalOf } from '../prices';
+import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
 import { MarketplaceService } from '../services/marketplace.service';
 import { ListingItem } from '../services/masterpod-api.service';
@@ -153,6 +154,7 @@ export class ListingPage {
 
   protected readonly session = inject(SessionService);
   protected readonly market = inject(MarketplaceService);
+  protected readonly lang = inject(LanguageService);
 
   protected readonly listing = signal<ListingItem | null>(null);
   protected readonly notFound = signal(false);
@@ -185,7 +187,7 @@ export class ListingPage {
   });
   protected readonly country = computed(() => {
     const listing = this.listing();
-    return listing ? countryName(listing.country) : '';
+    return listing ? countryName(listing.country, this.lang.tag()) : '';
   });
 
   constructor() {

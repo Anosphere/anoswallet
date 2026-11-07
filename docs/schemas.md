@@ -1314,6 +1314,13 @@ The pages done so far, a list the later steps extend:
 
 - step 1 (2026-11-06): the shell (the toolbar), the navigation (the
   labels of the side panel and the Home tiles), the landing page.
+- step 2 (2026-11-06): the create stepper, the vouching page, the
+  identity page and its form, the setup page, the seed page, the
+  notifications, the log; the camera and the copy button; the services'
+  own sentences (the passkey ceremonies, the deposits, the signing
+  server, the no-session answer of the two API services, the log's
+  network error); the country names, in the identity form and the
+  marketplace.
 
 ## 9. Configuration, and running it on this machine
 
@@ -2454,6 +2461,89 @@ later step turns its pages Thai.
   the user tests with `ng serve`: a browser whose first language is
   Thai shows the Thai shell, navigation and landing page and the
   button, any other shows English.
+
+### The languages, step 2 (2026-11-06)
+
+Step 2 of forclaude/wallet-languages-plan-1.md: the sign-up and setup
+pages, the notifications and the log, with the camera, the copy button
+and the services' own sentences. Why: after step 1 a Thai reader saw a
+Thai toolbar and landing page and English pages; these are the pages of
+the first visit, from Create to Setup.
+
+- `i18n/en.ts` and `th.ts`: the sections `create`, `vouching`,
+  `identity`, `identityForm`, `setup`, `seed`, `notifications`, `log`,
+  `camera`, `copy`, `passkey`, `shares`, `signing` and `api`, and the
+  first `common` entries: Next, Back, Continue, Retry, Refresh, Search,
+  Approve, Decline, Start, Clear, Copy, Username, the `selfie` alt and
+  "None yet.", each a sentence two or more pages show. The sentences with
+  a number or a name are functions (`vouchedBy`, `notYet`, `notSeed`,
+  `usernameAvailable`, `usernameTaken`, `markRead`, `asked`,
+  `retryFresh`, `couldNotOpen`, `refused`, `keyNotFetched`,
+  `publicKeys`, `sign`).
+- `create.page.ts`: the four step labels as `[label]`; the username
+  hints from the dictionary, the rule as the signal's first value; the
+  placeholder as a binding. `vouching.page.ts`: the plural sentence and
+  the two with a count or a username as functions; the time of a sent
+  request with the service's tag. `identity.page.ts`: the three
+  subtitles, the seven points, the warning, the review table's headings
+  from the form's section. `setup.page.ts`: `STEPS` left the file for
+  `setup.steps`, read into the `steps` signal as before; the thrown and
+  shown sentences from the dictionary. `seed.page.ts` and
+  `notifications.page.ts`: `DatePipe` left, `lang.dateTime` in its
+  place; the fifteen notification labels are `notifications.labels`,
+  read with today's fallback to the raw kind. `log.page.ts`: its four
+  pieces; the log's text stays raw.
+- `components/identity-form.component.ts`: `TextField` lost `label`;
+  the seven labels are `identityForm.fields`, keyed by the field key.
+  `IdentityFormState` injects the language service (a plain class, but
+  both pages make it in a field initializer, an injection context):
+  `countries` is a computed over the tag, `dateText` passes the tag.
+  `camera.component.ts` and `copy-button.component.ts`: their words
+  from the dictionary; the copy button's `label` input defaults to
+  null and the template falls back to `common.copy`.
+- `countries.ts`: `countryOptions(tag)` and `countryName(code, tag)`
+  name and sort in the app's language (they named in English before,
+  whatever the browser's language); the callers pass `lang.tag()`: the
+  identity form now, and `marketplace.page.ts`, `listing.page.ts`,
+  `listing-new.page.ts` and `listing-card.component.ts` with their
+  `lang` injection, their sentences waiting for step 6.
+- The services: `passkey.service.ts` (the three thrown sentences;
+  `asPublicKeyCredential`, a function outside the class, takes the
+  sentence as a parameter), `shares.service.ts` (`DepositError` takes
+  the finished sentence, built by its two throw sites from
+  `shares.refused`; the no-identity sentence), `signing.service.ts`
+  (the two sentences as functions of the reason),
+  `keyholder-api.service.ts` and `masterpod-api.service.ts`
+  (`api.noSession`), `log.service.ts` (`api.network`; the log's time
+  stamp with the tag).
+- Tables typed `Record<string, string>` added to the dictionaries (the
+  type cannot check their keys in Thai): `notifications.labels`, the
+  fifteen kinds. `setup.steps` is a `string[]` whose length the type
+  cannot check either: eight in both.
+- Readings where the plan left a detail open: `identityForm.fields` is
+  typed by its seven keys rather than `Record<string, string>`, so a
+  missing Thai label fails the build, and the identity page reads the
+  form's section for the labels, "Unknown", "Country of birth" and
+  "Date of birth"; "First name" and "Last name" live both in `create`
+  and in `identityForm.fields`, since a keyed table needs all its keys;
+  a page title that equals its navigation label (Setup, Vouch requests,
+  Notifications, Log) lives in the page's section; the create stepper's
+  "Username" step label is `create.stepUsername`, the field label
+  `common.username`; Retry, Start, Clear, Search and Copy joined
+  `common` here, the first step to meet them, as the rule of the plan's
+  1.1 says, though its step 3 names some of them. Thai: the instruction
+  lines of the vouching page put the Thai button words in quotation
+  marks ("ค้นหา", "ส่งคำขอ", "ปลดล็อก", "การแจ้งเตือน"), which the
+  English does not need, since Thai has no capital letter to mark a
+  button word; words outside the plan's glossary: lookup id รหัสค้นหา,
+  a share (of a secret) ส่วนแบ่ง, session เซสชัน, hash แฮช, wrap
+  ห่อหุ้ม, authenticator ตัวยืนยันตัวตน. One sentence read odd and was
+  moved as it is: "Ask a couple people you know who are a part of the
+  anoSphere for their username."
+- Spec: 8.8 (the list), this note.
+- `npx ng build` clean (1.71 MB initial). Not run in a browser here;
+  the user tests with `ng serve`, a browser set to Thai for the Thai
+  pages, any other for English.
 
 ## 12. Recovery and the moderator edition
 

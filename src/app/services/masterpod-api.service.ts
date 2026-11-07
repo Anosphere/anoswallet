@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { AttestationPayload, Envelope, EscrowVerdictPayload, FollowUp, HybridPublicKey, SignOffMessage, Signatures, Verdict } from './crypto.service';
+import { LanguageService } from './language.service';
 import { ApiResponse, LogService } from './log.service';
 import { CaseStatus, RecoveryPodAnswer } from './recovery.service';
 import { AnosAccountItem, NotificationItem, SessionService, StatusAnswer } from './session.service';
@@ -545,6 +546,7 @@ export interface ExistingEvidence {
 @Injectable({ providedIn: 'root' })
 export class MasterpodApiService {
   private readonly log = inject(LogService);
+  private readonly lang = inject(LanguageService);
   private readonly session = inject(SessionService);
 
   // --- level none ---------------------------------------------------------
@@ -886,7 +888,7 @@ export class MasterpodApiService {
   /** A signed call: the envelope for the masterpod's `path`, posted through the proxy. */
   private signed<T>(path: string, body: object, quiet = false): Promise<ApiResponse<T>> {
     const envelope = this.session.sign(path, body);
-    if (!envelope) return Promise.resolve({ ok: false, status: 0, body: { error: 'no session: unlock first' } as T });
+    if (!envelope) return Promise.resolve({ ok: false, status: 0, body: { error: this.lang.words().api.noSession } as T });
     return this.post<T>(path, envelope, quiet);
   }
 

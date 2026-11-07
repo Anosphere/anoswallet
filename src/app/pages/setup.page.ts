@@ -6,6 +6,7 @@ import { MatListModule } from '@angular/material/list';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { Router, RouterLink } from '@angular/router';
 import { ChatKeys, CryptoService } from '../services/crypto.service';
+import { LanguageService } from '../services/language.service';
 import { reasonOf } from '../services/log.service';
 import { MasterpodApiService, SetupFields } from '../services/masterpod-api.service';
 import { Bytes, PasskeyService } from '../services/passkey.service';
@@ -18,17 +19,6 @@ interface Step {
   label: string;
   state: 'todo' | 'doing' | 'done' | 'failed';
 }
-
-const STEPS = [
-  'Generate the encryption key',
-  'Generate the backup code',
-  'Derive the backup code keys',
-  'Generate the chat key pair',
-  'Wrap blob1 (the encryption key under the passkey)',
-  'Wrap blob2 (the encryption key under the backup code)',
-  'Wrap the chat private key',
-  'Wrap the identity blob',
-] as const;
 
 /**
  * The setup page (wallet spec 8.2): Start runs the progress list (an unlock
@@ -46,18 +36,18 @@ const STEPS = [
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
-        <mat-card-title>Setup</mat-card-title>
-        <mat-card-subtitle>Your encryption key, your backup code and your chat keys are made here, in this tab</mat-card-subtitle>
+        <mat-card-title>{{ t().setup.title }}</mat-card-title>
+        <mat-card-subtitle>{{ t().setup.subtitle }}</mat-card-subtitle>
       </mat-card-header>
       <mat-card-content>
         @if (!session.hasIdentity()) {
-          <p class="error">Your public ledger id is not in this tab's memory. Fill in the identity form first.</p>
-          <a mat-flat-button routerLink="/identity">Go to Identity</a>
+          <p class="error">{{ t().setup.noIdentity }}</p>
+          <a mat-flat-button routerLink="/identity">{{ t().setup.goToIdentity }}</a>
         } @else if (phase() === 'idle') {
           @if (!session.hasPrf()) {
-            <p>Your passkey has to be used once more to derive the key that protects everything; an unlock will be asked for.</p>
+            <p>{{ t().setup.unlockHint }}</p>
           }
-          <button mat-flat-button type="button" (click)="start()">Start</button>
+          <button mat-flat-button type="button" (click)="start()">{{ t().common.start }}</button>
         } @else {
           <mat-list dense>
             @for (step of steps(); track step.label) {
@@ -74,13 +64,13 @@ const STEPS = [
             <p class="error">{{ text }}</p>
           }
           @if (phase() === 'code' && backupCodeText(); as code) {
-            <h3>Your backup code</h3>
-            <p>Write it down and keep it somewhere safe. It is shown once and never again; with it, and your identity record, your anoPod can be recovered.</p>
+            <h3>{{ t().setup.codeTitle }}</h3>
+            <p>{{ t().setup.codeHint }}</p>
             <p class="code">{{ code }}</p>
-            <button mat-flat-button type="button" (click)="complete()" [disabled]="busy()">I have written it down, complete</button>
+            <button mat-flat-button type="button" (click)="complete()" [disabled]="busy()">{{ t().setup.complete }}</button>
           }
           @if (phase() === 'failed') {
-            <button mat-flat-button type="button" (click)="start()" [disabled]="busy()">Retry</button>
+            <button mat-flat-button type="button" (click)="start()" [disabled]="busy()">{{ t().common.retry }}</button>
           }
         }
       </mat-card-content>
@@ -98,9 +88,11 @@ export class SetupPage {
   private readonly passkey = inject(PasskeyService);
   private readonly shares = inject(SharesService);
   private readonly router = inject(Router);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
   protected readonly phase = signal<'idle' | 'running' | 'code' | 'failed' | 'done'>('idle');
-  protected readonly steps = signal<Step[]>(STEPS.map((label) => ({ label, state: 'todo' })));
+  protected readonly steps = signal<Step[]>(this.t().setup.steps.map((label) => ({ label, state: 'todo' })));
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly backupCodeText = computed(() => (this.backupCode ? this.crypto.backupCodeText(this.backupCode) : null));
@@ -124,15 +116,15 @@ export class SetupPage {
     this.busy.set(true);
     this.error.set(null);
     this.phase.set('running');
-    this.steps.set(STEPS.map((label) => ({ label, state: 'todo' })));
+    this.steps.set(this.t().setup.steps.map((label) => ({ label, state: 'todo' })));
     try {
       if (!this.session.getPrfOutput()) {
         await unlockWithPasskey({ api: this.api, crypto: this.crypto, passkey: this.passkey, session: this.session });
       }
       const prf = this.session.getPrfOutput();
       const identity = this.session.getIdentity();
-      if (!prf) throw new Error('The passkey returned no PRF output');
-      if (!identity) throw new Error('The public ledger id is not in RAM any more');
+      if (!prf) throw new Error(this.t().setup.noPrf);
+      if (!identity) throw new Error(this.t().setup.noIdentityInRam);
 
       let i = 0;
       const run = async <T>(fn: () => Promise<T> | T): Promise<T> => {
@@ -189,7 +181,7 @@ export class SetupPage {
         await this.shares.deposit(code, 'backupcode');
       } catch (err) {
         if (err instanceof DepositError) {
-          this.error.set(`${err.message}. Retry starts over with a fresh backup code.`);
+          this.error.set(this.t().setup.retryFresh(err.message));
           this.phase.set('failed');
           this.dropSecrets();
           return;
@@ -201,7 +193,7 @@ export class SetupPage {
         const status = await this.api.checkAnopodStatus();
         if (status.ok && status.body.setupComplete) {
           this.session.status.set(status.body);
-          this.error.set('Setup was already complete on the masterpod; carrying on. Unlock again to load its keys.');
+          this.error.set(this.t().setup.alreadyComplete);
           this.phase.set('done');
           await this.router.navigateByUrl(this.session.nextStep(status.body));
           return;

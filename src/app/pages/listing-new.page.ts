@@ -12,6 +12,7 @@ import { anosToMillionths } from '../amounts';
 import { PickerChoice, PickerData, PickerOption, PickerSheetComponent } from '../components/picker-sheet.component';
 import { countryName, countryOptions } from '../countries';
 import { currencyOptions, formatPrice, priceUnits, totalOf } from '../prices';
+import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
 import { MarketplaceService } from '../services/marketplace.service';
 import { MasterpodApiService } from '../services/masterpod-api.service';
@@ -78,6 +79,7 @@ export class ListingNewPage {
   private readonly api = inject(MasterpodApiService);
   private readonly sheet = inject(MatBottomSheet);
   private readonly router = inject(Router);
+  protected readonly lang = inject(LanguageService);
 
   protected readonly side = signal<'buy' | 'sell'>('sell');
   protected readonly quantity = signal('');
@@ -90,7 +92,7 @@ export class ListingNewPage {
   protected readonly currencyLabel = computed(() => this.currency() ?? 'Currency');
   protected readonly countryLabel = computed(() => {
     const code = this.country();
-    return code ? countryName(code) : 'Country';
+    return code ? countryName(code, this.lang.tag()) : 'Country';
   });
   protected readonly canCreate = computed(
     () => anosToMillionths(this.quantity()) !== null && (priceUnits(this.price()) ?? 0n) > 0n && this.currency() !== null && this.country() !== null,
@@ -113,7 +115,7 @@ export class ListingNewPage {
   }
 
   protected async pickCountry(): Promise<void> {
-    const choice = await this.pick('Country', countryOptions());
+    const choice = await this.pick('Country', countryOptions(this.lang.tag()));
     if (choice?.code) this.country.set(choice.code);
   }
 

@@ -4,6 +4,7 @@ import { millionthsToAnos } from '../amounts';
 import { countryName } from '../countries';
 import { formatPrice, totalOf } from '../prices';
 import { ChatService } from '../services/chat.service';
+import { LanguageService } from '../services/language.service';
 import { MarketplaceService } from '../services/marketplace.service';
 import { ListingItem } from '../services/masterpod-api.service';
 import { SessionService } from '../services/session.service';
@@ -59,11 +60,12 @@ export class ListingCardComponent {
   protected readonly market = inject(MarketplaceService);
   protected readonly chat = inject(ChatService);
   private readonly session = inject(SessionService);
+  protected readonly lang = inject(LanguageService);
 
   protected readonly priceLine = computed(() => `${formatPrice(this.listing().price, this.listing().currency)} per anos`);
   protected readonly anos = computed(() => millionthsToAnos(this.listing().quantity));
   protected readonly total = computed(() => formatPrice(totalOf(this.listing().quantity, this.listing().price), this.listing().currency, 0));
-  protected readonly country = computed(() => countryName(this.listing().country));
+  protected readonly country = computed(() => countryName(this.listing().country, this.lang.tag()));
 
   /** Yours, Closed, and for someone else's listing Waiting or Chat open, from this pod's room about it. */
   protected readonly labels = computed(() => {

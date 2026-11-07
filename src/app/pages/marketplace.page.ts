@@ -12,6 +12,7 @@ import { ListingCardComponent } from '../components/listing-card.component';
 import { PickerChoice, PickerData, PickerOption, PickerSheetComponent } from '../components/picker-sheet.component';
 import { countryName, countryOptions } from '../countries';
 import { currencyOptions, priceUnits } from '../prices';
+import { LanguageService } from '../services/language.service';
 import { reasonOf } from '../services/log.service';
 import { MarketplaceService, SortKey } from '../services/marketplace.service';
 import { ListingItem } from '../services/masterpod-api.service';
@@ -105,6 +106,7 @@ const SORT_WORDS: Record<SortKey, string> = { newest: 'Newest', priceLow: 'Price
 export class MarketplacePage {
   private readonly market = inject(MarketplaceService);
   private readonly sheet = inject(MatBottomSheet);
+  protected readonly lang = inject(LanguageService);
 
   protected readonly side = signal<'all' | 'sell' | 'buy'>('all');
   protected readonly country = signal<string | null>(this.market.remembered().country);
@@ -119,7 +121,7 @@ export class MarketplacePage {
 
   protected readonly countryLabel = computed(() => {
     const code = this.country();
-    return code ? countryName(code) : 'Country';
+    return code ? countryName(code, this.lang.tag()) : 'Country';
   });
   protected readonly sortLabel = computed(() => SORT_WORDS[this.sort()]);
   protected readonly rangeCount = computed(() => rangesSet(this.ranges()));
@@ -164,7 +166,7 @@ export class MarketplacePage {
   }
 
   protected async pickCountry(): Promise<void> {
-    const choice = await this.pick('Country', countryOptions());
+    const choice = await this.pick('Country', countryOptions(this.lang.tag()));
     if (choice === undefined) return;
     this.country.set(choice.code);
     this.market.remember({ country: choice.code });

@@ -2,7 +2,8 @@
  * ISO 3166-1 alpha-2 codes, for the country select of the identity form
  * (docs/public-ledger-id.md section 1) and the marketplace's country
  * picker, cards and chips (2026-11-06). The names come from the browser's
- * Intl.DisplayNames at run time, so only the codes are listed here.
+ * Intl.DisplayNames at run time, in the app's language (the language
+ * service's tag, wallet spec 8.8), so only the codes are listed here.
  */
 export const COUNTRY_CODES: readonly string[] = [
   'AD', 'AE', 'AF', 'AG', 'AI', 'AL', 'AM', 'AO', 'AQ', 'AR', 'AS', 'AT', 'AU', 'AW', 'AX', 'AZ',
@@ -32,13 +33,13 @@ export const COUNTRY_CODES: readonly string[] = [
   'ZA', 'ZM', 'ZW',
 ];
 
-/** { code, name } for the select, sorted by name in the browser's language. */
-export function countryOptions(): { code: string; name: string }[] {
-  const names = new Intl.DisplayNames(['en'], { type: 'region' });
-  return COUNTRY_CODES.map((code) => ({ code, name: names.of(code) ?? code })).sort((a, b) => a.name.localeCompare(b.name));
+/** { code, name } for the select, named and sorted in the app's language (`tag`, the language service's locale tag). */
+export function countryOptions(tag: string): { code: string; name: string }[] {
+  const names = new Intl.DisplayNames([tag], { type: 'region' });
+  return COUNTRY_CODES.map((code) => ({ code, name: names.of(code) ?? code })).sort((a, b) => a.name.localeCompare(b.name, tag));
 }
 
-/** The country's name, the code itself when the browser has no name for it: the marketplace's cards, chips and listing page (2026-11-06). */
-export function countryName(code: string): string {
-  return new Intl.DisplayNames(['en'], { type: 'region' }).of(code) ?? code;
+/** The country's name in the app's language (`tag`), the code itself when the browser has no name for it: the marketplace's cards, chips and listing page (2026-11-06). */
+export function countryName(code: string, tag: string): string {
+  return new Intl.DisplayNames([tag], { type: 'region' }).of(code) ?? code;
 }

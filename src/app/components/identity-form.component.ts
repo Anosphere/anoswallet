@@ -1,16 +1,16 @@
-import { Component, computed, input, signal } from '@angular/core';
+import { Component, computed, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { countryOptions } from '../countries';
+import { LanguageService } from '../services/language.service';
 import { BAR, IdentityAnswers, UNKNOWN } from '../services/public-ledger-id';
 
-/** A text field of the form: what was typed, and whether it is Known or Unknown (the five that allow it). */
+/** A text field of the form: its key, which also picks its label in the dictionary (identityForm.fields), and whether it is Known or Unknown (the five that allow it). */
 export interface TextField {
   key: keyof Omit<IdentityAnswers, 'country' | 'date'>;
-  label: string;
   unknownAllowed: boolean;
 }
 
@@ -18,13 +18,13 @@ export type TextKey = TextField['key'];
 
 /** The seven text fields of docs/public-ledger-id.md section 1, in order. */
 export const TEXT_FIELDS: TextField[] = [
-  { key: 'firstname', label: 'First name', unknownAllowed: false },
-  { key: 'lastname', label: 'Last name', unknownAllowed: false },
-  { key: 'fatherfirstname', label: "Father's first name", unknownAllowed: true },
-  { key: 'fatherlastname', label: "Father's last name", unknownAllowed: true },
-  { key: 'motherfirstname', label: "Mother's first name", unknownAllowed: true },
-  { key: 'mothermaidenname', label: "Mother's maiden name", unknownAllowed: true },
-  { key: 'city', label: 'City of birth', unknownAllowed: true },
+  { key: 'firstname', unknownAllowed: false },
+  { key: 'lastname', unknownAllowed: false },
+  { key: 'fatherfirstname', unknownAllowed: true },
+  { key: 'fatherlastname', unknownAllowed: true },
+  { key: 'motherfirstname', unknownAllowed: true },
+  { key: 'mothermaidenname', unknownAllowed: true },
+  { key: 'city', unknownAllowed: true },
 ];
 
 /** True when a value holds the bar character no field may contain. */
@@ -44,10 +44,13 @@ function allKnown(): Record<TextKey, boolean> {
  * The answers of the nine-field form while they are typed. The page that
  * shows the form owns one (so the answers survive a pane or step change and
  * a review pane can read them), hands it to the component, and resets it
- * once the ids exist. Nothing here leaves the tab's memory.
+ * once the ids exist. Nothing here leaves the tab's memory. The country
+ * names and the date text follow the app's language (the language service,
+ * injected here: a page makes the state in a field initializer).
  */
 export class IdentityFormState {
-  readonly countries = countryOptions();
+  private readonly lang = inject(LanguageService);
+  readonly countries = computed(() => countryOptions(this.lang.tag()));
   readonly texts = signal<Record<TextKey, string>>(emptyTexts());
   readonly unknown = signal<Record<TextKey, boolean>>(allKnown());
   readonly country = signal<string | null>(null);
@@ -65,8 +68,8 @@ export class IdentityFormState {
     return this.country() !== null && this.date() !== null;
   });
 
-  readonly countryName = computed(() => this.countries.find((c) => c.code === this.country())?.name ?? '');
-  readonly dateText = computed(() => this.date()?.toLocaleDateString(undefined, { day: '2-digit', month: 'long', year: 'numeric' }) ?? '');
+  readonly countryName = computed(() => this.countries().find((c) => c.code === this.country())?.name ?? '');
+  readonly dateText = computed(() => this.date()?.toLocaleDateString(this.lang.tag(), { day: '2-digit', month: 'long', year: 'numeric' }) ?? '');
 
   setText(key: TextKey, value: string): void {
     this.texts.update((t) => ({ ...t, [key]: value }));
@@ -118,26 +121,23 @@ export class IdentityFormState {
   selector: 'app-identity-form',
   imports: [FormsModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatDatepickerModule],
   template: `
-    <p class="guidance">
-      Write things the common way they are written today, your best guess of your birth certificate. St. Louis or Saint Louis
-      both can be tried in a recovery, but the more exact, the easier. If you do not know, choose Unknown.
-    </p>
+    <p class="guidance">{{ t().identityForm.guidance }}</p>
     <div class="grid">
       @for (field of textFields; track field.key) {
         <div class="field-row">
           <mat-form-field appearance="outline" class="grow">
-            <mat-label>{{ field.label }}</mat-label>
+            <mat-label>{{ t().identityForm.fields[field.key] }}</mat-label>
             <input matInput [ngModel]="state().texts()[field.key]" (ngModelChange)="state().setText(field.key, $event)" [disabled]="state().unknown()[field.key]" />
             @if (hasBar(state().texts()[field.key])) {
-              <mat-hint class="error">The bar character | is not allowed</mat-hint>
+              <mat-hint class="error">{{ t().identityForm.barNotAllowed }}</mat-hint>
             }
           </mat-form-field>
           @if (field.unknownAllowed) {
             <mat-form-field appearance="outline" class="known">
-              <mat-label>Known?</mat-label>
+              <mat-label>{{ t().identityForm.knownQuestion }}</mat-label>
               <mat-select [value]="state().unknown()[field.key] ? 'unknown' : 'known'" (valueChange)="state().setUnknown(field.key, $event === 'unknown')">
-                <mat-option value="known">Known</mat-option>
-                <mat-option value="unknown">Unknown</mat-option>
+                <mat-option value="known">{{ t().identityForm.known }}</mat-option>
+                <mat-option value="unknown">{{ t().identityForm.unknown }}</mat-option>
               </mat-select>
             </mat-form-field>
           }
@@ -145,9 +145,9 @@ export class IdentityFormState {
       }
       <div class="field-row">
         <mat-form-field appearance="outline" class="grow">
-          <mat-label>Country of birth</mat-label>
+          <mat-label>{{ t().identityForm.country }}</mat-label>
           <mat-select [value]="state().country()" (valueChange)="state().country.set($event)">
-            @for (c of state().countries; track c.code) {
+            @for (c of state().countries(); track c.code) {
               <mat-option [value]="c.code">{{ c.name }} ({{ c.code }})</mat-option>
             }
           </mat-select>
@@ -155,7 +155,7 @@ export class IdentityFormState {
       </div>
       <div class="field-row">
         <mat-form-field appearance="outline" class="grow">
-          <mat-label>Date of birth</mat-label>
+          <mat-label>{{ t().identityForm.date }}</mat-label>
           <input matInput [matDatepicker]="picker" [value]="state().date()" (dateChange)="state().date.set($event.value)" readonly (click)="picker.open()" />
           <mat-datepicker-toggle matIconSuffix [for]="picker"></mat-datepicker-toggle>
           <mat-datepicker #picker startView="multi-year"></mat-datepicker>
@@ -176,6 +176,9 @@ export class IdentityFormState {
 export class IdentityFormComponent {
   /** The answers, owned by the page. */
   readonly state = input.required<IdentityFormState>();
+
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
   protected readonly textFields = TEXT_FIELDS;
   protected hasBar = hasBar;
