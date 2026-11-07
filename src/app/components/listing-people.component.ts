@@ -2,6 +2,7 @@ import { Component, computed, inject, input, output, signal } from '@angular/cor
 import { MatButtonModule } from '@angular/material/button';
 import { RouterLink } from '@angular/router';
 import { ChatService } from '../services/chat.service';
+import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
 import { InviteItem, ListingItem, MasterpodApiService, RoomItem, RoomMember } from '../services/masterpod-api.service';
 import { MarketplaceService } from '../services/marketplace.service';
@@ -27,10 +28,10 @@ import { AvatarComponent } from './avatar.component';
     @for (invite of invites(); track invite.inviteId) {
       <div class="item">
         <app-avatar [anopodId]="invite.from.anopodId" [username]="invite.from.username" />
-        <span class="text"><strong>{{ invite.from.username }}</strong> wants to chat</span>
+        <span class="text"><strong>{{ invite.from.username }}</strong> {{ t().listingPeople.wantsToChat }}</span>
         <span class="actions">
-          <button mat-flat-button type="button" (click)="accept(invite)" [disabled]="busy()">Accept</button>
-          <button mat-button type="button" (click)="decline(invite)" [disabled]="busy()">Decline</button>
+          <button mat-flat-button type="button" (click)="accept(invite)" [disabled]="busy()">{{ t().common.accept }}</button>
+          <button mat-button type="button" (click)="decline(invite)" [disabled]="busy()">{{ t().common.decline }}</button>
         </span>
       </div>
     }
@@ -38,11 +39,11 @@ import { AvatarComponent } from './avatar.component';
       <div class="item">
         <app-avatar [anopodId]="person(room).anopodId" [username]="person(room).username" />
         <span class="text"><strong>{{ person(room).username }}</strong></span>
-        <a mat-stroked-button [routerLink]="['/chat', room.chatRoomId]">Open chat</a>
+        <a mat-stroked-button [routerLink]="['/chat', room.chatRoomId]">{{ t().common.openChat }}</a>
       </div>
     }
     @if (invites().length === 0 && rooms().length === 0) {
-      <p class="muted">Nobody has connected yet.</p>
+      <p class="muted">{{ t().listingPeople.nobody }}</p>
     }
   `,
   styles: `
@@ -62,6 +63,8 @@ export class ListingPeopleComponent {
   private readonly market = inject(MarketplaceService);
   private readonly chat = inject(ChatService);
   private readonly api = inject(MasterpodApiService);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
   protected readonly invites = computed(() => this.market.invitesAbout(this.listing().listingId));
   protected readonly rooms = computed(() => this.market.roomsAbout(this.listing().listingId));

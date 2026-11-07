@@ -1330,6 +1330,10 @@ The pages done so far, a list the later steps extend:
 - step 5 (2026-11-06): the chat: the list of chats, the new chat, the
   requests and the conversation, with the room titles and the listing
   words of the chat service.
+- step 6 (2026-11-06): the marketplace: Browse, the listing, the new
+  listing and Your listings, with the five components (the card, the
+  people, the pinned card, the filters and the picker sheets), the
+  marketplace service's words and the currency names.
 
 ## 9. Configuration, and running it on this machine
 
@@ -2771,6 +2775,89 @@ seller meet, still spoke English; its day and time words came in step
   คน"). No sentence read odd.
 - Spec: 8.8 (the list), this note.
 - `npx ng build` clean (1.79 MB initial). Not run in a browser here;
+  the user tests with `ng serve`.
+
+### The languages, step 6 (2026-11-06)
+
+Step 6 of forclaude/wallet-languages-plan-1.md: the marketplace, its
+four pages, the five components and the marketplace service, with the
+currency names. Why: after step 5 a Thai buyer and seller could chat in
+Thai, while the place they meet, the marketplace, still spoke English;
+the country names already followed the language (step 2), the currency
+names and the words follow now.
+
+- `i18n/en.ts` and `th.ts`: the sections `marketplace`, `listing`,
+  `listingNew`, `myListings`, `listingCard`, `listingPeople`, `pinned`,
+  `filters`, `picker` and `market` (the service's side words and the two
+  first messages), and the `common` entries Side, Country, Currency,
+  Filters, "New listing", "Your listings", "Back to the marketplace",
+  "Total …" and "… per anos" (functions), "Quantity, anos", "Price per
+  anos", the close question ("Close this listing? People can no longer
+  connect; your chats stay."), Yes, Cancel, "Open chat", 'This chat is
+  not about a listing' and 'No latest transaction on the ledger yet'
+  (moved from `account`, since the pinned card throws it too). The
+  sentences with a number, a name or an amount are functions
+  (`filtersCount`, `mineLine`, `sideAnos`, `posted`, `waitingFor`,
+  `didNotAccept`, the card's `line` and `where`, the pinned card's
+  `summary`, `tradeLine`, `atListingPrice`, `askStart`, `released`,
+  `refused` and the two posted messages `shareMessage` and
+  `startedMessage`).
+- `services/marketplace.service.ts`: `sideWords` and `firstWords` read
+  `t().market`, so the first message of Connect goes in the sender's
+  language (decision 10); the four thrown sentences from `common`.
+  `prices.ts`: `currencyOptions(tag)` names the currencies in the app's
+  language; Browse and the new-listing form pass `lang.tag()`.
+- `pages/marketplace.page.ts`: `SORT_WORDS` left the file for
+  `marketplace.sorts`, read by the sort chip and the three menu items;
+  the chips All, Selling and Buying, the Country and Currency chips and
+  picker titles, the Filters chip with its count, the Your listings row
+  and its line from the dictionary. `pages/listing.page.ts`: its words
+  from `listing` and `common`; "posted <date>" with `lang.dateTime` and
+  `DatePipe` gone; "This listing is closed." one entry for its three
+  places. `pages/listing-new.page.ts`: the toggle's words, the labels,
+  the total, the picker titles and the three thrown sentences.
+  `pages/my-listings.page.ts`: its nine pieces.
+- `components/listing-card.component.ts`: the labels Yours, Waiting and
+  "Chat open" from `listingCard.labels`, Closed from `common`, still the
+  `@for` track key; the three lines as functions.
+  `components/listing-people.component.ts`: "wants to chat" after the
+  username in bold, Accept, Decline, "Open chat", "Nobody has connected
+  yet.". `components/pinned-listing.component.ts`: every sentence from
+  `pinned` and `common`; the account menu shows `account.title(type)`,
+  as the plan says ("spending account" where it read "spending"); the
+  labels From and To from `common`; the two posted messages in the
+  sender's language. `components/filters-sheet.component.ts` and
+  `picker-sheet.component.ts`: their words; the picker's search matches
+  the typed letters against the names, so Thai names are found by Thai
+  letters, and the three-letter code rule stays Latin.
+  `pages/account.page.ts`: the one line that now reads `common.noLatest`.
+- Tables typed `Record<string, string>` added to the dictionaries (the
+  type cannot check their keys in Thai): none in this step.
+  `marketplace.sorts` and `listingCard.labels` are typed by their keys.
+- Readings where the plan left a detail open: the Browse chips Selling
+  and Buying read `market.selling` and `market.buying`, the service's
+  side words, rather than entries of their own; the card's Closed label
+  reads `common.closed` (step 4's entry) rather than a fourth entry of
+  `listingCard.labels`; the pinned card's template variable `t` (the
+  trade) is now `open`, as the trade page's is, since it would shadow
+  the dictionary's `t()`; "wants to chat" is an entry after the username
+  in bold, as the requests page's "asks to join" is, not a function of
+  the username; the pinned card's Start button reads `common.start` and
+  its "No latest transaction…" the moved `common.noLatest`; the words
+  the grep found on another page went to `common` now (Cancel is also
+  on the staff pages of step 8); the "Total …" and "… per anos"
+  functions live in `common`, each on two files. The English of the
+  pinned card's account menu changes by the plan's own instruction
+  (its section 6): "spending account" after the short id, where it read
+  the raw "spending". Thai: "Selling" / "Buying" read ขาย / ซื้อ, as the
+  chat's room words do; "each" in the summary reads ต่อ anos; "People",
+  the heading of the people who connected, reads ผู้ติดต่อ; "Any" reads
+  ใดก็ได้; "Apply" reads นำไปใช้; "Quantity, anos" and "Amount, anos"
+  both read จำนวน, anos; the counts of the Your listings row carry their
+  classifiers ("เปิดอยู่ 2 รายการ · 1 คนกำลังรอ"). No sentence read odd.
+- Spec: 8.8 (the list), this note; 8.7 is not reworded, it quotes the
+  English.
+- `npx ng build` clean (1.80 MB initial). Not run in a browser here;
   the user tests with `ng serve`.
 
 ## 12. Recovery and the moderator edition

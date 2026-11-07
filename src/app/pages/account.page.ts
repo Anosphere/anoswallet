@@ -517,7 +517,7 @@ export class AccountPage {
     await this.act(this.sendOutcome, async () => {
       const pairOne = await this.pairOne();
       const latest = await this.anos.getAccount(pairOne, this.accountId(), true);
-      if (!latest.ok || !latest.body.latestTransactionId) throw new Error(this.t().account.noLatest);
+      if (!latest.ok || !latest.body.latestTransactionId) throw new Error(this.t().common.noLatest);
       const previous = latest.body.latestTransactionId;
       const type = item.accountType as AccountType;
       let res: ApiResponse<Accepted>;

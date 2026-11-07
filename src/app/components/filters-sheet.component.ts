@@ -4,6 +4,7 @@ import { MAT_BOTTOM_SHEET_DATA, MatBottomSheetRef } from '@angular/material/bott
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { LanguageService } from '../services/language.service';
 
 /** The two ranges of Browse, as typed: anos for the quantity, the currency's units for the price; empty when not set. */
 export interface Ranges {
@@ -40,23 +41,23 @@ export function rangesSet(ranges: Ranges): number {
   selector: 'app-filters-sheet',
   imports: [FormsModule, MatButtonModule, MatFormFieldModule, MatInputModule],
   template: `
-    <h3>Filters</h3>
-    <p class="group">Quantity, anos</p>
+    <h3>{{ t().common.filters }}</h3>
+    <p class="group">{{ t().common.quantityAnos }}</p>
     <div class="pair">
-      <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>Least</mat-label><input matInput inputmode="decimal" [ngModel]="quantityMin()" (ngModelChange)="quantityMin.set($event)" /></mat-form-field>
-      <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>Most</mat-label><input matInput inputmode="decimal" [ngModel]="quantityMax()" (ngModelChange)="quantityMax.set($event)" /></mat-form-field>
+      <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>{{ t().filters.least }}</mat-label><input matInput inputmode="decimal" [ngModel]="quantityMin()" (ngModelChange)="quantityMin.set($event)" /></mat-form-field>
+      <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>{{ t().filters.most }}</mat-label><input matInput inputmode="decimal" [ngModel]="quantityMax()" (ngModelChange)="quantityMax.set($event)" /></mat-form-field>
     </div>
-    <p class="group">Price per anos</p>
+    <p class="group">{{ t().common.pricePerAnos }}</p>
     <div class="pair">
-      <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>Least</mat-label><input matInput inputmode="decimal" [ngModel]="priceMin()" (ngModelChange)="priceMin.set($event)" [disabled]="!data.hasCurrency" /></mat-form-field>
-      <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>Most</mat-label><input matInput inputmode="decimal" [ngModel]="priceMax()" (ngModelChange)="priceMax.set($event)" [disabled]="!data.hasCurrency" /></mat-form-field>
+      <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>{{ t().filters.least }}</mat-label><input matInput inputmode="decimal" [ngModel]="priceMin()" (ngModelChange)="priceMin.set($event)" [disabled]="!data.hasCurrency" /></mat-form-field>
+      <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>{{ t().filters.most }}</mat-label><input matInput inputmode="decimal" [ngModel]="priceMax()" (ngModelChange)="priceMax.set($event)" [disabled]="!data.hasCurrency" /></mat-form-field>
     </div>
     @if (!data.hasCurrency) {
-      <p class="muted">Pick a currency first</p>
+      <p class="muted">{{ t().filters.pickCurrencyFirst }}</p>
     }
     <div class="buttons">
-      <button mat-flat-button type="button" (click)="apply()">Apply</button>
-      <button mat-button type="button" (click)="clear()">Clear</button>
+      <button mat-flat-button type="button" (click)="apply()">{{ t().filters.apply }}</button>
+      <button mat-button type="button" (click)="clear()">{{ t().common.clear }}</button>
     </div>
   `,
   styles: `
@@ -72,6 +73,8 @@ export function rangesSet(ranges: Ranges): number {
 export class FiltersSheetComponent {
   protected readonly data = inject<FiltersData>(MAT_BOTTOM_SHEET_DATA);
   private readonly ref = inject<MatBottomSheetRef<FiltersSheetComponent, Ranges>>(MatBottomSheetRef);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
   protected readonly quantityMin = signal(this.data.ranges.quantityMin);
   protected readonly quantityMax = signal(this.data.ranges.quantityMax);
