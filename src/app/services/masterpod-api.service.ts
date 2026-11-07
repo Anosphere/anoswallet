@@ -85,6 +85,31 @@ export interface AnosAccountListItem extends AnosAccountItem {
   breakGlassBlob: string | null;
 }
 
+/** The clear part of a note as /add-noted-transaction takes it (wallet spec 4.6): the ledger's facts and the encrypted private part, hex. */
+export interface NoteFields {
+  transactionId: string;
+  accountId: string;
+  otherAccountId: string | null;
+  position: number;
+  transactedAt: string;
+  amount: string;
+  sent: boolean;
+  noteBlob: string;
+}
+
+/** One note as /list-noted-transactions answers it. */
+export interface NotedTransactionItem extends NoteFields {
+  noteId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** The date range of /list-noted-transactions: ISO 8601, the start of the first day and the start of the day after the last. */
+export interface NoteRange {
+  from?: string;
+  to?: string;
+}
+
 
 export interface CreateAnswer {
   anopodId: string;
@@ -539,9 +564,9 @@ export interface ExistingEvidence {
  * All HTTP calls to the masterpod live here, one method per route (the
  * keyholder test app's api.service.ts, base path /api/masterpod, the two
  * changed routes and the four new ones added, then the recovery routes of
- * masterpod 12.4 and the attesting routes of masterpod 13.4), so no page
- * builds URLs or envelopes. The session service holds the session and
- * signs.
+ * masterpod 12.4, the attesting routes of masterpod 13.4 and the wallet
+ * memory routes of wallet spec 4.6 (2026-11-07)), so no page builds URLs
+ * or envelopes. The session service holds the session and signs.
  */
 @Injectable({ providedIn: 'root' })
 export class MasterpodApiService {
@@ -745,6 +770,24 @@ export class MasterpodApiService {
 
   listAnosAccounts(quiet = false): Promise<ApiResponse<{ accounts: AnosAccountListItem[] }>> {
     return this.signed('/list-anos-accounts', {}, quiet);
+  }
+
+  // --- level setup: the wallet's memory (wallet spec 4.6) ---------------------
+
+  addNotedTransaction(fields: NoteFields): Promise<ApiResponse<{ noteId: string }>> {
+    return this.signed('/add-noted-transaction', fields);
+  }
+
+  updateNotedTransaction(noteId: string, noteBlob: string): Promise<ApiResponse<{ noteId: string; updatedAt: string }>> {
+    return this.signed('/update-noted-transaction', { noteId, noteBlob });
+  }
+
+  removeNotedTransaction(noteId: string): Promise<ApiResponse<{ noteId: string; removed: true }>> {
+    return this.signed('/remove-noted-transaction', { noteId });
+  }
+
+  listNotedTransactions(range: NoteRange = {}, quiet = false): Promise<ApiResponse<{ notes: NotedTransactionItem[]; more: boolean }>> {
+    return this.signed('/list-noted-transactions', range, quiet);
   }
 
   // --- level setup: after a recovery (masterpod 12.4.5) -----------------------

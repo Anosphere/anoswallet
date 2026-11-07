@@ -615,6 +615,18 @@ export class CryptoService {
     return { publicLedgerId: bytesToHex(plain.subarray(0, 32)), lookupId: bytesToHex(plain.subarray(32)) };
   }
 
+  // --- the wallet's memory (wallet spec 7) ------------------------------------
+
+  /** A JSON value as UTF-8 under `key` (AES-256-GCM, iv || ciphertext || tag): noteBlob and settingsBlob. */
+  wrapJson(value: unknown, key: Uint8Array): Promise<Bytes> {
+    return this.encrypt(key, this.utf8(JSON.stringify(value)));
+  }
+
+  /** The JSON value back from a wrapJson blob. Throws when the key is wrong or the blob was changed. */
+  async unwrapJson<T>(blob: Uint8Array, key: Uint8Array): Promise<T> {
+    return JSON.parse(this.fromUtf8(await this.decrypt(key, blob))) as T;
+  }
+
   // --- rooms and messages -------------------------------------------------
 
   /** A room key, 32 random bytes, made by the room's creator. */
