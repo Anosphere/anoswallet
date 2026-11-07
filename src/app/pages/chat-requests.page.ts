@@ -4,6 +4,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { Router, RouterLink } from '@angular/router';
 import { AvatarComponent } from '../components/avatar.component';
 import { ChatService } from '../services/chat.service';
+import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
 import { InviteItem, JoinRequestItem, MasterpodApiService } from '../services/masterpod-api.service';
 import { SessionService } from '../services/session.service';
@@ -21,41 +22,41 @@ import { SessionService } from '../services/session.service';
   imports: [RouterLink, MatButtonModule, MatIconModule, AvatarComponent],
   template: `
     <header class="head">
-      <a mat-icon-button class="back" routerLink="/chat" aria-label="Back to chats"><mat-icon>arrow_back</mat-icon></a>
-      <h2>Requests</h2>
+      <a mat-icon-button class="back" routerLink="/chat" [attr.aria-label]="t().common.backToChats"><mat-icon>arrow_back</mat-icon></a>
+      <h2>{{ t().common.requests }}</h2>
     </header>
     <div class="body">
       @if (error(); as text) {
         <p class="error">{{ text }}</p>
       }
       @if (invites().length === 0 && joinRequests().length === 0) {
-        <p class="muted">No requests.</p>
+        <p class="muted">{{ t().chatRequests.noRequests }}</p>
       } @else {
-        <h3>Invites to you</h3>
+        <h3>{{ t().chatRequests.invitesTitle }}</h3>
         @for (invite of invites(); track invite.inviteId) {
           <div class="item">
             <app-avatar [anopodId]="invite.from.anopodId" [username]="invite.from.username" />
             <span class="text"><strong>{{ invite.from.username }}</strong> {{ inviteText(invite) }}</span>
             <span class="actions">
-              <button mat-flat-button type="button" (click)="accept(invite)" [disabled]="busy()">Accept</button>
-              <button mat-button type="button" (click)="decline(invite)" [disabled]="busy()">Decline</button>
+              <button mat-flat-button type="button" (click)="accept(invite)" [disabled]="busy()">{{ t().common.accept }}</button>
+              <button mat-button type="button" (click)="decline(invite)" [disabled]="busy()">{{ t().common.decline }}</button>
             </span>
           </div>
         } @empty {
-          <p class="muted">None.</p>
+          <p class="muted">{{ t().chatRequests.none }}</p>
         }
-        <h3>Join requests on your rooms</h3>
+        <h3>{{ t().chatRequests.joinTitle }}</h3>
         @for (request of joinRequests(); track request.joinRequestId) {
           <div class="item">
             <app-avatar [anopodId]="request.from.anopodId" [username]="request.from.username" />
-            <span class="text"><strong>{{ request.from.username }}</strong> asks to join {{ roomTitle(request.chatRoomId) }}</span>
+            <span class="text"><strong>{{ request.from.username }}</strong> {{ t().chatRequests.asksToJoin(roomTitle(request.chatRoomId)) }}</span>
             <span class="actions">
-              <button mat-flat-button type="button" (click)="approve(request)" [disabled]="busy()">Approve</button>
-              <button mat-button type="button" (click)="declineJoin(request)" [disabled]="busy()">Decline</button>
+              <button mat-flat-button type="button" (click)="approve(request)" [disabled]="busy()">{{ t().common.approve }}</button>
+              <button mat-button type="button" (click)="declineJoin(request)" [disabled]="busy()">{{ t().common.decline }}</button>
             </span>
           </div>
         } @empty {
-          <p class="muted">None.</p>
+          <p class="muted">{{ t().chatRequests.none }}</p>
         }
       }
     </div>
@@ -82,6 +83,8 @@ export class ChatRequestsPage {
   protected readonly chat = inject(ChatService);
   private readonly api = inject(MasterpodApiService);
   private readonly router = inject(Router);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
   protected readonly invites = computed(() => this.session.chatRooms()?.invites ?? []);
   protected readonly joinRequests = computed(() => this.session.chatRooms()?.joinRequests ?? []);
@@ -90,13 +93,13 @@ export class ChatRequestsPage {
 
   /** An invite about a listing reads "wants to chat about your listing Selling 100 anos for THB" (2026-11-06); the others as before. */
   protected inviteText(invite: InviteItem): string {
-    if (invite.listing) return `wants to chat about your listing ${this.chat.listingWords(invite.listing)}`;
-    return invite.type === 'public' ? `invited you to "${invite.name}"` : 'invited you to a private chat';
+    if (invite.listing) return this.t().chatRequests.aboutListing(this.chat.listingWords(invite.listing));
+    return invite.type === 'public' ? this.t().chatRequests.invitedToRoom(invite.name) : this.t().chatRequests.invitedPrivate;
   }
 
   protected roomTitle(chatRoomId: string): string {
     const room = this.session.chatRooms()?.rooms.find((r) => r.chatRoomId === chatRoomId);
-    return room ? this.chat.title(room) : 'your room';
+    return room ? this.chat.title(room) : this.t().chatRequests.yourRoom;
   }
 
   protected accept(invite: InviteItem): Promise<void> {

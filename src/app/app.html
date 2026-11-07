@@ -1,18 +1,18 @@
 <mat-toolbar color="primary" class="toolbar">
   @if (session.hasSession()) {
-    <button mat-icon-button type="button" class="menu" (click)="menuOpen.set(!menuOpen())" aria-label="Menu">
+    <button mat-icon-button type="button" class="menu" (click)="menuOpen.set(!menuOpen())" [attr.aria-label]="t().shell.menu">
       <mat-icon>menu</mat-icon>
     </button>
   }
   @if (session.setupComplete()) {
-    <a class="brand" routerLink="/home">{{ config.attestorEdition() ? 'Attestor wallet' : config.moderatorEdition() ? 'Moderator wallet' : 'anoPod wallet' }}</a>
+    <a class="brand" routerLink="/home">{{ config.attestorEdition() ? t().shell.brandAttestor : config.moderatorEdition() ? t().shell.brandModerator : t().shell.brandWallet }}</a>
   } @else {
-    <span class="brand">{{ config.attestorEdition() ? 'Attestor wallet' : config.moderatorEdition() ? 'Moderator wallet' : 'anoPod wallet' }}</span>
+    <span class="brand">{{ config.attestorEdition() ? t().shell.brandAttestor : config.moderatorEdition() ? t().shell.brandModerator : t().shell.brandWallet }}</span>
   }
   <span class="spacer"></span>
   @if (session.hasSession()) {
     <span class="who">{{ session.username() }}</span>
-    <button mat-button type="button" (click)="lock()">Lock</button>
+    <button mat-button type="button" (click)="lock()">{{ t().shell.lock }}</button>
   }
 </mat-toolbar>
 

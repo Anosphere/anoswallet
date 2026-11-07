@@ -1,6 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { AnosApiService } from './anos-api.service';
 import { CryptoService } from './crypto.service';
+import { LanguageService } from './language.service';
 import { reasonOf } from './log.service';
 import { AnosAccountItem, SessionService } from './session.service';
 
@@ -60,6 +61,7 @@ export class BalancesService {
   private readonly session = inject(SessionService);
   private readonly anos = inject(AnosApiService);
   private readonly crypto = inject(CryptoService);
+  private readonly lang = inject(LanguageService);
 
   /** The entries by account id. */
   readonly byAccount = signal<Record<string, AccountBalance>>({});
@@ -132,7 +134,7 @@ export class BalancesService {
     const encryptionKey = this.session.getEncryptionKey();
     let entry: AccountBalance;
     if (!encryptionKey) {
-      entry = notLanded('The encryption key is not in RAM: unlock again');
+      entry = notLanded(this.lang.words().common.noKeyInRam);
     } else {
       try {
         const pairOne = await this.crypto.pairOneFromKeyBlob(this.crypto.fromHex(item.keyBlob), encryptionKey);

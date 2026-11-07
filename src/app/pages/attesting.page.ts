@@ -1,4 +1,3 @@
-import { DatePipe } from '@angular/common';
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -13,12 +12,12 @@ import { CASES_POLL_MS } from '../constants';
 import { AssistedTransferItem, DisputedEscrowItem } from '../services/anos-api.service';
 import { AttestingService, attestingError } from '../services/attesting.service';
 import { CryptoService } from '../services/crypto.service';
+import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
 import {
   AccountProfileItem,
   AttestorCaseStatus,
   AttestorCasesAnswer,
-  AttestorDismissReason,
   CaseKeyWrap,
   DisputeCaseItem,
   MasterpodApiService,
@@ -33,30 +32,12 @@ const DEFAULT_STATUSES: AttestorCaseStatus[] = ['open', 'inReview'];
 /** The review statuses: a case in either is open for work. */
 export const REVIEW_STATUSES: AttestorCaseStatus[] = ['open', 'inReview'];
 
-/** A status in words, for the lists and the case pages. */
-export const STATUS_WORDS: Record<AttestorCaseStatus, string> = {
-  open: 'Open',
-  inReview: 'In review',
-  decided: 'Decided',
-  dismissed: 'Dismissed',
-};
-
 /** The icon of a status, for the lists and the case pages. */
 export const STATUS_ICONS: Record<AttestorCaseStatus, string> = {
   open: 'flag',
   inReview: 'videocam',
   decided: 'verified',
   dismissed: 'block',
-};
-
-/** A dismissal's preset reason in words, as the attestors read it (masterpod 13.4.4). */
-export const DISMISS_WORDS: Record<AttestorDismissReason, string> = {
-  selfieMismatch: 'the selfie did not match',
-  documentsMismatch: 'the documents did not match',
-  noShow: 'the person did not join the call',
-  withdrawn: 'the request was withdrawn',
-  settled: 'the parties settled',
-  other: 'another reason',
 };
 
 /** The case state of a row: the best case among those matched by transaction id, or none; Open a case when there is none or only a dismissed one. */
@@ -77,7 +58,7 @@ interface DisputeRow {
   escrow: DisputedEscrowItem;
   seller: AccountProfileItem | null;
   buyer: AccountProfileItem | null;
-  disputedBy: 'the seller' | 'the buyer' | 'an unknown account';
+  disputedBy: string;
   state: CaseState<DisputeCaseItem>;
 }
 
@@ -115,42 +96,42 @@ function groupByTransaction<T extends { transactionId: string }>(items: T[]): Ma
  */
 @Component({
   selector: 'app-attesting-page',
-  imports: [DatePipe, RouterLink, MatCardModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatSelectModule, MatProgressBarModule, MatTabsModule],
+  imports: [RouterLink, MatCardModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatSelectModule, MatProgressBarModule, MatTabsModule],
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
-        <mat-card-title>Attesting</mat-card-title>
-        <mat-card-subtitle>The trades and the disputes waiting for attestors on the validators. Open a case to start on one.</mat-card-subtitle>
+        <mat-card-title>{{ t().attesting.title }}</mat-card-title>
+        <mat-card-subtitle>{{ t().attesting.subtitle }}</mat-card-subtitle>
       </mat-card-header>
       <mat-card-content>
-        <h3>Your account</h3>
-        <p class="muted">The spending account that holds your attestor stake signs the validator reads, the key requests and the sign-offs for this session.</p>
+        <h3>{{ t().common.yourAccount }}</h3>
+        <p class="muted">{{ t().attesting.accountText }}</p>
         <div class="form">
           <mat-form-field appearance="outline" class="wide">
-            <mat-label>Anos account</mat-label>
+            <mat-label>{{ t().common.anosAccount }}</mat-label>
             <mat-select [value]="attesting.accountId()" (valueChange)="pickAccount($event)">
               @for (account of session.accounts(); track account.accountId) {
-                <mat-option [value]="account.accountId">{{ account.accountType }} · {{ account.accountId }}</mat-option>
+                <mat-option [value]="account.accountId">{{ t().wallet.typeOption(account.accountType) }} · {{ account.accountId }}</mat-option>
               }
             </mat-select>
           </mat-form-field>
           @if (session.accounts().length === 0) {
-            <span class="muted">No anos account: create one on the Wallet page and stake it for attestor.</span>
+            <span class="muted">{{ t().attesting.noAccount }}</span>
           }
         </div>
 
         <div class="row">
           <mat-form-field appearance="outline" class="filter">
-            <mat-label>Case status</mat-label>
+            <mat-label>{{ t().attesting.caseStatus }}</mat-label>
             <mat-select multiple [value]="statuses()" (valueChange)="statuses.set($event)">
               @for (status of allStatuses; track status) {
-                <mat-option [value]="status">{{ words[status] }}</mat-option>
+                <mat-option [value]="status">{{ t().caseStatus[status] ?? status }}</mat-option>
               }
             </mat-select>
           </mat-form-field>
-          <button mat-stroked-button type="button" (click)="load()" [disabled]="busy()">Refresh</button>
+          <button mat-stroked-button type="button" (click)="load()" [disabled]="busy()">{{ t().common.refresh }}</button>
           @if (attesting.listedAt(); as at) {
-            <span class="muted">Lists from the validator at {{ at | date: 'mediumTime' }}; refreshed every 15 seconds.</span>
+            <span class="muted">{{ t().attesting.listsAt(lang.time(at)) }}</span>
           }
         </div>
         @if (busy()) {
@@ -161,78 +142,78 @@ function groupByTransaction<T extends { transactionId: string }>(items: T[]): Ma
         }
 
         <mat-tab-group>
-          <mat-tab label="Trades ({{ tradeRows().length }})">
+          <mat-tab [label]="t().attesting.tradesTab(tradeRows().length)">
             @for (row of tradeRows(); track row.trade.transactionId) {
               <div class="item">
                 @if (selfieOf(row.sender); as url) {
-                  <img class="avatar" [src]="url" alt="public selfie" />
+                  <img class="avatar" [src]="url" [alt]="t().common.publicSelfie" />
                 } @else {
                   <mat-icon class="avatar-icon">person_off</mat-icon>
                 }
                 <div class="facts">
-                  <div class="title">{{ personText(row.sender, row.trade.accountId) }} · {{ millionthsToAnos(row.trade.amount) }} anos</div>
+                  <div class="title">{{ personText(row.sender, row.trade.accountId) }} {{ t().common.anosFragment(millionthsToAnos(row.trade.amount)) }}</div>
                   <div class="muted">
-                    Trade made {{ row.trade.createdAt | date: 'medium' }} · to <code>{{ row.trade.accountIdTo }}</code>
+                    {{ t().attesting.tradeMade(lang.dateTime(row.trade.createdAt)) }} <code>{{ row.trade.accountIdTo }}</code>
                   </div>
                   <div class="muted">{{ attestationsText(row.trade) }} · <code>{{ row.trade.transactionId }}</code></div>
                   <div>
                     @if (row.state.item; as c) {
                       <mat-icon class="inline">{{ icons[c.status] }}</mat-icon>
-                      <a [routerLink]="['/attesting/trade', c.caseId]">{{ words[c.status] }}</a>
-                      · {{ c.signOffs }} of 2 sign-offs · opened by {{ c.openedBy ?? 'an attestor' }}
-                      @if (c.status === 'dismissed') { · a new case may be opened }
+                      <a [routerLink]="['/attesting/trade', c.caseId]">{{ t().caseStatus[c.status] ?? c.status }}</a>
+                      {{ t().attesting.signOffsBy(c.signOffs, c.openedBy ?? t().attesting.anAttestor) }}
+                      @if (c.status === 'dismissed') { {{ t().attesting.newCaseMayOpen }} }
                     } @else {
-                      No case yet
+                      {{ t().attesting.noCaseYet }}
                     }
                   </div>
                 </div>
                 @if (row.state.canOpen) {
-                  <button mat-flat-button type="button" (click)="openTrade(row)" [disabled]="busy() || opening() !== null || !attesting.accountId()">Open a case</button>
+                  <button mat-flat-button type="button" (click)="openTrade(row)" [disabled]="busy() || opening() !== null || !attesting.accountId()">{{ t().attesting.openCase }}</button>
                 }
               </div>
             } @empty {
               @if (!busy() && !error()) {
-                <p class="muted">No trades waiting with these statuses.</p>
+                <p class="muted">{{ t().attesting.noTrades }}</p>
               }
             }
           </mat-tab>
 
-          <mat-tab label="Disputes ({{ disputeRows().length }})">
+          <mat-tab [label]="t().attesting.disputesTab(disputeRows().length)">
             @for (row of disputeRows(); track row.escrow.transactionId) {
               <div class="item">
                 <div class="pair">
-                  @if (selfieOf(row.seller); as url) { <img class="avatar" [src]="url" alt="the seller" /> } @else { <mat-icon class="avatar-icon">person_off</mat-icon> }
-                  @if (selfieOf(row.buyer); as url) { <img class="avatar" [src]="url" alt="the buyer" /> } @else { <mat-icon class="avatar-icon">person_off</mat-icon> }
+                  @if (selfieOf(row.seller); as url) { <img class="avatar" [src]="url" [alt]="t().attesting.theSeller" /> } @else { <mat-icon class="avatar-icon">person_off</mat-icon> }
+                  @if (selfieOf(row.buyer); as url) { <img class="avatar" [src]="url" [alt]="t().attesting.theBuyer" /> } @else { <mat-icon class="avatar-icon">person_off</mat-icon> }
                 </div>
                 <div class="facts">
-                  <div class="title">{{ millionthsToAnos(row.escrow.amount) }} anos in escrow · disputed by {{ row.disputedBy }}</div>
-                  <div><span class="label">Seller</span> {{ personText(row.seller, row.escrow.accountId) }}</div>
-                  <div><span class="label">Buyer</span> {{ personText(row.buyer, row.escrow.accountIdTo) }}</div>
-                  <div class="muted">Escrow made {{ row.escrow.createdAt | date: 'medium' }} · {{ verdictsText(row.escrow) }} · <code>{{ row.escrow.transactionId }}</code></div>
+                  <div class="title">{{ t().attesting.escrowDisputed(millionthsToAnos(row.escrow.amount), row.disputedBy) }}</div>
+                  <div><span class="label">{{ t().common.seller }}</span> {{ personText(row.seller, row.escrow.accountId) }}</div>
+                  <div><span class="label">{{ t().common.buyer }}</span> {{ personText(row.buyer, row.escrow.accountIdTo) }}</div>
+                  <div class="muted">{{ t().attesting.escrowMade(lang.dateTime(row.escrow.createdAt)) }} · {{ verdictsText(row.escrow) }} · <code>{{ row.escrow.transactionId }}</code></div>
                   <div>
                     @if (row.state.item; as c) {
                       <mat-icon class="inline">{{ icons[c.status] }}</mat-icon>
-                      <a [routerLink]="['/attesting/dispute', c.caseId]">{{ words[c.status] }}</a>
-                      · {{ c.signOffs }} of 2 sign-offs · {{ c.evidenceCount }} evidence file{{ c.evidenceCount === 1 ? '' : 's' }} · opened by {{ c.openedBy ?? 'an attestor' }}
-                      @if (c.status === 'dismissed') { · a new case may be opened }
+                      <a [routerLink]="['/attesting/dispute', c.caseId]">{{ t().caseStatus[c.status] ?? c.status }}</a>
+                      {{ t().attesting.signOffsFilesBy(c.signOffs, c.evidenceCount, c.openedBy ?? t().attesting.anAttestor) }}
+                      @if (c.status === 'dismissed') { {{ t().attesting.newCaseMayOpen }} }
                     } @else {
-                      No case yet
+                      {{ t().attesting.noCaseYet }}
                     }
                   </div>
                 </div>
                 @if (row.state.canOpen) {
-                  <button mat-flat-button type="button" (click)="openDispute(row)" [disabled]="busy() || opening() !== null || !attesting.accountId()">Open a case</button>
+                  <button mat-flat-button type="button" (click)="openDispute(row)" [disabled]="busy() || opening() !== null || !attesting.accountId()">{{ t().attesting.openCase }}</button>
                 }
               </div>
             } @empty {
               @if (!busy() && !error()) {
-                <p class="muted">No disputed escrows with these statuses.</p>
+                <p class="muted">{{ t().attesting.noDisputes }}</p>
               }
             }
           </mat-tab>
         </mat-tab-group>
         @if (opening(); as id) {
-          <p class="muted">Opening a case on <code>{{ id }}</code>…</p>
+          <p class="muted">{{ t().attesting.openingCase }} <code>{{ id }}</code>…</p>
         }
       </mat-card-content>
     </mat-card>
@@ -261,10 +242,11 @@ export class AttestingPage {
   private readonly masterpod = inject(MasterpodApiService);
   private readonly crypto = inject(CryptoService);
   private readonly router = inject(Router);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
   protected readonly millionthsToAnos = millionthsToAnos;
   protected readonly allStatuses = CASE_STATUSES;
-  protected readonly words = STATUS_WORDS;
   protected readonly icons = STATUS_ICONS;
 
   protected readonly statuses = signal<AttestorCaseStatus[]>(DEFAULT_STATUSES);
@@ -293,7 +275,7 @@ export class AttestingPage {
         escrow,
         seller: this.attesting.profileOf(escrow.accountId),
         buyer: this.attesting.profileOf(escrow.accountIdTo),
-        disputedBy: (escrow.disputedBy === escrow.accountId ? 'the seller' : escrow.disputedBy === escrow.accountIdTo ? 'the buyer' : 'an unknown account') as DisputeRow['disputedBy'],
+        disputedBy: escrow.disputedBy === escrow.accountId ? this.t().attesting.theSeller : escrow.disputedBy === escrow.accountIdTo ? this.t().attesting.theBuyer : this.t().attesting.unknownAccount,
         state: stateOf(byTransaction.get(escrow.transactionId) ?? []),
       }))
       .filter((row) => shown(row.state, statuses));
@@ -320,11 +302,11 @@ export class AttestingPage {
     try {
       await this.attesting.loadAccounts();
       if (this.attesting.accountId() === '') {
-        this.error.set('No anos account: create one on the Wallet page and stake it for attestor.');
+        this.error.set(this.t().attesting.noAccount);
         return;
       }
       const [, cases] = await Promise.all([this.attesting.loadLists(quiet), this.masterpod.listAttestorCases(CASE_STATUSES, quiet)]);
-      if (!cases.ok) throw new Error(attestingError(cases, '/list-attestor-cases'));
+      if (!cases.ok) throw new Error(attestingError(cases, '/list-attestor-cases', this.t()));
       this.cases.set(cases.body);
       this.error.set(null);
     } catch (err) {
@@ -337,8 +319,8 @@ export class AttestingPage {
   // --- the people -----------------------------------------------------------------
 
   protected personText(item: AccountProfileItem | null, accountId: string): string {
-    if (!item?.profile) return `${accountId.slice(0, 16)}… · not on this masterpod`;
-    return `${item.profile.username} · ${item.profile.firstName} ${item.profile.lastName}`;
+    if (!item?.profile) return this.t().attesting.notOnMasterpod(accountId.slice(0, 16));
+    return this.t().common.personLine(item.profile.username, item.profile.firstName, item.profile.lastName);
   }
 
   protected selfieOf(item: AccountProfileItem | null): string | null {
@@ -349,14 +331,14 @@ export class AttestingPage {
   /** What the validators already hold for a trade: the attestations in the slots. */
   protected attestationsText(trade: AssistedTransferItem): string {
     const n = trade.attestorIds.length;
-    return n === 0 ? 'No attestation on the validators yet' : `${n} attestation${n === 1 ? '' : 's'} on the validators`;
+    return n === 0 ? this.t().attesting.noAttestation : this.t().attesting.attestations(n);
   }
 
   /** What the validators already hold for an escrow: the verdicts, with their value and whether every validator approved them. */
   protected verdictsText(escrow: DisputedEscrowItem): string {
-    if (escrow.verdicts.length === 0) return 'No verdict on the validators yet';
-    const parts = escrow.verdicts.map((v) => `${v.verdict} by ${v.arbitratorId.slice(0, 8)}…${v.approved ? '' : ' (not yet approved)'}`);
-    return `${escrow.verdicts.length} verdict${escrow.verdicts.length === 1 ? '' : 's'} on the validators: ${parts.join(', ')}`;
+    if (escrow.verdicts.length === 0) return this.t().attesting.noVerdict;
+    const parts = escrow.verdicts.map((v) => this.t().attesting.verdictBy(v.verdict, v.arbitratorId.slice(0, 8), v.approved));
+    return this.t().attesting.verdicts(escrow.verdicts.length, parts.join(', '));
   }
 
   // --- opening a case -----------------------------------------------------------------
@@ -392,13 +374,13 @@ export class AttestingPage {
     secret.set(keys.kemSeed, 32);
     try {
       const attestors = await this.masterpod.listAttestors();
-      if (!attestors.ok) throw new Error(attestingError(attestors, '/list-attestors'));
+      if (!attestors.ok) throw new Error(attestingError(attestors, '/list-attestors', this.t()));
       const wraps: CaseKeyWrap[] = [];
       for (const attestor of attestors.body.attestors) {
         if (!attestor.chatPublicKey || !attestor.chatPublicKeyPq) continue;
         wraps.push({ anopodId: attestor.anopodId, wrappedKey: this.crypto.toHex(await this.crypto.wrapCaseSecret(secret, attestor.chatPublicKey, attestor.chatPublicKeyPq)) });
       }
-      if (wraps.length === 0) throw new Error('No attestor pod has chat keys to wrap the case key to.');
+      if (wraps.length === 0) throw new Error(this.t().attesting.noAttestorKeys);
       const res = await this.masterpod.openDisputeCase({
         transactionId: row.escrow.transactionId,
         accountId: row.escrow.accountId,
@@ -425,10 +407,10 @@ export class AttestingPage {
   /** An open's refusal in words (masterpod 13.4.4). */
   private openRefusal(res: ApiResponse<unknown>, path: string): string {
     const reason = reasonOf(res);
-    if (res.status === 409 && /case already open/.test(reason)) return 'A case is already open on this transaction; the list is refreshed.';
-    if (res.status === 409 && /not an assisted account/.test(reason)) return 'The masterpod does not hold this account as an assisted account.';
-    if (res.status === 404 && /unknown (seller |buyer )?account/.test(reason)) return 'The masterpod knows no anoPod behind one of these accounts.';
-    if (res.status === 400) return `${path}: the masterpod refused the values (${reason}).`;
-    return attestingError(res, path);
+    if (res.status === 409 && /case already open/.test(reason)) return this.t().attesting.alreadyOpen;
+    if (res.status === 409 && /not an assisted account/.test(reason)) return this.t().attesting.notAssisted;
+    if (res.status === 404 && /unknown (seller |buyer )?account/.test(reason)) return this.t().attesting.unknownPod;
+    if (res.status === 400) return this.t().common.refusedValues(path, reason);
+    return attestingError(res, path, this.t());
   }
 }

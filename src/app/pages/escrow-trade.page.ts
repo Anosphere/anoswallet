@@ -1,4 +1,3 @@
-import { DatePipe } from '@angular/common';
 import { Component, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -10,6 +9,7 @@ import { ACCOUNT_POLL_MS } from '../constants';
 import { escrowStageWords } from '../escrow-stage';
 import { AnosApiService, EscrowItem } from '../services/anos-api.service';
 import { CryptoService, EscrowSignatureType, PairOne } from '../services/crypto.service';
+import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
 import { MasterpodApiService } from '../services/masterpod-api.service';
 import { SessionService } from '../services/session.service';
@@ -19,14 +19,6 @@ import { SigningService } from '../services/signing.service';
 type Action = 'release' | 'cancel' | 'dispute';
 
 const FOLLOW_UPS: Record<Action, EscrowSignatureType> = { release: 'escrowSuccess', cancel: 'escrowCancel', dispute: 'escrowDispute' };
-
-const YES_LABELS: Record<Action, string> = { release: 'Yes, release the anos', cancel: 'Yes, cancel the trade', dispute: 'Yes, dispute' };
-
-const SENT: Record<Action, string> = {
-  release: 'Sent. The anos will be released to the buyer at the next write.',
-  cancel: 'Sent. The trade is being cancelled.',
-  dispute: 'Sent. Attestors will decide this trade.',
-};
 
 /** How the trade ended, for someone on the page when it left the list; released null when the transactions could not be read. */
 interface Closed {
@@ -58,56 +50,56 @@ interface Outcome {
  */
 @Component({
   selector: 'app-escrow-trade-page',
-  imports: [DatePipe, RouterLink, MatCardModule, MatButtonModule, MatIconModule, MatProgressBarModule],
+  imports: [RouterLink, MatCardModule, MatButtonModule, MatIconModule, MatProgressBarModule],
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
-        <mat-card-title>Escrow trade</mat-card-title>
+        <mat-card-title>{{ t().escrow.title }}</mat-card-title>
         <mat-card-subtitle>
-          @if (trade()) { You are the {{ side() }} }
-          @else if (closed()) { Closed }
-          @else if (!loaded()) { Loading }
-          @else { Not open }
+          @if (trade()) { {{ t().escrow.youAre(t().sides[side()]) }} }
+          @else if (closed()) { {{ t().common.closed }} }
+          @else if (!loaded()) { {{ t().common.loading }} }
+          @else { {{ t().escrow.notOpen }} }
         </mat-card-subtitle>
       </mat-card-header>
       <mat-card-content>
-        <p><a mat-button [routerLink]="['/wallet', accountId()]"><mat-icon>arrow_back</mat-icon> Account</a></p>
+        <p><a mat-button [routerLink]="['/wallet', accountId()]"><mat-icon>arrow_back</mat-icon> {{ t().common.account }}</a></p>
         @if (readError(); as text) {
           <p class="error">{{ text }}</p>
         }
 
-        @if (trade(); as t) {
+        @if (trade(); as open) {
           <div class="summary">
-            <div><span class="label">Amount</span><span class="value">{{ millionthsToAnos(t.amount) }} anos</span></div>
-            <div><span class="label">{{ side() === 'seller' ? 'Buyer' : 'Seller' }}</span><code class="value">{{ side() === 'seller' ? t.accountIdTo : t.accountId }}</code></div>
-            <div><span class="label">Made</span><span class="value">{{ t.createdAt | date: 'medium' }}</span></div>
-            <div><span class="label">Stage</span><span class="value">{{ words(t) }}</span></div>
-            <div><span class="label">Transaction</span><code class="value">{{ t.transactionId }}</code></div>
+            <div><span class="label">{{ t().common.amount }}</span><span class="value">{{ t().common.anos(millionthsToAnos(open.amount)) }}</span></div>
+            <div><span class="label">{{ side() === 'seller' ? t().common.buyer : t().common.seller }}</span><code class="value">{{ side() === 'seller' ? open.accountIdTo : open.accountId }}</code></div>
+            <div><span class="label">{{ t().common.made }}</span><span class="value">{{ lang.dateTime(open.createdAt) }}</span></div>
+            <div><span class="label">{{ t().common.stage }}</span><span class="value">{{ words(open) }}</span></div>
+            <div><span class="label">{{ t().common.transaction }}</span><code class="value">{{ open.transactionId }}</code></div>
           </div>
-          <p>{{ explain(t) }}</p>
+          <p>{{ explain(open) }}</p>
 
-          @if (t.stage === 'disputed') {
-            <p>{{ t.disputedBy === accountId() ? 'You disputed this trade.' : 'The other side disputed this trade.' }} {{ verdictsText(t) }}</p>
+          @if (open.stage === 'disputed') {
+            <p>{{ open.disputedBy === accountId() ? t().escrow.youDisputed : t().escrow.otherDisputed }} {{ verdictsText(open) }}</p>
             @if (caseId(); as id) {
-              <p><a mat-stroked-button [routerLink]="['/cases', id]">See the case</a></p>
+              <p><a mat-stroked-button [routerLink]="['/cases', id]">{{ t().escrow.seeCase }}</a></p>
             }
           }
 
-          @if (t.stage === 'held') {
+          @if (open.stage === 'held') {
             @if (asking(); as action) {
-              <p class="question">{{ question(action, t) }}</p>
+              <p class="question">{{ question(action, open) }}</p>
               <div class="row">
                 <button mat-flat-button type="button" (click)="confirm()" [disabled]="busy()">{{ yesLabel(action) }}</button>
-                <button mat-button type="button" (click)="asking.set(null)" [disabled]="busy()">Back</button>
+                <button mat-button type="button" (click)="asking.set(null)" [disabled]="busy()">{{ t().common.back }}</button>
               </div>
             } @else {
               <div class="row">
                 @if (side() === 'seller') {
-                  <button mat-flat-button type="button" (click)="ask('release')" [disabled]="busy()">Release the anos</button>
+                  <button mat-flat-button type="button" (click)="ask('release')" [disabled]="busy()">{{ t().escrow.release }}</button>
                 } @else {
-                  <button mat-flat-button type="button" (click)="ask('cancel')" [disabled]="busy()">Cancel trade</button>
+                  <button mat-flat-button type="button" (click)="ask('cancel')" [disabled]="busy()">{{ t().escrow.cancelTrade }}</button>
                 }
-                <button mat-stroked-button type="button" (click)="ask('dispute')" [disabled]="busy()">Dispute</button>
+                <button mat-stroked-button type="button" (click)="ask('dispute')" [disabled]="busy()">{{ t().escrow.dispute }}</button>
               </div>
             }
           }
@@ -117,12 +109,12 @@ interface Outcome {
           @if (outcome(); as o) {
             <p [class.error]="!o.ok" [class.ok]="o.ok">{{ o.text }}</p>
           }
-          <p class="muted">This page refreshes every 5 seconds while the trade is open.</p>
+          <p class="muted">{{ t().common.refreshesWhileOpen }}</p>
         } @else if (closed(); as c) {
           <p>{{ closedText(c) }}</p>
         } @else if (loaded()) {
           @if (!readError()) {
-            <p>This trade is not open. Released trades are in the account's transactions.</p>
+            <p>{{ t().escrow.notOpenText }}</p>
           }
         } @else {
           <mat-progress-bar mode="indeterminate"></mat-progress-bar>
@@ -152,6 +144,8 @@ export class EscrowTradePage {
   private readonly anos = inject(AnosApiService);
   private readonly crypto = inject(CryptoService);
   private readonly signing = inject(SigningService);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
   protected readonly millionthsToAnos = millionthsToAnos;
 
@@ -199,64 +193,64 @@ export class EscrowTradePage {
   }
 
   protected words(t: EscrowItem): string {
-    return escrowStageWords(t.stage, this.side());
+    return escrowStageWords(t.stage, this.side(), this.t().escrowStages);
   }
 
   /** One sentence of what the stage means for this side. */
   protected explain(t: EscrowItem): string {
+    const words = this.t().escrow;
     const seller = this.side() === 'seller';
     switch (t.stage) {
       case 'waiting':
-        return 'The validators are still accepting this trade. Nothing can be done with it yet.';
+        return words.explainWaiting;
       case 'held':
-        return seller
-          ? 'The buyer pays you outside the system. When you have been paid, release the anos to the buyer. If something is wrong, dispute the trade and attestors decide.'
-          : 'Pay the seller outside the system. When the seller has been paid, they release the anos to you. To call the trade off, cancel it and the seller keeps the anos. If something is wrong, dispute the trade and attestors decide.';
+        return seller ? words.explainHeldSeller : words.explainHeldBuyer;
       case 'releasing':
-        return 'The seller has released the anos. The next write puts them in the buyer\'s account.';
+        return words.explainReleasing;
       case 'cancelling':
-        return 'The buyer has cancelled the trade. The anos stay with the seller.';
+        return words.explainCancelling;
       case 'disputed':
-        return 'Attestors are deciding this trade. Two verdicts that agree close it.';
+        return words.explainDisputed;
       default:
-        return 'This trade is open. This wallet does not know this stage, so it offers nothing to do with it.';
+        return words.explainUnknown;
     }
   }
 
   /** The verdicts on a disputed trade in words: how many say what, and what comes next. */
   protected verdictsText(t: EscrowItem): string {
-    if (t.verdicts.length === 0) return 'No verdict yet.';
+    const words = this.t().escrow;
+    if (t.verdicts.length === 0) return words.noVerdict;
     const accepted = t.verdicts.filter((v) => v.approved);
     const release = accepted.filter((v) => v.verdict === 'success').length;
     const cancel = accepted.filter((v) => v.verdict === 'cancel').length;
     const waiting = t.verdicts.length - accepted.length;
     const parts: string[] = [];
-    if (release > 0) parts.push(`${release} to release`);
-    if (cancel > 0) parts.push(`${cancel} to cancel`);
-    if (waiting > 0) parts.push(`${waiting} not yet accepted by every validator`);
+    if (release > 0) parts.push(words.toRelease(release));
+    if (cancel > 0) parts.push(words.toCancel(cancel));
+    if (waiting > 0) parts.push(words.notAccepted(waiting));
     let next: string;
-    if (release >= 2) next = 'The anos are being released to the buyer.';
-    else if (cancel >= 2) next = 'The trade is being cancelled.';
-    else if (release === 1 && cancel === 1) next = 'A third attestor decides.';
-    else if (release + cancel === 1) next = 'Waiting for one more.';
-    else next = 'Waiting for the attestors.';
-    return `Verdicts so far: ${parts.join(', ')}. ${next}`;
+    if (release >= 2) next = words.beingReleased;
+    else if (cancel >= 2) next = words.beingCancelled;
+    else if (release === 1 && cancel === 1) next = words.thirdDecides;
+    else if (release + cancel === 1) next = words.waitingOneMore;
+    else next = words.waitingAttestors;
+    return words.verdictsSoFar(parts.join(', '), next);
   }
 
   protected question(action: Action, t: EscrowItem): string {
     const amount = millionthsToAnos(t.amount);
     switch (action) {
       case 'release':
-        return `Release ${amount} anos to the buyer? Do this once you have been paid. It cannot be undone.`;
+        return this.t().escrow.askRelease(amount);
       case 'cancel':
-        return `Cancel this trade? The seller keeps the ${amount} anos. It cannot be undone.`;
+        return this.t().escrow.askCancel(amount);
       case 'dispute':
-        return 'Dispute this trade? Attestors will decide it, and neither side can release or cancel it after that.';
+        return this.t().escrow.askDispute;
     }
   }
 
   protected yesLabel(action: Action): string {
-    return YES_LABELS[action];
+    return this.t().escrow.yes[action];
   }
 
   protected ask(action: Action): void {
@@ -265,9 +259,10 @@ export class EscrowTradePage {
   }
 
   protected closedText(c: Closed): string {
-    const when = c.disputed ? ' after the attestors decided' : '';
-    if (c.released === null) return `This trade is closed${when}. Check the account's transactions to see whether the anos moved.`;
-    return `This trade is closed${when}. ${c.released ? 'The anos were released to the buyer.' : 'The trade was cancelled and the anos stayed with the seller.'}`;
+    const words = this.t().escrow;
+    const when = c.disputed ? words.afterDecided : '';
+    if (c.released === null) return `${words.closed(when)} ${words.checkTransactions}`;
+    return `${words.closed(when)} ${c.released ? words.released : words.cancelled}`;
   }
 
   /** Pair one, opened from the keyBlob for one signature; the caller drops it. */
@@ -279,8 +274,8 @@ export class EscrowTradePage {
       item = this.session.accounts().find((a) => a.accountId === this.accountId());
     }
     const encryptionKey = this.session.getEncryptionKey();
-    if (!item) throw new Error('This account is not one of this anoPod\'s accounts');
-    if (!encryptionKey) throw new Error('The encryption key is not in RAM: unlock again');
+    if (!item) throw new Error(this.t().common.notMyAccount);
+    if (!encryptionKey) throw new Error(this.t().common.noKeyInRam);
     return this.crypto.pairOneFromKeyBlob(this.crypto.fromHex(item.keyBlob), encryptionKey);
   }
 
@@ -333,7 +328,7 @@ export class EscrowTradePage {
       const signed = await this.signing.sign(this.crypto.buildFollowUp(pairOne, { type: FOLLOW_UPS[action], transactionId: trade.transactionId, accountId: this.accountId() }));
       const res = await this.anos.escrowSignature(signed);
       if (!res.ok) throw new Error(this.plainReason(res));
-      this.outcome.set({ ok: true, text: SENT[action] });
+      this.outcome.set({ ok: true, text: this.t().escrow.sent[action] });
       this.asking.set(null);
     } catch (err) {
       this.outcome.set({ ok: false, text: err instanceof Error ? err.message : String(err) });
@@ -346,11 +341,12 @@ export class EscrowTradePage {
   /** The validator's refusal in plain words where the reason is a known one. */
   private plainReason(res: ApiResponse<unknown>): string {
     const reason = reasonOf(res);
-    if (/not approved yet/.test(reason)) return 'The validators have not all accepted this trade yet. Try again in a moment.';
-    if (/success signature is already present/.test(reason)) return 'The seller has already released the anos.';
-    if (/cancel signature is already present/.test(reason)) return 'The buyer has already cancelled the trade.';
-    if (/dispute signature is already present/.test(reason)) return 'This trade is already in dispute.';
-    if (/not the seller|not the buyer|neither the seller/.test(reason)) return 'This account cannot sign that for this trade.';
+    const words = this.t().escrow;
+    if (/not approved yet/.test(reason)) return words.notAllAccepted;
+    if (/success signature is already present/.test(reason)) return words.alreadyReleased;
+    if (/cancel signature is already present/.test(reason)) return words.alreadyCancelled;
+    if (/dispute signature is already present/.test(reason)) return words.alreadyDisputed;
+    if (/not the seller|not the buyer|neither the seller/.test(reason)) return words.cannotSign;
     return `/escrow-signature: ${reason}`;
   }
 }

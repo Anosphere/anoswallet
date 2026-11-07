@@ -2,6 +2,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { LOG_MAX_ENTRIES, LOG_STRING_MAX } from '../constants';
+import { LanguageService } from './language.service';
 
 /** What every call resolves to: the status and the parsed body, `ok` for 2xx. Never throws on an HTTP error. */
 export interface ApiResponse<T = unknown> {
@@ -34,6 +35,7 @@ export interface LogEntry {
 @Injectable({ providedIn: 'root' })
 export class LogService {
   private readonly http = inject(HttpClient);
+  private readonly lang = inject(LanguageService);
 
   /** The newest calls first, at most LOG_MAX_ENTRIES. */
   readonly entries = signal<LogEntry[]>([]);
@@ -69,13 +71,13 @@ export class LogService {
       return { ok: true, status: res.status, body: res.body as T };
     } catch (err) {
       if (!(err instanceof HttpErrorResponse)) throw err;
-      const reason = err.status === 0 ? { error: 'could not reach the wallet proxy (network error)' } : err.error;
+      const reason = err.status === 0 ? { error: this.lang.words().api.network } : err.error;
       return { ok: false, status: err.status, body: reason as T };
     }
   }
 
   private record(method: LogEntry['method'], path: string, result: ApiResponse<unknown>): void {
-    const entry: LogEntry = { time: new Date().toLocaleTimeString(), method, path, status: result.status, body: result.body };
+    const entry: LogEntry = { time: new Date().toLocaleTimeString(this.lang.tag()), method, path, status: result.status, body: result.body };
     this.entries.update((entries) => [entry, ...entries].slice(0, LOG_MAX_ENTRIES));
   }
 }

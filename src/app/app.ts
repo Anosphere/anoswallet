@@ -10,6 +10,7 @@ import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/rou
 import { map } from 'rxjs';
 import { NOTIFICATIONS_POLL_MS } from './constants';
 import { ConfigService } from './services/config.service';
+import { LanguageService } from './services/language.service';
 import { MasterpodApiService } from './services/masterpod-api.service';
 import { NavigationService } from './services/navigation.service';
 import { SessionService } from './services/session.service';
@@ -25,7 +26,10 @@ import { SessionService } from './services/session.service';
  * Moderation in the moderator edition, wallet spec 12.1, which also names
  * the app "Moderator wallet" in the toolbar; Attesting in the attestor
  * edition, wallet spec 13.1, named "Attestor wallet"). The toolbar's name
- * is a link to Home once setup is complete.
+ * is a link to Home once setup is complete. The toolbar's words come from
+ * the dictionary (wallet spec 8.8), and the language service is created
+ * here, so the page's `lang` attribute follows the language from the
+ * start.
  */
 @Component({
   selector: 'app-root',
@@ -36,6 +40,8 @@ import { SessionService } from './services/session.service';
 export class App {
   protected readonly session = inject(SessionService);
   protected readonly config = inject(ConfigService);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
   private readonly router = inject(Router);
   private readonly api = inject(MasterpodApiService);
   private readonly navigation = inject(NavigationService);

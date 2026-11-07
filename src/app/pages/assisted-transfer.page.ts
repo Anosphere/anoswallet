@@ -1,4 +1,3 @@
-import { DatePipe } from '@angular/common';
 import { Component, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -10,11 +9,11 @@ import { assistedStageWords } from '../assisted-stage';
 import { ACCOUNT_POLL_MS } from '../constants';
 import { AnosApiService, HeldAssistedTransfer } from '../services/anos-api.service';
 import { CryptoService, PairOne } from '../services/crypto.service';
+import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
 import { MasterpodApiService, MyTradeCase } from '../services/masterpod-api.service';
 import { SessionService } from '../services/session.service';
 import { SigningService } from '../services/signing.service';
-import { DISMISS_WORDS } from './my-case.page';
 
 /** How the transfer ended, for someone on the page when it left the validator: the transfer as last seen held, and written null when the transactions could not be read. */
 interface Closed {
@@ -47,49 +46,49 @@ interface Outcome {
  */
 @Component({
   selector: 'app-assisted-transfer-page',
-  imports: [DatePipe, RouterLink, MatCardModule, MatButtonModule, MatIconModule, MatProgressBarModule],
+  imports: [RouterLink, MatCardModule, MatButtonModule, MatIconModule, MatProgressBarModule],
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
-        <mat-card-title>Assisted transfer</mat-card-title>
+        <mat-card-title>{{ t().common.assistedTransfer }}</mat-card-title>
         <mat-card-subtitle>
-          @if (transfer()) { Held }
-          @else if (closed()) { Closed }
-          @else if (!loaded()) { Loading }
-          @else { Not held }
+          @if (transfer()) { {{ t().assisted.held }} }
+          @else if (closed()) { {{ t().common.closed }} }
+          @else if (!loaded()) { {{ t().common.loading }} }
+          @else { {{ t().assisted.notHeld }} }
         </mat-card-subtitle>
       </mat-card-header>
       <mat-card-content>
-        <p><a mat-button [routerLink]="['/wallet', accountId()]"><mat-icon>arrow_back</mat-icon> Account</a></p>
+        <p><a mat-button [routerLink]="['/wallet', accountId()]"><mat-icon>arrow_back</mat-icon> {{ t().common.account }}</a></p>
         @if (readError(); as text) {
           <p class="error">{{ text }}</p>
         }
 
-        @if (transfer(); as t) {
+        @if (transfer(); as held) {
           <div class="summary">
-            <div><span class="label">Amount</span><span class="value">{{ millionthsToAnos(t.amount) }} anos</span></div>
-            <div><span class="label">To</span><code class="value">{{ t.accountIdTo }}</code></div>
-            <div><span class="label">Made</span><span class="value">{{ t.createdAt | date: 'medium' }}</span></div>
-            <div><span class="label">Stage</span><span class="value">{{ assistedStageWords(t.stage) }}</span></div>
-            <div><span class="label">Attestations</span><span class="value">{{ t.attestations }} of 2 on the validators</span></div>
-            <div><span class="label">Transaction</span><code class="value">{{ t.transactionId }}</code></div>
+            <div><span class="label">{{ t().common.amount }}</span><span class="value">{{ t().common.anos(millionthsToAnos(held.amount)) }}</span></div>
+            <div><span class="label">{{ t().common.to }}</span><code class="value">{{ held.accountIdTo }}</code></div>
+            <div><span class="label">{{ t().common.made }}</span><span class="value">{{ lang.dateTime(held.createdAt) }}</span></div>
+            <div><span class="label">{{ t().common.stage }}</span><span class="value">{{ assistedStageWords(held.stage, t().assistedStages) }}</span></div>
+            <div><span class="label">{{ t().assisted.attestations }}</span><span class="value">{{ t().assisted.ofTwo(held.attestations) }}</span></div>
+            <div><span class="label">{{ t().common.transaction }}</span><code class="value">{{ held.transactionId }}</code></div>
           </div>
-          <p>{{ explain(t) }}</p>
+          <p>{{ explain(held) }}</p>
           <p>{{ caseText() }}</p>
 
           @if (asking()) {
-            <p class="question">Cancel this transfer? The {{ millionthsToAnos(t.amount) }} anos stay in this account. It cannot be undone.</p>
+            <p class="question">{{ t().assisted.askCancel(millionthsToAnos(held.amount)) }}</p>
             <div class="row">
-              <button mat-flat-button type="button" (click)="confirm()" [disabled]="busy()">Yes, cancel the transfer</button>
-              <button mat-button type="button" (click)="asking.set(false)" [disabled]="busy()">Back</button>
+              <button mat-flat-button type="button" (click)="confirm()" [disabled]="busy()">{{ t().assisted.yesCancel }}</button>
+              <button mat-button type="button" (click)="asking.set(false)" [disabled]="busy()">{{ t().common.back }}</button>
             </div>
           } @else {
             <div class="row">
               @if (tradeCase(); as c) {
-                <a mat-flat-button [routerLink]="['/cases', c.caseId]">Go to the case</a>
+                <a mat-flat-button [routerLink]="['/cases', c.caseId]">{{ t().assisted.goToCase }}</a>
               }
-              @if (t.stage === 'attesting' || t.stage === 'writing') {
-                <button mat-stroked-button type="button" (click)="ask()" [disabled]="busy()">Cancel transfer</button>
+              @if (held.stage === 'attesting' || held.stage === 'writing') {
+                <button mat-stroked-button type="button" (click)="ask()" [disabled]="busy()">{{ t().assisted.cancelTransfer }}</button>
               }
             </div>
           }
@@ -99,18 +98,18 @@ interface Outcome {
           @if (outcome(); as o) {
             <p [class.error]="!o.ok" [class.ok]="o.ok">{{ o.text }}</p>
           }
-          <p class="muted">This page refreshes every 5 seconds while the transfer is held.</p>
+          <p class="muted">{{ t().common.refreshesWhileHeld }}</p>
         } @else if (closed(); as c) {
           @if (c.written === true) {
-            <p>Done. The {{ millionthsToAnos(c.transfer.amount) }} anos went to <code>{{ c.transfer.accountIdTo }}</code>.</p>
+            <p>{{ t().assisted.doneWentTo(millionthsToAnos(c.transfer.amount)) }} <code>{{ c.transfer.accountIdTo }}</code>{{ t().assisted.doneEnd }}</p>
           } @else if (c.written === false) {
-            <p>Cancelled. The anos stayed in this account.</p>
+            <p>{{ t().assisted.cancelledStayed }}</p>
           } @else {
-            <p>This transfer is no longer held. Check the account's transactions to see whether the anos moved.</p>
+            <p>{{ t().assisted.noLongerHeld }}</p>
           }
         } @else if (loaded()) {
           @if (!readError()) {
-            <p>This transfer is not held. A written transfer is in the account's transactions.</p>
+            <p>{{ t().assisted.notHeldText }}</p>
           }
         } @else {
           <mat-progress-bar mode="indeterminate"></mat-progress-bar>
@@ -140,6 +139,8 @@ export class AssistedTransferPage {
   private readonly anos = inject(AnosApiService);
   private readonly crypto = inject(CryptoService);
   private readonly signing = inject(SigningService);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
   protected readonly millionthsToAnos = millionthsToAnos;
   protected readonly assistedStageWords = assistedStageWords;
@@ -163,17 +164,18 @@ export class AssistedTransferPage {
 
   /** The case in one sentence: none yet, or its status in the words of the plan. */
   protected readonly caseText = computed((): string => {
+    const words = this.t().assisted;
     const c = this.tradeCase();
-    if (!c) return 'No case yet. An attestor will open one and ask for your lookup id.';
+    if (!c) return words.noCase;
     switch (c.status) {
       case 'open':
-        return 'An attestor opened a case. Share your lookup id on the case page.';
+        return words.caseOpen;
       case 'inReview':
-        return 'An attestor is checking your trade.';
+        return words.caseInReview;
       case 'decided':
-        return 'Two attestors signed. The attestations go to the validators and the transfer is written in the next round.';
+        return words.caseDecided;
       case 'dismissed':
-        return `The case was dismissed: ${this.dismissReason() ?? 'another reason'}. The anos stay held until you cancel the transfer or an attestor opens a new case.`;
+        return words.caseDismissed(this.dismissReason() ?? this.t().common.anotherReason);
     }
   });
 
@@ -207,17 +209,18 @@ export class AssistedTransferPage {
 
   /** One sentence of what the stage means. */
   protected explain(t: HeldAssistedTransfer): string {
+    const words = this.t().assisted;
     switch (t.stage) {
       case 'waiting':
-        return 'The validators are still accepting this transfer. Nothing can be done with it yet.';
+        return words.explainWaiting;
       case 'attesting':
-        return 'Two attestors have to check this transfer before it is written. An attestor opens a case and meets you on a video call. You can cancel the transfer until it is written.';
+        return words.explainAttesting;
       case 'writing':
-        return 'Both attestations are on the validators. The next write moves the anos to the receiver. You can still cancel until then.';
+        return words.explainWriting;
       case 'cancelling':
-        return 'You cancelled this transfer. The anos stay in this account.';
+        return words.explainCancelling;
       default:
-        return 'This transfer is held. This wallet does not know this stage, so it offers nothing to do with it.';
+        return words.explainUnknown;
     }
   }
 
@@ -235,8 +238,8 @@ export class AssistedTransferPage {
       item = this.session.accounts().find((a) => a.accountId === this.accountId());
     }
     const encryptionKey = this.session.getEncryptionKey();
-    if (!item) throw new Error('This account is not one of this anoPod\'s accounts');
-    if (!encryptionKey) throw new Error('The encryption key is not in RAM: unlock again');
+    if (!item) throw new Error(this.t().common.notMyAccount);
+    if (!encryptionKey) throw new Error(this.t().common.noKeyInRam);
     return this.crypto.pairOneFromKeyBlob(this.crypto.fromHex(item.keyBlob), encryptionKey);
   }
 
@@ -281,7 +284,7 @@ export class AssistedTransferPage {
     const detail = await this.masterpod.getMyCase(found.caseId, true);
     if (!detail.ok) return;
     const reason = [...detail.body.events].reverse().find((e) => e.kind === 'dismissed')?.details['reason'];
-    this.dismissReason.set(typeof reason === 'string' ? (DISMISS_WORDS[reason] ?? reason) : null);
+    this.dismissReason.set(typeof reason === 'string' ? (this.t().dismissReasons[reason] ?? reason) : null);
   }
 
   /** Builds, signs and posts the assistedTransferCancel follow-up, then refreshes. */
@@ -295,7 +298,7 @@ export class AssistedTransferPage {
       const signed = await this.signing.sign(this.crypto.buildFollowUp(pairOne, { type: 'assistedTransferCancel', transactionId: transfer.transactionId, accountId: this.accountId() }));
       const res = await this.anos.assistedTransferCancel(signed);
       if (!res.ok) throw new Error(this.plainReason(res));
-      this.outcome.set({ ok: true, text: 'Sent. The transfer is being cancelled; the anos stay in this account.' });
+      this.outcome.set({ ok: true, text: this.t().assisted.sentCancel });
       this.asking.set(false);
     } catch (err) {
       this.outcome.set({ ok: false, text: err instanceof Error ? err.message : String(err) });
@@ -308,10 +311,11 @@ export class AssistedTransferPage {
   /** The validator's refusal in plain words where the reason is a known one. */
   private plainReason(res: ApiResponse<unknown>): string {
     const reason = reasonOf(res);
-    if (/not approved yet/.test(reason)) return 'The validators have not all accepted this transfer yet. Try again in a moment.';
-    if (/a cancellation is already present/.test(reason)) return 'This transfer is already being cancelled.';
-    if (/no assisted_transfers transaction/.test(reason)) return 'This transfer is no longer held: it was written or cancelled.';
-    if (/not the transfer's sender/.test(reason)) return 'This account cannot cancel this transfer.';
+    const words = this.t().assisted;
+    if (/not approved yet/.test(reason)) return words.notAllAccepted;
+    if (/a cancellation is already present/.test(reason)) return words.alreadyCancelling;
+    if (/no assisted_transfers transaction/.test(reason)) return words.noLongerHeldReason;
+    if (/not the transfer's sender/.test(reason)) return words.cannotCancel;
     return `/assisted-transfer-cancel: ${reason}`;
   }
 }

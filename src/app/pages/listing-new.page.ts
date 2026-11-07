@@ -12,6 +12,7 @@ import { anosToMillionths } from '../amounts';
 import { PickerChoice, PickerData, PickerOption, PickerSheetComponent } from '../components/picker-sheet.component';
 import { countryName, countryOptions } from '../countries';
 import { currencyOptions, formatPrice, priceUnits, totalOf } from '../prices';
+import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
 import { MarketplaceService } from '../services/marketplace.service';
 import { MasterpodApiService } from '../services/masterpod-api.service';
@@ -32,19 +33,19 @@ import { MasterpodApiService } from '../services/masterpod-api.service';
   imports: [FormsModule, RouterLink, MatBottomSheetModule, MatButtonModule, MatButtonToggleModule, MatIconModule, MatFormFieldModule, MatInputModule],
   template: `
     <header class="head">
-      <a mat-icon-button routerLink="/marketplace" aria-label="Back to the marketplace"><mat-icon>arrow_back</mat-icon></a>
-      <h2>New listing</h2>
+      <a mat-icon-button routerLink="/marketplace" [attr.aria-label]="t().common.backToMarketplace"><mat-icon>arrow_back</mat-icon></a>
+      <h2>{{ t().common.newListing }}</h2>
     </header>
-    <mat-button-toggle-group class="sides" [value]="side()" (change)="sideChanged($event)" hideSingleSelectionIndicator aria-label="Side">
-      <mat-button-toggle value="sell">I am selling anos</mat-button-toggle>
-      <mat-button-toggle value="buy">I am buying anos</mat-button-toggle>
+    <mat-button-toggle-group class="sides" [value]="side()" (change)="sideChanged($event)" hideSingleSelectionIndicator [attr.aria-label]="t().common.side">
+      <mat-button-toggle value="sell">{{ t().listingNew.selling }}</mat-button-toggle>
+      <mat-button-toggle value="buy">{{ t().listingNew.buying }}</mat-button-toggle>
     </mat-button-toggle-group>
     <mat-form-field appearance="outline" class="wide">
-      <mat-label>Quantity, anos</mat-label>
+      <mat-label>{{ t().common.quantityAnos }}</mat-label>
       <input matInput inputmode="decimal" [ngModel]="quantity()" (ngModelChange)="quantity.set($event)" />
     </mat-form-field>
     <mat-form-field appearance="outline" class="wide">
-      <mat-label>Price per anos</mat-label>
+      <mat-label>{{ t().common.pricePerAnos }}</mat-label>
       <input matInput inputmode="decimal" [ngModel]="price()" (ngModelChange)="price.set($event)" />
     </mat-form-field>
     <div class="pickers">
@@ -52,12 +53,12 @@ import { MasterpodApiService } from '../services/masterpod-api.service';
       <button mat-stroked-button type="button" (click)="pickCountry()"><mat-icon>public</mat-icon> {{ countryLabel() }}</button>
     </div>
     @if (total(); as total) {
-      <p class="total">Total {{ total }}</p>
+      <p class="total">{{ t().common.total(total) }}</p>
     }
     @if (error(); as text) {
       <p class="error">{{ text }}</p>
     }
-    <button mat-flat-button type="button" class="big" (click)="create()" [disabled]="busy() || !canCreate()">Create listing</button>
+    <button mat-flat-button type="button" class="big" (click)="create()" [disabled]="busy() || !canCreate()">{{ t().listingNew.create }}</button>
   `,
   styles: `
     :host { display: block; max-width: 560px; margin: 0 auto; }
@@ -78,6 +79,8 @@ export class ListingNewPage {
   private readonly api = inject(MasterpodApiService);
   private readonly sheet = inject(MatBottomSheet);
   private readonly router = inject(Router);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
   protected readonly side = signal<'buy' | 'sell'>('sell');
   protected readonly quantity = signal('');
@@ -87,10 +90,10 @@ export class ListingNewPage {
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
 
-  protected readonly currencyLabel = computed(() => this.currency() ?? 'Currency');
+  protected readonly currencyLabel = computed(() => this.currency() ?? this.t().common.currency);
   protected readonly countryLabel = computed(() => {
     const code = this.country();
-    return code ? countryName(code) : 'Country';
+    return code ? countryName(code, this.lang.tag()) : this.t().common.country;
   });
   protected readonly canCreate = computed(
     () => anosToMillionths(this.quantity()) !== null && (priceUnits(this.price()) ?? 0n) > 0n && this.currency() !== null && this.country() !== null,
@@ -108,12 +111,12 @@ export class ListingNewPage {
   }
 
   protected async pickCurrency(): Promise<void> {
-    const choice = await this.pick('Currency', currencyOptions());
+    const choice = await this.pick(this.t().common.currency, currencyOptions(this.lang.tag()));
     if (choice?.code) this.currency.set(choice.code);
   }
 
   protected async pickCountry(): Promise<void> {
-    const choice = await this.pick('Country', countryOptions());
+    const choice = await this.pick(this.t().common.country, countryOptions(this.lang.tag()));
     if (choice?.code) this.country.set(choice.code);
   }
 
@@ -129,12 +132,12 @@ export class ListingNewPage {
   protected create(): Promise<void> {
     return this.run(async () => {
       const quantity = anosToMillionths(this.quantity());
-      if (quantity === null) throw new Error('The quantity must be anos with up to six decimals');
+      if (quantity === null) throw new Error(this.t().listingNew.badQuantity);
       const price = this.price().trim();
-      if ((priceUnits(price) ?? 0n) <= 0n) throw new Error('The price must be a number above zero with up to eight decimals');
+      if ((priceUnits(price) ?? 0n) <= 0n) throw new Error(this.t().listingNew.badPrice);
       const currency = this.currency();
       const country = this.country();
-      if (!currency || !country) throw new Error('Pick a currency and a country');
+      if (!currency || !country) throw new Error(this.t().listingNew.pickBoth);
       const res = await this.api.createListing({ side: this.side(), quantity: quantity.toString(), currency, country, price });
       if (res.ok) {
         this.market.remember({ country, currency });

@@ -1,6 +1,7 @@
 import { Component, ElementRef, OnDestroy, afterNextRender, inject, input, output, signal, viewChild } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { LanguageService } from '../services/language.service';
 
 /** What the camera hands over: the image's type and bytes, for the caller to encrypt or send. */
 export interface Photo {
@@ -34,9 +35,9 @@ const SIZES: Record<CameraQuality, { width: number; height: number; jpeg: number
   template: `
     <div class="camera">
       @if (preview(); as url) {
-        <img class="frame" [src]="url" alt="Your photo" />
+        <img class="frame" [src]="url" [alt]="t().camera.yourPhoto" />
         <div class="row">
-          <button mat-stroked-button type="button" (click)="retake()">Retake</button>
+          <button mat-stroked-button type="button" (click)="retake()">{{ t().camera.retake }}</button>
         </div>
       } @else {
         @if (cameraError(); as text) {
@@ -45,13 +46,13 @@ const SIZES: Record<CameraQuality, { width: number; height: number; jpeg: number
           <video #video class="frame" autoplay playsinline muted></video>
           <div class="row">
             <button mat-flat-button type="button" (click)="takePhoto()" [disabled]="!ready()">
-              <mat-icon>photo_camera</mat-icon> Take photo
+              <mat-icon>photo_camera</mat-icon> {{ t().camera.takePhoto }}
             </button>
           </div>
         }
       }
       <label class="file">
-        <span class="muted">Or pick a photo</span>
+        <span class="muted">{{ t().camera.orPick }}</span>
         <input type="file" accept="image/*" [attr.capture]="facing()" (change)="fileChosen($event)" />
       </label>
     </div>
@@ -77,6 +78,8 @@ export class CameraComponent implements OnDestroy {
   private readonly video = viewChild<ElementRef<HTMLVideoElement>>('video');
   private stream: MediaStream | null = null;
   private readonly host = inject(ElementRef<HTMLElement>);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
   constructor() {
     afterNextRender(() => void this.start());
@@ -91,7 +94,7 @@ export class CameraComponent implements OnDestroy {
   private async start(): Promise<void> {
     if (this.stream) return;
     if (!navigator.mediaDevices?.getUserMedia) {
-      this.cameraError.set('No camera available here. Pick a photo below.');
+      this.cameraError.set(this.t().camera.noCamera);
       return;
     }
     const size = SIZES[this.quality()];
@@ -101,7 +104,7 @@ export class CameraComponent implements OnDestroy {
         audio: false,
       });
     } catch (err) {
-      this.cameraError.set(`The camera could not be opened (${err instanceof Error ? err.message : String(err)}). Pick a photo below.`);
+      this.cameraError.set(this.t().camera.couldNotOpen(err instanceof Error ? err.message : String(err)));
       return;
     }
     const video = this.video()?.nativeElement ?? this.host.nativeElement.querySelector('video');

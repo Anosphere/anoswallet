@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { MAT_BOTTOM_SHEET_DATA, MatBottomSheetRef } from '@angular/material/bottom-sheet';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { LanguageService } from '../services/language.service';
 
 /** One choice of the picker: an ISO code and its name. */
 export interface PickerOption {
@@ -36,21 +37,21 @@ export interface PickerChoice {
   template: `
     <h3>{{ data.title }}</h3>
     <mat-form-field appearance="outline" class="search" subscriptSizing="dynamic">
-      <mat-label>Search</mat-label>
+      <mat-label>{{ t().common.search }}</mat-label>
       <input matInput [ngModel]="query()" (ngModelChange)="query.set($event)" autocomplete="off" />
     </mat-form-field>
     <div class="rows">
       @if (data.allowAny) {
-        <button type="button" class="row" (click)="choose(null)"><span class="code"></span><span>Any</span></button>
+        <button type="button" class="row" (click)="choose(null)"><span class="code"></span><span>{{ t().picker.any }}</span></button>
       }
       @for (option of matches(); track option.code) {
         <button type="button" class="row" (click)="choose(option.code)"><span class="code">{{ option.code }}</span><span>{{ option.name }}</span></button>
       }
       @if (typedCode(); as code) {
-        <button type="button" class="row" (click)="choose(code)"><span class="code">{{ code }}</span><span>Use this code</span></button>
+        <button type="button" class="row" (click)="choose(code)"><span class="code">{{ code }}</span><span>{{ t().picker.useCode }}</span></button>
       }
       @if (matches().length === 0 && !typedCode()) {
-        <p class="muted">No match.</p>
+        <p class="muted">{{ t().picker.noMatch }}</p>
       }
     </div>
   `,
@@ -68,6 +69,8 @@ export interface PickerChoice {
 export class PickerSheetComponent {
   protected readonly data = inject<PickerData>(MAT_BOTTOM_SHEET_DATA);
   private readonly ref = inject<MatBottomSheetRef<PickerSheetComponent, PickerChoice>>(MatBottomSheetRef);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
   protected readonly query = signal('');
 

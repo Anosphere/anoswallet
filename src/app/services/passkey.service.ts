@@ -3,6 +3,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { hexToBytes, utf8ToBytes } from '@noble/hashes/utils.js';
 import { PRF_SALT_LABEL } from '../constants';
 import { ConfigService } from './config.service';
+import { LanguageService } from './language.service';
 
 /** A Uint8Array over its own ArrayBuffer, which WebAuthn and WebCrypto require. */
 export type Bytes = Uint8Array<ArrayBuffer>;
@@ -49,6 +50,7 @@ export interface Assertion {
 @Injectable({ providedIn: 'root' })
 export class PasskeyService {
   private readonly config = inject(ConfigService);
+  private readonly lang = inject(LanguageService);
 
   /**
    * Registers a discoverable passkey for a new pod: the challenge from
@@ -76,10 +78,10 @@ export class PasskeyService {
         extensions: { prf: { eval: { first: PRF_SALT } } },
       },
     });
-    const pkc = asPublicKeyCredential(credential);
+    const pkc = asPublicKeyCredential(credential, this.lang.words().passkey.noCredential);
     const ext = pkc.getClientExtensionResults();
     if (ext.prf?.enabled !== true) {
-      throw new Error('This passkey does not report PRF support (prf.enabled); the server refuses it');
+      throw new Error(this.lang.words().passkey.noPrfSupport);
     }
     const json = toJson(pkc);
     const first = ext.prf.results?.first;
@@ -103,10 +105,10 @@ export class PasskeyService {
         extensions: { prf: { eval: { first: PRF_SALT } } },
       },
     });
-    const pkc = asPublicKeyCredential(credential);
+    const pkc = asPublicKeyCredential(credential, this.lang.words().passkey.noCredential);
     const first = pkc.getClientExtensionResults().prf?.results?.first;
     if (!first) {
-      throw new Error('The authenticator returned no PRF output; this passkey or platform does not support PRF');
+      throw new Error(this.lang.words().passkey.noPrfOutput);
     }
     const json = toJson(pkc);
     const results = { ...(json['clientExtensionResults'] as Record<string, unknown>) };
@@ -116,9 +118,10 @@ export class PasskeyService {
   }
 }
 
-function asPublicKeyCredential(credential: Credential | null): PublicKeyCredential {
+/** The credential as a PublicKeyCredential; `noCredential` is the dictionary's sentence thrown when it is not one. */
+function asPublicKeyCredential(credential: Credential | null, noCredential: string): PublicKeyCredential {
   if (!(credential instanceof PublicKeyCredential)) {
-    throw new Error('The browser returned no public-key credential');
+    throw new Error(noCredential);
   }
   return credential;
 }

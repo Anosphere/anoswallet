@@ -12,11 +12,10 @@ import { ListingCardComponent } from '../components/listing-card.component';
 import { PickerChoice, PickerData, PickerOption, PickerSheetComponent } from '../components/picker-sheet.component';
 import { countryName, countryOptions } from '../countries';
 import { currencyOptions, priceUnits } from '../prices';
+import { LanguageService } from '../services/language.service';
 import { reasonOf } from '../services/log.service';
 import { MarketplaceService, SortKey } from '../services/marketplace.service';
 import { ListingItem } from '../services/masterpod-api.service';
-
-const SORT_WORDS: Record<SortKey, string> = { newest: 'Newest', priceLow: 'Price low to high', priceHigh: 'Price high to low' };
 
 /**
  * Browse (wallet spec 8.2, Marketplace, Browse), at /marketplace: one row
@@ -37,29 +36,29 @@ const SORT_WORDS: Record<SortKey, string> = { newest: 'Newest', priceLow: 'Price
   imports: [RouterLink, MatBottomSheetModule, MatButtonModule, MatChipsModule, MatIconModule, MatMenuModule, ListingCardComponent],
   template: `
     <div class="chips">
-      <mat-chip-listbox aria-label="Side" [value]="side()" (change)="sideChanged($event)">
-        <mat-chip-option value="all">All</mat-chip-option>
-        <mat-chip-option value="sell">Selling</mat-chip-option>
-        <mat-chip-option value="buy">Buying</mat-chip-option>
+      <mat-chip-listbox [attr.aria-label]="t().common.side" [value]="side()" (change)="sideChanged($event)">
+        <mat-chip-option value="all">{{ t().marketplace.all }}</mat-chip-option>
+        <mat-chip-option value="sell">{{ t().market.selling }}</mat-chip-option>
+        <mat-chip-option value="buy">{{ t().market.buying }}</mat-chip-option>
       </mat-chip-listbox>
       <mat-chip role="button" tabindex="0" [highlighted]="country() !== null" (click)="pickCountry()" (keydown.enter)="pickCountry()">{{ countryLabel() }}</mat-chip>
-      <mat-chip role="button" tabindex="0" [highlighted]="currency() !== null" (click)="pickCurrency()" (keydown.enter)="pickCurrency()">{{ currency() ?? 'Currency' }}</mat-chip>
+      <mat-chip role="button" tabindex="0" [highlighted]="currency() !== null" (click)="pickCurrency()" (keydown.enter)="pickCurrency()">{{ currency() ?? t().common.currency }}</mat-chip>
       <mat-chip role="button" tabindex="0" [matMenuTriggerFor]="sortMenu">{{ sortLabel() }}<mat-icon matChipTrailingIcon>arrow_drop_down</mat-icon></mat-chip>
       <mat-menu #sortMenu="matMenu">
-        <button mat-menu-item type="button" (click)="setSort('newest')">Newest</button>
-        <button mat-menu-item type="button" (click)="setSort('priceLow')">Price low to high</button>
-        <button mat-menu-item type="button" (click)="setSort('priceHigh')">Price high to low</button>
+        <button mat-menu-item type="button" (click)="setSort('newest')">{{ t().marketplace.sorts.newest }}</button>
+        <button mat-menu-item type="button" (click)="setSort('priceLow')">{{ t().marketplace.sorts.priceLow }}</button>
+        <button mat-menu-item type="button" (click)="setSort('priceHigh')">{{ t().marketplace.sorts.priceHigh }}</button>
       </mat-menu>
-      <mat-chip role="button" tabindex="0" [highlighted]="rangeCount() > 0" (click)="openFilters()" (keydown.enter)="openFilters()">{{ rangeCount() > 0 ? 'Filters · ' + rangeCount() : 'Filters' }}</mat-chip>
+      <mat-chip role="button" tabindex="0" [highlighted]="rangeCount() > 0" (click)="openFilters()" (keydown.enter)="openFilters()">{{ rangeCount() > 0 ? t().marketplace.filtersCount(rangeCount()) : t().common.filters }}</mat-chip>
       <span class="spacer"></span>
-      <a mat-flat-button class="new" routerLink="/marketplace/new"><mat-icon>add</mat-icon> New listing</a>
+      <a mat-flat-button class="new" routerLink="/marketplace/new"><mat-icon>add</mat-icon> {{ t().common.newListing }}</a>
     </div>
 
     @if (showMine()) {
       <a class="row" routerLink="/marketplace/mine">
         <span class="disc"><mat-icon>storefront</mat-icon></span>
         <span class="texts">
-          <span class="title">Your listings</span>
+          <span class="title">{{ t().common.yourListings }}</span>
           <span class="line">{{ mineLine() }}</span>
         </span>
         <mat-icon class="chevron">chevron_right</mat-icon>
@@ -70,7 +69,7 @@ const SORT_WORDS: Record<SortKey, string> = { newest: 'Newest', priceLow: 'Price
       <p class="error">{{ text }}</p>
     }
     @if (loaded() && shown().length === 0 && !error()) {
-      <p class="muted">No listings match.</p>
+      <p class="muted">{{ t().marketplace.noMatch }}</p>
     }
     <div class="grid">
       @for (listing of shown(); track listing.listingId) {
@@ -78,7 +77,7 @@ const SORT_WORDS: Record<SortKey, string> = { newest: 'Newest', priceLow: 'Price
       }
     </div>
 
-    <a mat-fab class="fab" routerLink="/marketplace/new" aria-label="New listing"><mat-icon>add</mat-icon></a>
+    <a mat-fab class="fab" routerLink="/marketplace/new" [attr.aria-label]="t().common.newListing"><mat-icon>add</mat-icon></a>
   `,
   styles: `
     :host { display: block; padding-bottom: 80px; }
@@ -105,6 +104,8 @@ const SORT_WORDS: Record<SortKey, string> = { newest: 'Newest', priceLow: 'Price
 export class MarketplacePage {
   private readonly market = inject(MarketplaceService);
   private readonly sheet = inject(MatBottomSheet);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
   protected readonly side = signal<'all' | 'sell' | 'buy'>('all');
   protected readonly country = signal<string | null>(this.market.remembered().country);
@@ -119,9 +120,9 @@ export class MarketplacePage {
 
   protected readonly countryLabel = computed(() => {
     const code = this.country();
-    return code ? countryName(code) : 'Country';
+    return code ? countryName(code, this.lang.tag()) : this.t().common.country;
   });
-  protected readonly sortLabel = computed(() => SORT_WORDS[this.sort()]);
+  protected readonly sortLabel = computed(() => this.t().marketplace.sorts[this.sort()]);
   protected readonly rangeCount = computed(() => rangesSet(this.ranges()));
   /** The loaded listings within the two ranges; the price range applies only with a currency. */
   protected readonly shown = computed(() => {
@@ -130,7 +131,7 @@ export class MarketplacePage {
     return this.listings().filter((listing) => inRanges(listing, ranges, priceApplies));
   });
   protected readonly showMine = computed(() => (this.mineCount()?.total ?? 0) > 0 || this.market.waitingCount() > 0);
-  protected readonly mineLine = computed(() => `${this.mineCount()?.open ?? 0} open · ${this.market.waitingCount()} waiting`);
+  protected readonly mineLine = computed(() => this.t().marketplace.mineLine(this.mineCount()?.open ?? 0, this.market.waitingCount()));
 
   constructor() {
     void this.load();
@@ -164,7 +165,7 @@ export class MarketplacePage {
   }
 
   protected async pickCountry(): Promise<void> {
-    const choice = await this.pick('Country', countryOptions());
+    const choice = await this.pick(this.t().common.country, countryOptions(this.lang.tag()));
     if (choice === undefined) return;
     this.country.set(choice.code);
     this.market.remember({ country: choice.code });
@@ -172,7 +173,7 @@ export class MarketplacePage {
   }
 
   protected async pickCurrency(): Promise<void> {
-    const choice = await this.pick('Currency', currencyOptions());
+    const choice = await this.pick(this.t().common.currency, currencyOptions(this.lang.tag()));
     if (choice === undefined) return;
     this.currency.set(choice.code);
     this.market.remember({ currency: choice.code });

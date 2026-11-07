@@ -10,6 +10,7 @@ import { Router } from '@angular/router';
 import { CameraComponent, Photo } from '../components/camera.component';
 import { USERNAME_DEBOUNCE_MS } from '../constants';
 import { CryptoService } from '../services/crypto.service';
+import { LanguageService } from '../services/language.service';
 import { reasonOf } from '../services/log.service';
 import { MasterpodApiService } from '../services/masterpod-api.service';
 import { PasskeyService } from '../services/passkey.service';
@@ -27,53 +28,53 @@ import { SessionService } from '../services/session.service';
   imports: [FormsModule, MatStepperModule, MatFormFieldModule, MatInputModule, MatButtonModule, MatCardModule, MatProgressBarModule, CameraComponent],
   template: `
     <mat-card appearance="outlined">
-      <mat-card-header><mat-card-title>Create your anoPod</mat-card-title></mat-card-header>
+      <mat-card-header><mat-card-title>{{ t().create.title }}</mat-card-title></mat-card-header>
       <mat-card-content>
         <mat-stepper linear orientation="vertical" #stepper>
-          <mat-step [completed]="namesDone()" label="Your name">
-            <p>Step 1 of creating your anoPod is to become vouched. We do this to keep the anoSphere safe and secure.</p>
+          <mat-step [completed]="namesDone()" [label]="t().create.stepName">
+            <p>{{ t().create.intro }}</p>
             <div class="fields">
               <mat-form-field appearance="outline">
-                <mat-label>First name</mat-label>
+                <mat-label>{{ t().create.firstName }}</mat-label>
                 <input matInput [ngModel]="firstName()" (ngModelChange)="firstName.set($event)" autocomplete="given-name" />
               </mat-form-field>
               <mat-form-field appearance="outline">
-                <mat-label>Last name</mat-label>
+                <mat-label>{{ t().create.lastName }}</mat-label>
                 <input matInput [ngModel]="lastName()" (ngModelChange)="lastName.set($event)" autocomplete="family-name" />
               </mat-form-field>
             </div>
-            <button mat-flat-button type="button" matStepperNext [disabled]="!namesDone()">Next</button>
+            <button mat-flat-button type="button" matStepperNext [disabled]="!namesDone()">{{ t().common.next }}</button>
           </mat-step>
 
-          <mat-step [completed]="usernameAvailable()" label="Username">
+          <mat-step [completed]="usernameAvailable()" [label]="t().create.stepUsername">
             <mat-form-field appearance="outline">
-              <mat-label>Username</mat-label>
-              <input matInput [ngModel]="username()" (ngModelChange)="username.set($event)" autocomplete="username" placeholder="a-z, 0-9 and _" />
+              <mat-label>{{ t().common.username }}</mat-label>
+              <input matInput [ngModel]="username()" (ngModelChange)="username.set($event)" autocomplete="username" [placeholder]="t().create.usernamePlaceholder" />
               <mat-hint>{{ usernameHint() }}</mat-hint>
             </mat-form-field>
             <div>
-              <button mat-button type="button" matStepperPrevious>Back</button>
-              <button mat-flat-button type="button" matStepperNext [disabled]="!usernameAvailable()">Next</button>
+              <button mat-button type="button" matStepperPrevious>{{ t().common.back }}</button>
+              <button mat-flat-button type="button" matStepperNext [disabled]="!usernameAvailable()">{{ t().common.next }}</button>
             </div>
           </mat-step>
 
-          <mat-step [completed]="selfie() !== null" label="Selfie">
-            <p>A selfie goes on your public profile, so seeds and friends can recognise you.</p>
+          <mat-step [completed]="selfie() !== null" [label]="t().common.selfieStep">
+            <p>{{ t().create.selfieHint }}</p>
             @if (stepper.selectedIndex === 2) {
               <app-camera quality="normal" (photo)="selfie.set($event)" (cleared)="selfie.set(null)" />
             }
             <div>
-              <button mat-button type="button" matStepperPrevious>Back</button>
-              <button mat-flat-button type="button" matStepperNext [disabled]="selfie() === null">Next</button>
+              <button mat-button type="button" matStepperPrevious>{{ t().common.back }}</button>
+              <button mat-flat-button type="button" matStepperNext [disabled]="selfie() === null">{{ t().common.next }}</button>
             </div>
           </mat-step>
 
-          <mat-step label="Create">
+          <mat-step [label]="t().common.create">
             @if (created()) {
-              <p>Your anoPod is created, now get vouched.</p>
-              <button mat-flat-button type="button" (click)="continue()">Continue</button>
+              <p>{{ t().create.created }}</p>
+              <button mat-flat-button type="button" (click)="continue()">{{ t().common.continue }}</button>
             } @else {
-              <p>Your passkey is created now, with your device's screen lock or biometrics. Nothing secret leaves this tab.</p>
+              <p>{{ t().create.passkeyHint }}</p>
               @if (busy()) {
                 <mat-progress-bar mode="indeterminate"></mat-progress-bar>
               }
@@ -81,8 +82,8 @@ import { SessionService } from '../services/session.service';
                 <p class="error">{{ text }}</p>
               }
               <div>
-                <button mat-button type="button" matStepperPrevious [disabled]="busy()">Back</button>
-                <button mat-flat-button type="button" (click)="create()" [disabled]="busy()">Create anoPod</button>
+                <button mat-button type="button" matStepperPrevious [disabled]="busy()">{{ t().common.back }}</button>
+                <button mat-flat-button type="button" (click)="create()" [disabled]="busy()">{{ t().create.createButton }}</button>
               </div>
             }
           </mat-step>
@@ -103,11 +104,13 @@ export class CreatePage {
   private readonly passkey = inject(PasskeyService);
   private readonly session = inject(SessionService);
   private readonly router = inject(Router);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
   protected readonly firstName = signal('');
   protected readonly lastName = signal('');
   protected readonly username = signal('');
-  protected readonly usernameHint = signal('3 to 32 characters');
+  protected readonly usernameHint = signal(this.t().create.usernameRule);
   protected readonly usernameAvailable = signal(false);
   protected readonly selfie = signal<Photo | null>(null);
   protected readonly busy = signal(false);
@@ -127,10 +130,10 @@ export class CreatePage {
         this.usernameAvailable.set(false);
         if (timer) clearTimeout(timer);
         if (typed === '') {
-          this.usernameHint.set('3 to 32 characters');
+          this.usernameHint.set(this.t().create.usernameRule);
           return;
         }
-        this.usernameHint.set('checking…');
+        this.usernameHint.set(this.t().common.checking);
         timer = setTimeout(() => void this.checkUsername(typed), USERNAME_DEBOUNCE_MS);
       });
     });
@@ -147,7 +150,7 @@ export class CreatePage {
       return;
     }
     this.usernameAvailable.set(res.body.available);
-    this.usernameHint.set(res.body.available ? `${res.body.username} is available` : `${res.body.username} is taken`);
+    this.usernameHint.set(res.body.available ? this.t().create.usernameAvailable(res.body.username) : this.t().create.usernameTaken(res.body.username));
   }
 
   /** Challenge, passkey with PRF, fresh session keys, the signed payload, then the id. */

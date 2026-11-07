@@ -1,4 +1,4 @@
-import { DatePipe, NgTemplateOutlet } from '@angular/common';
+import { NgTemplateOutlet } from '@angular/common';
 import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -11,6 +11,7 @@ import { AvatarComponent } from '../components/avatar.component';
 import { ListingPeopleComponent } from '../components/listing-people.component';
 import { countryName } from '../countries';
 import { formatPrice, totalOf } from '../prices';
+import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
 import { MarketplaceService } from '../services/marketplace.service';
 import { ListingItem } from '../services/masterpod-api.service';
@@ -30,20 +31,20 @@ import { SessionService } from '../services/session.service';
  */
 @Component({
   selector: 'app-listing-page',
-  imports: [DatePipe, NgTemplateOutlet, FormsModule, RouterLink, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, AvatarComponent, ListingPeopleComponent],
+  imports: [NgTemplateOutlet, FormsModule, RouterLink, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, AvatarComponent, ListingPeopleComponent],
   template: `
     <header class="head">
-      <a mat-icon-button routerLink="/marketplace" aria-label="Back to the marketplace"><mat-icon>arrow_back</mat-icon></a>
-      <h2>Listing</h2>
+      <a mat-icon-button routerLink="/marketplace" [attr.aria-label]="t().common.backToMarketplace"><mat-icon>arrow_back</mat-icon></a>
+      <h2>{{ t().listing.title }}</h2>
     </header>
     @if (listing(); as listing) {
       @if (listing.status === 'closed') {
-        <p class="banner">Closed</p>
+        <p class="banner">{{ t().common.closed }}</p>
       }
       <p class="price">{{ priceLine() }}</p>
-      <p class="line">{{ market.sideWords(listing) }} {{ anos() }} anos</p>
-      <p class="line">Total {{ total() }}</p>
-      <p class="muted">{{ country() }} · posted {{ listing.createdAt | date: 'medium' }}</p>
+      <p class="line">{{ t().listing.sideAnos(market.sideWords(listing), anos()) }}</p>
+      <p class="line">{{ t().common.total(total()) }}</p>
+      <p class="muted">{{ t().listing.posted(country(), lang.dateTime(listing.createdAt)) }}</p>
       <div class="owner">
         <app-avatar [anopodId]="listing.owner.anopodId" [username]="listing.owner.username" [size]="56" />
         <span class="texts">
@@ -53,55 +54,55 @@ import { SessionService } from '../services/session.service';
       </div>
 
       @if (mine()) {
-        <h3>People</h3>
+        <h3>{{ t().listing.people }}</h3>
         <app-listing-people [listing]="listing" (changed)="reload()" />
         @if (listing.status === 'open') {
           @if (confirmClose()) {
-            <p>Close this listing? People can no longer connect; your chats stay.</p>
+            <p>{{ t().common.askClose }}</p>
             <div class="buttons">
-              <button mat-flat-button type="button" (click)="close()" [disabled]="busy()">Yes</button>
-              <button mat-button type="button" (click)="confirmClose.set(false)" [disabled]="busy()">Back</button>
+              <button mat-flat-button type="button" (click)="close()" [disabled]="busy()">{{ t().common.yes }}</button>
+              <button mat-button type="button" (click)="confirmClose.set(false)" [disabled]="busy()">{{ t().common.back }}</button>
             </div>
           } @else {
-            <button mat-stroked-button type="button" class="big" (click)="confirmClose.set(true)" [disabled]="busy()">Close listing</button>
+            <button mat-stroked-button type="button" class="big" (click)="confirmClose.set(true)" [disabled]="busy()">{{ t().listing.closeListing }}</button>
           }
         }
       } @else {
         @if (!session.hasChatKeys()) {
-          <p class="error">No chat keys in this tab: unlock again.</p>
+          <p class="error">{{ t().common.noChatKeysUnlock }}</p>
         }
         @switch (state()) {
           @case ('open') {
             @if (myRoom(); as room) {
-              <a mat-flat-button class="big" [routerLink]="['/chat', room.chatRoomId]">Open chat</a>
+              <a mat-flat-button class="big" [routerLink]="['/chat', room.chatRoomId]">{{ t().common.openChat }}</a>
             }
           }
           @case ('waiting') {
             @if (listing.status === 'closed') {
-              <p class="muted">This listing is closed.</p>
+              <p class="muted">{{ t().listing.closed }}</p>
             } @else {
-              <button mat-flat-button class="big" type="button" disabled>Waiting for {{ listing.owner.username }} to accept</button>
+              <button mat-flat-button class="big" type="button" disabled>{{ t().listing.waitingFor(listing.owner.username) }}</button>
             }
           }
           @case ('declined') {
             @if (listing.status === 'closed') {
-              <p class="muted">This listing is closed.</p>
+              <p class="muted">{{ t().listing.closed }}</p>
             } @else {
-              <p class="muted">{{ listing.owner.username }} did not accept.</p>
+              <p class="muted">{{ t().listing.didNotAccept(listing.owner.username) }}</p>
               @if (composing()) {
                 <ng-container *ngTemplateOutlet="box" />
               } @else {
-                <button mat-flat-button class="big" type="button" (click)="openBox()" [disabled]="busy() || !session.hasChatKeys()">Connect again</button>
+                <button mat-flat-button class="big" type="button" (click)="openBox()" [disabled]="busy() || !session.hasChatKeys()">{{ t().listing.connectAgain }}</button>
               }
             }
           }
           @default {
             @if (listing.status === 'closed') {
-              <p class="muted">This listing is closed.</p>
+              <p class="muted">{{ t().listing.closed }}</p>
             } @else if (composing()) {
               <ng-container *ngTemplateOutlet="box" />
             } @else {
-              <button mat-flat-button class="big" type="button" (click)="openBox()" [disabled]="busy() || !session.hasChatKeys()">Connect</button>
+              <button mat-flat-button class="big" type="button" (click)="openBox()" [disabled]="busy() || !session.hasChatKeys()">{{ t().listing.connect }}</button>
             }
           }
         }
@@ -112,21 +113,21 @@ import { SessionService } from '../services/session.service';
 
       <ng-template #box>
         <mat-form-field appearance="outline" class="wide" subscriptSizing="dynamic">
-          <mat-label>Your first message</mat-label>
+          <mat-label>{{ t().listing.firstMessage }}</mat-label>
           <textarea matInput rows="3" [ngModel]="text()" (ngModelChange)="text.set($event)"></textarea>
         </mat-form-field>
         <div class="buttons">
-          <button mat-flat-button type="button" (click)="send()" [disabled]="busy() || !text().trim()">Send</button>
-          <button mat-button type="button" (click)="composing.set(false)" [disabled]="busy()">Cancel</button>
+          <button mat-flat-button type="button" (click)="send()" [disabled]="busy() || !text().trim()">{{ t().common.send }}</button>
+          <button mat-button type="button" (click)="composing.set(false)" [disabled]="busy()">{{ t().common.cancel }}</button>
         </div>
       </ng-template>
     } @else if (notFound()) {
-      <p class="muted">This listing does not exist.</p>
+      <p class="muted">{{ t().listing.notFound }}</p>
     } @else {
       @if (error(); as text) {
         <p class="error">{{ text }}</p>
       } @else {
-        <p class="muted">Loading</p>
+        <p class="muted">{{ t().common.loading }}</p>
       }
     }
   `,
@@ -153,6 +154,8 @@ export class ListingPage {
 
   protected readonly session = inject(SessionService);
   protected readonly market = inject(MarketplaceService);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
   protected readonly listing = signal<ListingItem | null>(null);
   protected readonly notFound = signal(false);
@@ -173,7 +176,7 @@ export class ListingPage {
   });
   protected readonly priceLine = computed(() => {
     const listing = this.listing();
-    return listing ? `${formatPrice(listing.price, listing.currency)} per anos` : '';
+    return listing ? this.t().common.perAnos(formatPrice(listing.price, listing.currency)) : '';
   });
   protected readonly anos = computed(() => {
     const listing = this.listing();
@@ -185,7 +188,7 @@ export class ListingPage {
   });
   protected readonly country = computed(() => {
     const listing = this.listing();
-    return listing ? countryName(listing.country) : '';
+    return listing ? countryName(listing.country, this.lang.tag()) : '';
   });
 
   constructor() {
@@ -221,7 +224,7 @@ export class ListingPage {
   protected send(): Promise<void> {
     return this.run(async () => {
       const listing = this.listing();
-      if (!listing) throw new Error('The listing is not loaded');
+      if (!listing) throw new Error(this.t().listing.notLoaded);
       const room = this.myRoom();
       const res = room ? await this.market.connectAgain(room, this.text().trim()) : await this.market.connect(listing, this.text().trim());
       if (res.ok) this.composing.set(false);
@@ -233,7 +236,7 @@ export class ListingPage {
   protected close(): Promise<void> {
     return this.run(async () => {
       const listing = this.listing();
-      if (!listing) throw new Error('The listing is not loaded');
+      if (!listing) throw new Error(this.t().listing.notLoaded);
       const res = await this.market.close(listing.listingId);
       this.confirmClose.set(false);
       await this.reload();

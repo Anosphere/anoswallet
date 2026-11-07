@@ -1,6 +1,7 @@
 import { Component, DestroyRef, inject, input, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { LanguageService } from '../services/language.service';
 
 /**
  * The copy button (wallet spec 8.5): an icon button that copies `text` to
@@ -13,7 +14,7 @@ import { MatIconModule } from '@angular/material/icon';
   selector: 'app-copy-button',
   imports: [MatButtonModule, MatIconModule],
   template: `
-    <button mat-icon-button type="button" (click)="copy()" [attr.aria-label]="label()"><mat-icon>content_copy</mat-icon></button>
+    <button mat-icon-button type="button" (click)="copy()" [attr.aria-label]="label() ?? t().common.copy"><mat-icon>content_copy</mat-icon></button>
     @if (word(); as word) { <span class="word">{{ word }}</span> }
   `,
   styles: `
@@ -24,9 +25,11 @@ import { MatIconModule } from '@angular/material/icon';
 export class CopyButtonComponent {
   /** What a tap copies. */
   readonly text = input.required<string>();
-  /** The button's label for screen readers. */
-  readonly label = input('Copy');
+  /** The button's label for screen readers; the dictionary's Copy when the caller gives none. */
+  readonly label = input<string | null>(null);
 
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
   protected readonly word = signal<string | null>(null);
   private timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -37,11 +40,11 @@ export class CopyButtonComponent {
   }
 
   protected async copy(): Promise<void> {
-    let word = 'copied';
+    let word = this.t().copy.copied;
     try {
       await navigator.clipboard.writeText(this.text());
     } catch {
-      word = 'could not copy';
+      word = this.t().copy.couldNotCopy;
     }
     this.word.set(word);
     if (this.timer) clearTimeout(this.timer);

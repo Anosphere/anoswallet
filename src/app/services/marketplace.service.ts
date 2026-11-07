@@ -1,6 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { ChatService } from './chat.service';
 import { CryptoService } from './crypto.service';
+import { LanguageService } from './language.service';
 import { ApiResponse } from './log.service';
 import { InviteItem, ListingFilters, ListingItem, MasterpodApiService, RoomItem } from './masterpod-api.service';
 import { SessionService } from './session.service';
@@ -60,6 +61,7 @@ export class MarketplaceService {
   private readonly api = inject(MasterpodApiService);
   private readonly chat = inject(ChatService);
   private readonly crypto = inject(CryptoService);
+  private readonly lang = inject(LanguageService);
 
   /** The invites to this pod that carry a listing: people waiting on this pod's listings, for the Your listings row. */
   readonly waitingCount = computed(() => (this.session.chatRooms()?.invites ?? []).filter((i) => i.listingId !== null).length);
@@ -95,9 +97,10 @@ export class MarketplaceService {
 
   // --- words and roles ----------------------------------------------------------
 
-  /** "Selling" or "Buying", from the owner's side. */
+  /** "Selling" or "Buying", from the owner's side, in the app's language. */
   sideWords(listing: { side: 'buy' | 'sell' }): string {
-    return listing.side === 'sell' ? 'Selling' : 'Buying';
+    const market = this.lang.words().market;
+    return listing.side === 'sell' ? market.selling : market.buying;
   }
 
   /** This pod's side in a chat about the listing: the owner of a sell listing and the other person of a buy listing are the seller. */
@@ -106,9 +109,10 @@ export class MarketplaceService {
     return (listing.side === 'sell') === owner ? 'seller' : 'buyer';
   }
 
-  /** The ready-made first message of Connect (decision 3 of the plan). */
+  /** The ready-made first message of Connect (decision 3 of the plan), in the sender's language (wallet spec 8.8). */
   firstWords(listing: { side: 'buy' | 'sell' }): string {
-    return listing.side === 'sell' ? 'Hi, is this still available?' : 'Hi, I can sell you anos. Are you still buying?';
+    const market = this.lang.words().market;
+    return listing.side === 'sell' ? market.firstSell : market.firstBuy;
   }
 
   // --- the rooms and invites about a listing, live from session.chatRooms ------
@@ -151,11 +155,11 @@ export class MarketplaceService {
    */
   async connect(listing: ListingItem, text: string): Promise<ApiResponse<unknown>> {
     const chat = this.session.getChatKeys();
-    if (!chat) throw new Error('No chat keys in this tab');
+    if (!chat) throw new Error(this.lang.words().common.noChatKeys);
     const owner = listing.owner.anopodId;
     const keys = await this.api.getChatPublicKeys([owner]);
     const theirs = keys.ok ? keys.body.keys.find((k) => k.anopodId === owner) : undefined;
-    if (!theirs) throw new Error('That anoPod has no chat keys (setup not complete)');
+    if (!theirs) throw new Error(this.lang.words().common.podHasNoChatKeys);
     const roomKey = this.crypto.newRoomKey();
     const ownKey = await this.crypto.wrapRoomKey(roomKey, this.crypto.toHex(chat.p256Public), this.crypto.toHex(chat.kemPublic));
     const created = await this.api.createChatRoom('private', undefined, this.crypto.toHex(ownKey), listing.listingId);
@@ -176,12 +180,12 @@ export class MarketplaceService {
   /** For a declined room: the owner invited again with the room's key wrapped to theirs, and the message into the same room. */
   async connectAgain(room: RoomItem, text: string): Promise<ApiResponse<unknown>> {
     const owner = room.listing?.owner.anopodId;
-    if (!owner) throw new Error('This chat is not about a listing');
+    if (!owner) throw new Error(this.lang.words().common.notAboutListing);
     const theirKey = await this.chat.wrapFor(room.chatRoomId, owner);
     const invited = await this.api.inviteToChatRoom(room.chatRoomId, owner, theirKey);
     if (!invited.ok) return invited;
     const roomKey = await this.chat.roomKeyOf(room);
-    if (!roomKey) throw new Error('No room key for this room in this tab');
+    if (!roomKey) throw new Error(this.lang.words().common.noRoomKeyInTab);
     const sent = await this.api.sendMessage(room.chatRoomId, await this.crypto.encryptText(roomKey, text));
     await this.chat.refreshRooms();
     return sent;

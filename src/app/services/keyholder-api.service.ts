@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { Envelope } from './crypto.service';
+import { LanguageService } from './language.service';
 import { ApiResponse, LogService } from './log.service';
 import { KeyholderPublicKey, SessionService } from './session.service';
 
@@ -48,6 +49,7 @@ export interface BucketKeyAnswer {
 @Injectable({ providedIn: 'root' })
 export class KeyholderApiService {
   private readonly log = inject(LogService);
+  private readonly lang = inject(LanguageService);
   private readonly session = inject(SessionService);
 
   /** POST /get-keyholder-public-key (level none) on keyholder n. */
@@ -59,7 +61,7 @@ export class KeyholderApiService {
   receiveShare(n: number, body: ReceiveShareBody): Promise<ApiResponse<ReceiveShareAnswer>> {
     const envelope = this.session.sign('/receive-share', body);
     if (!envelope) {
-      return Promise.resolve({ ok: false, status: 0, body: { error: 'no session: unlock first' } as unknown as ReceiveShareAnswer });
+      return Promise.resolve({ ok: false, status: 0, body: { error: this.lang.words().api.noSession } as unknown as ReceiveShareAnswer });
     }
     return this.log.post(`/api/keyholder/${n}/receive-share`, envelope);
   }

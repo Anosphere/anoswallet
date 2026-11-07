@@ -4,6 +4,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { Router, RouterLink } from '@angular/router';
 import { CryptoService } from '../services/crypto.service';
+import { LanguageService } from '../services/language.service';
 import { ApiError, reasonOf } from '../services/log.service';
 import { MasterpodApiService } from '../services/masterpod-api.service';
 import { PasskeyService } from '../services/passkey.service';
@@ -24,36 +25,32 @@ import { CaseStatus, RecoveryService } from '../services/recovery.service';
   template: `
     <div class="cards">
       <mat-card appearance="outlined" class="card">
-        <mat-card-header><mat-card-title>I'm locked out</mat-card-title></mat-card-header>
+        <mat-card-header><mat-card-title>{{ t().common.lockedOut }}</mat-card-title></mat-card-header>
         <mat-card-content>
-          <p>
-            If you lost the device with your passkey, we can get you back in. You'll need your birth record, your username and an
-            email where a moderator can reach you. A moderator will meet you on a video call and check your security buckets before
-            anything is released.
-          </p>
+          <p>{{ t().recover.lockedOutText }}</p>
         </mat-card-content>
         <mat-card-actions class="actions">
-          <a mat-flat-button routerLink="/recover/open" [class.disabled]="busy()">Start</a>
+          <a mat-flat-button routerLink="/recover/open" [class.disabled]="busy()">{{ t().common.start }}</a>
         </mat-card-actions>
       </mat-card>
 
       <mat-card appearance="outlined" class="card">
-        <mat-card-header><mat-card-title>Continue a recovery</mat-card-title></mat-card-header>
+        <mat-card-header><mat-card-title>{{ t().recover.continueTitle }}</mat-card-title></mat-card-header>
         <mat-card-content>
-          <p>Already opened a case on this device? Unlock it with the passkey you made then.</p>
+          <p>{{ t().recover.continueText }}</p>
           @if (busy()) {
             <mat-progress-bar mode="indeterminate"></mat-progress-bar>
-            <p>Unlocking your case…</p>
+            <p>{{ t().recover.unlocking }}</p>
           } @else if (error(); as text) {
             <p class="error">{{ text }}</p>
           }
         </mat-card-content>
         <mat-card-actions class="actions">
-          <button mat-flat-button type="button" (click)="continue()" [disabled]="busy()">Continue</button>
+          <button mat-flat-button type="button" (click)="continue()" [disabled]="busy()">{{ t().common.continue }}</button>
         </mat-card-actions>
       </mat-card>
     </div>
-    <div class="back"><a mat-button routerLink="/">Back</a></div>
+    <div class="back"><a mat-button routerLink="/">{{ t().common.back }}</a></div>
   `,
   styles: `
     .cards { display: flex; flex-wrap: wrap; gap: 16px; max-width: 1000px; margin: 24px auto 0; }
@@ -69,6 +66,8 @@ export class RecoverPage {
   private readonly passkey = inject(PasskeyService);
   private readonly recovery = inject(RecoveryService);
   private readonly router = inject(Router);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
@@ -92,7 +91,7 @@ export class RecoverPage {
       if (!res.ok) {
         const reason = (res.body as unknown as Partial<ApiError>)?.error;
         if (res.status === 401 && reason === 'unknown passkey') {
-          throw new Error("This passkey belongs to no recovery case. If it is your anoPod's own passkey you are not locked out: unlock from the start page.");
+          throw new Error(this.t().recover.noCase);
         }
         throw new Error(`/unlock-recovery-pod: ${reasonOf(res)}`);
       }

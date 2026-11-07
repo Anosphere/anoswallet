@@ -465,6 +465,9 @@ walkthrough's "Go to wallet") still end at Wallet, the next thing to do
 
 The user may navigate anywhere the navigation shows at any time.
 
+The toolbar's words and the navigation's labels come from the
+dictionary and follow the language (8.8; 2026-11-06, section 11).
+
 ### 8.2 The screens
 
 Landing. Above the card, in every edition, the test-site notice: a wide
@@ -472,12 +475,13 @@ red-tinted box (the theme's error-container colours) with a warning
 icon, "This is just a test site." in large bold letters, then "There are
 no real Anos here, do not pay money to anyone in order to buy Anos. This
 is for testing purposes only.", then the same in Thai. Then the card.
-Unlock: /challenge (unlock), the passkey assertion with the PRF salt,
-/unlock; opens blob1, chatPrivateKeyBlob and identityBlob; then
-/check-anopod-status and the next-step rule. The platform's passkey
-picker is what says whether a passkey exists; with none, the
-authenticator's own message shows and the page suggests Create. Create
-goes to /create, Recover to /recover.
+The headline follows the language; under the card, while the app is in
+Thai, the button "Switch to English" (8.8). Unlock: /challenge (unlock),
+the passkey assertion with the PRF salt, /unlock; opens blob1,
+chatPrivateKeyBlob and identityBlob; then /check-anopod-status and the
+next-step rule. The platform's passkey picker is what says whether a
+passkey exists; with none, the authenticator's own message shows and
+the page suggests Create. Create goes to /create, Recover to /recover.
 
 Create, a linear Material stepper
 1. "Step 1 of creating your anoPod is to become vouched. We do this to
@@ -1126,6 +1130,10 @@ excepted, with the keyholder and anos calls included.
 
     config.service          GET /api/config once; the counts, the threshold, the edition, rpId and the three lock
                             numbers (2026-11-06)
+    language.service        the language on screen (Thai when the browser's first language is Thai, else
+                            English; English for the tab after Switch to English), words, tag, dateTime and
+                            time; sets the page's lang, the date adapter's locale and Material's Optional
+                            (2026-11-06)
     session.service         signals: anopodId, username, firstName, lastName, the session keys, the PRF output
                             while needed, the encryption key, the chat keys, the PLID and lookup id, the status
                             from /check-anopod-status, the keyholder receiving keys, the wallet public keys, the
@@ -1252,6 +1260,87 @@ src/app/components/:
   Escrow trade started) encrypted with the room key, and the thread's poll
   shows them. It exports `FoundAccountId`.
 
+### 8.8 The languages
+
+The app speaks two languages, English and Thai (2026-11-06, section 11;
+the plan is forclaude/wallet-languages-plan-1.md). English is the
+default: the language is Thai when the browser's first preferred
+language (the first entry of navigator.languages, else
+navigator.language) begins with "th", else English; nothing is stored.
+One button, "Switch to English", always in those English words, under
+the landing card while the app is in Thai: after it the app is English
+for as long as the tab lives, like the unlock itself, and a new tab
+follows the browser again. There is no button to Thai and no language
+toggle anywhere else.
+
+The words live in a dictionary, src/app/i18n/en.ts and th.ts, no
+package: one section per page or component, `common` for the sentences
+several pages share, `dates` for the day words, `material` for
+Material's visible word "Optional". `Words` is the English object's
+shape and th.ts must match it, so a sentence missing in Thai fails the
+build. A sentence with a number, a name, an amount, a date or an id in
+it is a function, so each language keeps its own grammar (English its
+plurals, Thai none). language.service (8.3) holds the language in a
+signal; a page reads `t = this.lang.words` and writes `t().page.key`,
+a sentence with a variable as `t().page.sentence(n)`. The page's `lang`
+attribute follows the language, so Chrome sees a Thai page as Thai and
+does not offer to translate it; nothing is blocked and nothing is
+marked untranslatable. Dates and times go through the service's
+dateTime ("Nov 6, 2026, 3:50:12 PM"; "6 พ.ย. 2026 15:50:12") and time
+("3:50:12 PM"; "15:50:12"), or pass its tag to the browser's own
+formatting: en-US, and th-TH-u-ca-gregory for Thai, so a Thai date
+reads with Thai month names and the Western year, never the Buddhist
+one; "Today" and "Yesterday" come from the dictionary; the date
+pickers' calendar and Material's "Optional" follow the language.
+
+The English on screen does not change: every English sentence moves
+into en.ts letter for letter, and this spec's descriptions quote it.
+In both languages these stay as they are: the messages of the servers
+(the validators, the doormen, the masterpod), shown inside the Thai
+page as they come, and the wallet's pattern checks on them; every wire
+word, id, code, path, field name and key ("Send guardedAnosTransfer",
+"Fund proposal transactionId"); the product names, in Latin letters
+(anoPod, anos, anoSphere, masterpod, seed, super seed, PRF); the
+browser tab's titles; Material's screen-reader labels ("Open calendar"
+and the like); the developer-worded errors of crypto.service.ts; the
+test-site notice's two paragraphs, English and Thai, whatever the
+language on screen (only its headline follows it). Every edition
+speaks both languages, the staff pages of the moderator and attestor
+editions too. The Thai was written by the build chat from the plan's
+style and glossary, for Thai readers to correct; a correction is an
+edit of th.ts.
+
+The pages done so far, a list the later steps extend:
+
+- step 1 (2026-11-06): the shell (the toolbar), the navigation (the
+  labels of the side panel and the Home tiles), the landing page.
+- step 2 (2026-11-06): the create stepper, the vouching page, the
+  identity page and its form, the setup page, the seed page, the
+  notifications, the log; the camera and the copy button; the services'
+  own sentences (the passkey ceremonies, the deposits, the signing
+  server, the no-session answer of the two API services, the log's
+  network error); the country names, in the identity form and the
+  marketplace.
+- step 3 (2026-11-06): Home, the Wallet page, the Account page and the
+  recovery walkthrough, the balance card, the balances service and the
+  account names.
+- step 4 (2026-11-06): the account page, the transaction history, the
+  escrow trade and the assisted transfer, with the stage words, the
+  history words, the minutes in words and the chat's day and time words.
+- step 5 (2026-11-06): the chat: the list of chats, the new chat, the
+  requests and the conversation, with the room titles and the listing
+  words of the chat service.
+- step 6 (2026-11-06): the marketplace: Browse, the listing, the new
+  listing and Your listings, with the five components (the card, the
+  people, the pinned card, the filters and the picker sheets), the
+  marketplace service's words and the currency names.
+- step 7 (2026-11-06): the recovery flow (the Recover page, the
+  locked-out stepper, My recovery) and the cases (the list, My case),
+  with the case statuses.
+- step 8 (2026-11-06): the moderation page and its case page, the
+  attesting page and its trade and dispute case pages, with the
+  attesting service's words. Every page of every edition is done.
+
 ## 9. Configuration, and running it on this machine
 
 What runs, who starts it
@@ -1305,8 +1394,16 @@ network/testnet.env numbers (2026-11-06, section 11).
   changed together.
 - Any check by a validator that walletKey in a creation is the signing
   server's key: the binding check with the masterpod is the check.
-- Several passkeys, push delivery, languages other than English, a custom
-  theme, rate limits.
+- From the languages plan (forclaude/wallet-languages-plan-1.md,
+  2026-11-06): languages other than English and Thai (one more
+  dictionary file each); remembering the language on the device; a
+  button to switch to Thai; translating the servers' reasons (needs
+  error codes on the validator, the doorman and the masterpod); the
+  browser tab's titles; Material's screen-reader labels; the
+  developer-worded errors of crypto.service.ts; the Buddhist year; a
+  Thai web font; blocking Google Translate or marking pieces
+  untranslatable; right-to-left languages.
+- Several passkeys, push delivery, a custom theme, rate limits.
 
 ## 11. Build notes
 
@@ -2327,6 +2424,626 @@ guarded transfer on the testnet was dated 2 minutes ahead where 10 to
   this note.
 - `npx ng build` clean (1.67 MB initial). Not run against a proxy or a
   validator here; the user tests on the testnet.
+
+### The languages, step 1 (2026-11-06)
+
+Step 1 of forclaude/wallet-languages-plan-1.md: the dictionary, the
+language service, the shell, the navigation and the landing page. Why:
+the app was English only, about 1,300 pieces of English across 34
+pages, and the first people to use it are Thai. Their only help was
+Chrome's page translation, which rewrites every piece of text behind
+Angular's back, so a changed amount or status can show stale or mixed
+words; a wallet cannot rely on it. From this step the app speaks both
+languages, Thai when the browser's first language is Thai, and each
+later step turns its pages Thai.
+
+- `src/app/i18n/en.ts`: the English words, the sections `shell`, `nav`,
+  `landing`, `material` and `dates` and an empty `common`, every
+  sentence moved letter for letter; `Words`, the object's shape.
+  `src/app/i18n/th.ts`: the Thai, the same shape, typed `Words`, so a
+  sentence missing in Thai fails the build; written from the plan's
+  style and glossary (its 1.6) for the Thai readers to correct.
+- `services/language.service.ts`: `LanguageService`, root-provided:
+  `language`, a signal, Thai when the browser's first preferred
+  language begins with "th", else English; `words`, the dictionary of
+  that language; `tag`, en-US or th-TH-u-ca-gregory; `useEnglish()`;
+  `dateTime` and `time`, what `date: 'medium'` and `date:
+  'mediumTime'` gave. An effect sets the page's `lang` attribute, the
+  date adapter's locale (the native adapter app.config.ts provides)
+  and MatStepperIntl's `optionalLabel`, and fires its `changes`: once
+  at start and again after Switch to English.
+- `app.ts`: `lang` and `t` after `config`, so the service is created
+  with the shell. `app.html`: the menu button's aria label, the two
+  brand lines and Lock from `t().shell`.
+- `services/navigation.service.ts`: the fourteen labels from
+  `t().nav`, read inside `items`, so the side panel and the Home tiles
+  follow the language.
+- `pages/landing.page.ts`: the notice's headline and the card's words
+  from `t().landing`; the English paragraph of the notice carries
+  `lang="en"`, the Thai one stays as it was; under the card, in Thai
+  only, the button "Switch to English" (a literal, English in every
+  language), which calls `useEnglish()`.
+- `index.html` is not changed: its `lang="en"` is the start value the
+  service overwrites.
+- Tables typed `Record<string, string>` added to the dictionaries (the
+  type cannot check their keys in Thai): none in this step.
+- Readings where the plan left a detail open: the landing page's
+  `lang` and `t` sit after its five private injections, protected,
+  since the template reads them; the README's `language.service.ts`
+  line wraps onto a second line, as the block's other long lines do;
+  the 8.2 Landing paragraph was re-wrapped from the new sentence on.
+  No sentence of this step read odd.
+- Spec: 8.1 (the dictionary paragraph), 8.2 Landing (the headline and
+  the button), 8.3 (language.service), 8.8 (new), 10, this note;
+  README (the layout block, the languages paragraph).
+- `npx ng build` clean (1.67 MB initial). Not run in a browser here;
+  the user tests with `ng serve`: a browser whose first language is
+  Thai shows the Thai shell, navigation and landing page and the
+  button, any other shows English.
+
+### The languages, step 2 (2026-11-06)
+
+Step 2 of forclaude/wallet-languages-plan-1.md: the sign-up and setup
+pages, the notifications and the log, with the camera, the copy button
+and the services' own sentences. Why: after step 1 a Thai reader saw a
+Thai toolbar and landing page and English pages; these are the pages of
+the first visit, from Create to Setup.
+
+- `i18n/en.ts` and `th.ts`: the sections `create`, `vouching`,
+  `identity`, `identityForm`, `setup`, `seed`, `notifications`, `log`,
+  `camera`, `copy`, `passkey`, `shares`, `signing` and `api`, and the
+  first `common` entries: Next, Back, Continue, Retry, Refresh, Search,
+  Approve, Decline, Start, Clear, Copy, Username, the `selfie` alt and
+  "None yet.", each a sentence two or more pages show. The sentences with
+  a number or a name are functions (`vouchedBy`, `notYet`, `notSeed`,
+  `usernameAvailable`, `usernameTaken`, `markRead`, `asked`,
+  `retryFresh`, `couldNotOpen`, `refused`, `keyNotFetched`,
+  `publicKeys`, `sign`).
+- `create.page.ts`: the four step labels as `[label]`; the username
+  hints from the dictionary, the rule as the signal's first value; the
+  placeholder as a binding. `vouching.page.ts`: the plural sentence and
+  the two with a count or a username as functions; the time of a sent
+  request with the service's tag. `identity.page.ts`: the three
+  subtitles, the seven points, the warning, the review table's headings
+  from the form's section. `setup.page.ts`: `STEPS` left the file for
+  `setup.steps`, read into the `steps` signal as before; the thrown and
+  shown sentences from the dictionary. `seed.page.ts` and
+  `notifications.page.ts`: `DatePipe` left, `lang.dateTime` in its
+  place; the fifteen notification labels are `notifications.labels`,
+  read with today's fallback to the raw kind. `log.page.ts`: its four
+  pieces; the log's text stays raw.
+- `components/identity-form.component.ts`: `TextField` lost `label`;
+  the seven labels are `identityForm.fields`, keyed by the field key.
+  `IdentityFormState` injects the language service (a plain class, but
+  both pages make it in a field initializer, an injection context):
+  `countries` is a computed over the tag, `dateText` passes the tag.
+  `camera.component.ts` and `copy-button.component.ts`: their words
+  from the dictionary; the copy button's `label` input defaults to
+  null and the template falls back to `common.copy`.
+- `countries.ts`: `countryOptions(tag)` and `countryName(code, tag)`
+  name and sort in the app's language (they named in English before,
+  whatever the browser's language); the callers pass `lang.tag()`: the
+  identity form now, and `marketplace.page.ts`, `listing.page.ts`,
+  `listing-new.page.ts` and `listing-card.component.ts` with their
+  `lang` injection, their sentences waiting for step 6.
+- The services: `passkey.service.ts` (the three thrown sentences;
+  `asPublicKeyCredential`, a function outside the class, takes the
+  sentence as a parameter), `shares.service.ts` (`DepositError` takes
+  the finished sentence, built by its two throw sites from
+  `shares.refused`; the no-identity sentence), `signing.service.ts`
+  (the two sentences as functions of the reason),
+  `keyholder-api.service.ts` and `masterpod-api.service.ts`
+  (`api.noSession`), `log.service.ts` (`api.network`; the log's time
+  stamp with the tag).
+- Tables typed `Record<string, string>` added to the dictionaries (the
+  type cannot check their keys in Thai): `notifications.labels`, the
+  fifteen kinds. `setup.steps` is a `string[]` whose length the type
+  cannot check either: eight in both.
+- Readings where the plan left a detail open: `identityForm.fields` is
+  typed by its seven keys rather than `Record<string, string>`, so a
+  missing Thai label fails the build, and the identity page reads the
+  form's section for the labels, "Unknown", "Country of birth" and
+  "Date of birth"; "First name" and "Last name" live both in `create`
+  and in `identityForm.fields`, since a keyed table needs all its keys;
+  a page title that equals its navigation label (Setup, Vouch requests,
+  Notifications, Log) lives in the page's section; the create stepper's
+  "Username" step label is `create.stepUsername`, the field label
+  `common.username`; Retry, Start, Clear, Search and Copy joined
+  `common` here, the first step to meet them, as the rule of the plan's
+  1.1 says, though its step 3 names some of them. Thai: the instruction
+  lines of the vouching page put the Thai button words in quotation
+  marks ("ค้นหา", "ส่งคำขอ", "ปลดล็อก", "การแจ้งเตือน"), which the
+  English does not need, since Thai has no capital letter to mark a
+  button word; words outside the plan's glossary: lookup id รหัสค้นหา,
+  a share (of a secret) ส่วนแบ่ง, session เซสชัน, hash แฮช, wrap
+  ห่อหุ้ม, authenticator ตัวยืนยันตัวตน. One sentence read odd and was
+  moved as it is: "Ask a couple people you know who are a part of the
+  anoSphere for their username."
+- Spec: 8.8 (the list), this note.
+- `npx ng build` clean (1.71 MB initial). Not run in a browser here;
+  the user tests with `ng serve`, a browser set to Thai for the Thai
+  pages, any other for English.
+
+### The languages, step 3 (2026-11-06)
+
+Step 3 of forclaude/wallet-languages-plan-1.md: Home, the Wallet page,
+the Account pages and the balance card. Why: after step 2 the pages of
+the first visit were Thai, while Home, the Wallet page and the Account
+pages, the pages of every day after it, were still English.
+
+- `i18n/en.ts` and `th.ts`: the sections `home`, `wallet`,
+  `accountHome`, `recovery`, `balanceCard` and `accountKinds`, and the
+  `common` entries "Reading…", "<n> anos" (a function), "Copy the
+  account id", 'The encryption key is not in RAM: unlock again', Done,
+  Remove, "Account recovery" and the step label "Selfie". The sentences
+  with a count, a name or an amount are functions (`hello`,
+  `finishCreating`, the three unread counts; the wallet's `available`
+  and the four held kinds; `selfiesOnFile`, `detailsOnFile`;
+  `doneOnFile`, `onFile`; the card's `available`, its four held lines,
+  `notLanded`, `notRead`; the two `retryFresh`).
+- `account-names.ts`: `accountNames(accounts, kinds)`; the name of one
+  of a type is `kinds[type]`, else the type word and "account"; the
+  numbering as it was. The callers pass `t().accountKinds`: Home, the
+  Wallet page and, with its `lang` injection, the history page, whose
+  sentences wait for step 4.
+- `home.page.ts`: the greeting and the to-do lines from functions;
+  `count()` gone. `wallet.page.ts`: `STEPS` left the file for
+  `wallet.steps`; the type select shows `typeOption(type)`, the raw word
+  in English and the glossary's in Thai; `balanceWords` and `heldWords`
+  from functions; the sentences from the dictionary.
+- `account-home.page.ts`: the two rows' counts from functions; the
+  `count` import gone. `account-recovery.page.ts`: the seven step labels
+  as `[label]`, the six long paragraphs, `onFile` a function of the
+  three counts, `finishLabel` from entries, the five progress sentences,
+  the alt and aria words; the exported `count()` gone with its last
+  importer. The two optional steps show Material's "Optional" from the
+  service (step 1).
+- `components/balance-card.component.ts`: the `lines` computed from
+  functions, the aria label as a binding. `services/balances.service.ts`:
+  `common.noKeyInRam`.
+- Tables typed `Record<string, string>` added to the dictionaries (the
+  type cannot check their keys in Thai): `accountKinds`, the four types.
+  `wallet.steps` is a `string[]` of six, its length unchecked.
+- Readings where the plan left a detail open: the Wallet page's 'The
+  encryption key is not in RAM: unlock again.' ends with a period where
+  the balances service's does not, so it is `wallet.noKeyInRam`, its own
+  entry, and `common.noKeyInRam` is the one without, each English letter
+  for letter; 'This account is not one of this anoPod's accounts', named
+  by the plan among this step's `common` entries, has no reader in this
+  step's files and is added in step 4, the first step that meets it;
+  "<n> anos" (the card's total, an account card's balance) is one
+  function, `common.anos`; the Account page's subtitle and the
+  walkthrough's title, both "Account recovery", are
+  `common.accountRecovery`; "Remove" (the aria label, also on the
+  account page) is `common.remove`; "Done" is `common.done` as the plan
+  says, though only the walkthrough shows it today; the step label
+  "Selfie" moved from `create.stepSelfie` to `common.selfieStep`, one
+  line of `create.page.ts`, since this step met it on a second page
+  (the rule of the plan's 1.1); `finishCreating` takes the account's
+  name with `?? ''`, since `Map.get` is typed as possibly undefined
+  though every account has a name; the walkthrough's "Email", a step
+  label and a field label, is one entry. Thai: "Finish" and "Done" both
+  read เสร็จสิ้น; the progress lines keep bucket in Latin letters, the
+  security buckets' name; "break-glass seed" reads seed ฉุกเฉิน; "Up
+  to five photos" reads สูงสุด 5 รูป, digits by the style rule. No
+  sentence read odd.
+- Spec: 8.8 (the list), this note.
+- `npx ng build` clean (1.73 MB initial). Not run in a browser here;
+  the user tests with `ng serve`.
+
+### The languages, step 4 (2026-11-06)
+
+Step 4 of forclaude/wallet-languages-plan-1.md: the account page, the
+transaction history, the escrow trade, the assisted transfer, the three
+stage helpers, the history words, the minutes words and the chat
+service's day and time words. Why: these are the pages of sending and
+receiving anos, the heart of the wallet, and the last English pages a
+person meets before the chat and the marketplace.
+
+- `i18n/en.ts` and `th.ts`: the sections `account`, `history`,
+  `escrow`, `assisted`, `escrowStages`, `assistedStages`, `lockedStages`,
+  `historyWords`, `sides`, `dismissReasons` and `minutes` (a function of
+  the minutes: the English body of minutes-words.ts moved as it was, the
+  Thai "15 นาที", "1 ชั่วโมง 30 นาที", "7 วัน 10 นาที", the parts joined by
+  a space), and the `common` entries Account, Type (moved from `wallet`,
+  since the account page shows the same label), Kind, Amount, Made,
+  Stage, Transaction, To, From, Reason, Closed, Loading, "Copy the
+  transaction id", "Transaction history", "Assisted transfer", the two
+  "This page refreshes every 5 seconds…" sentences, 'This account is not
+  one of this anoPod's accounts' (left over from step 3) and "another
+  reason". th.ts gained a module-level `KINDS` table of the four account
+  types' words, read by `wallet.typeOption`, `account.title` and the
+  lock line.
+- `escrow-stage.ts`, `assisted-stage.ts`, `locked-stage.ts`: each
+  function takes `words`, the dictionary's table for it; the switches
+  stay. `history-words.ts`: `historyWords(t, accountId, words)`, the
+  titles as entries and functions of the short id, the kinds as entries,
+  `TRANSFER_KINDS` as `historyWords.transferKinds`; the signs, the icons
+  and the default branch stay. `minutes-words.ts` moved to the
+  scratchpad: `t().minutes(n)` replaces it.
+- `account.page.ts`: every sentence from `t().account`, `common` and
+  `nav` (the Wallet back link); the spending kinds, the stake purposes
+  and the votes show words from tables while their values stay; the lock
+  line a function of the type and `t().minutes(ahead)`; the five date
+  pipes are `lang.dateTime` and `DatePipe` left. Kept as they are, by
+  decision 14: the labels "Fund proposal transactionId" and "Recipient
+  accountId", the buttons "Send guardianVote" and "Send fundProposal",
+  the wire word after Send, the paths and reasons in thrown lines.
+- `transaction-history.page.ts`: its words, "To" / "From" from `common`,
+  the day headings and times from the chat service (below); `DatePipe`
+  left. `escrow-trade.page.ts`: `YES_LABELS` and `SENT` left the file
+  for `escrow.yes` and `escrow.sent`; `explain`, `verdictsText`,
+  `question`, `closedText` and `plainReason` read entries and functions;
+  "You are the seller" is `escrow.youAre(t().sides[side()])`.
+  `assisted-transfer.page.ts`: `caseText`, `explain` and `plainReason`
+  likewise; the dismissal reasons are read from `t().dismissReasons`,
+  the import from `my-case.page.ts` gone (that file keeps its own table
+  until step 7). `chat.service.ts`: `shortWhen`, `timeOf` and `dayLabel`
+  pass the service's tag and read Today and Yesterday from `dates`.
+  `pinned-listing.component.ts`: its `lang` injection and the words
+  passed to `escrowStageWords`; its sentences wait for step 6.
+- Tables typed `Record<string, string>` added to the dictionaries (the
+  type cannot check their keys in Thai): `historyWords.transferKinds`
+  (the four transfer types) and `dismissReasons` (the six reasons). The
+  stage tables, `sides`, the spending kinds, the stake purposes, the
+  votes and `historyWords.kinds` are typed by their keys, so the type
+  checks them.
+- Readings where the plan left a detail open: the templates of the
+  account, history, escrow and assisted pages named their block or loop
+  variable `t` (`@if (trade(); as t)`, `@for (t of day.rows)`), which
+  would shadow the dictionary's `t()` inside those blocks, so those
+  variables are now `open` (the trade), `held` (the assisted transfer),
+  `waiting` (the locked transfer) and `row` (a history row), nothing
+  else about them changed; the assisted page's closed sentence "Done.
+  The 5 anos went to <id>." keeps the id in code font, so it is two
+  entries, `doneWentTo` before the id and `doneEnd` after it (the
+  English period, nothing in Thai); "another reason" is both the
+  `dismissReasons.other` entry and `common.anotherReason`, the fallback
+  when a dismissal carries no reason; the account page's "Type" label
+  made `wallet.type` of step 3 a `common.type`, one line of
+  `wallet.page.ts`; the Wallet back link reads `nav.wallet`; the "Escrow
+  trade" title stays in `escrow`, since the pinned card's "Escrow
+  trade: …" is another sentence. Thai: the account types inside
+  sentences come from the `KINDS` table ("การโอนจากบัญชีหน่วงเวลา…");
+  "It cannot be undone" reads เปลี่ยนกลับไม่ได้; "Held" reads ถูกกันไว้;
+  the stake purpose daoVote reads โหวต DAO and masterPod stays as it
+  is. No sentence read odd.
+- Spec: 8.8 (the list), this note.
+- `npx ng build` clean (1.78 MB initial). Not run in a browser here;
+  the user tests with `ng serve`.
+
+### The languages, step 5 (2026-11-06)
+
+Step 5 of forclaude/wallet-languages-plan-1.md: the chat, its four
+pages and the rest of the chat service. Why: after step 4 every page of
+the wallet's own money was Thai, while the chat, where a Thai buyer and
+seller meet, still spoke English; its day and time words came in step
+4, the rest comes here.
+
+- `i18n/en.ts` and `th.ts`: the sections `chat`, `chatNew`,
+  `chatRequests`, `chatRoom` and `rooms` (the room titles and the
+  listing words the chat service builds), and the `common` entries
+  Chats, "New chat", Requests, "Back to chats", Find, Accept, Create
+  (moved from `create`, the step label of the create stepper, since the
+  new public room's button shows the same word), Send (moved from
+  `account`, since the conversation's send button shows the same word),
+  Name, the shown "No chat keys in this tab: unlock again." (the chat
+  list, the new chat and the listing page), and the thrown 'No chat
+  keys in this tab', 'That anoPod has no chat keys (setup not
+  complete)', 'No room key for this room in this tab', 'No room key for
+  this room' and 'Find the username first', each thrown by two files;
+  the marketplace files read them in step 6. The sentences with a
+  number or a name are functions (`requestLine` of the two counts,
+  `byAndMembers`, `aboutListing`, `invitedToRoom`, `asksToJoin`, and
+  the room words `sell`, `buy`, `selling` and `buying` of the amount
+  and the currency, `invited` of the username).
+- `services/chat.service.ts`: `title` and `listingWords` read
+  `t().rooms`; the two thrown sentences from `common`. Kept: the room
+  types, `listing.side`, the icon names, the console line.
+- `pages/chat.page.ts`: `count()` gone, the Requests row's line a
+  function of the two counts; "You: ", "(cannot read)", "No messages
+  yet" and the list's pieces from the dictionary; the two "New chat"
+  aria labels as bindings. `pages/chat-new.page.ts`: the three tab
+  labels as `[label]`; "by <username> · N member(s)" a function; the
+  thrown sentences from `common` and `chatNew`.
+  `pages/chat-requests.page.ts`: `inviteText` reads the three functions
+  and entries; "asks to join <room>" a function, the username in bold
+  before it; "your room". `pages/chat-room.page.ts`: the menu items,
+  the aria words More, Send and "Back to chats" as bindings,
+  "(invited)", "(cannot decrypt)", "(no room key)", "Sending", "Load
+  older messages", the copy button's label as a binding; the members
+  line reads `rooms.invited` for the invited; the thrown sentences.
+  `pages/create.page.ts` and `pages/account.page.ts`: the one and the
+  two lines that now read `common.create` and `common.send`.
+- Tables typed `Record<string, string>` added to the dictionaries (the
+  type cannot check their keys in Thai): none in this step.
+- Readings where the plan left a detail open: a word the grep found on
+  another page, even one of a later step, went to `common` now rather
+  than to the page's section and a move later: Accept (the listing
+  people, step 6), Name (the staff pages' profile label, step 8), Send
+  (the listing page's button, step 6) and the shown and thrown chat-key
+  sentences; "Back to chats", an aria label on three chat pages, is
+  `common.backToChats` though the plan lists it under the conversation;
+  "No messages yet" (the list's preview, no period) and "No messages
+  yet." (the empty thread) are two entries, `chat.noMessages` and
+  `chatRoom.noMessages`, each English letter for letter; "<username>
+  (invited)" is one function, `rooms.invited`, read by the service's
+  title and by the conversation's members line, while the members
+  panel, where the username is its own element, reads the bare
+  `chatRoom.invited`; `invitedToRoom` takes `string | null`, the type
+  of an invite's `name`, so the English stays what it was; the " · "
+  between the people and the listing's words stays in the code,
+  punctuation the same in both languages. Thai: "Sell" and "Selling"
+  both read ขาย and "Buy" and "Buying" both ซื้อ, since Thai has no
+  participle ("ขาย 50 anos รับ THB", "ซื้อ 50 anos ด้วย THB"); Find
+  reads ค้นหา like Search; Leave reads ออกจากห้อง, the room named as
+  Thai needs; members are counted with their classifier ("สมาชิก 3
+  คน"). No sentence read odd.
+- Spec: 8.8 (the list), this note.
+- `npx ng build` clean (1.79 MB initial). Not run in a browser here;
+  the user tests with `ng serve`.
+
+### The languages, step 6 (2026-11-06)
+
+Step 6 of forclaude/wallet-languages-plan-1.md: the marketplace, its
+four pages, the five components and the marketplace service, with the
+currency names. Why: after step 5 a Thai buyer and seller could chat in
+Thai, while the place they meet, the marketplace, still spoke English;
+the country names already followed the language (step 2), the currency
+names and the words follow now.
+
+- `i18n/en.ts` and `th.ts`: the sections `marketplace`, `listing`,
+  `listingNew`, `myListings`, `listingCard`, `listingPeople`, `pinned`,
+  `filters`, `picker` and `market` (the service's side words and the two
+  first messages), and the `common` entries Side, Country, Currency,
+  Filters, "New listing", "Your listings", "Back to the marketplace",
+  "Total …" and "… per anos" (functions), "Quantity, anos", "Price per
+  anos", the close question ("Close this listing? People can no longer
+  connect; your chats stay."), Yes, Cancel, "Open chat", 'This chat is
+  not about a listing' and 'No latest transaction on the ledger yet'
+  (moved from `account`, since the pinned card throws it too). The
+  sentences with a number, a name or an amount are functions
+  (`filtersCount`, `mineLine`, `sideAnos`, `posted`, `waitingFor`,
+  `didNotAccept`, the card's `line` and `where`, the pinned card's
+  `summary`, `tradeLine`, `atListingPrice`, `askStart`, `released`,
+  `refused` and the two posted messages `shareMessage` and
+  `startedMessage`).
+- `services/marketplace.service.ts`: `sideWords` and `firstWords` read
+  `t().market`, so the first message of Connect goes in the sender's
+  language (decision 10); the four thrown sentences from `common`.
+  `prices.ts`: `currencyOptions(tag)` names the currencies in the app's
+  language; Browse and the new-listing form pass `lang.tag()`.
+- `pages/marketplace.page.ts`: `SORT_WORDS` left the file for
+  `marketplace.sorts`, read by the sort chip and the three menu items;
+  the chips All, Selling and Buying, the Country and Currency chips and
+  picker titles, the Filters chip with its count, the Your listings row
+  and its line from the dictionary. `pages/listing.page.ts`: its words
+  from `listing` and `common`; "posted <date>" with `lang.dateTime` and
+  `DatePipe` gone; "This listing is closed." one entry for its three
+  places. `pages/listing-new.page.ts`: the toggle's words, the labels,
+  the total, the picker titles and the three thrown sentences.
+  `pages/my-listings.page.ts`: its nine pieces.
+- `components/listing-card.component.ts`: the labels Yours, Waiting and
+  "Chat open" from `listingCard.labels`, Closed from `common`, still the
+  `@for` track key; the three lines as functions.
+  `components/listing-people.component.ts`: "wants to chat" after the
+  username in bold, Accept, Decline, "Open chat", "Nobody has connected
+  yet.". `components/pinned-listing.component.ts`: every sentence from
+  `pinned` and `common`; the account menu shows `account.title(type)`,
+  as the plan says ("spending account" where it read "spending"); the
+  labels From and To from `common`; the two posted messages in the
+  sender's language. `components/filters-sheet.component.ts` and
+  `picker-sheet.component.ts`: their words; the picker's search matches
+  the typed letters against the names, so Thai names are found by Thai
+  letters, and the three-letter code rule stays Latin.
+  `pages/account.page.ts`: the one line that now reads `common.noLatest`.
+- Tables typed `Record<string, string>` added to the dictionaries (the
+  type cannot check their keys in Thai): none in this step.
+  `marketplace.sorts` and `listingCard.labels` are typed by their keys.
+- Readings where the plan left a detail open: the Browse chips Selling
+  and Buying read `market.selling` and `market.buying`, the service's
+  side words, rather than entries of their own; the card's Closed label
+  reads `common.closed` (step 4's entry) rather than a fourth entry of
+  `listingCard.labels`; the pinned card's template variable `t` (the
+  trade) is now `open`, as the trade page's is, since it would shadow
+  the dictionary's `t()`; "wants to chat" is an entry after the username
+  in bold, as the requests page's "asks to join" is, not a function of
+  the username; the pinned card's Start button reads `common.start` and
+  its "No latest transaction…" the moved `common.noLatest`; the words
+  the grep found on another page went to `common` now (Cancel is also
+  on the staff pages of step 8); the "Total …" and "… per anos"
+  functions live in `common`, each on two files. The English of the
+  pinned card's account menu changes by the plan's own instruction
+  (its section 6): "spending account" after the short id, where it read
+  the raw "spending". Thai: "Selling" / "Buying" read ขาย / ซื้อ, as the
+  chat's room words do; "each" in the summary reads ต่อ anos; "People",
+  the heading of the people who connected, reads ผู้ติดต่อ; "Any" reads
+  ใดก็ได้; "Apply" reads นำไปใช้; "Quantity, anos" and "Amount, anos"
+  both read จำนวน, anos; the counts of the Your listings row carry their
+  classifiers ("เปิดอยู่ 2 รายการ · 1 คนกำลังรอ"). No sentence read odd.
+- Spec: 8.8 (the list), this note; 8.7 is not reworded, it quotes the
+  English.
+- `npx ng build` clean (1.80 MB initial). Not run in a browser here;
+  the user tests with `ng serve`.
+
+### The languages, step 7 (2026-11-06)
+
+Step 7 of forclaude/wallet-languages-plan-1.md: the recovery flow (the
+Recover page, the locked-out stepper and My recovery) and the cases (the
+list and My case). Why: after step 6 the pages of every day were Thai;
+these are the pages of a bad day, a lost device or a dispute, where a
+Thai reader needs the words most.
+
+- `i18n/en.ts` and `th.ts`: the sections `recover`, `recoverOpen`,
+  `recoverCase`, `cases`, `myCase` and `caseStatus` (the four case
+  statuses of `attesting.page.ts`'s `STATUS_WORDS`), and the `common`
+  entries "I'm locked out", "Recover account" (moved from `landing`,
+  since My recovery links to it), "checking…" (moved from `create`,
+  since the locked-out stepper's username hint reads it), "I have
+  written it down, complete" (moved from `setup`, since the new backup
+  code's button reads it), "Case <id>" (a function), "Copy the case id",
+  "Could not copy; select the id by hand.", Timeline, "Nothing yet.",
+  "Meeting link", Evidence, "Loading your case…", "Video call scheduled
+  for <at>." and "a time to be confirmed", and "Dismissed: <reason>" (a
+  function; the status line of My case, which ends with a period, has
+  its own). The sentences with a number, a name, an amount or a date are
+  functions (`found`, `statusOpen`, `statusDelivering`,
+  `noCodeRebuilt`, `notTakingFinish`, `retryDeposits`, the plurals
+  `codesRecovered`, `seedsRecovered`, `sharesSkipped`, `seedsUnmatched`
+  and `storedOn`; the cases' `anos`, `line` and `youAre`; My case's
+  `youAre`, `upload`, `yourFiles`, `fromCase`, `decidedDispute`,
+  `statusDismissed`, `badType`, `tooLarge`, `encrypting`, `uploading`,
+  `uploaded`, `refusedValues`, `eventAdded` and `eventDecided`).
+- `pages/recover.page.ts`: its eight pieces and the thrown sentence from
+  the dictionary. `pages/recover-open.page.ts`: the three step labels as
+  `[label]`; the username hint's three states ("the username of the
+  anoPod you lost", "checking…", "<username> found") and the thrown
+  sentences; the hint still shows the server's reason as it comes.
+  `pages/recover-case.page.ts`: `DISMISS_REASONS` left the file for
+  `recoverCase.dismissReasons`; `statusText`, `combinedText`,
+  `breakGlassText`, `dismissReason` and `textOf` read entries and
+  functions; the five step labels as `[label]`, Done from `common`; the
+  two `toLocaleString` calls are `lang.dateTime`.
+- `pages/cases.page.ts`: the row's pieces from `cases` (the "· N anos",
+  "· with" and "· transaction" fragments before their ids, the status
+  line as a function with `lang.dateTime`; `DatePipe` left); the status
+  words from `t().caseStatus`, the `STATUS_WORDS` import gone, the icons
+  still imported. `pages/my-case.page.ts`: its `DISMISS_WORDS` table and
+  export gone (the assisted transfer page reads `t().dismissReasons`
+  since step 4, and this page now does too); the status words from
+  `t().caseStatus`; `title`, `statusText`, `refusal`, `dismissReason`
+  and `textOf` read entries and functions; "You are the <side> of this
+  escrow." a function of `t().sides`; the three `toLocaleString` calls
+  are `lang.dateTime`. `pages/create.page.ts`, `pages/landing.page.ts`
+  and `pages/setup.page.ts`: the one line each that now reads the moved
+  `common` entry.
+- Tables typed `Record<string, string>` added to the dictionaries (the
+  type cannot check their keys in Thai): `caseStatus` (open, inReview,
+  decided, dismissed) and `recoverCase.dismissReasons` (selfieMismatch,
+  documentsMismatch, unknownLookupId, noShow, other: the "you" wording
+  of the recovery, whose keys differ from the trade cases'
+  `dismissReasons` of step 4).
+- Readings where the plan left a detail open: the Cases page's title is
+  `cases.title` and My case's back link reads `nav.cases`, as a page
+  title equal to its navigation label lives in the page's section (step
+  2) and a back link reads the label (step 4); the status words are
+  read with a fallback to the raw status (`t().caseStatus[c.status] ??
+  c.status`), as the other `Record` tables are, though the typed table
+  of `attesting.page.ts` had none; "Dismissed: <reason>" without a
+  period, in three places, is `common.dismissed`, and My case's status
+  line with the period is `myCase.statusDismissed`; "no anoPod has that
+  username" (the hint) and "No anoPod has that username" (thrown) are
+  two entries, each letter for letter; "Upload <n>" keeps today's shape
+  as a function of the count, `Upload ${n || ''}`, so the button reads
+  "Upload" with nothing picked; the " · " before the skipped shares and
+  the unmatched seeds stays in the code; "Combine", "Get back in" and
+  "Open my case" are one entry each for the step label and its button;
+  "copied" reads the copy button's `copy.copied`; the file link text
+  "PDF", a format name, and the raw verdict and event kinds stay as
+  they are. Thai: Combine reads รวมส่วนแบ่ง, the shares named as Thai
+  needs; the bankers read นายธนาคาร; "break-glass keys" reads
+  กุญแจฉุกเฉิน after step 3's seed ฉุกเฉิน; Timeline reads ไทม์ไลน์;
+  Dismissed reads ถูกยกคำร้อง, the glossary's word. No sentence read odd.
+- Spec: 8.8 (the list), this note; 12.3 is not reworded, it quotes the
+  English.
+- `npx ng build` clean (1.85 MB initial). Not run in a browser here;
+  the user tests with `ng serve`.
+
+### The languages, step 8 (2026-11-06)
+
+Step 8 of forclaude/wallet-languages-plan-1.md, the last: the moderation
+and attesting pages of the staff editions, with the attesting service.
+Why: the staff pages were the last English in the app; with them every
+page of every edition speaks both languages, and the plan is built.
+
+- `i18n/en.ts` and `th.ts`: the sections `moderation`, `moderationCase`,
+  `attesting` (the attesting list page and the sentences the three
+  attesting pages and the attesting service share), `tradeCase`,
+  `disputeCase`, `recoveryStatus` (the six recovery statuses of
+  `moderation.page.ts`'s `STATUS_WORDS`), `dismissReasonsStaff` (the
+  "the person" wording, the union of the moderation case's five keys and
+  the attesting pages' six) and `buckets` (the two titles); and the
+  `common` entries the moderation and attesting pages share: Status,
+  "unknown pod", "The person", "public selfie", "Copy the lookup id",
+  "<status> · opened <date>", "Loading the case…", Schedule, "Video
+  call", "Meeting link (https)", Save, "Anos account", "Pull key", the
+  bucket summary and its locked-rows fragment, "bucket image", Verdict,
+  Note, Dismiss, "Confirm dismissal", "Pick one of your anos accounts
+  first.", "Enter the time of the call.", the scheduled line, the pull's
+  progress and refusal sentences, "This case is closed: nothing more can
+  be done to it.", the two signature refusals, "Could not copy; select
+  the text by hand.", "pod <id>…", "Note: <note>", "<who> scheduled the
+  video call for <at>", "<who> read bucket one/two (N keys)", "<who>
+  dismissed the case: <reason>" and "<username> · <first> <last>". Eight
+  words earlier steps put in page sections moved to `common`, since a
+  staff page shows them too: "Your account" (from `accountHome`), 'The
+  encryption key is not in RAM: unlock again.' with its period (from
+  `wallet`), Seller and Buyer (from `escrow`), Email (from `recovery`),
+  "· N anos" (from `cases`), the refused-values sentence and 'Decided:
+  two attestors signed' (from `myCase`); one line of each of those pages
+  changed.
+- `services/attesting.service.ts`: `attestingError` and
+  `validatorRefusal` take the dictionary (`words: Words`) as a third
+  parameter, since they are plain functions that cannot inject; every
+  caller passes `this.t()` or `this.lang.words()`; the regexes and the
+  `${path}: ${reason}` fallbacks stay. `pages/moderation.page.ts`:
+  `moderationError` likewise; `STATUS_WORDS` left the file for
+  `recoveryStatus`; the person line and the approvals line are
+  functions with `lang.dateTime`.
+- `pages/moderation-case.page.ts`: `DISMISS_WORDS` and the `BUCKETS`
+  titles left the file (the paths and share types stay); the status and
+  reason words from `recoveryStatus` and `dismissReasonsStaff`; the
+  sign-offs, the bucket summary, the timeline's `itemOf` and the
+  refusals read entries and functions; the two date pipes and three
+  `toLocaleString` calls are `lang.dateTime`; the note's placeholder
+  translates with its "14:00 UTC"; the URL placeholder and the native
+  `datetime-local` input stay.
+- `pages/attesting.page.ts`: `STATUS_WORDS` and `DISMISS_WORDS` left the
+  file; `CASE_STATUSES`, `REVIEW_STATUSES` and `STATUS_ICONS` stay
+  exported; the tab labels as `[label]` functions of the counts; the
+  attestations and verdicts plurals, the "disputed by" words and the
+  person line from the dictionary; `DisputeRow.disputedBy` is a string
+  of the dictionary's words; the three pipes are `lang.time` and
+  `lang.dateTime`. `pages/attesting-trade-case.page.ts` and
+  `pages/attesting-dispute-case.page.ts`: `BUCKETS` titles from
+  `t().buckets`; the explain switches, the plurals, "The <side>'s files",
+  the Success / Cancel and reason options, the sending lines and the
+  refusals from the dictionary; the English appended to a username after
+  a file that did not open is `disputeCase.didNotOpen`; the pipes and
+  `toLocaleString` calls as above.
+- Tables typed `Record<string, string>` added to the dictionaries (the
+  type cannot check their keys in Thai): `recoveryStatus` (six statuses)
+  and `dismissReasonsStaff` (seven reasons). `buckets` is typed by its
+  keys.
+- Readings where the plan left a detail open: the attesting service's
+  sentences live in `attesting`, the section the three attesting pages
+  share, as `market` holds the marketplace service's; sentences the
+  three attesting pages share ("Send to the validators", "an attestor",
+  the no-account hint, the validator's refusal line) live in `attesting`
+  too, while sentences the moderation pages share with them live in
+  `common`; the plan's `common.noKeyInRam` for the service is the
+  sentence with its period, so it is `common.noKeyInRamSentence`, moved
+  from `wallet`, and `common.noKeyInRam` without the period stays as it
+  was; "This account is not one of this anoPod's accounts." with its
+  period is `common.notMyAccountSentence` beside the step 4 entry
+  without one; the account pickers show `wallet.typeOption(type)` for
+  the raw type word, as the Wallet page's select does; the status words
+  are read with a fallback to the raw status, as the other `Record`
+  tables are; the trade case page's template variable `t` (the trade)
+  is now `held`, as the assisted transfer page's is; the dispute case
+  page's party sides are `'seller' as const` and `'buyer' as const`, so
+  the template can read `t().sides`; the moderation case's back link
+  "Cases" reads `nav.cases`; the "→ HTTP <status>" fragments, the
+  "data:" URL, the URL placeholder and the "…" after an id stay in the
+  templates; the person line prints an empty name where the masterpod
+  sends null, as the template did. Thai: "the bankers" read นายธนาคาร;
+  bucket stays Latin ("Bucket หนึ่ง", "Bucket สอง"); "sign off" reads
+  ลงนามรับรอง; "the person" reads บุคคล; Reject reads ไม่อนุมัติ. No
+  sentence read odd.
+- Spec: 8.8 (the list, now complete), this note; 13.3 is not reworded,
+  it quotes the English.
+- `npx ng build` clean (1.89 MB initial). Not run in a browser here;
+  the user tests with `ng serve`.
 
 ## 12. Recovery and the moderator edition
 

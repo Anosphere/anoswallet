@@ -5,6 +5,7 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { Router } from '@angular/router';
 import { IdentityFormComponent, IdentityFormState, TEXT_FIELDS } from '../components/identity-form.component';
+import { LanguageService } from '../services/language.service';
 import { identityIdsOf } from '../services/public-ledger-id';
 import { SessionService } from '../services/session.service';
 
@@ -25,12 +26,12 @@ type Pane = 'why' | 'form' | 'review';
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
-        <mat-card-title>Your public ledger id</mat-card-title>
+        <mat-card-title>{{ t().identity.title }}</mat-card-title>
         <mat-card-subtitle>
           @switch (pane()) {
-            @case ('why') { Why we ask, before you type anything }
-            @case ('form') { Your birth record }
-            @case ('review') { Check every answer }
+            @case ('why') { {{ t().identity.whySubtitle }} }
+            @case ('form') { {{ t().identity.formSubtitle }} }
+            @case ('review') { {{ t().identity.reviewSubtitle }} }
           }
         </mat-card-subtitle>
       </mat-card-header>
@@ -38,37 +39,34 @@ type Pane = 'why' | 'form' | 'review';
         @switch (pane()) {
           @case ('why') {
             <ul class="why">
-              <li>Step 6 of setup is your public ledger id.</li>
-              <li>We do not store what you type.</li>
-              <li>It is turned into a one-way hash on your device.</li>
-              <li>The hash is kept encrypted by independent keyholders, not in our database.</li>
-              <li>It exists so you, or one day your heirs, can prove this identity made this account after a complete lockout, and recover the account and its anos.</li>
-              <li>It cannot be deleted, by anyone, ever, and you have to know that before you go on.</li>
-              <li>A very sophisticated attack could leak a hash of your birth record, and there are far easier ways to learn a birthday or a maiden name.</li>
+              <li>{{ t().identity.why1 }}</li>
+              <li>{{ t().identity.why2 }}</li>
+              <li>{{ t().identity.why3 }}</li>
+              <li>{{ t().identity.why4 }}</li>
+              <li>{{ t().identity.why5 }}</li>
+              <li>{{ t().identity.why6 }}</li>
+              <li>{{ t().identity.why7 }}</li>
             </ul>
-            <mat-checkbox [checked]="understood()" (change)="understood.set($event.checked)">I understand this record can never be deleted</mat-checkbox>
+            <mat-checkbox [checked]="understood()" (change)="understood.set($event.checked)">{{ t().identity.understood }}</mat-checkbox>
             <div class="actions">
-              <button mat-flat-button type="button" (click)="pane.set('form')" [disabled]="!understood()">Continue</button>
+              <button mat-flat-button type="button" (click)="pane.set('form')" [disabled]="!understood()">{{ t().common.continue }}</button>
             </div>
           }
           @case ('form') {
             <app-identity-form [state]="form" />
             <div class="actions">
-              <button mat-button type="button" (click)="pane.set('why')">Back</button>
-              <button mat-flat-button type="button" (click)="pane.set('review')" [disabled]="!form.complete()">Submit</button>
+              <button mat-button type="button" (click)="pane.set('why')">{{ t().common.back }}</button>
+              <button mat-flat-button type="button" (click)="pane.set('review')" [disabled]="!form.complete()">{{ t().identity.submit }}</button>
             </div>
           }
           @case ('review') {
-            <p class="warning">
-              Check that everything is right. If this is wrong, you may not be able to recover after a complete lockout, and your heirs
-              may fail to recover it in the future.
-            </p>
+            <p class="warning">{{ t().identity.warning }}</p>
             <table class="review">
               @for (field of textFields; track field.key) {
-                <tr><th>{{ field.label }}</th><td>{{ form.unknown()[field.key] ? 'Unknown' : form.texts()[field.key] }}</td></tr>
+                <tr><th>{{ t().identityForm.fields[field.key] }}</th><td>{{ form.unknown()[field.key] ? t().identityForm.unknown : form.texts()[field.key] }}</td></tr>
               }
-              <tr><th>Country of birth</th><td>{{ form.countryName() }}</td></tr>
-              <tr><th>Date of birth</th><td>{{ form.dateText() }}</td></tr>
+              <tr><th>{{ t().identityForm.country }}</th><td>{{ form.countryName() }}</td></tr>
+              <tr><th>{{ t().identityForm.date }}</th><td>{{ form.dateText() }}</td></tr>
             </table>
             @if (computing()) {
               <mat-progress-bar mode="indeterminate"></mat-progress-bar>
@@ -77,8 +75,8 @@ type Pane = 'why' | 'form' | 'review';
               <p class="error">{{ text }}</p>
             }
             <div class="actions">
-              <button mat-button type="button" (click)="pane.set('form')" [disabled]="computing()">Edit</button>
-              <button mat-flat-button type="button" (click)="confirm()" [disabled]="computing()">All information is correct</button>
+              <button mat-button type="button" (click)="pane.set('form')" [disabled]="computing()">{{ t().identity.edit }}</button>
+              <button mat-flat-button type="button" (click)="confirm()" [disabled]="computing()">{{ t().identity.allCorrect }}</button>
             </div>
           }
         }
@@ -97,6 +95,8 @@ type Pane = 'why' | 'form' | 'review';
 export class IdentityPage {
   private readonly session = inject(SessionService);
   private readonly router = inject(Router);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
   protected readonly textFields = TEXT_FIELDS;
   protected readonly form = new IdentityFormState();

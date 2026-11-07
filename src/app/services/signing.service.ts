@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { SignedObject, WalletPublicKeys } from './crypto.service';
+import { LanguageService } from './language.service';
 import { LogService, reasonOf } from './log.service';
 import { SessionService } from './session.service';
 
@@ -12,6 +13,7 @@ import { SessionService } from './session.service';
 @Injectable({ providedIn: 'root' })
 export class SigningService {
   private readonly log = inject(LogService);
+  private readonly lang = inject(LanguageService);
   private readonly session = inject(SessionService);
 
   /** GET /api/sign/public-keys, once per session. */
@@ -19,7 +21,7 @@ export class SigningService {
     const cached = this.session.walletKeys();
     if (cached) return cached;
     const res = await this.log.get<WalletPublicKeys>('/api/sign/public-keys');
-    if (!res.ok) throw new Error(`the signing server's public keys: ${reasonOf(res)}`);
+    if (!res.ok) throw new Error(this.lang.words().signing.publicKeys(reasonOf(res)));
     this.session.walletKeys.set(res.body);
     return res.body;
   }
@@ -27,7 +29,7 @@ export class SigningService {
   /** POST /api/sign: the transaction back with signatures.walletKey and signatures.walletPostQuantumKey set. */
   async sign<T extends SignedObject>(transaction: T): Promise<T> {
     const res = await this.log.post<{ transaction: T }>('/api/sign', { transaction });
-    if (!res.ok) throw new Error(`the signing server: ${reasonOf(res)}`);
+    if (!res.ok) throw new Error(this.lang.words().signing.sign(reasonOf(res)));
     return res.body.transaction;
   }
 }

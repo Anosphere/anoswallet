@@ -16,6 +16,7 @@ import { ACCOUNT_POLL_MS } from '../constants';
 import { AnosApiService } from '../services/anos-api.service';
 import { AccountBalance, BalancesService } from '../services/balances.service';
 import { ACCOUNT_TYPES, AccountType, BrowserAccountKeys, CreateAccountTransaction, CryptoService } from '../services/crypto.service';
+import { LanguageService } from '../services/language.service';
 import { reasonOf } from '../services/log.service';
 import { MasterpodApiService } from '../services/masterpod-api.service';
 import { AnosAccountItem, SessionService } from '../services/session.service';
@@ -27,15 +28,6 @@ interface Step {
   label: string;
   state: 'todo' | 'doing' | 'done' | 'failed';
 }
-
-const STEPS = [
-  'Pair one, pair two, the break-glass seed and its keys; the creation signed by the six keys here',
-  'Deposit the break-glass seed with the keyholders',
-  'The signing server adds the two wallet signatures',
-  'Register the account on the masterpod (/create-anos-account)',
-  'Submit the creation to the validator (/create-account)',
-  'Mark it submitted on the masterpod',
-] as const;
 
 /** A 400 from the validator that means the creation is already there, which counts as submitted. */
 const ALREADY_THERE = /already (exists|pending|in the garlic chain)/;
@@ -58,7 +50,7 @@ const ALREADY_THERE = /already (exists|pending|in the garlic chain)/;
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
-        <mat-card-title>Wallet</mat-card-title>
+        <mat-card-title>{{ t().wallet.title }}</mat-card-title>
       </mat-card-header>
       <mat-card-content>
         @if (listError(); as text) {
@@ -66,7 +58,7 @@ const ALREADY_THERE = /already (exists|pending|in the garlic chain)/;
         }
         <app-balance-card />
 
-        <h3>Accounts</h3>
+        <h3>{{ t().wallet.accountsTitle }}</h3>
         <div class="cards">
           @for (account of session.accounts(); track account.accountId) {
             <mat-card appearance="outlined" class="account">
@@ -82,44 +74,44 @@ const ALREADY_THERE = /already (exists|pending|in the garlic chain)/;
                       <span class="small muted">{{ held }}</span>
                     }
                     @if (entry.partial) {
-                      <span class="small muted">Some of this account's reads failed; what is held may be incomplete.</span>
+                      <span class="small muted">{{ t().wallet.partial }}</span>
                     }
                   } @else if (!account.submittedAt) {
-                    <span class="muted">Not submitted to the validator</span>
+                    <span class="muted">{{ t().wallet.notSubmitted }}</span>
                   } @else if (entry.error === 'not landed yet') {
-                    <span class="muted">Waiting for the ledger…</span>
+                    <span class="muted">{{ t().wallet.waitingForLedger }}</span>
                   } @else {
                     <span class="error">{{ entry.error }}</span>
                   }
                 } @else {
-                  <span class="muted">Reading…</span>
+                  <span class="muted">{{ t().common.reading }}</span>
                 }
               </a>
               <div class="footer">
                 <code>{{ shortId(account.accountId) }}</code>
-                <app-copy-button [text]="account.accountId" label="Copy the account id" />
+                <app-copy-button [text]="account.accountId" [label]="t().common.copyAccountId" />
                 @if (!account.submittedAt) {
-                  <button mat-stroked-button type="button" (click)="resubmit(account)" [disabled]="busy()">Resubmit</button>
+                  <button mat-stroked-button type="button" (click)="resubmit(account)" [disabled]="busy()">{{ t().wallet.resubmit }}</button>
                 }
               </div>
             </mat-card>
           } @empty {
-            <p class="muted">No anos account yet. Open one below.</p>
+            <p class="muted">{{ t().wallet.noAccounts }}</p>
           }
         </div>
 
-        <h3>Open a new account</h3>
+        <h3>{{ t().wallet.openTitle }}</h3>
         <div class="row">
           <mat-form-field appearance="outline">
-            <mat-label>Type</mat-label>
+            <mat-label>{{ t().common.type }}</mat-label>
             <mat-select [value]="accountType()" (valueChange)="accountType.set($event)" [disabled]="busy()">
               @for (type of accountTypes; track type) {
-                <mat-option [value]="type">{{ type }}</mat-option>
+                <mat-option [value]="type">{{ t().wallet.typeOption(type) }}</mat-option>
               }
             </mat-select>
           </mat-form-field>
-          <button mat-flat-button type="button" (click)="create()" [disabled]="busy()">{{ failedBeforeRegister() ? 'Retry' : 'Create anos account' }}</button>
-          <button mat-button type="button" (click)="load()" [disabled]="busy()">Refresh</button>
+          <button mat-flat-button type="button" (click)="create()" [disabled]="busy()">{{ failedBeforeRegister() ? t().common.retry : t().wallet.createAccount }}</button>
+          <button mat-button type="button" (click)="load()" [disabled]="busy()">{{ t().common.refresh }}</button>
         </div>
         @if (steps().length > 0) {
           <mat-list dense>
@@ -162,6 +154,8 @@ export class WalletPage {
   private readonly crypto = inject(CryptoService);
   private readonly shares = inject(SharesService);
   private readonly signing = inject(SigningService);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
   protected readonly accountTypes = ACCOUNT_TYPES;
   protected readonly millionthsToAnos = millionthsToAnos;
@@ -174,7 +168,7 @@ export class WalletPage {
   protected readonly failedBeforeRegister = signal(false);
 
   /** The accounts' names by id, "Spending account 1" and so on (account-names.ts). */
-  protected readonly names = computed(() => accountNames(this.session.accounts()));
+  protected readonly names = computed(() => accountNames(this.session.accounts(), this.t().accountKinds));
 
   constructor() {
     void this.load();
@@ -192,18 +186,19 @@ export class WalletPage {
 
   /** A landed account's balance, "125 anos". */
   protected balanceWords(entry: AccountBalance): string {
-    return `${millionthsToAnos(entry.balance ?? 0n)} anos`;
+    return this.t().common.anos(millionthsToAnos(entry.balance ?? 0n));
   }
 
   /** The small line under the balance while something is held: what is available, then the held part named by its kind (one at a time, by the validator's rule). */
   protected heldWords(entry: AccountBalance): string | null {
     if (entry.held <= 0n) return null;
+    const words = this.t().wallet;
     const parts: string[] = [];
-    if (entry.escrow > 0n) parts.push(`${millionthsToAnos(entry.escrow)} in an escrow trade`);
-    if (entry.assisted > 0n) parts.push(`${millionthsToAnos(entry.assisted)} in an assisted transfer`);
-    if (entry.locked > 0n) parts.push(`${millionthsToAnos(entry.locked)} waiting out a lock`);
-    if (entry.pending > 0n) parts.push(`${millionthsToAnos(entry.pending)} pending`);
-    return `${millionthsToAnos(entry.available)} anos available · ${parts.join(' · ')}`;
+    if (entry.escrow > 0n) parts.push(words.inEscrow(millionthsToAnos(entry.escrow)));
+    if (entry.assisted > 0n) parts.push(words.inAssisted(millionthsToAnos(entry.assisted)));
+    if (entry.locked > 0n) parts.push(words.waitingOutLock(millionthsToAnos(entry.locked)));
+    if (entry.pending > 0n) parts.push(words.pending(millionthsToAnos(entry.pending)));
+    return `${words.available(millionthsToAnos(entry.available))} · ${parts.join(' · ')}`;
   }
 
   /** The accounts from the masterpod, then the balances of every one. */
@@ -226,13 +221,13 @@ export class WalletPage {
   protected async create(): Promise<void> {
     const encryptionKey = this.session.getEncryptionKey();
     if (!encryptionKey) {
-      this.error.set('The encryption key is not in RAM: unlock again.');
+      this.error.set(this.t().common.noKeyInRamSentence);
       return;
     }
     this.busy.set(true);
     this.error.set(null);
     this.failedBeforeRegister.set(false);
-    this.steps.set(STEPS.map((label) => ({ label, state: 'todo' })));
+    this.steps.set(this.t().wallet.steps.map((label) => ({ label, state: 'todo' })));
     let step = 0;
     try {
       // 1. The keys and the creation signed by the six keys here.
@@ -274,7 +269,7 @@ export class WalletPage {
     } catch (err) {
       this.setStep(step, 'failed');
       if (step < 3) this.failedBeforeRegister.set(true);
-      this.error.set(err instanceof DepositError ? `${err.message}. Retry starts over with fresh keys.` : err instanceof Error ? err.message : String(err));
+      this.error.set(err instanceof DepositError ? this.t().wallet.retryFresh(err.message) : err instanceof Error ? err.message : String(err));
     } finally {
       this.busy.set(false);
     }
@@ -284,7 +279,7 @@ export class WalletPage {
   protected async resubmit(account: AnosAccountItem): Promise<void> {
     this.busy.set(true);
     this.error.set(null);
-    this.steps.set(STEPS.map((label, i) => ({ label, state: i < 4 ? 'done' : 'todo' })));
+    this.steps.set(this.t().wallet.steps.map((label, i) => ({ label, state: i < 4 ? 'done' : 'todo' })));
     try {
       await this.submit(account.creation as unknown as CreateAccountTransaction, 4);
     } catch (err) {

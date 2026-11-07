@@ -4,6 +4,7 @@ import { millionthsToAnos } from '../amounts';
 import { countryName } from '../countries';
 import { formatPrice, totalOf } from '../prices';
 import { ChatService } from '../services/chat.service';
+import { LanguageService } from '../services/language.service';
 import { MarketplaceService } from '../services/marketplace.service';
 import { ListingItem } from '../services/masterpod-api.service';
 import { SessionService } from '../services/session.service';
@@ -31,11 +32,11 @@ import { AvatarComponent } from './avatar.component';
           }
         </span>
       </span>
-      <span class="line">{{ market.sideWords(listing()) }} {{ anos() }} anos · {{ total() }}</span>
+      <span class="line">{{ t().listingCard.line(market.sideWords(listing()), anos(), total()) }}</span>
       <span class="who">
         <app-avatar [anopodId]="listing().owner.anopodId" [username]="listing().owner.username" [size]="24" />
         <span class="name">{{ listing().owner.username }}</span>
-        <span class="muted">· {{ country() }} · {{ chat.shortWhen(listing().createdAt) }}</span>
+        <span class="muted">{{ t().listingCard.where(country(), chat.shortWhen(listing().createdAt)) }}</span>
       </span>
     </a>
   `,
@@ -59,23 +60,26 @@ export class ListingCardComponent {
   protected readonly market = inject(MarketplaceService);
   protected readonly chat = inject(ChatService);
   private readonly session = inject(SessionService);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
-  protected readonly priceLine = computed(() => `${formatPrice(this.listing().price, this.listing().currency)} per anos`);
+  protected readonly priceLine = computed(() => this.t().common.perAnos(formatPrice(this.listing().price, this.listing().currency)));
   protected readonly anos = computed(() => millionthsToAnos(this.listing().quantity));
   protected readonly total = computed(() => formatPrice(totalOf(this.listing().quantity, this.listing().price), this.listing().currency, 0));
-  protected readonly country = computed(() => countryName(this.listing().country));
+  protected readonly country = computed(() => countryName(this.listing().country, this.lang.tag()));
 
   /** Yours, Closed, and for someone else's listing Waiting or Chat open, from this pod's room about it. */
   protected readonly labels = computed(() => {
     const listing = this.listing();
+    const words = this.t().listingCard.labels;
     const labels: string[] = [];
     const mine = listing.owner.anopodId === this.session.anopodId();
-    if (mine) labels.push('Yours');
-    if (listing.status === 'closed') labels.push('Closed');
+    if (mine) labels.push(words.yours);
+    if (listing.status === 'closed') labels.push(this.t().common.closed);
     if (!mine) {
       const state = this.market.stateOf(listing);
-      if (state === 'waiting') labels.push('Waiting');
-      if (state === 'open') labels.push('Chat open');
+      if (state === 'waiting') labels.push(words.waiting);
+      if (state === 'open') labels.push(words.chatOpen);
     }
     return labels;
   });

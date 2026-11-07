@@ -69,15 +69,16 @@ export function totalOf(quantityMillionths: string | bigint, price: string): str
 
 /**
  * { code, name } for the currency picker: every currency the browser knows
- * (Intl.supportedValuesOf) with its English name, sorted by code. A browser
+ * (Intl.supportedValuesOf) with its name in the app's language (`tag`, the
+ * language service's locale tag, wallet spec 8.8), sorted by code. A browser
  * without supportedValuesOf gives an empty list, and the picker then takes
  * a typed three-letter code.
  */
-export function currencyOptions(): { code: string; name: string }[] {
+export function currencyOptions(tag: string): { code: string; name: string }[] {
   const intl = Intl as unknown as { supportedValuesOf?: (key: string) => string[] };
   if (typeof intl.supportedValuesOf !== 'function') return [];
   try {
-    const names = new Intl.DisplayNames(['en'], { type: 'currency' });
+    const names = new Intl.DisplayNames([tag], { type: 'currency' });
     return intl
       .supportedValuesOf('currency')
       .map((code) => ({ code, name: names.of(code) ?? code }))

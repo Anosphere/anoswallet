@@ -1,4 +1,3 @@
-import { DatePipe } from '@angular/common';
 import { Component, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -13,6 +12,7 @@ import { RouterLink } from '@angular/router';
 import { ConfigService } from '../services/config.service';
 import { CryptoService, PairOne } from '../services/crypto.service';
 import { BucketKeyAnswer, KeyholderApiService, ShareType } from '../services/keyholder-api.service';
+import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
 import {
   CaseEvent,
@@ -25,22 +25,13 @@ import {
 } from '../services/masterpod-api.service';
 import { RECOVERY_POLL_MS } from '../services/recovery.service';
 import { AnosAccountItem, SessionService } from '../services/session.service';
-import { STATUS_ICONS, STATUS_WORDS, moderationError } from './moderation.page';
+import { STATUS_ICONS, moderationError } from './moderation.page';
 
-/** A dismissal's preset reason in words, as the moderators read it. */
-const DISMISS_WORDS: Record<DismissReason, string> = {
-  selfieMismatch: 'the selfie did not match',
-  documentsMismatch: 'the documents did not match',
-  unknownLookupId: 'the keyholders know no identity with this lookup id',
-  noShow: 'the person did not join the call',
-  other: 'another reason',
-};
-
-/** The two buckets: the keyholder route, the share type and the masterpod's bucket number of each. */
+/** The two buckets: the keyholder route, the share type and the masterpod's bucket number of each; the titles are the dictionary's `buckets`. */
 type Bucket = 1 | 2;
-const BUCKETS: Record<Bucket, { title: string; path: string; shareType: ShareType }> = {
-  1: { title: 'Bucket one', path: '/get-security-bucket-one-key', shareType: 'securitybucket1' },
-  2: { title: 'Bucket two', path: '/get-security-bucket-two-key', shareType: 'securitybucket2' },
+const BUCKETS: Record<Bucket, { path: string; shareType: ShareType }> = {
+  1: { path: '/get-security-bucket-one-key', shareType: 'securitybucket1' },
+  2: { path: '/get-security-bucket-two-key', shareType: 'securitybucket2' },
 };
 
 /** The statuses in which the banker packet shows (masterpod 12.4.3's blob2 rule, from the moderator's side). */
@@ -91,23 +82,23 @@ interface Outcome {
  */
 @Component({
   selector: 'app-moderation-case-page',
-  imports: [DatePipe, FormsModule, RouterLink, MatCardModule, MatButtonModule, MatListModule, MatIconModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatProgressBarModule],
+  imports: [FormsModule, RouterLink, MatCardModule, MatButtonModule, MatListModule, MatIconModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatProgressBarModule],
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
-        <mat-card-title>Case <code class="id">{{ caseId() }}</code></mat-card-title>
+        <mat-card-title>{{ t().moderationCase.title }} <code class="id">{{ caseId() }}</code></mat-card-title>
         <mat-card-subtitle>
           @if (data(); as d) {
-            <mat-icon class="inline">{{ icons[d.case.status] }}</mat-icon> {{ words[d.case.status] }}
+            <mat-icon class="inline">{{ icons[d.case.status] }}</mat-icon> {{ t().recoveryStatus[d.case.status] ?? d.case.status }}
           } @else {
-            Loading the case…
+            {{ t().common.loadingTheCase }}
           }
         </mat-card-subtitle>
       </mat-card-header>
       <mat-card-content>
         <div class="row">
-          <a mat-button routerLink="/moderation"><mat-icon>arrow_back</mat-icon> Cases</a>
-          <button mat-stroked-button type="button" (click)="refresh()" [disabled]="busy()">Refresh</button>
+          <a mat-button routerLink="/moderation"><mat-icon>arrow_back</mat-icon> {{ t().nav.cases }}</a>
+          <button mat-stroked-button type="button" (click)="refresh()" [disabled]="busy()">{{ t().common.refresh }}</button>
           @if (busy()) {
             <mat-progress-bar mode="indeterminate" class="grow"></mat-progress-bar>
           }
@@ -117,27 +108,27 @@ interface Outcome {
         }
 
         @if (data(); as d) {
-          <h3>The person</h3>
+          <h3>{{ t().common.thePerson }}</h3>
           <div class="person">
             @if (d.profile?.selfie; as selfie) {
-              <img class="selfie" [src]="'data:' + selfie.contentType + ';base64,' + selfie.image" alt="public selfie" />
+              <img class="selfie" [src]="'data:' + selfie.contentType + ';base64,' + selfie.image" [alt]="t().common.publicSelfie" />
             }
             <div class="facts">
-              <div><span class="label">Username</span><span class="value">{{ d.profile?.username ?? 'unknown pod' }}</span></div>
-              <div><span class="label">Name</span><span class="value">{{ d.profile?.firstName }} {{ d.profile?.lastName }}</span></div>
+              <div><span class="label">{{ t().common.username }}</span><span class="value">{{ d.profile?.username ?? t().common.unknownPod }}</span></div>
+              <div><span class="label">{{ t().common.name }}</span><span class="value">{{ d.profile?.firstName }} {{ d.profile?.lastName }}</span></div>
               <div>
-                <span class="label">Email</span>
-                <span class="value">{{ d.case.contactEmail }} <button mat-icon-button type="button" (click)="copy('email', d.case.contactEmail)" aria-label="Copy the email"><mat-icon>content_copy</mat-icon></button>@if (copied() === 'email') { <span class="muted">copied</span> }</span>
+                <span class="label">{{ t().common.email }}</span>
+                <span class="value">{{ d.case.contactEmail }} <button mat-icon-button type="button" (click)="copy('email', d.case.contactEmail)" [attr.aria-label]="t().moderationCase.copyEmail"><mat-icon>content_copy</mat-icon></button>@if (copied() === 'email') { <span class="muted">{{ t().copy.copied }}</span> }</span>
               </div>
               <div>
-                <span class="label">Lookup id</span>
-                <span class="value"><code>{{ d.case.lookupId }}</code> <button mat-icon-button type="button" (click)="copy('lookupId', d.case.lookupId)" aria-label="Copy the lookup id"><mat-icon>content_copy</mat-icon></button>@if (copied() === 'lookupId') { <span class="muted">copied</span> }</span>
+                <span class="label">{{ t().moderationCase.lookupId }}</span>
+                <span class="value"><code>{{ d.case.lookupId }}</code> <button mat-icon-button type="button" (click)="copy('lookupId', d.case.lookupId)" [attr.aria-label]="t().common.copyLookupId"><mat-icon>content_copy</mat-icon></button>@if (copied() === 'lookupId') { <span class="muted">{{ t().copy.copied }}</span> }</span>
               </div>
-              <div><span class="label">Status</span><span class="value">{{ words[d.case.status] }} · opened {{ d.case.createdAt | date: 'medium' }}</span></div>
+              <div><span class="label">{{ t().common.status }}</span><span class="value">{{ t().common.statusOpened(t().recoveryStatus[d.case.status] ?? d.case.status, lang.dateTime(d.case.createdAt)) }}</span></div>
             </div>
           </div>
 
-          <h3>Timeline</h3>
+          <h3>{{ t().common.timeline }}</h3>
           <mat-list dense>
             @for (item of timeline(); track item.key) {
               <mat-list-item [lines]="item.note ? 3 : 2">
@@ -145,7 +136,7 @@ interface Outcome {
                 <span matListItemTitle>
                   {{ item.text }}
                   @if (item.link) {
-                    <a [href]="item.link" target="_blank" rel="noopener">Meeting link</a>
+                    <a [href]="item.link" target="_blank" rel="noopener">{{ t().common.meetingLink }}</a>
                   }
                 </span>
                 @if (item.note) {
@@ -156,40 +147,40 @@ interface Outcome {
             }
           </mat-list>
 
-          <h3>Schedule</h3>
+          <h3>{{ t().common.schedule }}</h3>
           <div class="form">
             <mat-form-field appearance="outline">
-              <mat-label>Video call</mat-label>
+              <mat-label>{{ t().common.videoCall }}</mat-label>
               <input matInput type="datetime-local" [ngModel]="scheduleAt()" (ngModelChange)="scheduleAt.set($event)" />
             </mat-form-field>
             <mat-form-field appearance="outline" class="wide">
-              <mat-label>Meeting link (https)</mat-label>
+              <mat-label>{{ t().common.meetingLinkHttps }}</mat-label>
               <input matInput [ngModel]="meetLink()" (ngModelChange)="meetLink.set($event)" placeholder="https://meet.example/…" />
             </mat-form-field>
-            <button mat-flat-button type="button" (click)="schedule()" [disabled]="busy() || !canSchedule()">Save</button>
+            <button mat-flat-button type="button" (click)="schedule()" [disabled]="busy() || !canSchedule()">{{ t().common.save }}</button>
           </div>
           @if (scheduleOutcome(); as o) { <p [class.error]="!o.ok" [class.ok]="o.ok">{{ o.text }}</p> }
 
-          <h3>Your account</h3>
-          <p class="muted">The spending account that holds your moderator stake signs the key requests and the sign-off.</p>
+          <h3>{{ t().common.yourAccount }}</h3>
+          <p class="muted">{{ t().moderationCase.accountText }}</p>
           <div class="form">
             <mat-form-field appearance="outline" class="wide">
-              <mat-label>Anos account</mat-label>
+              <mat-label>{{ t().common.anosAccount }}</mat-label>
               <mat-select [value]="accountId()" (valueChange)="accountId.set($event)">
                 @for (account of session.accounts(); track account.accountId) {
-                  <mat-option [value]="account.accountId">{{ account.accountType }} · {{ account.accountId }}</mat-option>
+                  <mat-option [value]="account.accountId">{{ t().wallet.typeOption(account.accountType) }} · {{ account.accountId }}</mat-option>
                 }
               </mat-select>
             </mat-form-field>
             @if (session.accounts().length === 0) {
-              <span class="muted">No anos account: create one on the Wallet page and stake it for moderator.</span>
+              <span class="muted">{{ t().moderationCase.noAccount }}</span>
             }
           </div>
 
           @for (bucket of bucketNumbers; track bucket) {
             <h3>{{ bucketTitle(bucket) }}</h3>
             <div class="row">
-              <button mat-flat-button type="button" (click)="pull(bucket)" [disabled]="buckets[bucket].busy() || !accountId()">Pull key</button>
+              <button mat-flat-button type="button" (click)="pull(bucket)" [disabled]="buckets[bucket].busy() || !accountId()">{{ t().common.pullKey }}</button>
               @if (buckets[bucket].busy()) {
                 <span class="muted">{{ buckets[bucket].step() }}</span>
               }
@@ -202,13 +193,12 @@ interface Outcome {
             }
             @if (buckets[bucket].view(); as view) {
               <p class="muted">
-                {{ view.answered }} keyholders answered · {{ view.keyIds.length }} key{{ view.keyIds.length === 1 ? '' : 's' }} combined ·
-                {{ view.images.length }} image{{ view.images.length === 1 ? '' : 's' }}, {{ view.texts.length }} text{{ view.texts.length === 1 ? '' : 's' }} opened
-                @if (view.locked > 0) { · {{ view.locked }} row{{ view.locked === 1 ? '' : 's' }} under other keys }
+                {{ t().common.bucketSummary(view.answered, view.keyIds.length, view.images.length, view.texts.length) }}
+                @if (view.locked > 0) { {{ t().common.bucketLocked(view.locked) }} }
               </p>
               <div class="thumbs">
                 @for (image of view.images; track image.url) {
-                  <a [href]="image.url" target="_blank" rel="noopener"><img [src]="image.url" alt="bucket image" /></a>
+                  <a [href]="image.url" target="_blank" rel="noopener"><img [src]="image.url" [alt]="t().common.bucketImage" /></a>
                 }
               </div>
               @if (view.texts.length > 0) {
@@ -221,71 +211,71 @@ interface Outcome {
             }
           }
 
-          <h3>Sign off</h3>
+          <h3>{{ t().moderationCase.signOff }}</h3>
           @if (signOffs().length > 0) {
-            <p class="muted">Signed off so far: {{ signOffs().join(', ') }}.</p>
+            <p class="muted">{{ t().moderationCase.signedSoFar(signOffs().join(', ')) }}</p>
           }
           <div class="form">
             <mat-form-field appearance="outline">
-              <mat-label>Verdict</mat-label>
+              <mat-label>{{ t().common.verdict }}</mat-label>
               <mat-select [value]="verdict()" (valueChange)="verdict.set($event)">
-                <mat-option value="approve">Approve</mat-option>
-                <mat-option value="reject">Reject</mat-option>
+                <mat-option value="approve">{{ t().common.approve }}</mat-option>
+                <mat-option value="reject">{{ t().moderationCase.reject }}</mat-option>
               </mat-select>
             </mat-form-field>
             <mat-form-field appearance="outline" class="wide">
-              <mat-label>Note</mat-label>
-              <input matInput [ngModel]="signNote()" (ngModelChange)="signNote.set($event)" maxlength="2000" placeholder="Passport and selfie match; called at 14:00 UTC." />
+              <mat-label>{{ t().common.note }}</mat-label>
+              <input matInput [ngModel]="signNote()" (ngModelChange)="signNote.set($event)" maxlength="2000" [placeholder]="t().moderationCase.notePlaceholder" />
             </mat-form-field>
-            <button mat-flat-button type="button" (click)="signOff()" [disabled]="busy() || !accountId()">Sign</button>
+            <button mat-flat-button type="button" (click)="signOff()" [disabled]="busy() || !accountId()">{{ t().moderationCase.sign }}</button>
           </div>
           @if (signOutcome(); as o) { <p [class.error]="!o.ok" [class.ok]="o.ok">{{ o.text }}</p> }
 
-          <h3>Dismiss</h3>
+          <h3>{{ t().common.dismiss }}</h3>
           <div class="form">
             <mat-form-field appearance="outline">
-              <mat-label>Reason</mat-label>
+              <mat-label>{{ t().common.reason }}</mat-label>
               <mat-select [value]="reason()" (valueChange)="reason.set($event)">
                 @for (r of reasons; track r) {
-                  <mat-option [value]="r">{{ reasonWords[r] }}</mat-option>
+                  <mat-option [value]="r">{{ t().dismissReasonsStaff[r] ?? r }}</mat-option>
                 }
               </mat-select>
             </mat-form-field>
             <mat-form-field appearance="outline" class="wide">
-              <mat-label>Note</mat-label>
+              <mat-label>{{ t().common.note }}</mat-label>
               <input matInput [ngModel]="dismissNote()" (ngModelChange)="dismissNote.set($event)" maxlength="2000" />
             </mat-form-field>
             @if (confirmingDismiss()) {
-              <button mat-flat-button type="button" class="danger" (click)="dismiss()" [disabled]="busy()">Confirm dismissal</button>
-              <button mat-button type="button" (click)="confirmingDismiss.set(false)">Cancel</button>
+              <button mat-flat-button type="button" class="danger" (click)="dismiss()" [disabled]="busy()">{{ t().common.confirmDismissal }}</button>
+              <button mat-button type="button" (click)="confirmingDismiss.set(false)">{{ t().common.cancel }}</button>
             } @else {
-              <button mat-stroked-button type="button" (click)="confirmingDismiss.set(true)" [disabled]="busy()">Dismiss</button>
+              <button mat-stroked-button type="button" (click)="confirmingDismiss.set(true)" [disabled]="busy()">{{ t().common.dismiss }}</button>
             }
           </div>
           @if (confirmingDismiss()) {
-            <p class="error">Dismissing is final: the case closes and the person must open a new one.</p>
+            <p class="error">{{ t().moderationCase.dismissWarning }}</p>
           }
           @if (dismissOutcome(); as o) { <p [class.error]="!o.ok" [class.ok]="o.ok">{{ o.text }}</p> }
 
           @if (packet(); as packet) {
-            <h3>Banker packet</h3>
-            <p class="muted">What the bankers' GUI takes: the lookup id, the recovery pod's URL and its hybrid key.</p>
+            <h3>{{ t().moderationCase.packetTitle }}</h3>
+            <p class="muted">{{ t().moderationCase.packetText }}</p>
             <div class="facts">
-              <div><span class="label">Lookup id</span><span class="value"><code>{{ packet.lookupId }}</code> <button mat-icon-button type="button" (click)="copy('packetLookupId', packet.lookupId)" aria-label="Copy the lookup id"><mat-icon>content_copy</mat-icon></button>@if (copied() === 'packetLookupId') { <span class="muted">copied</span> }</span></div>
-              <div><span class="label">URL</span><span class="value"><code>{{ packet.url }}</code> <button mat-icon-button type="button" (click)="copy('url', packet.url)" aria-label="Copy the URL"><mat-icon>content_copy</mat-icon></button>@if (copied() === 'url') { <span class="muted">copied</span> }</span></div>
-              <div><span class="label">Hybrid key</span><span class="value"><code>{{ packet.hybridKeyJson }}</code> <button mat-icon-button type="button" (click)="copy('hybridKey', packet.hybridKeyJson)" aria-label="Copy the hybrid key"><mat-icon>content_copy</mat-icon></button>@if (copied() === 'hybridKey') { <span class="muted">copied</span> }</span></div>
+              <div><span class="label">{{ t().moderationCase.lookupId }}</span><span class="value"><code>{{ packet.lookupId }}</code> <button mat-icon-button type="button" (click)="copy('packetLookupId', packet.lookupId)" [attr.aria-label]="t().common.copyLookupId"><mat-icon>content_copy</mat-icon></button>@if (copied() === 'packetLookupId') { <span class="muted">{{ t().copy.copied }}</span> }</span></div>
+              <div><span class="label">{{ t().moderationCase.url }}</span><span class="value"><code>{{ packet.url }}</code> <button mat-icon-button type="button" (click)="copy('url', packet.url)" [attr.aria-label]="t().moderationCase.copyUrl"><mat-icon>content_copy</mat-icon></button>@if (copied() === 'url') { <span class="muted">{{ t().copy.copied }}</span> }</span></div>
+              <div><span class="label">{{ t().moderationCase.hybridKey }}</span><span class="value"><code>{{ packet.hybridKeyJson }}</code> <button mat-icon-button type="button" (click)="copy('hybridKey', packet.hybridKeyJson)" [attr.aria-label]="t().moderationCase.copyHybridKey"><mat-icon>content_copy</mat-icon></button>@if (copied() === 'hybridKey') { <span class="muted">{{ t().copy.copied }}</span> }</span></div>
             </div>
             <div class="row">
-              <button mat-stroked-button type="button" (click)="copy('all', packet.all)">Copy all</button>
-              @if (copied() === 'all') { <span class="muted">copied</span> }
+              <button mat-stroked-button type="button" (click)="copy('all', packet.all)">{{ t().moderationCase.copyAll }}</button>
+              @if (copied() === 'all') { <span class="muted">{{ t().copy.copied }}</span> }
             </div>
-            <h4>Shares received</h4>
+            <h4>{{ t().moderationCase.sharesReceived }}</h4>
             @if (d.shares.length === 0) {
-              <p class="muted">None yet.</p>
+              <p class="muted">{{ t().common.noneYet }}</p>
             } @else {
               <ul class="texts">
                 @for (share of d.shares; track share.keyholderId + share.shareType + share.keyId) {
-                  <li>Keyholder {{ share.keyholderId }} · {{ share.shareType }} · key <code>{{ share.keyId.slice(0, 8) }}…</code> · {{ share.receivedAt | date: 'medium' }}</li>
+                  <li>{{ t().moderationCase.keyholderShare(share.keyholderId, share.shareType) }} <code>{{ share.keyId.slice(0, 8) }}…</code> · {{ lang.dateTime(share.receivedAt) }}</li>
                 }
               </ul>
             }
@@ -326,11 +316,11 @@ export class ModerationCasePage {
   private readonly keyholders = inject(KeyholderApiService);
   private readonly config = inject(ConfigService);
   private readonly crypto = inject(CryptoService);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
-  protected readonly words = STATUS_WORDS;
   protected readonly icons = STATUS_ICONS;
   protected readonly reasons = DISMISS_REASONS;
-  protected readonly reasonWords = DISMISS_WORDS;
   protected readonly bucketNumbers: Bucket[] = [1, 2];
 
   protected readonly data = signal<RecoveryCaseAnswer | null>(null);
@@ -363,7 +353,7 @@ export class ModerationCasePage {
   protected readonly signOffs = computed(() =>
     (this.data()?.events ?? [])
       .filter((e) => e.kind === 'approvalSigned' || e.kind === 'rejectionSigned')
-      .map((e) => `${e.username ?? 'a moderator'} ${e.kind === 'approvalSigned' ? 'approved' : 'rejected'}`),
+      .map((e) => this.t().moderationCase.signOffLine(e.username ?? this.t().moderationCase.aModerator, e.kind === 'approvalSigned' ? this.t().moderationCase.approved : this.t().moderationCase.rejected)),
   );
 
   /** The banker packet, shown once the case is approved or delivering, with the hybrid key as JSON and the three together. */
@@ -387,7 +377,7 @@ export class ModerationCasePage {
   }
 
   protected bucketTitle(bucket: Bucket): string {
-    return BUCKETS[bucket].title;
+    return bucket === 1 ? this.t().buckets.one : this.t().buckets.two;
   }
 
   // --- the case ----------------------------------------------------------------
@@ -407,9 +397,9 @@ export class ModerationCasePage {
       this.data.set(res.body);
       this.error.set(null);
     } else if (res.status === 404) {
-      this.error.set('No case with this id.');
+      this.error.set(this.t().moderationCase.notFound);
     } else {
-      this.error.set(moderationError(res, '/get-recovery-case'));
+      this.error.set(moderationError(res, '/get-recovery-case', this.t()));
     }
   }
 
@@ -430,8 +420,8 @@ export class ModerationCasePage {
   private async pairOne(): Promise<{ account: AnosAccountItem; pairOne: PairOne }> {
     const account = this.session.accounts().find((a) => a.accountId === this.accountId());
     const encryptionKey = this.session.getEncryptionKey();
-    if (!account) throw new Error('Pick one of your anos accounts first.');
-    if (!encryptionKey) throw new Error('The encryption key is not in RAM: unlock again.');
+    if (!account) throw new Error(this.t().common.pickAccountFirst);
+    if (!encryptionKey) throw new Error(this.t().common.noKeyInRamSentence);
     return { account, pairOne: await this.crypto.pairOneFromKeyBlob(this.crypto.fromHex(account.keyBlob), encryptionKey) };
   }
 
@@ -440,10 +430,10 @@ export class ModerationCasePage {
   protected schedule(): Promise<void> {
     return this.act(this.scheduleOutcome, async () => {
       const at = new Date(this.scheduleAt());
-      if (Number.isNaN(at.getTime())) throw new Error('Enter the time of the call.');
+      if (Number.isNaN(at.getTime())) throw new Error(this.t().common.enterCallTime);
       const res = await this.masterpod.scheduleRecoveryCase(this.caseId(), at.toISOString(), this.meetLink().trim());
       if (!res.ok) throw new Error(this.refusal(res, '/schedule-recovery-case'));
-      return `Scheduled for ${at.toLocaleString()}; the person sees the link on their case page.`;
+      return this.t().common.scheduledPerson(this.lang.dateTime(at));
     });
   }
 
@@ -464,15 +454,15 @@ export class ModerationCasePage {
     state.error.set(null);
     try {
       const d = this.data();
-      if (!d) throw new Error('The case has not loaded yet.');
-      state.step.set('Opening pair one of your account…');
+      if (!d) throw new Error(this.t().common.caseNotLoaded);
+      state.step.set(this.t().common.openingPairOne);
       const { account, pairOne } = await this.pairOne();
-      state.step.set('Asking the keyholders for the bucket key…');
+      state.step.set(this.t().common.askingKeyholders);
       const { keys, answered } = await this.pullKeys(bucket, pairOne, account.accountId, d.case.lookupId);
-      state.step.set('Reading the rows from the masterpod…');
+      state.step.set(this.t().common.readingRows);
       const res = await this.masterpod.listCaseSecurityRecords(this.caseId(), bucket);
-      if (!res.ok) throw new Error(moderationError(res, '/list-case-security-records'));
-      state.step.set('Decrypting…');
+      if (!res.ok) throw new Error(moderationError(res, '/list-case-security-records', this.t()));
+      state.step.set(this.t().common.decrypting);
       const view = await this.openRows(keys, answered, res.body);
       this.dropView(state.view());
       state.view.set(view);
@@ -510,7 +500,7 @@ export class ModerationCasePage {
           try {
             share = await this.crypto.decryptFromHybrid(response, this.crypto.fromHex(item.share), this.crypto.shareAad(lookupId, shareType, item.keyId));
           } catch {
-            throw new Error(`A share from keyholder ${n} did not open with the response key.`);
+            throw new Error(this.t().common.shareNoOpen(n));
           }
           const group = groups.get(item.keyId) ?? { createdAt: item.createdAt, shares: [] };
           if (item.createdAt > group.createdAt) group.createdAt = item.createdAt;
@@ -520,7 +510,7 @@ export class ModerationCasePage {
       }
       const complete = [...groups.entries()].filter(([, g]) => g.shares.length >= shareThreshold).sort((a, b) => b[1].createdAt.localeCompare(a[1].createdAt));
       if (complete.length === 0) {
-        throw new Error(groups.size === 0 ? 'The keyholders hold no key for this bucket.' : `No bucket key has ${shareThreshold} shares among the keyholders that answered.`);
+        throw new Error(groups.size === 0 ? this.t().common.noBucketKey : this.t().common.noBucketKeyShares(shareThreshold));
       }
       const keys = new Map<string, Uint8Array>();
       for (const [keyId, group] of bucket === 1 ? complete.slice(0, 1) : complete) {
@@ -538,10 +528,10 @@ export class ModerationCasePage {
   /** The keyholders' refusals in words (wallet spec 12.3). */
   private pullRefusal(res: ApiResponse<unknown>, refused: number, keyholders: number): string {
     const reason = reasonOf(res);
-    if (res.status === 403 && /not a moderator/.test(reason)) return 'This account holds no moderator stake: the keyholders refused it.';
-    if (res.status === 404 && /unknown lookup id/.test(reason)) return 'The keyholders know no identity with this lookup id.';
-    if (res.status === 401 && /unknown account/.test(reason)) return 'This account is not on the ledger yet.';
-    return `${refused} of ${keyholders} keyholders refused or did not answer (${reason}).`;
+    if (res.status === 403 && /not a moderator/.test(reason)) return this.t().moderationCase.noStake;
+    if (res.status === 404 && /unknown lookup id/.test(reason)) return this.t().common.unknownLookupId;
+    if (res.status === 401 && /unknown account/.test(reason)) return this.t().common.notOnLedger;
+    return this.t().common.keyholdersRefused(refused, keyholders, reason);
   }
 
   /** The rows under a combined key decrypted; the others counted; the keys wiped. */
@@ -585,8 +575,8 @@ export class ModerationCasePage {
       const message = { caseId: this.caseId(), accountId: account.accountId, verdict: this.verdict(), note: this.signNote().trim(), signedAt: new Date().toISOString() };
       const res = await this.masterpod.signOffRecoveryCase({ ...message, signatures: this.crypto.signSignOff(pairOne, message) });
       if (!res.ok) throw new Error(this.refusal(res, '/sign-off-recovery-case'));
-      if (res.body.status === 'approved') return 'Signed. The case is approved: the banker packet is below.';
-      return `Signed: ${this.verdict() === 'approve' ? 'approved' : 'rejected'}. ${res.body.approvals} of 2 approvals.`;
+      if (res.body.status === 'approved') return this.t().moderationCase.signedApproved;
+      return this.t().moderationCase.signed(this.verdict() === 'approve' ? this.t().moderationCase.approved : this.t().moderationCase.rejected, res.body.approvals);
     });
   }
 
@@ -595,19 +585,19 @@ export class ModerationCasePage {
     return this.act(this.dismissOutcome, async () => {
       const res = await this.masterpod.dismissRecoveryCase(this.caseId(), this.reason(), this.dismissNote().trim());
       if (!res.ok) throw new Error(this.refusal(res, '/dismiss-recovery-case'));
-      return 'Dismissed. The person sees the reason on their case page and may open a new case.';
+      return this.t().moderationCase.dismissed;
     });
   }
 
   /** A moderator route's refusal in words. */
   private refusal(res: ApiResponse<unknown>, path: string): string {
     const reason = reasonOf(res);
-    if (res.status === 409 && /already signed off/.test(reason)) return 'This anoPod already signed off on this case.';
-    if (res.status === 409 && /case closed/.test(reason)) return 'This case is closed: nothing more can be done to it.';
-    if (res.status === 403 && /not your account/.test(reason)) return 'This account is not one of this anoPod\'s accounts.';
-    if (res.status === 401 && /bad signature/.test(reason)) return 'The masterpod refused the signature: the account\'s stored keys do not match.';
-    if (res.status === 400) return `${path}: the masterpod refused the values (${reason}).`;
-    return moderationError(res, path);
+    if (res.status === 409 && /already signed off/.test(reason)) return this.t().moderationCase.alreadySigned;
+    if (res.status === 409 && /case closed/.test(reason)) return this.t().common.caseClosedDone;
+    if (res.status === 403 && /not your account/.test(reason)) return this.t().common.notMyAccountSentence;
+    if (res.status === 401 && /bad signature/.test(reason)) return this.t().common.badSignature;
+    if (res.status === 400) return this.t().common.refusedValues(path, reason);
+    return moderationError(res, path, this.t());
   }
 
   private async act(outcome: ReturnType<typeof signal<Outcome | null>>, action: () => Promise<string>): Promise<void> {
@@ -631,52 +621,53 @@ export class ModerationCasePage {
       this.copied.set(what);
       setTimeout(() => this.copied.set(null), 2000);
     } catch {
-      this.error.set('Could not copy; select the text by hand.');
+      this.error.set(this.t().common.couldNotCopyText);
     }
   }
 
   private itemOf(event: CaseEvent): TimelineItem {
     const d = event.details;
-    const who = event.username ?? (event.anopodId ? `pod ${event.anopodId.slice(0, 8)}…` : 'a moderator');
-    const note = typeof d['note'] === 'string' && d['note'] !== '' ? `Note: ${d['note']}` : null;
+    const words = this.t().moderationCase;
+    const who = event.username ?? (event.anopodId ? this.t().common.podShort(event.anopodId.slice(0, 8)) : words.aModerator);
+    const note = typeof d['note'] === 'string' && d['note'] !== '' ? this.t().common.notePrefix(d['note']) : null;
     const keys = Array.isArray(d['keyIds']) ? d['keyIds'].length : 0;
     let icon = 'circle';
     let text = event.kind;
     let link: string | null = null;
     switch (event.kind) {
       case 'opened':
-        [icon, text] = ['flag', 'Case opened by the person'];
+        [icon, text] = ['flag', words.eventOpened];
         break;
       case 'scheduled':
-        [icon, text] = ['event', `${who} scheduled the video call for ${typeof d['at'] === 'string' ? new Date(d['at']).toLocaleString() : 'a time to be confirmed'}`];
+        [icon, text] = ['event', this.t().common.scheduledBy(who, typeof d['at'] === 'string' ? this.lang.dateTime(d['at']) : this.t().common.timeToBeConfirmed)];
         link = typeof d['meetLink'] === 'string' ? d['meetLink'] : null;
         break;
       case 'bucketOneViewed':
       case 'bucketTwoViewed':
-        [icon, text] = ['visibility', `${who} read bucket ${event.kind === 'bucketOneViewed' ? 'one' : 'two'} (${keys} key${keys === 1 ? '' : 's'})`];
+        [icon, text] = ['visibility', this.t().common.readBucket(who, event.kind === 'bucketOneViewed' ? 1 : 2, keys)];
         break;
       case 'approvalSigned':
-        [icon, text] = ['thumb_up', `${who} approved`];
+        [icon, text] = ['thumb_up', words.eventApproved(who)];
         break;
       case 'rejectionSigned':
-        [icon, text] = ['thumb_down', `${who} rejected`];
+        [icon, text] = ['thumb_down', words.eventRejected(who)];
         break;
       case 'approved':
-        [icon, text] = ['verified', 'Approved: two moderators signed off'];
+        [icon, text] = ['verified', words.eventDecided];
         break;
       case 'dismissed':
-        [icon, text] = ['block', `${who} dismissed the case: ${DISMISS_WORDS[d['reason'] as DismissReason] ?? String(d['reason'] ?? '')}`];
+        [icon, text] = ['block', this.t().common.dismissedBy(who, this.t().dismissReasonsStaff[String(d['reason'])] ?? String(d['reason'] ?? ''))];
         break;
       case 'shareReceived':
-        [icon, text] = ['local_shipping', `Keyholder ${String(d['keyholderId'] ?? '?')} delivered a ${String(d['shareType'] ?? '')} share`];
+        [icon, text] = ['local_shipping', words.eventShare(String(d['keyholderId'] ?? '?'), String(d['shareType'] ?? ''))];
         break;
       case 'recovered':
-        [icon, text] = ['key', 'The person recovered their passkey'];
+        [icon, text] = ['key', words.eventRecovered];
         break;
       case 'completed':
-        [icon, text] = ['check_circle', 'The person completed the recovery'];
+        [icon, text] = ['check_circle', words.eventCompleted];
         break;
     }
-    return { key: event.eventId, icon, text, note, link, when: new Date(event.createdAt).toLocaleString() };
+    return { key: event.eventId, icon, text, note, link, when: this.lang.dateTime(event.createdAt) };
   }
 }

@@ -10,6 +10,7 @@ import { Router } from '@angular/router';
 import { IdentityFormComponent, IdentityFormState } from '../components/identity-form.component';
 import { USERNAME_DEBOUNCE_MS } from '../constants';
 import { CryptoService } from '../services/crypto.service';
+import { LanguageService } from '../services/language.service';
 import { reasonOf } from '../services/log.service';
 import { MasterpodApiService } from '../services/masterpod-api.service';
 import { PasskeyService } from '../services/passkey.service';
@@ -41,47 +42,44 @@ function isContactEmail(value: string): boolean {
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
-        <mat-card-title>I'm locked out</mat-card-title>
-        <mat-card-subtitle>Open a recovery case</mat-card-subtitle>
+        <mat-card-title>{{ t().common.lockedOut }}</mat-card-title>
+        <mat-card-subtitle>{{ t().recoverOpen.subtitle }}</mat-card-subtitle>
       </mat-card-header>
       <mat-card-content>
         <mat-stepper linear orientation="vertical" #stepper>
-          <mat-step [completed]="lookupId() !== null" label="Your birth record">
-            <p>We turn this into the same lookup id you made at setup, on this device; nothing you type is sent.</p>
+          <mat-step [completed]="lookupId() !== null" [label]="t().recoverOpen.stepRecord">
+            <p>{{ t().recoverOpen.recordText }}</p>
             <app-identity-form [state]="form" />
             @if (computing()) {
               <mat-progress-bar mode="indeterminate"></mat-progress-bar>
             }
             @if (lookupId() !== null && !form.complete()) {
-              <p class="muted">Your lookup id is computed and the answers are dropped. Fill the form in again to compute it afresh.</p>
+              <p class="muted">{{ t().recoverOpen.computed }}</p>
             }
-            <button mat-flat-button type="button" (click)="next(stepper)" [disabled]="computing() || (!form.complete() && lookupId() === null)">Next</button>
+            <button mat-flat-button type="button" (click)="next(stepper)" [disabled]="computing() || (!form.complete() && lookupId() === null)">{{ t().common.next }}</button>
           </mat-step>
 
-          <mat-step [completed]="whoDone()" label="Who you are">
+          <mat-step [completed]="whoDone()" [label]="t().recoverOpen.stepWho">
             <div class="fields">
               <mat-form-field appearance="outline">
-                <mat-label>Username</mat-label>
+                <mat-label>{{ t().common.username }}</mat-label>
                 <input matInput [ngModel]="username()" (ngModelChange)="username.set($event)" autocomplete="username" />
                 <mat-hint>{{ usernameHint() }}</mat-hint>
               </mat-form-field>
               <mat-form-field appearance="outline">
-                <mat-label>Contact email</mat-label>
+                <mat-label>{{ t().recoverOpen.contactEmail }}</mat-label>
                 <input matInput type="email" [ngModel]="email()" (ngModelChange)="email.set($event)" autocomplete="email" />
-                <mat-hint>Where a moderator can reach you. Nothing is sent by itself.</mat-hint>
+                <mat-hint>{{ t().recoverOpen.emailHint }}</mat-hint>
               </mat-form-field>
             </div>
             <div>
-              <button mat-button type="button" matStepperPrevious>Back</button>
-              <button mat-flat-button type="button" matStepperNext [disabled]="!whoDone()">Next</button>
+              <button mat-button type="button" matStepperPrevious>{{ t().common.back }}</button>
+              <button mat-flat-button type="button" matStepperNext [disabled]="!whoDone()">{{ t().common.next }}</button>
             </div>
           </mat-step>
 
-          <mat-step label="Open my case">
-            <p>
-              Your recovery passkey is created now, with this device's screen lock or biometrics. Keep this device: you unlock your case
-              with that passkey while the recovery runs.
-            </p>
+          <mat-step [label]="t().recoverOpen.openCase">
+            <p>{{ t().recoverOpen.passkeyText }}</p>
             @if (busy()) {
               <mat-progress-bar mode="indeterminate"></mat-progress-bar>
             }
@@ -89,8 +87,8 @@ function isContactEmail(value: string): boolean {
               <p class="error">{{ text }}</p>
             }
             <div>
-              <button mat-button type="button" matStepperPrevious [disabled]="busy()">Back</button>
-              <button mat-flat-button type="button" (click)="open()" [disabled]="busy()">Open my case</button>
+              <button mat-button type="button" matStepperPrevious [disabled]="busy()">{{ t().common.back }}</button>
+              <button mat-flat-button type="button" (click)="open()" [disabled]="busy()">{{ t().recoverOpen.openCase }}</button>
             </div>
           </mat-step>
         </mat-stepper>
@@ -112,12 +110,14 @@ export class RecoverOpenPage {
   private readonly recovery = inject(RecoveryService);
   private readonly router = inject(Router);
   private readonly injector = inject(Injector);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
   protected readonly form = new IdentityFormState();
   protected readonly lookupId = signal<string | null>(null);
   protected readonly computing = signal(false);
   protected readonly username = signal('');
-  protected readonly usernameHint = signal('the username of the anoPod you lost');
+  protected readonly usernameHint = signal(this.t().recoverOpen.usernameHint);
   protected readonly usernameFound = signal(false);
   protected readonly email = signal('');
   protected readonly busy = signal(false);
@@ -134,10 +134,10 @@ export class RecoverOpenPage {
         this.usernameFound.set(false);
         if (timer) clearTimeout(timer);
         if (typed === '') {
-          this.usernameHint.set('the username of the anoPod you lost');
+          this.usernameHint.set(this.t().recoverOpen.usernameHint);
           return;
         }
-        this.usernameHint.set('checking…');
+        this.usernameHint.set(this.t().common.checking);
         timer = setTimeout(() => void this.checkUsername(typed), USERNAME_DEBOUNCE_MS);
       });
     });
@@ -155,7 +155,7 @@ export class RecoverOpenPage {
       return;
     }
     this.usernameFound.set(!res.body.available);
-    this.usernameHint.set(res.body.available ? 'no anoPod has that username' : `${res.body.username} found`);
+    this.usernameHint.set(res.body.available ? this.t().recoverOpen.noSuchUsername : this.t().recoverOpen.found(res.body.username));
   }
 
   /** Step 1's Next: the lookup id from the answers (scrypt takes well under a second), the answers dropped. */
@@ -190,8 +190,8 @@ export class RecoverOpenPage {
       const username = this.username().trim().toLowerCase();
       const contactEmail = this.email().trim();
       const challenge = await this.api.challenge('openCase', username);
-      if (!challenge.ok) throw new Error(challenge.status === 404 ? 'No anoPod has that username' : `/challenge: ${reasonOf(challenge)}`);
-      if (!challenge.body.anopodId) throw new Error('/challenge answered no anopodId');
+      if (!challenge.ok) throw new Error(challenge.status === 404 ? this.t().recoverOpen.noAnopod : `/challenge: ${reasonOf(challenge)}`);
+      if (!challenge.body.anopodId) throw new Error(this.t().recoverOpen.noAnopodId);
       const registration = await this.passkey.register(challenge.body.challenge, challenge.body.anopodId, username, username);
       let prf = registration.prfOutput;
       if (!prf) {
@@ -216,7 +216,7 @@ export class RecoverOpenPage {
       };
       const res = await this.api.openRecoveryCase({ payload, signatures: this.crypto.signPayload(keys, payload) });
       if (!res.ok) {
-        throw new Error(res.status === 409 ? 'A case is already open for this identity' : `/open-recovery-case: ${reasonOf(res)}`);
+        throw new Error(res.status === 409 ? this.t().recoverOpen.alreadyOpen : `/open-recovery-case: ${reasonOf(res)}`);
       }
       this.recovery.open(res.body.caseId, keys, res.body.status);
       this.recovery.username.set(username);

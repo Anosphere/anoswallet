@@ -4,6 +4,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { RouterLink } from '@angular/router';
 import { ListingCardComponent } from '../components/listing-card.component';
 import { ListingPeopleComponent } from '../components/listing-people.component';
+import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
 import { MarketplaceService } from '../services/marketplace.service';
 import { ListingItem } from '../services/masterpod-api.service';
@@ -21,8 +22,8 @@ import { ListingItem } from '../services/masterpod-api.service';
   imports: [RouterLink, MatButtonModule, MatIconModule, ListingCardComponent, ListingPeopleComponent],
   template: `
     <header class="head">
-      <a mat-icon-button routerLink="/marketplace" aria-label="Back to the marketplace"><mat-icon>arrow_back</mat-icon></a>
-      <h2>Your listings</h2>
+      <a mat-icon-button routerLink="/marketplace" [attr.aria-label]="t().common.backToMarketplace"><mat-icon>arrow_back</mat-icon></a>
+      <h2>{{ t().common.yourListings }}</h2>
     </header>
     @if (error(); as text) {
       <p class="error">{{ text }}</p>
@@ -33,22 +34,22 @@ import { ListingItem } from '../services/masterpod-api.service';
         <app-listing-people [listing]="listing" />
         @if (listing.status === 'open') {
           @if (closing() === listing.listingId) {
-            <p>Close this listing? People can no longer connect; your chats stay.</p>
+            <p>{{ t().common.askClose }}</p>
             <div class="buttons">
-              <button mat-flat-button type="button" (click)="close(listing)" [disabled]="busy()">Yes</button>
-              <button mat-button type="button" (click)="closing.set(null)" [disabled]="busy()">Back</button>
+              <button mat-flat-button type="button" (click)="close(listing)" [disabled]="busy()">{{ t().common.yes }}</button>
+              <button mat-button type="button" (click)="closing.set(null)" [disabled]="busy()">{{ t().common.back }}</button>
             </div>
           } @else {
-            <button mat-stroked-button type="button" (click)="closing.set(listing.listingId)" [disabled]="busy()">Close</button>
+            <button mat-stroked-button type="button" (click)="closing.set(listing.listingId)" [disabled]="busy()">{{ t().myListings.close }}</button>
           }
         }
       </section>
     } @empty {
       @if (loaded()) {
-        <p class="muted">You have no listings yet.</p>
-        <a mat-flat-button routerLink="/marketplace/new"><mat-icon>add</mat-icon> New listing</a>
+        <p class="muted">{{ t().myListings.none }}</p>
+        <a mat-flat-button routerLink="/marketplace/new"><mat-icon>add</mat-icon> {{ t().common.newListing }}</a>
       } @else if (!error()) {
-        <p class="muted">Loading</p>
+        <p class="muted">{{ t().common.loading }}</p>
       }
     }
   `,
@@ -66,6 +67,8 @@ import { ListingItem } from '../services/masterpod-api.service';
 })
 export class MyListingsPage {
   private readonly market = inject(MarketplaceService);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
   protected readonly listings = signal<ListingItem[]>([]);
   protected readonly loaded = signal(false);

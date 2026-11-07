@@ -8,6 +8,7 @@ import { MatStepper, MatStepperModule } from '@angular/material/stepper';
 import { Router, RouterLink } from '@angular/router';
 import { ConfigService } from '../services/config.service';
 import { BackupCodeKeys, CryptoService } from '../services/crypto.service';
+import { LanguageService } from '../services/language.service';
 import { ApiError, reasonOf } from '../services/log.service';
 import { AnosAccountListItem, MasterpodApiService, RotationMessage } from '../services/masterpod-api.service';
 import { Bytes, PasskeyService } from '../services/passkey.service';
@@ -38,15 +39,6 @@ interface BreakGlassResult {
   unmatched: number;
 }
 
-/** A dismissal's preset reason in words (masterpod 12.4.4). */
-const DISMISS_REASONS: Record<string, string> = {
-  selfieMismatch: 'the selfie did not match',
-  documentsMismatch: 'the documents did not match',
-  unknownLookupId: 'the keyholders know no identity with this lookup id',
-  noShow: 'you did not join the call',
-  other: 'another reason',
-};
-
 /** The final statuses: the poll stops there. */
 const FINAL_STATUSES = ['completed', 'dismissed'];
 
@@ -69,27 +61,27 @@ const FINISH_STATUSES = ['approved', 'delivering'];
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
-        <mat-card-title>My recovery</mat-card-title>
+        <mat-card-title>{{ t().recoverCase.title }}</mat-card-title>
         <mat-card-subtitle class="subtitle">
-          <span>Case {{ shortCaseId() }}</span>
-          <button mat-icon-button type="button" (click)="copyCaseId()" aria-label="Copy the case id"><mat-icon>content_copy</mat-icon></button>
+          <span>{{ t().common.caseId(shortCaseId()) }}</span>
+          <button mat-icon-button type="button" (click)="copyCaseId()" [attr.aria-label]="t().common.copyCaseId"><mat-icon>content_copy</mat-icon></button>
           @if (copied()) {
-            <span class="muted">copied</span>
+            <span class="muted">{{ t().copy.copied }}</span>
           }
         </mat-card-subtitle>
       </mat-card-header>
       <mat-card-content>
         <p class="status">{{ statusText() }}</p>
-        <p>Keep this device: you unlock this case with the passkey you just made.</p>
+        <p>{{ t().recoverCase.keepDevice }}</p>
         @if (busy()) {
           <mat-progress-bar mode="indeterminate"></mat-progress-bar>
         }
         @if (error(); as text) {
           <p class="error">{{ text }}</p>
         }
-        <h3>Timeline</h3>
+        <h3>{{ t().common.timeline }}</h3>
         @if (timeline().length === 0) {
-          <p class="muted">Nothing yet.</p>
+          <p class="muted">{{ t().common.nothingYet }}</p>
         }
         <mat-list dense>
           @for (item of timeline(); track item.key) {
@@ -98,7 +90,7 @@ const FINISH_STATUSES = ['approved', 'delivering'];
               <span matListItemTitle>
                 {{ item.text }}
                 @if (item.link) {
-                  <a [href]="item.link" target="_blank" rel="noopener">Meeting link</a>
+                  <a [href]="item.link" target="_blank" rel="noopener">{{ t().common.meetingLink }}</a>
                 }
               </span>
               <span matListItemLine>{{ item.when }}</span>
@@ -107,8 +99,8 @@ const FINISH_STATUSES = ['approved', 'delivering'];
         </mat-list>
 
         @if (showFinish()) {
-          <h3>Finish your recovery</h3>
-          <p>Enough backup code shares are in. Everything below happens in this tab; a step that fails can be run again.</p>
+          <h3>{{ t().recoverCase.finishTitle }}</h3>
+          <p>{{ t().recoverCase.finishText }}</p>
           @if (finishBusy()) {
             <mat-progress-bar mode="indeterminate"></mat-progress-bar>
           }
@@ -116,61 +108,58 @@ const FINISH_STATUSES = ['approved', 'delivering'];
             <p class="error">{{ text }}</p>
           }
           <mat-stepper linear orientation="vertical" #finish>
-            <mat-step [completed]="combined() !== null" [editable]="false" label="Combine">
-              <p>The shares the bankers sent are opened with this case's key and put back together: your backup code and your break-glass seeds.</p>
+            <mat-step [completed]="combined() !== null" [editable]="false" [label]="t().recoverCase.combine">
+              <p>{{ t().recoverCase.combineText }}</p>
               @if (combined(); as c) {
                 <p class="result">{{ combinedText(c) }}</p>
               }
-              <button mat-flat-button type="button" (click)="combine(finish)" [disabled]="finishBusy()">Combine</button>
+              <button mat-flat-button type="button" (click)="combine(finish)" [disabled]="finishBusy()">{{ t().recoverCase.combine }}</button>
             </mat-step>
 
-            <mat-step [completed]="backIn()" [editable]="false" label="Get back in">
-              <p>
-                Your backup code opens your encryption key and proves itself to the masterpod, which makes this case's passkey your anoPod's
-                passkey. Then you unlock as usual, here, with that passkey: pick it when asked.
-              </p>
-              <button mat-flat-button type="button" (click)="getBackIn(finish)" [disabled]="finishBusy()">Get back in</button>
+            <mat-step [completed]="backIn()" [editable]="false" [label]="t().recoverCase.getBackIn">
+              <p>{{ t().recoverCase.backInText }}</p>
+              <button mat-flat-button type="button" (click)="getBackIn(finish)" [disabled]="finishBusy()">{{ t().recoverCase.getBackIn }}</button>
             </mat-step>
 
-            <mat-step [completed]="breakGlass() !== null" [editable]="false" label="Break-glass keys">
-              <p>Each recovered break-glass seed is matched to its anos account and stored there under your encryption key.</p>
+            <mat-step [completed]="breakGlass() !== null" [editable]="false" [label]="t().recoverCase.stepBreakGlass">
+              <p>{{ t().recoverCase.breakGlassText }}</p>
               @if (breakGlass(); as b) {
                 <p class="result">{{ breakGlassText(b) }}</p>
               }
-              <button mat-flat-button type="button" (click)="storeBreakGlass(finish)" [disabled]="finishBusy()">Store break-glass keys</button>
+              <button mat-flat-button type="button" (click)="storeBreakGlass(finish)" [disabled]="finishBusy()">{{ t().recoverCase.storeBreakGlass }}</button>
             </mat-step>
 
-            <mat-step [completed]="deposited()" [editable]="false" label="New backup code">
-              <p>Your old backup code went through the bankers' hands: make a new one. It replaces the old one on the masterpod and is deposited with the keyholders.</p>
+            <mat-step [completed]="deposited()" [editable]="false" [label]="t().recoverCase.stepNewCode">
+              <p>{{ t().recoverCase.newCodeText }}</p>
               @if (newCodeText(); as code) {
-                <h4>Your new backup code</h4>
-                <p>Write it down and keep it somewhere safe. It is shown once and never again.</p>
+                <h4>{{ t().recoverCase.newCodeTitle }}</h4>
+                <p>{{ t().recoverCase.newCodeHint }}</p>
                 <p class="code">{{ code }}</p>
                 <button mat-flat-button type="button" (click)="completeRotation(finish)" [disabled]="finishBusy()">
-                  {{ rotated() ? 'Retry the deposit' : 'I have written it down, complete' }}
+                  {{ rotated() ? t().recoverCase.retryDeposit : t().common.writtenDown }}
                 </button>
               } @else if (deposited()) {
-                <p class="result">Your old backup code is now worthless.</p>
+                <p class="result">{{ t().recoverCase.oldCodeWorthless }}</p>
               } @else {
-                <button mat-flat-button type="button" (click)="makeNewCode()" [disabled]="finishBusy()">Make a new backup code</button>
+                <button mat-flat-button type="button" (click)="makeNewCode()" [disabled]="finishBusy()">{{ t().recoverCase.makeNewCode }}</button>
               }
             </mat-step>
 
-            <mat-step [completed]="completed()" label="Done">
+            <mat-step [completed]="completed()" [label]="t().common.done">
               @if (completed()) {
-                <p class="result">You're back in.</p>
-                <button mat-flat-button type="button" (click)="continueToWallet()">Continue</button>
+                <p class="result">{{ t().recoverCase.backInDone }}</p>
+                <button mat-flat-button type="button" (click)="continueToWallet()">{{ t().common.continue }}</button>
               } @else {
-                <p>Close the case: the lost device's passkey and session no longer unlock anything.</p>
-                <button mat-flat-button type="button" (click)="complete()" [disabled]="finishBusy()">Complete my recovery</button>
+                <p>{{ t().recoverCase.closeCaseText }}</p>
+                <button mat-flat-button type="button" (click)="complete()" [disabled]="finishBusy()">{{ t().recoverCase.completeRecovery }}</button>
               }
             </mat-step>
           </mat-stepper>
         }
       </mat-card-content>
       <mat-card-actions class="actions">
-        <button mat-stroked-button type="button" (click)="refresh()" [disabled]="busy()">Refresh</button>
-        <a mat-button routerLink="/recover">Recover account</a>
+        <button mat-stroked-button type="button" (click)="refresh()" [disabled]="busy()">{{ t().common.refresh }}</button>
+        <a mat-button routerLink="/recover">{{ t().common.recoverAccount }}</a>
       </mat-card-actions>
     </mat-card>
   `,
@@ -195,6 +184,8 @@ export class RecoverCasePage {
   private readonly shares = inject(SharesService);
   private readonly router = inject(Router);
   private readonly injector = inject(Injector);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
@@ -245,22 +236,23 @@ export class RecoverCasePage {
   });
 
   protected readonly statusText = computed(() => {
-    const email = this.recovery.contactEmail() ?? 'your email';
+    const words = this.t().recoverCase;
+    const email = this.recovery.contactEmail() ?? words.yourEmail;
     switch (this.recovery.status()) {
       case 'open':
-        return `Open: a moderator will contact you at ${email} and meet you on a video call`;
+        return words.statusOpen(email);
       case 'inReview':
-        return 'In review: a moderator is checking your case';
+        return words.statusInReview;
       case 'approved':
-        return 'Approved: the bankers are sending your keys';
+        return words.statusApproved;
       case 'delivering':
-        return `Delivering: ${this.backupShares()} of ${this.threshold()} backup code shares received`;
+        return words.statusDelivering(this.backupShares(), this.threshold());
       case 'completed':
-        return 'Completed: you are back in';
+        return words.statusCompleted;
       case 'dismissed':
-        return `Dismissed: ${this.dismissReason(this.recovery.pod())}`;
+        return this.t().common.dismissed(this.dismissReason(this.recovery.pod()));
       default:
-        return 'Loading your case…';
+        return this.t().common.loadingCase;
     }
   });
 
@@ -270,7 +262,7 @@ export class RecoverCasePage {
       icon: this.iconOf(event),
       text: this.textOf(event),
       link: event.kind === 'scheduled' && typeof event.details['meetLink'] === 'string' ? event.details['meetLink'] : null,
-      when: new Date(event.createdAt).toLocaleString(),
+      when: this.lang.dateTime(event.createdAt),
     })),
   );
 
@@ -307,7 +299,7 @@ export class RecoverCasePage {
   private async load(quiet: boolean): Promise<void> {
     const envelope = this.recovery.sign('/get-recovery-pod', {});
     if (!envelope) {
-      this.error.set('No recovery session: continue the recovery with your passkey.');
+      this.error.set(this.t().recoverCase.noSession);
       return;
     }
     const res = await this.api.getRecoveryPod(envelope, quiet);
@@ -316,7 +308,7 @@ export class RecoverCasePage {
       this.recovery.applyPod(res.body);
       this.error.set(null);
     } else if (res.status === 401) {
-      this.error.set('Your recovery session has ended. Go to Recover account and continue the recovery with your passkey.');
+      this.error.set(this.t().recoverCase.sessionEnded);
     } else {
       this.error.set(`/get-recovery-pod: ${reasonOf(res)}`);
     }
@@ -330,7 +322,7 @@ export class RecoverCasePage {
       this.copied.set(true);
       setTimeout(() => this.copied.set(false), 2000);
     } catch {
-      this.error.set('Could not copy; select the id by hand.');
+      this.error.set(this.t().common.couldNotCopyId);
     }
   }
 
@@ -347,7 +339,7 @@ export class RecoverCasePage {
       const hybrid = this.recovery.getHybridKeys();
       const pod = this.recovery.pod();
       const lookupId = this.recovery.lookupId();
-      if (!hybrid || !pod || !lookupId) throw new Error('The recovery pod is not open in this tab: go to Recover account and continue the recovery with your passkey.');
+      if (!hybrid || !pod || !lookupId) throw new Error(this.t().recoverCase.podNotOpen);
       const { shareThreshold } = await this.config.load();
       const groups = new Map<string, { shareType: string; newest: string; shares: Uint8Array[]; skipped: number }>();
       for (const share of pod.shares) {
@@ -369,7 +361,7 @@ export class RecoverCasePage {
         else if (group.shareType === 'breakglasskey') seeds.push(secret);
       }
       const skipped = [...groups.values()].reduce((n, g) => n + g.skipped, 0);
-      if (codes.length === 0) throw new Error(`No backup code could be rebuilt: ${shareThreshold} shares of one key id that open with this case's key are needed.`);
+      if (codes.length === 0) throw new Error(this.t().recoverCase.noCodeRebuilt(shareThreshold));
       this.recovery.setCombined(codes, seeds);
       this.recovered = false;
       this.recoveredCode = null;
@@ -387,7 +379,7 @@ export class RecoverCasePage {
     await this.runStep(async () => {
       if (!this.recovered) await this.prove();
       await unlockWithPasskey({ api: this.api, crypto: this.crypto, passkey: this.passkey, session: this.session });
-      if (!this.session.getEncryptionKey()) throw new Error('The unlock did not open your encryption key; pick the passkey made for this case and try again.');
+      if (!this.session.getEncryptionKey()) throw new Error(this.t().recoverCase.unlockNoKey);
       this.backIn.set(true);
     }, stepper);
   }
@@ -404,9 +396,9 @@ export class RecoverCasePage {
     const kekPrf = this.recovery.getKekPrf();
     const blob2 = this.recovery.pod()?.blob2;
     const codes = this.recovery.getBackupCodes();
-    if (!caseId || !kekPrf) throw new Error('The recovery pod is not open in this tab: go to Recover account and continue the recovery with your passkey.');
-    if (!blob2) throw new Error('The masterpod has not handed over your second key blob yet; refresh once the case is approved.');
-    if (codes.length === 0) throw new Error('Combine first.');
+    if (!caseId || !kekPrf) throw new Error(this.t().recoverCase.podNotOpen);
+    if (!blob2) throw new Error(this.t().recoverCase.noBlob2);
+    if (codes.length === 0) throw new Error(this.t().recoverCase.combineFirst);
 
     let code: Bytes | null = null;
     let encryptionKey: Bytes | null = null;
@@ -420,7 +412,7 @@ export class RecoverCasePage {
       }
     }
     if (!code || !encryptionKey) {
-      throw new Error('The rebuilt backup code does not open your key blob. If you already rotated your backup code in an earlier attempt, you are not locked out any more: unlock from the start page with this passkey.');
+      throw new Error(this.t().recoverCase.codeNoOpen);
     }
     const newBlob1 = await this.crypto.encrypt(kekPrf, encryptionKey);
     const challenge = await this.api.challenge('recover');
@@ -430,9 +422,9 @@ export class RecoverCasePage {
     if (!res.ok) {
       const reason = (res.body as unknown as Partial<ApiError>)?.error;
       if (res.status === 401 && reason === 'bad signature') {
-        throw new Error('The masterpod does not accept the rebuilt backup code as this anoPod\'s current one. If you already rotated it in an earlier attempt, unlock from the start page with this passkey.');
+        throw new Error(this.t().recoverCase.codeNotAccepted);
       }
-      if (res.status === 409) throw new Error(`The case does not take the finish right now (${reasonOf(res)}); refresh and try again.`);
+      if (res.status === 409) throw new Error(this.t().recoverCase.notTakingFinish(reasonOf(res)));
       throw new Error(`/recover-with-backup-code: ${reasonOf(res)}`);
     }
     this.recovered = true;
@@ -447,7 +439,7 @@ export class RecoverCasePage {
   protected async storeBreakGlass(stepper: MatStepper): Promise<void> {
     await this.runStep(async () => {
       const encryptionKey = this.session.getEncryptionKey();
-      if (!encryptionKey) throw new Error('Your encryption key is not in this tab: get back in first.');
+      if (!encryptionKey) throw new Error(this.t().recoverCase.noKeyInTab);
       const listed = await this.api.listAnosAccounts();
       if (!listed.ok) throw new Error(`/list-anos-accounts: ${reasonOf(listed)}`);
       this.session.accounts.set(listed.body.accounts);
@@ -484,7 +476,7 @@ export class RecoverCasePage {
     this.finishError.set(null);
     const encryptionKey = this.session.getEncryptionKey();
     if (!encryptionKey) {
-      this.finishError.set('Your encryption key is not in this tab: get back in first.');
+      this.finishError.set(this.t().recoverCase.noKeyInTab);
       return;
     }
     const code = this.crypto.newBackupCode();
@@ -507,11 +499,11 @@ export class RecoverCasePage {
       const blob2 = this.newBlob2;
       const keys = this.newKeys;
       const anopodId = this.session.anopodId();
-      if (!code || !blob2 || !keys) throw new Error('Make a new backup code first.');
-      if (!anopodId) throw new Error('No session in this tab: get back in first.');
+      if (!code || !blob2 || !keys) throw new Error(this.t().recoverCase.makeCodeFirst);
+      if (!anopodId) throw new Error(this.t().recoverCase.noSessionInTab);
       if (!this.rotated()) {
         const oldCode = this.recoveredCode;
-        if (!oldCode) throw new Error('The current backup code is not in this tab: combine and get back in first.');
+        if (!oldCode) throw new Error(this.t().recoverCase.noCurrentCode);
         const message: RotationMessage = {
           anopodId,
           newBackupCodePublicKey: this.crypto.toHex(keys.p256Public),
@@ -526,7 +518,7 @@ export class RecoverCasePage {
       try {
         await this.shares.deposit(code, 'backupcode');
       } catch (err) {
-        if (err instanceof DepositError) throw new Error(`${err.message}. Retry deposits the same new code again under a fresh key id.`);
+        if (err instanceof DepositError) throw new Error(this.t().recoverCase.retryDeposits(err.message));
         throw err;
       }
       this.deposited.set(true);
@@ -541,7 +533,7 @@ export class RecoverCasePage {
   protected async complete(): Promise<void> {
     await this.runStep(async () => {
       const envelope = this.recovery.sign('/complete-recovery-case', {});
-      if (!envelope) throw new Error('No recovery session: go to Recover account and continue the recovery with your passkey.');
+      if (!envelope) throw new Error(this.t().recoverCase.noSessionGoTo);
       const res = await this.api.completeRecoveryCase(envelope);
       if (!res.ok) {
         await this.load(true);
@@ -574,22 +566,24 @@ export class RecoverCasePage {
   }
 
   protected combinedText(c: Combined): string {
-    const codes = c.codes === 1 ? 'backup code recovered' : `${c.codes} backup code candidates recovered (the newest is tried first)`;
-    const seeds = `${c.seeds} break-glass ${c.seeds === 1 ? 'seed' : 'seeds'} recovered`;
-    const skipped = c.skipped > 0 ? ` · ${c.skipped} ${c.skipped === 1 ? 'share' : 'shares'} did not open with this case's key` : '';
+    const words = this.t().recoverCase;
+    const codes = words.codesRecovered(c.codes);
+    const seeds = words.seedsRecovered(c.seeds);
+    const skipped = c.skipped > 0 ? ` · ${words.sharesSkipped(c.skipped)}` : '';
     return `${codes} · ${seeds}${skipped}`;
   }
 
   protected breakGlassText(b: BreakGlassResult): string {
-    const stored = b.stored.length === 0 ? 'No break-glass seed was stored' : `Stored on ${b.stored.map((id) => id.slice(0, 8) + '…').join(', ')}`;
-    const unmatched = b.unmatched > 0 ? ` · ${b.unmatched} ${b.unmatched === 1 ? 'seed' : 'seeds'} matched no account of yours` : '';
+    const words = this.t().recoverCase;
+    const stored = b.stored.length === 0 ? words.noSeedStored : words.storedOn(b.stored.map((id) => id.slice(0, 8) + '…').join(', '));
+    const unmatched = b.unmatched > 0 ? ` · ${words.seedsUnmatched(b.unmatched)}` : '';
     return `${stored}${unmatched}`;
   }
 
   private dismissReason(pod: RecoveryPodAnswer | null): string {
     const event = [...(pod?.events ?? [])].reverse().find((e) => e.kind === 'dismissed');
     const reason = typeof event?.details['reason'] === 'string' ? event.details['reason'] : 'other';
-    return DISMISS_REASONS[reason] ?? reason;
+    return this.t().recoverCase.dismissReasons[reason] ?? reason;
   }
 
   private iconOf(event: RecoveryEvent): string {
@@ -597,21 +591,22 @@ export class RecoverCasePage {
   }
 
   private textOf(event: RecoveryEvent): string {
+    const words = this.t().recoverCase;
     switch (event.kind) {
       case 'opened':
-        return 'Case opened';
+        return words.eventOpened;
       case 'scheduled': {
-        const at = typeof event.details['at'] === 'string' ? new Date(event.details['at']).toLocaleString() : 'a time to be confirmed';
-        return `Video call scheduled for ${at}.`;
+        const at = typeof event.details['at'] === 'string' ? this.lang.dateTime(event.details['at']) : this.t().common.timeToBeConfirmed;
+        return this.t().common.videoCallScheduled(at);
       }
       case 'approved':
-        return 'Approved by two moderators';
+        return words.eventApproved;
       case 'dismissed':
-        return `Dismissed: ${DISMISS_REASONS[String(event.details['reason'])] ?? String(event.details['reason'] ?? '')}`;
+        return this.t().common.dismissed(words.dismissReasons[String(event.details['reason'])] ?? String(event.details['reason'] ?? ''));
       case 'recovered':
-        return 'Your passkey is restored: you are back in';
+        return words.eventRecovered;
       case 'completed':
-        return 'Recovery completed';
+        return words.eventCompleted;
       default:
         return event.kind;
     }

@@ -10,6 +10,7 @@ import { MatStepper, MatStepperModule } from '@angular/material/stepper';
 import { ActivatedRoute, Router } from '@angular/router';
 import { CameraComponent, Photo } from '../components/camera.component';
 import { CryptoService } from '../services/crypto.service';
+import { LanguageService } from '../services/language.service';
 import { reasonOf } from '../services/log.service';
 import { Image, MasterpodApiService } from '../services/masterpod-api.service';
 import { SessionService, StatusAnswer } from '../services/session.service';
@@ -62,43 +63,39 @@ const ID = 1;
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
-        <mat-card-title>Account recovery</mat-card-title>
-        <mat-card-subtitle>What a moderator would use to give your account back if you were ever locked out.</mat-card-subtitle>
+        <mat-card-title>{{ t().common.accountRecovery }}</mat-card-title>
+        <mat-card-subtitle>{{ t().recovery.subtitle }}</mat-card-subtitle>
       </mat-card-header>
       <mat-card-content>
         @if (done()) {
-          <p>Done. On file for a recovery: {{ onFile() }}.</p>
-          <p>You can add more any time under Account.</p>
-          <button mat-flat-button type="button" (click)="toWallet()">Go to wallet</button>
+          <p>{{ t().recovery.doneOnFile(onFile()) }}</p>
+          <p>{{ t().recovery.addMore }}</p>
+          <button mat-flat-button type="button" (click)="toWallet()">{{ t().recovery.goToWallet }}</button>
         } @else {
-          <p class="muted">Everything here is encrypted on your phone before it is sent. Nobody at anoPod can read it.</p>
+          <p class="muted">{{ t().recovery.encrypted }}</p>
           <mat-stepper linear orientation="vertical" [selectedIndex]="startIndex" #stepper>
-            <mat-step [completed]="selfieDone()" label="Selfie">
+            <mat-step [completed]="selfieDone()" [label]="t().common.selfieStep">
               @if (selfieDone() && selfies().length === 0) {
-                <p>A selfie is on file. Take another one if you like, or press Next.</p>
+                <p>{{ t().recovery.selfieOnFile }}</p>
               } @else {
-                <p>Take a selfie.</p>
+                <p>{{ t().recovery.takeSelfie }}</p>
               }
-              <button mat-button type="button" (click)="why.set(!why())">Why do we need this?</button>
+              <button mat-button type="button" (click)="why.set(!why())">{{ t().recovery.whyButton }}</button>
               @if (why()) {
-                <p class="muted">
-                  If you are ever locked out, a moderator compares a new selfie with this one to see that it is really you. The photo
-                  is encrypted on your phone under a key only the keyholders can rebuild, and it is only opened in a recovery you ask
-                  for. Up to five photos; one good selfie is enough.
-                </p>
+                <p class="muted">{{ t().recovery.why }}</p>
               }
               @if (stepper.selectedIndex === 0) {
                 @if (selfies().length < max) {
                   <app-camera quality="high" facing="user" (photo)="tookSelfie($event)" />
                 } @else {
-                  <p class="muted">Five photos is the limit for one visit.</p>
+                  <p class="muted">{{ t().recovery.fiveLimit }}</p>
                 }
               }
               <div class="thumbs">
                 @for (image of selfies(); track image.url) {
                   <div class="thumb">
-                    <img [src]="image.url" alt="selfie" />
-                    <button mat-icon-button type="button" (click)="removeSelfie($index)" aria-label="Remove"><mat-icon>close</mat-icon></button>
+                    <img [src]="image.url" [alt]="t().common.selfie" />
+                    <button mat-icon-button type="button" (click)="removeSelfie($index)" [attr.aria-label]="t().common.remove"><mat-icon>close</mat-icon></button>
                   </div>
                 }
               </div>
@@ -111,136 +108,126 @@ const ID = 1;
               }
               <div class="row">
                 <button mat-flat-button type="button" (click)="sendSelfie(stepper)" [disabled]="busy() || (selfies().length === 0 && !selfieDone())">
-                  {{ failed() ? 'Retry' : 'Next' }}
+                  {{ failed() ? t().common.retry : t().common.next }}
                 </button>
               </div>
             </mat-step>
 
-            <mat-step [completed]="idDone()" label="ID">
-              <p class="muted">The more you add here, the easier it will be to recover your account if you are ever locked out.</p>
-              <p>
-                Now a photo of your ID. The best ones show your photo and your full name, like a driver's license, a national or state
-                ID card, or a passport. Lay it flat on a table and fill the frame. Things that do not prove who you are, like a bus
-                pass, do not help.
-              </p>
+            <mat-step [completed]="idDone()" [label]="t().recovery.stepId">
+              <p class="muted">{{ t().recovery.moreHelps }}</p>
+              <p>{{ t().recovery.idText }}</p>
               @if (stepper.selectedIndex === 1) {
                 @if (images().length < max) {
                   <app-camera quality="normal" facing="environment" (photo)="took($event)" />
                 } @else {
-                  <p class="muted">Five photos is the limit for one visit.</p>
+                  <p class="muted">{{ t().recovery.fiveLimit }}</p>
                 }
               }
               <div class="thumbs">
                 @for (image of images(); track image.url) {
                   <div class="thumb">
-                    <img [src]="image.url" alt="photo" />
-                    <button mat-icon-button type="button" (click)="remove($index)" aria-label="Remove"><mat-icon>close</mat-icon></button>
+                    <img [src]="image.url" [alt]="t().recovery.photo" />
+                    <button mat-icon-button type="button" (click)="remove($index)" [attr.aria-label]="t().common.remove"><mat-icon>close</mat-icon></button>
                   </div>
                 }
               </div>
               <div class="row">
-                <button mat-flat-button type="button" matStepperNext [disabled]="!idDone()">Next</button>
+                <button mat-flat-button type="button" matStepperNext [disabled]="!idDone()">{{ t().common.next }}</button>
               </div>
             </mat-step>
 
-            <mat-step [completed]="emailDone()" label="Email">
-              <p>An email address where you can be reached if you are locked out of your account.</p>
+            <mat-step [completed]="emailDone()" [label]="t().common.email">
+              <p>{{ t().recovery.emailText }}</p>
               <mat-form-field appearance="outline">
-                <mat-label>Email</mat-label>
+                <mat-label>{{ t().common.email }}</mat-label>
                 <input matInput [ngModel]="email()" (ngModelChange)="email.set($event)" autocomplete="email" />
               </mat-form-field>
               <div class="row">
-                <button mat-button type="button" matStepperPrevious>Back</button>
-                <button mat-flat-button type="button" matStepperNext [disabled]="!emailDone()">Next</button>
+                <button mat-button type="button" matStepperPrevious>{{ t().common.back }}</button>
+                <button mat-flat-button type="button" matStepperNext [disabled]="!emailDone()">{{ t().common.next }}</button>
               </div>
             </mat-step>
 
-            <mat-step [completed]="phoneDone()" label="Phone">
-              <p>A phone number where you can be reached.</p>
+            <mat-step [completed]="phoneDone()" [label]="t().recovery.stepPhone">
+              <p>{{ t().recovery.phoneText }}</p>
               <mat-form-field appearance="outline">
-                <mat-label>Phone number</mat-label>
+                <mat-label>{{ t().recovery.phoneLabel }}</mat-label>
                 <input matInput [ngModel]="phone()" (ngModelChange)="phone.set($event)" autocomplete="tel" />
               </mat-form-field>
               <div class="row">
-                <button mat-button type="button" matStepperPrevious>Back</button>
-                <button mat-flat-button type="button" matStepperNext [disabled]="!phoneDone()">Next</button>
+                <button mat-button type="button" matStepperPrevious>{{ t().common.back }}</button>
+                <button mat-flat-button type="button" matStepperNext [disabled]="!phoneDone()">{{ t().common.next }}</button>
               </div>
             </mat-step>
 
-            <mat-step [completed]="contactDone()" label="Friend or family">
-              <p>
-                The name and phone number of a friend or family member who could help during a lockout recovery. A moderator may
-                phone them to check that it is really you. Someone like a spouse, or someone who lives with you, is best.
-              </p>
+            <mat-step [completed]="contactDone()" [label]="t().recovery.stepContact">
+              <p>{{ t().recovery.contactText }}</p>
               <div class="fields">
                 <mat-form-field appearance="outline">
-                  <mat-label>Their name</mat-label>
+                  <mat-label>{{ t().recovery.theirName }}</mat-label>
                   <input matInput [ngModel]="contactName()" (ngModelChange)="contactName.set($event)" />
                 </mat-form-field>
                 <mat-form-field appearance="outline">
-                  <mat-label>Their phone number</mat-label>
+                  <mat-label>{{ t().recovery.theirPhone }}</mat-label>
                   <input matInput [ngModel]="contactPhone()" (ngModelChange)="contactPhone.set($event)" />
                 </mat-form-field>
               </div>
               <div class="row">
-                <button mat-button type="button" matStepperPrevious>Back</button>
-                <button mat-flat-button type="button" matStepperNext [disabled]="!contactDone()">Next</button>
+                <button mat-button type="button" matStepperPrevious>{{ t().common.back }}</button>
+                <button mat-flat-button type="button" matStepperNext [disabled]="!contactDone()">{{ t().common.next }}</button>
                 @if (!contactDone() && !contactEmpty()) {
-                  <span class="muted">Both the name and the number.</span>
+                  <span class="muted">{{ t().recovery.bothNameAndNumber }}</span>
                 }
               </div>
             </mat-step>
 
-            <mat-step optional label="Bank account">
-              <p>
-                A bank account in your name is strong proof. In a recovery a moderator can send two small deposits and ask you the
-                amounts. The name on the account should match the name on your ID.
-              </p>
-              <p class="muted">This is encrypted on your phone. Nobody at anoPod can read it. It is only opened in a recovery you ask for.</p>
+            <mat-step optional [label]="t().recovery.stepBank">
+              <p>{{ t().recovery.bankText }}</p>
+              <p class="muted">{{ t().recovery.bankEncrypted }}</p>
               <div class="fields">
                 <mat-form-field appearance="outline">
-                  <mat-label>Bank</mat-label>
+                  <mat-label>{{ t().recovery.bank }}</mat-label>
                   <input matInput [ngModel]="bankName()" (ngModelChange)="bankName.set($event)" />
                 </mat-form-field>
                 <mat-form-field appearance="outline">
-                  <mat-label>Name on the account</mat-label>
+                  <mat-label>{{ t().recovery.nameOnAccount }}</mat-label>
                   <input matInput [ngModel]="accountName()" (ngModelChange)="accountName.set($event)" autocomplete="name" />
                 </mat-form-field>
                 <mat-form-field appearance="outline">
-                  <mat-label>Account number</mat-label>
+                  <mat-label>{{ t().recovery.accountNumber }}</mat-label>
                   <input matInput [ngModel]="accountNumber()" (ngModelChange)="accountNumber.set($event)" />
                 </mat-form-field>
               </div>
               <div class="row">
-                <button mat-button type="button" matStepperPrevious>Back</button>
-                <button mat-button type="button" matStepperNext (click)="skipBank()">Skip</button>
-                <button mat-flat-button type="button" matStepperNext [disabled]="!bankDone()">Next</button>
+                <button mat-button type="button" matStepperPrevious>{{ t().common.back }}</button>
+                <button mat-button type="button" matStepperNext (click)="skipBank()">{{ t().recovery.skip }}</button>
+                <button mat-flat-button type="button" matStepperNext [disabled]="!bankDone()">{{ t().common.next }}</button>
                 @if (!bankDone() && !bankEmpty()) {
-                  <span class="muted">All three, or skip.</span>
+                  <span class="muted">{{ t().recovery.allThreeOrSkip }}</span>
                 }
               </div>
             </mat-step>
 
-            <mat-step optional label="Anything else">
-              <p>Anything else that could help prove who you are. Other official papers with your name on them, as photos or as text.</p>
-              <p class="muted">The more you add here, the easier it will be to recover your account if you are ever locked out.</p>
+            <mat-step optional [label]="t().recovery.stepExtra">
+              <p>{{ t().recovery.extraText }}</p>
+              <p class="muted">{{ t().recovery.moreHelps }}</p>
               @if (stepper.selectedIndex === 6) {
                 @if (images().length < max) {
                   <app-camera quality="normal" facing="environment" (photo)="took($event)" />
                 } @else {
-                  <p class="muted">Five photos is the limit for one visit.</p>
+                  <p class="muted">{{ t().recovery.fiveLimit }}</p>
                 }
               }
               <div class="thumbs">
                 @for (image of images(); track image.url) {
                   <div class="thumb">
-                    <img [src]="image.url" alt="photo" />
-                    <button mat-icon-button type="button" (click)="remove($index)" aria-label="Remove"><mat-icon>close</mat-icon></button>
+                    <img [src]="image.url" [alt]="t().recovery.photo" />
+                    <button mat-icon-button type="button" (click)="remove($index)" [attr.aria-label]="t().common.remove"><mat-icon>close</mat-icon></button>
                   </div>
                 }
               </div>
               <mat-form-field appearance="outline" class="wide">
-                <mat-label>Anything else, one per line</mat-label>
+                <mat-label>{{ t().recovery.extraLabel }}</mat-label>
                 <textarea matInput rows="3" [ngModel]="extra()" (ngModelChange)="extra.set($event)"></textarea>
               </mat-form-field>
               @if (busy()) {
@@ -251,10 +238,10 @@ const ID = 1;
                 <p class="error">{{ text }}</p>
               }
               <div class="row">
-                <button mat-button type="button" matStepperPrevious [disabled]="busy()">Back</button>
+                <button mat-button type="button" matStepperPrevious [disabled]="busy()">{{ t().common.back }}</button>
                 <button mat-flat-button type="button" (click)="finish()" [disabled]="busy() || !canFinish()">{{ finishLabel() }}</button>
                 @if (!canFinish()) {
-                  <span class="muted">At least one photo of your ID, your email, your phone and a friend or family member.</span>
+                  <span class="muted">{{ t().recovery.minimum }}</span>
                 }
               </div>
             </mat-step>
@@ -283,6 +270,8 @@ export class AccountRecoveryPage {
   private readonly crypto = inject(CryptoService);
   private readonly shares = inject(SharesService);
   private readonly router = inject(Router);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
   /** The selfie at /account/recovery/selfie, the ID at /account/recovery/details. */
   protected readonly startIndex = inject(ActivatedRoute).snapshot.data['start'] === 'details' ? ID : SELFIE;
@@ -330,15 +319,12 @@ export class AccountRecoveryPage {
   /** Something for Finish to send: a photo or a line. */
   protected readonly hasNew = computed(() => this.images().length > 0 || this.texts().length > 0);
   protected readonly canFinish = computed(() => !this.firstVisit || this.minimumMet());
-  protected readonly finishLabel = computed(() => (this.failed() ? 'Retry' : this.hasNew() ? 'Finish' : 'Done'));
+  protected readonly finishLabel = computed(() => (this.failed() ? this.t().common.retry : this.hasNew() ? this.t().recovery.finish : this.t().common.done));
 
   /** What the status counts after the send, for the done view. */
   protected readonly onFile = computed(() => {
     const status = this.session.status();
-    return [
-      count(status?.bucketOneImages ?? 0, 'selfie', 'selfies'),
-      count(status?.bucketTwoImages ?? 0, 'photo', 'photos'),
-    ].join(', ') + ` and ${count(status?.bucketTwoInfos ?? 0, 'detail', 'details')}`;
+    return this.t().recovery.onFile(status?.bucketOneImages ?? 0, status?.bucketTwoImages ?? 0, status?.bucketTwoInfos ?? 0);
   });
 
   protected tookSelfie(photo: Photo): void {
@@ -378,12 +364,12 @@ export class AccountRecoveryPage {
     this.error.set(null);
     this.failed.set(false);
     try {
-      this.step.set('Encrypting the selfie under a fresh bucket key…');
+      this.step.set(this.t().recovery.encryptingSelfie);
       const key = this.crypto.newBucketKey();
       const encrypted = await this.encryptAll(key, selfies);
-      this.step.set('Depositing the key with the keyholders…');
+      this.step.set(this.t().recovery.depositingKey);
       const { keyId } = await this.shares.deposit(key, 'securitybucket1');
-      this.step.set('Storing the selfie on the masterpod…');
+      this.step.set(this.t().recovery.storingSelfie);
       const res = await this.api.addToSecurityBucketOne(keyId, encrypted);
       if (!res.ok) throw new Error(`/add-to-security-bucket-one: ${reasonOf(res)}`);
       key.fill(0);
@@ -413,14 +399,14 @@ export class AccountRecoveryPage {
     this.error.set(null);
     this.failed.set(false);
     try {
-      this.step.set('Encrypting under a fresh bucket key…');
+      this.step.set(this.t().recovery.encrypting);
       const key = this.crypto.newBucketKey();
       const encrypted = await this.encryptAll(key, images);
       const info: { info: string }[] = [];
       for (const text of texts) info.push({ info: await this.crypto.encryptToBase64(key, this.crypto.utf8(text)) });
-      this.step.set('Depositing the key with the keyholders…');
+      this.step.set(this.t().recovery.depositingKey);
       const { keyId } = await this.shares.deposit(key, 'securitybucket2');
-      this.step.set('Storing on the masterpod…');
+      this.step.set(this.t().recovery.storing);
       const res = await this.api.addToSecurityBucketTwo(keyId, encrypted, info);
       if (!res.ok) throw new Error(`/add-to-security-bucket-two: ${reasonOf(res)}`);
       key.fill(0);
@@ -473,7 +459,7 @@ export class AccountRecoveryPage {
   private fail(err: unknown): void {
     this.failed.set(true);
     this.error.set(
-      err instanceof DepositError ? `${err.message}. Retry starts the step again with a fresh key.` : err instanceof Error ? err.message : String(err),
+      err instanceof DepositError ? this.t().recovery.retryFresh(err.message) : err instanceof Error ? err.message : String(err),
     );
   }
 
@@ -498,9 +484,4 @@ export class AccountRecoveryPage {
 /** The next-step rule's bucket two line: an image and three infos on file. */
 function detailsOnFile(status: StatusAnswer | null | undefined): boolean {
   return !!status && status.bucketTwoImages > 0 && status.bucketTwoInfos >= 3;
-}
-
-/** "1 selfie", "2 photos": a count with its noun, for this page and the Account page. */
-export function count(n: number, one: string, many: string): string {
-  return `${n} ${n === 1 ? one : many}`;
 }

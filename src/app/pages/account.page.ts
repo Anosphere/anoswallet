@@ -1,4 +1,3 @@
-import { DatePipe } from '@angular/common';
 import { Component, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -17,7 +16,6 @@ import { CopyButtonComponent } from '../components/copy-button.component';
 import { ACCOUNT_POLL_MS } from '../constants';
 import { escrowStageWords } from '../escrow-stage';
 import { lockedStageWords } from '../locked-stage';
-import { minutesWords } from '../minutes-words';
 import { AccountAnswer, Accepted, AnosApiService, EscrowItem, HeldAssistedTransfer, HeldLockedTransfer, PendingItem } from '../services/anos-api.service';
 import { ConfigService } from '../services/config.service';
 import {
@@ -31,6 +29,7 @@ import {
   TransferType,
   Vote,
 } from '../services/crypto.service';
+import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
 import { MasterpodApiService } from '../services/masterpod-api.service';
 import { AnosAccountItem, SessionService } from '../services/session.service';
@@ -104,33 +103,33 @@ interface Outcome {
  */
 @Component({
   selector: 'app-account-page',
-  imports: [DatePipe, FormsModule, RouterLink, MatCardModule, MatButtonModule, MatListModule, MatIconModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatProgressBarModule, MatExpansionModule, CopyButtonComponent],
+  imports: [FormsModule, RouterLink, MatCardModule, MatButtonModule, MatListModule, MatIconModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatProgressBarModule, MatExpansionModule, CopyButtonComponent],
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
-        <mat-card-title>Account <code class="id">{{ accountId() }}</code> <app-copy-button [text]="accountId()" label="Copy the account id" /></mat-card-title>
+        <mat-card-title>{{ t().common.account }} <code class="id">{{ accountId() }}</code> <app-copy-button [text]="accountId()" [label]="t().common.copyAccountId" /></mat-card-title>
         <mat-card-subtitle>
-          @if (item(); as item) { {{ item.accountType }} account }
-          @if (!item()) { not one of this anoPod's accounts }
+          @if (item(); as item) { {{ t().account.title(item.accountType) }} }
+          @if (!item()) { {{ t().account.notMine }} }
         </mat-card-subtitle>
       </mat-card-header>
       <mat-card-content>
-        <p><a mat-button routerLink="/wallet"><mat-icon>arrow_back</mat-icon> Wallet</a></p>
+        <p><a mat-button routerLink="/wallet"><mat-icon>arrow_back</mat-icon> {{ t().nav.wallet }}</a></p>
         @if (account(); as a) {
           <div class="summary">
-            <div><span class="label">Balance</span><span class="value">{{ millionthsToAnos(a.balance) }} anos</span></div>
+            <div><span class="label">{{ t().account.balance }}</span><span class="value">{{ t().common.anos(millionthsToAnos(a.balance)) }}</span></div>
             @if (heldAsSeller(); as held) {
-              <div><span class="label"></span><span class="value muted">{{ held }} anos of this are in an open escrow trade.</span></div>
+              <div><span class="label"></span><span class="value muted">{{ t().account.heldInEscrow(held) }}</span></div>
             }
-            @if (assisted(); as t) {
-              <div><span class="label"></span><span class="value muted">{{ millionthsToAnos(t.amount) }} anos of this are waiting in an assisted transfer.</span></div>
+            @if (assisted(); as held) {
+              <div><span class="label"></span><span class="value muted">{{ t().account.heldInAssisted(millionthsToAnos(held.amount)) }}</span></div>
             }
-            @if (locked(); as t) {
-              <div><span class="label"></span><span class="value muted">{{ millionthsToAnos(t.amount) }} anos of this are waiting out a lock.</span></div>
+            @if (locked(); as waiting) {
+              <div><span class="label"></span><span class="value muted">{{ t().account.heldInLock(millionthsToAnos(waiting.amount)) }}</span></div>
             }
-            <div><span class="label">Type</span><span class="value">{{ a.type }}</span></div>
-            <div><span class="label">Latest transaction</span><code class="value">{{ a.latestTransactionId ?? 'none' }}</code></div>
-            <div><span class="label">Created</span><span class="value">{{ a.createdAt | date: 'medium' }}</span></div>
+            <div><span class="label">{{ t().common.type }}</span><span class="value">{{ a.type }}</span></div>
+            <div><span class="label">{{ t().account.latestTransaction }}</span><code class="value">{{ a.latestTransactionId ?? t().account.none }}</code></div>
+            <div><span class="label">{{ t().account.created }}</span><span class="value">{{ lang.dateTime(a.createdAt) }}</span></div>
           </div>
         } @else if (readError(); as text) {
           <p class="error">{{ text }}</p>
@@ -138,86 +137,86 @@ interface Outcome {
           <mat-progress-bar mode="indeterminate"></mat-progress-bar>
         }
         <div class="row">
-          <button mat-stroked-button type="button" (click)="refresh()" [disabled]="busy()">Refresh</button>
+          <button mat-stroked-button type="button" (click)="refresh()" [disabled]="busy()">{{ t().common.refresh }}</button>
           @if (pending().length > 0) {
-            <span class="muted">A transaction is pending; refreshing every 5 seconds.</span>
+            <span class="muted">{{ t().account.pendingRefreshing }}</span>
           } @else if (escrows().length > 0) {
-            <span class="muted">An escrow trade is open; refreshing every 5 seconds.</span>
+            <span class="muted">{{ t().account.escrowRefreshing }}</span>
           } @else if (assisted()) {
-            <span class="muted">An assisted transfer is waiting; refreshing every 5 seconds.</span>
+            <span class="muted">{{ t().account.assistedRefreshing }}</span>
           } @else if (locked()) {
-            <span class="muted">A transfer is waiting out its lock; refreshing every 5 seconds.</span>
+            <span class="muted">{{ t().account.lockedRefreshing }}</span>
           }
         </div>
 
-        <h3>Send</h3>
+        <h3>{{ t().common.send }}</h3>
         @if (item(); as item) {
           <div class="form send">
             @if (item.accountType === 'spending') {
               <mat-form-field appearance="outline">
-                <mat-label>Kind</mat-label>
+                <mat-label>{{ t().common.kind }}</mat-label>
                 <mat-select [value]="spendingKind()" (valueChange)="spendingKind.set($event)">
-                  @for (kind of spendingKinds; track kind) { <mat-option [value]="kind">{{ kind }}</mat-option> }
+                  @for (kind of spendingKinds; track kind) { <mat-option [value]="kind">{{ t().account.spendingKinds[kind] }}</mat-option> }
                 </mat-select>
               </mat-form-field>
               @if (spendingKind() === 'stake') {
                 <mat-form-field appearance="outline">
-                  <mat-label>Stake for</mat-label>
+                  <mat-label>{{ t().account.stakeFor }}</mat-label>
                   <mat-select [value]="stakePurpose()" (valueChange)="stakePurpose.set($event)">
-                    @for (purpose of stakePurposes; track purpose) { <mat-option [value]="purpose">{{ purpose }}</mat-option> }
+                    @for (purpose of stakePurposes; track purpose) { <mat-option [value]="purpose">{{ t().account.stakePurposes[purpose] }}</mat-option> }
                   </mat-select>
                 </mat-form-field>
               }
             }
             @if (transferType() !== 'transferToFund') {
               <mat-form-field appearance="outline" class="wide" subscriptSizing="dynamic">
-                <mat-label>Recipient account id</mat-label>
-                <input matInput [ngModel]="accountIdTo()" (ngModelChange)="accountIdTo.set($event)" placeholder="64 hex characters" />
-                <button mat-icon-button matSuffix type="button" (click)="pasteRecipient()" aria-label="Paste the recipient account id"><mat-icon>content_paste</mat-icon></button>
+                <mat-label>{{ t().account.recipient }}</mat-label>
+                <input matInput [ngModel]="accountIdTo()" (ngModelChange)="accountIdTo.set($event)" [placeholder]="t().account.recipientPlaceholder" />
+                <button mat-icon-button matSuffix type="button" (click)="pasteRecipient()" [attr.aria-label]="t().account.pasteRecipient"><mat-icon>content_paste</mat-icon></button>
                 @if (pasteNote(); as note) { <mat-hint>{{ note }}</mat-hint> }
               </mat-form-field>
             }
             <mat-form-field appearance="outline">
-              <mat-label>Amount (anos)</mat-label>
-              <input matInput [ngModel]="amount()" (ngModelChange)="amount.set($event)" placeholder="1 or 0.5" />
+              <mat-label>{{ t().account.amountAnos }}</mat-label>
+              <input matInput [ngModel]="amount()" (ngModelChange)="amount.set($event)" [placeholder]="t().account.amountPlaceholder" />
             </mat-form-field>
-            <button mat-flat-button type="button" (click)="send()" [disabled]="busy() || pending().length > 0 || sellerEscrowOpen() || assisted() !== null || locked() !== null || minutesAhead() === null || !canSend()">Send {{ transferType() }}</button>
+            <button mat-flat-button type="button" (click)="send()" [disabled]="busy() || pending().length > 0 || sellerEscrowOpen() || assisted() !== null || locked() !== null || minutesAhead() === null || !canSend()">{{ t().common.send }} {{ transferType() }}</button>
           </div>
           @if (sellerEscrowOpen()) {
-            <p class="muted">An escrow trade is open. This account can send again when it closes.</p>
+            <p class="muted">{{ t().account.escrowOpen }}</p>
           }
           @if (assisted()) {
-            <p class="muted">An assisted transfer is waiting. This account can send again when it is written or cancelled.</p>
+            <p class="muted">{{ t().account.assistedWaiting }}</p>
           }
           @if (locked()) {
-            <p class="muted">A transfer is waiting out its lock. This account can send again when it is written.</p>
+            <p class="muted">{{ t().account.lockWaiting }}</p>
           }
           @if (item.accountType === 'guarded' || item.accountType === 'vault') {
             @if (minutesAhead(); as ahead) {
-              <p class="muted">A {{ item.accountType }} transfer is dated {{ minutesWords(ahead) }} ahead and waits out its lock on the validators.</p>
+              <p class="muted">{{ t().account.lockLine(item.accountType, t().minutes(ahead)) }}</p>
             } @else {
-              <p class="muted">The lock settings have not loaded from the proxy. Refresh to try again.</p>
+              <p class="muted">{{ t().account.lockNotLoaded }}</p>
             }
           } @else if (item.accountType === 'assisted') {
-            <p class="muted">An assisted transfer waits until two attestors have checked it. An attestor will open a case and ask for your lookup id. You can cancel it until it is written.</p>
+            <p class="muted">{{ t().account.assistedHint }}</p>
           }
           @if (sendOutcome(); as o) { <p [class.error]="!o.ok" [class.ok]="o.ok">{{ o.text }}</p> }
         }
 
         @if (pending().length > 0) {
-          <h3>Pending</h3>
+          <h3>{{ t().account.pending }}</h3>
           <mat-list>
             @for (p of pending(); track p.transactionId) {
               <mat-list-item lines="2">
                 <mat-icon matListItemIcon>hourglass_top</mat-icon>
-                <span matListItemTitle>{{ p.type }} · {{ millionthsToAnos(p.amount) }} anos · {{ p.approved ? 'approved by every validator' : 'waiting for approval' }}</span>
+                <span matListItemTitle>{{ p.type }} · {{ t().common.anos(millionthsToAnos(p.amount)) }} · {{ p.approved ? t().account.approved : t().account.waitingApproval }}</span>
                 <span matListItemLine><code>{{ p.transactionId }}</code> → <code>{{ p.accountIdTo ?? '' }}</code></span>
               </mat-list-item>
             }
           </mat-list>
         }
 
-        <h3>Escrow trades</h3>
+        <h3>{{ t().account.escrowTrades }}</h3>
         @if (escrowsError(); as text) {
           <p class="error">{{ text }}</p>
         }
@@ -225,65 +224,65 @@ interface Outcome {
           @for (e of escrows(); track e.transactionId) {
             <mat-list-item lines="2">
               <mat-icon matListItemIcon>{{ e.accountId === accountId() ? 'call_made' : 'call_received' }}</mat-icon>
-              <a matListItemTitle [routerLink]="['/wallet', accountId(), 'escrow', e.transactionId]">{{ millionthsToAnos(e.amount) }} anos {{ e.accountId === accountId() ? 'to' : 'from' }} <code>{{ e.accountId === accountId() ? e.accountIdTo : e.accountId }}</code></a>
-              <span matListItemLine>{{ stageWords(e) }} · {{ e.createdAt | date: 'medium' }}</span>
+              <a matListItemTitle [routerLink]="['/wallet', accountId(), 'escrow', e.transactionId]">{{ t().common.anos(millionthsToAnos(e.amount)) }} {{ e.accountId === accountId() ? t().account.to : t().account.from }} <code>{{ e.accountId === accountId() ? e.accountIdTo : e.accountId }}</code></a>
+              <span matListItemLine>{{ stageWords(e) }} · {{ lang.dateTime(e.createdAt) }}</span>
             </mat-list-item>
           } @empty {
             @if (!escrowsError()) {
-              <p class="muted">No open escrow trades.</p>
+              <p class="muted">{{ t().account.noEscrows }}</p>
             }
           }
         </mat-list>
 
         @if (item()?.accountType === 'assisted') {
-          <h3>Assisted transfer</h3>
+          <h3>{{ t().common.assistedTransfer }}</h3>
           @if (assistedError(); as text) {
             <p class="error">{{ text }}</p>
-          } @else if (assisted(); as t) {
+          } @else if (assisted(); as held) {
             <mat-list>
               <mat-list-item lines="2">
                 <mat-icon matListItemIcon>call_made</mat-icon>
-                <a matListItemTitle [routerLink]="['/wallet', accountId(), 'assisted', t.transactionId]">{{ millionthsToAnos(t.amount) }} anos to <code>{{ t.accountIdTo }}</code></a>
-                <span matListItemLine>{{ assistedStageWords(t.stage) }} · {{ t.createdAt | date: 'medium' }}</span>
+                <a matListItemTitle [routerLink]="['/wallet', accountId(), 'assisted', held.transactionId]">{{ t().common.anos(millionthsToAnos(held.amount)) }} {{ t().account.to }} <code>{{ held.accountIdTo }}</code></a>
+                <span matListItemLine>{{ assistedStageWords(held.stage, t().assistedStages) }} · {{ lang.dateTime(held.createdAt) }}</span>
               </mat-list-item>
             </mat-list>
           } @else {
-            <p class="muted">No transfer is waiting.</p>
+            <p class="muted">{{ t().account.noTransferWaiting }}</p>
           }
         }
 
         @if (item()?.accountType === 'guarded' || item()?.accountType === 'vault') {
-          <h3>Locked transfer</h3>
+          <h3>{{ t().account.lockedTransfer }}</h3>
           @if (lockedError(); as text) {
             <p class="error">{{ text }}</p>
-          } @else if (locked(); as t) {
+          } @else if (locked(); as waiting) {
             <mat-list>
               <mat-list-item lines="2">
                 <mat-icon matListItemIcon>lock_clock</mat-icon>
-                <span matListItemTitle>{{ millionthsToAnos(t.amount) }} anos to <code>{{ t.accountIdTo }}</code></span>
+                <span matListItemTitle>{{ t().common.anos(millionthsToAnos(waiting.amount)) }} {{ t().account.to }} <code>{{ waiting.accountIdTo }}</code></span>
                 <span matListItemLine>
-                  @if (t.stage === 'locked') {
-                    Waiting out the lock · until {{ t.unlocksAt | date: 'medium' }}
+                  @if (waiting.stage === 'locked') {
+                    {{ t().account.waitingOutLockUntil(lang.dateTime(waiting.unlocksAt)) }}
                   } @else {
-                    {{ lockedStageWords(t.stage) }} · {{ t.createdAt | date: 'medium' }}
+                    {{ lockedStageWords(waiting.stage, t().lockedStages) }} · {{ lang.dateTime(waiting.createdAt) }}
                   }
                 </span>
               </mat-list-item>
             </mat-list>
           } @else {
-            <p class="muted">No transfer is waiting.</p>
+            <p class="muted">{{ t().account.noTransferWaiting }}</p>
           }
         }
 
-        <p><a mat-stroked-button [routerLink]="['/wallet', accountId(), 'history']"><mat-icon>history</mat-icon> Transaction history</a></p>
+        <p><a mat-stroked-button [routerLink]="['/wallet', accountId(), 'history']"><mat-icon>history</mat-icon> {{ t().common.transactionHistory }}</a></p>
 
         <mat-accordion class="followups">
           <mat-expansion-panel>
-            <mat-expansion-panel-header><mat-panel-title>Follow-ups, signed by this account</mat-panel-title></mat-expansion-panel-header>
+            <mat-expansion-panel-header><mat-panel-title>{{ t().account.followUps }}</mat-panel-title></mat-expansion-panel-header>
             <div class="form">
               <mat-form-field appearance="outline" class="wide"><mat-label>Fund proposal transactionId</mat-label><input matInput [ngModel]="voteTransactionId()" (ngModelChange)="voteTransactionId.set($event)" /></mat-form-field>
-              <mat-form-field appearance="outline"><mat-label>Vote</mat-label>
-                <mat-select [value]="vote()" (valueChange)="vote.set($event)"><mat-option value="for">for</mat-option><mat-option value="against">against</mat-option></mat-select>
+              <mat-form-field appearance="outline"><mat-label>{{ t().account.vote }}</mat-label>
+                <mat-select [value]="vote()" (valueChange)="vote.set($event)"><mat-option value="for">{{ t().account.votes['for'] }}</mat-option><mat-option value="against">{{ t().account.votes['against'] }}</mat-option></mat-select>
               </mat-form-field>
               <button mat-stroked-button type="button" (click)="sendVote()" [disabled]="busy() || !voteTransactionId().trim()">Send guardianVote</button>
             </div>
@@ -291,23 +290,23 @@ interface Outcome {
           </mat-expansion-panel>
 
           <mat-expansion-panel>
-            <mat-expansion-panel-header><mat-panel-title>Fund proposal, by this account as guardian</mat-panel-title></mat-expansion-panel-header>
+            <mat-expansion-panel-header><mat-panel-title>{{ t().account.fundProposal }}</mat-panel-title></mat-expansion-panel-header>
             @for (row of payouts(); track $index) {
               <div class="form">
                 <mat-form-field appearance="outline" class="wide"><mat-label>Recipient accountId</mat-label><input matInput [ngModel]="row.accountIdTo" (ngModelChange)="updatePayout($index, 'accountIdTo', $event)" /></mat-form-field>
-                <mat-form-field appearance="outline"><mat-label>Amount (anos)</mat-label><input matInput [ngModel]="row.amount" (ngModelChange)="updatePayout($index, 'amount', $event)" /></mat-form-field>
-                <mat-form-field appearance="outline"><mat-label>Reason</mat-label><input matInput [ngModel]="row.reason" (ngModelChange)="updatePayout($index, 'reason', $event)" /></mat-form-field>
-                <mat-form-field appearance="outline"><mat-label>Returns stake</mat-label>
+                <mat-form-field appearance="outline"><mat-label>{{ t().account.amountAnos }}</mat-label><input matInput [ngModel]="row.amount" (ngModelChange)="updatePayout($index, 'amount', $event)" /></mat-form-field>
+                <mat-form-field appearance="outline"><mat-label>{{ t().common.reason }}</mat-label><input matInput [ngModel]="row.reason" (ngModelChange)="updatePayout($index, 'reason', $event)" /></mat-form-field>
+                <mat-form-field appearance="outline"><mat-label>{{ t().account.returnsStake }}</mat-label>
                   <mat-select [value]="row.stakeFor" (valueChange)="updatePayout($index, 'stakeFor', $event)">
-                    <mat-option value="">no</mat-option>
-                    @for (purpose of stakePurposes; track purpose) { <mat-option [value]="purpose">{{ purpose }}</mat-option> }
+                    <mat-option value="">{{ t().account.no }}</mat-option>
+                    @for (purpose of stakePurposes; track purpose) { <mat-option [value]="purpose">{{ t().account.stakePurposes[purpose] }}</mat-option> }
                   </mat-select>
                 </mat-form-field>
-                <button mat-icon-button type="button" (click)="removePayout($index)" [disabled]="payouts().length === 1" aria-label="Remove"><mat-icon>close</mat-icon></button>
+                <button mat-icon-button type="button" (click)="removePayout($index)" [disabled]="payouts().length === 1" [attr.aria-label]="t().common.remove"><mat-icon>close</mat-icon></button>
               </div>
             }
             <div class="row">
-              <button mat-button type="button" (click)="addPayout()">Add payout</button>
+              <button mat-button type="button" (click)="addPayout()">{{ t().account.addPayout }}</button>
               <button mat-flat-button type="button" (click)="sendFundProposal()" [disabled]="busy()">Send fundProposal</button>
             </div>
             @if (proposalOutcome(); as o) { <p [class.error]="!o.ok" [class.ok]="o.ok">{{ o.text }}</p> }
@@ -343,9 +342,10 @@ export class AccountPage {
   private readonly crypto = inject(CryptoService);
   private readonly signing = inject(SigningService);
   private readonly config = inject(ConfigService);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
   protected readonly millionthsToAnos = millionthsToAnos;
-  protected readonly minutesWords = minutesWords;
   protected readonly assistedStageWords = assistedStageWords;
   protected readonly lockedStageWords = lockedStageWords;
   protected readonly spendingKinds = SPENDING_KINDS;
@@ -424,7 +424,7 @@ export class AccountPage {
 
   /** The stage of an open escrow trade in words, from this account's side (escrow-stage.ts, shared with the trade page). */
   protected stageWords(e: EscrowItem): string {
-    return escrowStageWords(e.stage, e.accountId === this.accountId() ? 'seller' : 'buyer');
+    return escrowStageWords(e.stage, e.accountId === this.accountId() ? 'seller' : 'buyer', this.t().escrowStages);
   }
 
   /** Pair one, opened from the keyBlob for one signature; the caller drops it. */
@@ -436,8 +436,8 @@ export class AccountPage {
       item = this.item();
     }
     const encryptionKey = this.session.getEncryptionKey();
-    if (!item) throw new Error('This account is not one of this anoPod\'s accounts');
-    if (!encryptionKey) throw new Error('The encryption key is not in RAM: unlock again');
+    if (!item) throw new Error(this.t().common.notMyAccount);
+    if (!encryptionKey) throw new Error(this.t().common.noKeyInRam);
     return this.crypto.pairOneFromKeyBlob(this.crypto.fromHex(item.keyBlob), encryptionKey);
   }
 
@@ -459,7 +459,7 @@ export class AccountPage {
         lockedAccount ? this.anos.getLockedTransfer(pairOne, this.accountId(), quiet) : null,
       ]);
       if (!account.ok) {
-        this.readError.set(account.status === 401 && /unknown account/.test(reasonOf(account)) ? 'Not on the ledger yet: the creation has not landed.' : `/get-account: ${reasonOf(account)}`);
+        this.readError.set(account.status === 401 && /unknown account/.test(reasonOf(account)) ? this.t().account.notLanded : `/get-account: ${reasonOf(account)}`);
         return;
       }
       this.account.set(account.body);
@@ -497,12 +497,12 @@ export class AccountPage {
     try {
       text = await navigator.clipboard.readText();
     } catch {
-      this.pasteNote.set('The browser did not allow reading the clipboard. Paste into the box the usual way.');
+      this.pasteNote.set(this.t().account.clipboardRefused);
       return;
     }
     const found = ACCOUNT_ID_IN_TEXT.exec(text);
     if (!found) {
-      this.pasteNote.set('Nothing on the clipboard looks like an account id.');
+      this.pasteNote.set(this.t().account.clipboardNoId);
       return;
     }
     this.accountIdTo.set(found[0].toLowerCase());
@@ -517,7 +517,7 @@ export class AccountPage {
     await this.act(this.sendOutcome, async () => {
       const pairOne = await this.pairOne();
       const latest = await this.anos.getAccount(pairOne, this.accountId(), true);
-      if (!latest.ok || !latest.body.latestTransactionId) throw new Error('No latest transaction on the ledger yet');
+      if (!latest.ok || !latest.body.latestTransactionId) throw new Error(this.t().common.noLatest);
       const previous = latest.body.latestTransactionId;
       const type = item.accountType as AccountType;
       let res: ApiResponse<Accepted>;
@@ -527,13 +527,13 @@ export class AccountPage {
       } else {
         const transactionType = this.transferType() as TransferType;
         const ahead = this.minutesAhead();
-        if (ahead === null) throw new Error('The lock settings have not loaded from the proxy. Refresh to try again.');
+        if (ahead === null) throw new Error(this.t().account.lockNotLoaded);
         const createdAt = new Date(Date.now() + ahead * 60_000);
         const tx = await this.signing.sign(this.crypto.buildAnosTransferTransaction(pairOne, this.accountId(), previous, this.accountIdTo().trim().toLowerCase(), amount, transactionType, createdAt));
         res = await this.anos.anosTransfer(tx);
       }
       if (!res.ok) throw new Error(reasonOf(res));
-      return `accepted: ${res.body.transactionId}`;
+      return this.t().account.accepted(res.body.transactionId);
     });
     await this.refresh(true);
   }
@@ -548,7 +548,7 @@ export class AccountPage {
       const signed = await this.signing.sign(build(pairOne, this.accountId()));
       const res = await post(signed);
       if (!res.ok) throw new Error(reasonOf(res));
-      return `${signed.payload.type} accepted for ${res.body.transactionId}`;
+      return this.t().account.followUpAccepted(signed.payload.type, res.body.transactionId);
     });
   }
 
@@ -569,7 +569,7 @@ export class AccountPage {
       const payouts: Payout[] = [];
       for (const [i, row] of this.payouts().entries()) {
         const amount = anosToMillionths(row.amount);
-        if (amount === null) throw new Error(`Payout ${i + 1}: the amount must be anos with up to six decimals`);
+        if (amount === null) throw new Error(this.t().account.payoutAmount(i + 1));
         const payout: Payout = { accountIdTo: row.accountIdTo.trim(), amount: amount.toString(), reason: row.reason };
         if (row.stakeFor !== '') payout.stakeFor = row.stakeFor;
         payouts.push(payout);
@@ -578,7 +578,7 @@ export class AccountPage {
       const tx = await this.signing.sign(this.crypto.buildFundProposal(pairOne, this.accountId(), payouts));
       const res = await this.anos.fundProposal(tx);
       if (!res.ok) throw new Error(reasonOf(res));
-      return `fund proposal accepted: ${res.body.transactionId}`;
+      return this.t().account.proposalAccepted(res.body.transactionId);
     });
   }
 

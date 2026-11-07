@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { ConfigService } from './config.service';
 import { CryptoService } from './crypto.service';
 import { KeyholderApiService, ShareType } from './keyholder-api.service';
+import { LanguageService } from './language.service';
 import { reasonOf } from './log.service';
 import { KeyholderPublicKey, SessionService } from './session.service';
 
@@ -10,10 +11,10 @@ export interface Deposit {
   keyId: string;
 }
 
-/** A keyholder refused or did not answer: the step stops and Retry starts it again with a fresh secret. */
+/** A keyholder refused or did not answer: the step stops and Retry starts it again with a fresh secret. The sentence comes from the dictionary (shares.refused). */
 export class DepositError extends Error {
-  constructor(readonly keyholder: number, detail: string) {
-    super(`keyholder ${keyholder} refused the share: ${detail}`);
+  constructor(readonly keyholder: number, message: string) {
+    super(message);
   }
 }
 
@@ -31,12 +32,13 @@ export class SharesService {
   private readonly config = inject(ConfigService);
   private readonly crypto = inject(CryptoService);
   private readonly keyholders = inject(KeyholderApiService);
+  private readonly lang = inject(LanguageService);
   private readonly session = inject(SessionService);
 
   /** Deposits `secret` as `shareType` on every keyholder; returns the fresh keyId. */
   async deposit(secret: Uint8Array, shareType: ShareType): Promise<Deposit> {
     const identity = this.session.getIdentity();
-    if (!identity) throw new Error('no public ledger id in RAM: unlock again');
+    if (!identity) throw new Error(this.lang.words().shares.noIdentity);
     const { keyholders, shareThreshold } = await this.config.load();
     const keyId = this.crypto.newKeyId();
     const aad = this.crypto.shareAad(identity.lookupId, shareType, keyId);
@@ -52,7 +54,7 @@ export class SharesService {
         keyId,
         share: this.crypto.toHex(share),
       });
-      if (!res.ok || res.status !== 201) throw new DepositError(n, reasonOf(res));
+      if (!res.ok || res.status !== 201) throw new DepositError(n, this.lang.words().shares.refused(n, reasonOf(res)));
     }
     return { keyId };
   }
@@ -62,7 +64,10 @@ export class SharesService {
     const cached = this.session.keyholderKeys.get(n);
     if (cached) return cached;
     const res = await this.keyholders.getPublicKey(n);
-    if (!res.ok) throw new DepositError(n, `its receiving key could not be fetched (${reasonOf(res)})`);
+    if (!res.ok) {
+      const words = this.lang.words().shares;
+      throw new DepositError(n, words.refused(n, words.keyNotFetched(reasonOf(res))));
+    }
     this.session.keyholderKeys.set(n, res.body);
     return res.body;
   }

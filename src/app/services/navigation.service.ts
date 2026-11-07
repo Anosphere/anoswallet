@@ -1,5 +1,6 @@
 import { Injectable, computed, inject } from '@angular/core';
 import { ConfigService } from './config.service';
+import { LanguageService } from './language.service';
 import { SessionService } from './session.service';
 
 /** One entry of the side navigation and one Home tile; `badge` is a count drawn at its right (Chat: the unread rooms; Notifications: the unread notifications; wallet spec 8.2). */
@@ -17,35 +18,39 @@ export interface NavItem {
  * setup is complete; Home first, then wallet, cases, chat, marketplace and
  * account once it is; Moderation in the moderator edition and Attesting in
  * the attestor edition (wallet spec 12.1, 13.1); Notifications; Vouch
- * requests when the pod is a seed; Log.
+ * requests when the pod is a seed; Log. The labels come from the
+ * dictionary, so the side panel and the Home tiles follow the language
+ * (wallet spec 8.8).
  */
 @Injectable({ providedIn: 'root' })
 export class NavigationService {
   private readonly session = inject(SessionService);
   private readonly config = inject(ConfigService);
+  private readonly lang = inject(LanguageService);
 
   readonly items = computed<NavItem[]>(() => {
+    const nav = this.lang.words().nav;
     const status = this.session.status();
     if (!this.session.hasSession()) return [];
     const items: NavItem[] = [];
-    if (!status?.vouched) items.push({ path: '/vouching', label: 'Vouching', icon: 'how_to_reg' });
+    if (!status?.vouched) items.push({ path: '/vouching', label: nav.vouching, icon: 'how_to_reg' });
     if (!status?.setupComplete) {
-      items.push({ path: '/identity', label: 'Identity', icon: 'badge' }, { path: '/setup', label: 'Setup', icon: 'key' });
+      items.push({ path: '/identity', label: nav.identity, icon: 'badge' }, { path: '/setup', label: nav.setup, icon: 'key' });
     } else {
       items.push(
-        { path: '/home', label: 'Home', icon: 'home' },
-        { path: '/wallet', label: 'Wallet', icon: 'account_balance_wallet' },
-        { path: '/cases', label: 'Cases', icon: 'folder_shared' },
-        { path: '/chat', label: 'Chat', icon: 'chat', badge: this.session.unreadRoomCount() },
-        { path: '/marketplace', label: 'Marketplace', icon: 'storefront' },
-        { path: '/account', label: 'Account', icon: 'manage_accounts' },
+        { path: '/home', label: nav.home, icon: 'home' },
+        { path: '/wallet', label: nav.wallet, icon: 'account_balance_wallet' },
+        { path: '/cases', label: nav.cases, icon: 'folder_shared' },
+        { path: '/chat', label: nav.chat, icon: 'chat', badge: this.session.unreadRoomCount() },
+        { path: '/marketplace', label: nav.marketplace, icon: 'storefront' },
+        { path: '/account', label: nav.account, icon: 'manage_accounts' },
       );
     }
-    if (this.config.moderatorEdition()) items.push({ path: '/moderation', label: 'Moderation', icon: 'gavel' });
-    if (this.config.attestorEdition()) items.push({ path: '/attesting', label: 'Attesting', icon: 'fact_check' });
-    items.push({ path: '/notifications', label: 'Notifications', icon: 'notifications', badge: this.session.unread().length });
-    if (status?.isSeed || status?.isSuperSeed) items.push({ path: '/seed', label: 'Vouch requests', icon: 'verified_user' });
-    items.push({ path: '/log', label: 'Log', icon: 'receipt_long' });
+    if (this.config.moderatorEdition()) items.push({ path: '/moderation', label: nav.moderation, icon: 'gavel' });
+    if (this.config.attestorEdition()) items.push({ path: '/attesting', label: nav.attesting, icon: 'fact_check' });
+    items.push({ path: '/notifications', label: nav.notifications, icon: 'notifications', badge: this.session.unread().length });
+    if (status?.isSeed || status?.isSuperSeed) items.push({ path: '/seed', label: nav.vouchRequests, icon: 'verified_user' });
+    items.push({ path: '/log', label: nav.log, icon: 'receipt_long' });
     return items;
   });
 }

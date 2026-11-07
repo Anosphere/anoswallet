@@ -55,12 +55,15 @@ src/app/
   constants.ts             the PRF salt label, the polling intervals
   amounts.ts               anos <-> millionths
   countries.ts             the ISO 3166-1 alpha-2 codes for the identity form
+  i18n/en.ts, th.ts        the words of each language, one section per page (spec 8.8)
   unlock.ts                the unlock flow, shared by the landing page and setup
   components/camera.component.ts   the camera: live preview, Take photo, a file input as the fallback
   pages/                   one file per route: landing, create, recover, vouching, identity, setup,
                            bucket-one, bucket-two, wallet, account, chat, marketplace, notifications, seed, log
   services/
     config.service.ts      GET /api/config once
+    language.service.ts    the language on screen: Thai when the browser's first language is Thai,
+                           else English; the words, the locale tag, the dates
     session.service.ts     the pod, its keys and ids in RAM, the status, the next-step rule, sign()
     masterpod-api.service.ts, keyholder-api.service.ts, anos-api.service.ts, signing.service.ts
                            one method per route of each backend, through the proxy
@@ -71,6 +74,11 @@ src/app/
 docs/                      schemas.md (the spec, build notes in section 11), public-ledger-id.md, build-plan.md
 proxy.conf.json            ng serve forwards /api to the proxy
 ```
+
+The app speaks English and Thai (spec 8.8). The language follows the
+browser's first language, English unless it is Thai, and the landing
+card offers Switch to English for the tab while the app is in Thai;
+nothing is stored.
 
 Everything secret lives in RAM and dies with the tab; nothing touches
 browser storage. A new tab unlocks again.

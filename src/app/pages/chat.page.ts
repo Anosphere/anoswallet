@@ -6,6 +6,7 @@ import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } fro
 import { filter, map } from 'rxjs';
 import { AvatarComponent } from '../components/avatar.component';
 import { ChatService } from '../services/chat.service';
+import { LanguageService } from '../services/language.service';
 import { reasonOf } from '../services/log.service';
 import { RoomItem } from '../services/masterpod-api.service';
 import { SessionService } from '../services/session.service';
@@ -28,11 +29,11 @@ import { SessionService } from '../services/session.service';
     <div class="chat" [class.child-open]="childOpen()">
       <section class="list">
         <header class="list-head">
-          <h1>Chats</h1>
-          <a mat-icon-button class="pencil" routerLink="/chat/new" aria-label="New chat"><mat-icon>edit</mat-icon></a>
+          <h1>{{ t().common.chats }}</h1>
+          <a mat-icon-button class="pencil" routerLink="/chat/new" [attr.aria-label]="t().common.newChat"><mat-icon>edit</mat-icon></a>
         </header>
         @if (!session.hasChatKeys()) {
-          <p class="error note">No chat keys in this tab: unlock again.</p>
+          <p class="error note">{{ t().common.noChatKeysUnlock }}</p>
         }
         @if (error(); as text) {
           <p class="error note">{{ text }}</p>
@@ -42,7 +43,7 @@ import { SessionService } from '../services/session.service';
             <a class="row" routerLink="/chat/requests" routerLinkActive="open">
               <span class="disc"><mat-icon>person_add</mat-icon></span>
               <span class="texts">
-                <span class="title">Requests</span>
+                <span class="title">{{ t().common.requests }}</span>
                 <span class="line">{{ requestLine() }}</span>
               </span>
             </a>
@@ -67,17 +68,17 @@ import { SessionService } from '../services/session.service';
             </a>
           } @empty {
             @if (session.chatRooms() === null) {
-              <p class="muted note">Loading your chats.</p>
+              <p class="muted note">{{ t().chat.loading }}</p>
             } @else {
-              <p class="muted note">No chats yet. Tap the pencil to start one.</p>
+              <p class="muted note">{{ t().chat.none }}</p>
             }
           }
         </div>
-        <a mat-fab class="fab" routerLink="/chat/new" aria-label="New chat"><mat-icon>edit</mat-icon></a>
+        <a mat-fab class="fab" routerLink="/chat/new" [attr.aria-label]="t().common.newChat"><mat-icon>edit</mat-icon></a>
       </section>
       <section class="pane">
         @if (!childOpen()) {
-          <p class="muted placeholder">Pick a chat, or start a new one.</p>
+          <p class="muted placeholder">{{ t().chat.pick }}</p>
         }
         <router-outlet />
       </section>
@@ -125,6 +126,8 @@ export class ChatPage {
   protected readonly session = inject(SessionService);
   protected readonly chat = inject(ChatService);
   private readonly router = inject(Router);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
   private readonly url = toSignal(
     this.router.events.pipe(
@@ -144,7 +147,7 @@ export class ChatPage {
   });
   protected readonly requestLine = computed(() => {
     const answer = this.session.chatRooms();
-    return answer ? `${count(answer.invites.length, 'invite')}, ${count(answer.joinRequests.length, 'join request')}` : '';
+    return answer ? this.t().chat.requestLine(answer.invites.length, answer.joinRequests.length) : '';
   });
   protected readonly error = signal<string | null>(null);
   /** The newest message of each room, decrypted, by message id. */
@@ -163,10 +166,10 @@ export class ChatPage {
   /** The one-line preview: "You: " before this pod's own message; the two texts for a room without messages or a message that will not open. */
   protected preview(room: RoomItem): string {
     const last = room.lastMessage;
-    if (!last) return 'No messages yet';
+    if (!last) return this.t().chat.noMessages;
     const text = this.previews().get(last.messageId);
     if (text === undefined) return '';
-    return (last.senderAnopodId === this.session.anopodId() ? 'You: ' : '') + text;
+    return (last.senderAnopodId === this.session.anopodId() ? this.t().chat.youPrefix : '') + text;
   }
 
   private async decryptPreviews(rooms: RoomItem[]): Promise<void> {
@@ -178,12 +181,8 @@ export class ChatPage {
       const last = room.lastMessage;
       if (!last) continue;
       const text = await this.chat.decryptMessage(room, last.message);
-      added.set(last.messageId, text === null ? '(cannot read)' : text.replace(/\s+/g, ' ').trim());
+      added.set(last.messageId, text === null ? this.t().chat.cannotRead : text.replace(/\s+/g, ' ').trim());
     }
     this.previews.update((map) => new Map([...map, ...added]));
   }
-}
-
-function count(n: number, word: string): string {
-  return `${n} ${word}${n === 1 ? '' : 's'}`;
 }

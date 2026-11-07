@@ -13,6 +13,7 @@ import { formatPrice, totalOf } from '../prices';
 import { AnosApiService, EscrowItem } from '../services/anos-api.service';
 import { ChatService } from '../services/chat.service';
 import { CryptoService, PairOne } from '../services/crypto.service';
+import { LanguageService } from '../services/language.service';
 import { reasonOf } from '../services/log.service';
 import { MarketplaceService } from '../services/marketplace.service';
 import { MasterpodApiService, RoomItem } from '../services/masterpod-api.service';
@@ -70,52 +71,52 @@ interface Ended {
           }
           <span class="summary">{{ summary() }}</span>
           @if (closed()) {
-            <span class="label">Closed</span>
+            <span class="label">{{ t().common.closed }}</span>
           }
         </div>
 
-        @if (trade(); as t) {
-          <p class="stage">Escrow trade: {{ millionthsToAnos(t.amount) }} anos · {{ stageWords(t) }}</p>
+        @if (trade(); as open) {
+          <p class="stage">{{ t().pinned.tradeLine(millionthsToAnos(open.amount), stageWords(open)) }}</p>
           <div class="buttons">
-            <a mat-stroked-button [routerLink]="['/wallet', tradeAccount(), 'escrow', t.transactionId]">See the trade</a>
+            <a mat-stroked-button [routerLink]="['/wallet', tradeAccount(), 'escrow', open.transactionId]">{{ t().pinned.seeTrade }}</a>
           </div>
         } @else {
           @if (ended(); as e) {
             <p class="stage">{{ endedText(e) }}</p>
             @if (e.released && isOwner() && !closed()) {
               @if (confirmClose()) {
-                <p class="question">Close this listing? People can no longer connect; your chats stay.</p>
+                <p class="question">{{ t().common.askClose }}</p>
                 <div class="buttons">
-                  <button mat-flat-button type="button" (click)="closeListing()" [disabled]="busy()">Yes</button>
-                  <button mat-button type="button" (click)="confirmClose.set(false)" [disabled]="busy()">Back</button>
+                  <button mat-flat-button type="button" (click)="closeListing()" [disabled]="busy()">{{ t().common.yes }}</button>
+                  <button mat-button type="button" (click)="confirmClose.set(false)" [disabled]="busy()">{{ t().common.back }}</button>
                 </div>
               } @else {
-                <button mat-stroked-button type="button" (click)="confirmClose.set(true)" [disabled]="busy()">Close the listing</button>
+                <button mat-stroked-button type="button" (click)="confirmClose.set(true)" [disabled]="busy()">{{ t().pinned.closeListing }}</button>
               }
             }
           }
           @if (!closed() && !ended()?.released) {
             @if (side() === 'buyer') {
               <div class="buttons">
-                <button mat-flat-button type="button" [matMenuTriggerFor]="accountsMenu" [disabled]="busy() || session.accounts().length === 0">Share an account</button>
+                <button mat-flat-button type="button" [matMenuTriggerFor]="accountsMenu" [disabled]="busy() || session.accounts().length === 0">{{ t().pinned.shareAccount }}</button>
                 @if (session.accounts().length === 0) {
-                  <span class="hint">This anoPod has no anos account yet.</span>
+                  <span class="hint">{{ t().pinned.noAccounts }}</span>
                 }
               </div>
               <mat-menu #accountsMenu="matMenu">
                 @for (account of session.accounts(); track account.accountId) {
-                  <button mat-menu-item type="button" (click)="share(account.accountId)"><code>{{ shortId(account.accountId) }}</code> · {{ account.accountType }}</button>
+                  <button mat-menu-item type="button" (click)="share(account.accountId)"><code>{{ shortId(account.accountId) }}</code> · {{ t().account.title(account.accountType) }}</button>
                 }
               </mat-menu>
             } @else if (starting()) {
               <div class="form">
                 @if (spendingAccounts().length === 1) {
-                  <p class="field">From <code>{{ shortId(from()) }}</code></p>
+                  <p class="field">{{ t().common.from }} <code>{{ shortId(from()) }}</code></p>
                 } @else if (spendingAccounts().length === 0) {
-                  <p class="field hint">This anoPod has no spending account.</p>
+                  <p class="field hint">{{ t().pinned.noSpending }}</p>
                 } @else {
                   <mat-form-field appearance="outline" subscriptSizing="dynamic">
-                    <mat-label>From</mat-label>
+                    <mat-label>{{ t().common.from }}</mat-label>
                     <mat-select [value]="from()" (valueChange)="from.set($event)">
                       @for (account of spendingAccounts(); track account.accountId) {
                         <mat-option [value]="account.accountId">{{ shortId(account.accountId) }}</mat-option>
@@ -124,10 +125,10 @@ interface Ended {
                   </mat-form-field>
                 }
                 @if (theirAccountIds().length === 1) {
-                  <p class="field">To <code>{{ shortId(to()) }}</code></p>
+                  <p class="field">{{ t().common.to }} <code>{{ shortId(to()) }}</code></p>
                 } @else {
                   <mat-form-field appearance="outline" subscriptSizing="dynamic">
-                    <mat-label>To</mat-label>
+                    <mat-label>{{ t().common.to }}</mat-label>
                     <mat-select [value]="to()" (valueChange)="to.set($event)">
                       @for (id of theirAccountIds(); track id) {
                         <mat-option [value]="id">{{ shortId(id) }}</mat-option>
@@ -136,30 +137,30 @@ interface Ended {
                   </mat-form-field>
                 }
                 <mat-form-field appearance="outline" subscriptSizing="dynamic">
-                  <mat-label>Amount, anos</mat-label>
+                  <mat-label>{{ t().pinned.amountAnos }}</mat-label>
                   <input matInput inputmode="decimal" [ngModel]="amount()" (ngModelChange)="amount.set($event)" />
                 </mat-form-field>
                 @if (formTotal(); as total) {
-                  <p class="field">{{ total }} at the listing's price</p>
+                  <p class="field">{{ t().pinned.atListingPrice(total) }}</p>
                 }
                 @if (confirmStart()) {
-                  <p class="question">Put {{ amount().trim() }} anos into escrow for {{ otherName() }}? You release them once you have been paid. Only the buyer can cancel; either side can dispute.</p>
+                  <p class="question">{{ t().pinned.askStart(amount().trim(), otherName()) }}</p>
                   <div class="buttons">
-                    <button mat-flat-button type="button" (click)="start()" [disabled]="busy()">Yes</button>
-                    <button mat-button type="button" (click)="confirmStart.set(false)" [disabled]="busy()">Back</button>
+                    <button mat-flat-button type="button" (click)="start()" [disabled]="busy()">{{ t().common.yes }}</button>
+                    <button mat-button type="button" (click)="confirmStart.set(false)" [disabled]="busy()">{{ t().common.back }}</button>
                   </div>
                 } @else {
                   <div class="buttons">
-                    <button mat-flat-button type="button" (click)="confirmStart.set(true)" [disabled]="busy() || !canStart()">Start</button>
-                    <button mat-button type="button" (click)="starting.set(false)" [disabled]="busy()">Cancel</button>
+                    <button mat-flat-button type="button" (click)="confirmStart.set(true)" [disabled]="busy() || !canStart()">{{ t().common.start }}</button>
+                    <button mat-button type="button" (click)="starting.set(false)" [disabled]="busy()">{{ t().common.cancel }}</button>
                   </div>
                 }
               </div>
             } @else {
               <div class="buttons">
-                <button mat-flat-button type="button" (click)="openForm()" [disabled]="busy() || theirAccountIds().length === 0">Start the escrow trade</button>
+                <button mat-flat-button type="button" (click)="openForm()" [disabled]="busy() || theirAccountIds().length === 0">{{ t().pinned.startTrade }}</button>
                 @if (theirAccountIds().length === 0) {
-                  <span class="hint">Ask them to share an account first</span>
+                  <span class="hint">{{ t().pinned.askShare }}</span>
                 }
               </div>
             }
@@ -199,6 +200,8 @@ export class PinnedListingComponent {
   private readonly anos = inject(AnosApiService);
   private readonly crypto = inject(CryptoService);
   private readonly signing = inject(SigningService);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
   protected readonly millionthsToAnos = millionthsToAnos;
 
@@ -211,12 +214,12 @@ export class PinnedListingComponent {
     return listing ? this.market.mySide(listing) : 'buyer';
   });
   protected readonly other = computed(() => this.chat.otherPerson(this.room()));
-  protected readonly otherName = computed(() => this.other()?.username ?? 'them');
+  protected readonly otherName = computed(() => this.other()?.username ?? this.t().pinned.them);
   protected readonly summary = computed(() => {
     const listing = this.listing();
     if (!listing) return '';
     const total = formatPrice(totalOf(listing.quantity, listing.price), listing.currency, 0);
-    return `${this.market.sideWords(listing)} ${millionthsToAnos(listing.quantity)} anos · ${formatPrice(listing.price, listing.currency)} each · ${total}`;
+    return this.t().pinned.summary(this.market.sideWords(listing), millionthsToAnos(listing.quantity), formatPrice(listing.price, listing.currency), total);
   });
   /** The account ids the other person posted, newest first. */
   protected readonly theirAccountIds = computed(() => {
@@ -291,17 +294,17 @@ export class PinnedListingComponent {
 
   /** The stage in words from this pod's side of the trade (escrow-stage.ts). */
   protected stageWords(t: EscrowItem): string {
-    return escrowStageWords(t.stage, t.accountId === this.tradeAccount() ? 'seller' : 'buyer');
+    return escrowStageWords(t.stage, t.accountId === this.tradeAccount() ? 'seller' : 'buyer', this.lang.words().escrowStages);
   }
 
   protected endedText(e: Ended): string {
-    if (e.released === null) return "Closed. Check the account's transactions to see whether the anos moved.";
-    return e.released ? `Released: ${millionthsToAnos(e.amount)} anos went to the buyer.` : 'Cancelled: the seller kept the anos.';
+    if (e.released === null) return this.t().pinned.closedUnknown;
+    return e.released ? this.t().pinned.released(millionthsToAnos(e.amount)) : this.t().pinned.cancelled;
   }
 
   /** The buyer posts one of their account ids into the chat. */
   protected share(accountId: string): Promise<void> {
-    return this.run(() => this.post(`Please send the anos to this account: ${accountId}`));
+    return this.run(() => this.post(this.t().pinned.shareMessage(accountId)));
   }
 
   /** The seller's form: the first spending account, the newest account id the other person posted, the listing's quantity. */
@@ -327,16 +330,16 @@ export class PinnedListingComponent {
       const from = this.from();
       const to = this.to();
       const amount = anosToMillionths(this.amount());
-      if (!from || !to || amount === null) throw new Error('Pick the accounts and an amount in anos');
+      if (!from || !to || amount === null) throw new Error(this.t().pinned.pickAccounts);
       const pairOne = await this.pairOne(from);
       const latest = await this.anos.getAccount(pairOne, from, true);
-      if (!latest.ok || !latest.body.latestTransactionId) throw new Error('No latest transaction on the ledger yet');
+      if (!latest.ok || !latest.body.latestTransactionId) throw new Error(this.t().common.noLatest);
       const tx = await this.signing.sign(this.crypto.buildAnosTransferTransaction(pairOne, from, latest.body.latestTransactionId, to, amount, 'escrowTransfer', new Date()));
       const res = await this.anos.anosTransfer(tx);
-      if (!res.ok) throw new Error(`The validator refused the trade: ${reasonOf(res)}`);
+      if (!res.ok) throw new Error(this.t().pinned.refused(reasonOf(res)));
       this.starting.set(false);
       this.confirmStart.set(false);
-      await this.post(`Escrow trade started: ${millionthsToAnos(amount)} anos from ${from} to ${to}. Transaction ${res.body.transactionId}.`);
+      await this.post(this.t().pinned.startedMessage(millionthsToAnos(amount), from, to, res.body.transactionId));
       await this.poll();
     });
   }
@@ -345,7 +348,7 @@ export class PinnedListingComponent {
   protected closeListing(): Promise<void> {
     return this.run(async () => {
       const listing = this.listing();
-      if (!listing) throw new Error('This chat is not about a listing');
+      if (!listing) throw new Error(this.t().common.notAboutListing);
       const res = await this.market.close(listing.listingId);
       if (!res.ok) throw new Error(reasonOf(res));
       this.confirmClose.set(false);
@@ -356,7 +359,7 @@ export class PinnedListingComponent {
   /** A message into the room, encrypted like any other; the thread's poll shows it. */
   private async post(text: string): Promise<void> {
     const key = await this.chat.roomKeyOf(this.room());
-    if (!key) throw new Error('No room key for this room');
+    if (!key) throw new Error(this.t().common.noRoomKey);
     const res = await this.masterpod.sendMessage(this.room().chatRoomId, await this.crypto.encryptText(key, text));
     if (!res.ok) throw new Error(`/send-message: ${reasonOf(res)}`);
   }
@@ -370,8 +373,8 @@ export class PinnedListingComponent {
       item = this.session.accounts().find((a) => a.accountId === accountId);
     }
     const encryptionKey = this.session.getEncryptionKey();
-    if (!item) throw new Error("This account is not one of this anoPod's accounts");
-    if (!encryptionKey) throw new Error('The encryption key is not in RAM: unlock again');
+    if (!item) throw new Error(this.t().common.notMyAccount);
+    if (!encryptionKey) throw new Error(this.t().common.noKeyInRam);
     return this.crypto.pairOneFromKeyBlob(this.crypto.fromHex(item.keyBlob), encryptionKey);
   }
 

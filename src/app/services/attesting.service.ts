@@ -1,6 +1,8 @@
 import { Injectable, effect, inject, signal } from '@angular/core';
+import type { Words } from '../i18n/en';
 import { AnosApiService, AssistedTransferItem, DisputedEscrowItem } from './anos-api.service';
 import { CryptoService, HybridKeys, PairOne } from './crypto.service';
+import { LanguageService } from './language.service';
 import { ApiResponse, reasonOf } from './log.service';
 import { AccountProfileItem, MasterpodApiService } from './masterpod-api.service';
 import { AnosAccountItem, SessionService } from './session.service';
@@ -22,6 +24,7 @@ export class AttestingService {
   private readonly masterpod = inject(MasterpodApiService);
   private readonly anos = inject(AnosApiService);
   private readonly crypto = inject(CryptoService);
+  private readonly lang = inject(LanguageService);
 
   /** The staked spending account that signs every validator read, keyholder pull and sign-off this session. */
   readonly accountId = signal('');
@@ -62,8 +65,8 @@ export class AttestingService {
   async pairOne(): Promise<{ account: AnosAccountItem; pairOne: PairOne }> {
     const account = this.session.accounts().find((a) => a.accountId === this.accountId());
     const encryptionKey = this.session.getEncryptionKey();
-    if (!account) throw new Error('Pick one of your anos accounts first.');
-    if (!encryptionKey) throw new Error('The encryption key is not in RAM: unlock again.');
+    if (!account) throw new Error(this.lang.words().common.pickAccountFirst);
+    if (!encryptionKey) throw new Error(this.lang.words().common.noKeyInRamSentence);
     return { account, pairOne: await this.crypto.pairOneFromKeyBlob(this.crypto.fromHex(account.keyBlob), encryptionKey) };
   }
 
@@ -80,8 +83,8 @@ export class AttestingService {
       this.anos.listAssistedTransfers(pairOne, account.accountId, quiet),
       this.anos.listDisputedEscrows(pairOne, account.accountId, quiet),
     ]);
-    if (!trades.ok) throw new Error(validatorRefusal(trades, '/list-assisted-transfers'));
-    if (!disputes.ok) throw new Error(validatorRefusal(disputes, '/list-disputed-escrows'));
+    if (!trades.ok) throw new Error(validatorRefusal(trades, '/list-assisted-transfers', this.lang.words()));
+    if (!disputes.ok) throw new Error(validatorRefusal(disputes, '/list-disputed-escrows', this.lang.words()));
     const ids = new Set<string>();
     for (const trade of trades.body.transfers) ids.add(trade.accountId);
     for (const escrow of disputes.body.escrows) {
@@ -102,7 +105,7 @@ export class AttestingService {
     const next = new Map(known);
     for (let i = 0; i < missing.length; i += PROFILE_IDS_PER_CALL) {
       const res = await this.masterpod.listAnosAccountProfiles(missing.slice(i, i + PROFILE_IDS_PER_CALL), quiet);
-      if (!res.ok) throw new Error(attestingError(res, '/list-anos-account-profiles'));
+      if (!res.ok) throw new Error(attestingError(res, '/list-anos-account-profiles', this.lang.words()));
       for (const item of res.body.profiles) next.set(item.accountId, item);
     }
     this.profiles.set(next);
@@ -156,16 +159,16 @@ export class AttestingService {
   }
 }
 
-/** The masterpod's 403 not an attestor in words (wallet spec 13.2); other refusals as they are. */
-export function attestingError(res: ApiResponse<unknown>, path: string): string {
-  if (res.status === 403 && /not an attestor/.test(reasonOf(res))) return 'This anoPod is not an attestor.';
+/** The masterpod's 403 not an attestor in words (wallet spec 13.2), from the dictionary `words`; other refusals as they are. */
+export function attestingError(res: ApiResponse<unknown>, path: string, words: Words): string {
+  if (res.status === 403 && /not an attestor/.test(reasonOf(res))) return words.attesting.notAttestor;
   return `${path}: ${reasonOf(res)}`;
 }
 
-/** A validator read's refusal in words (anossoftware 13.1): the stake, the ledger; the rest as it is. */
-export function validatorRefusal(res: ApiResponse<unknown>, path: string): string {
+/** A validator read's refusal in words (anossoftware 13.1), from the dictionary `words`: the stake, the ledger; the rest as it is. */
+export function validatorRefusal(res: ApiResponse<unknown>, path: string, words: Words): string {
   const reason = reasonOf(res);
-  if (res.status === 403 && /not an attestor/.test(reason)) return 'This account holds no attestor stake on the validators.';
-  if (res.status === 401 && /unknown account/.test(reason)) return 'This account is not on the ledger yet.';
+  if (res.status === 403 && /not an attestor/.test(reason)) return words.attesting.noAttestorStake;
+  if (res.status === 401 && /unknown account/.test(reason)) return words.common.notOnLedger;
   return `${path}: ${reason}`;
 }
