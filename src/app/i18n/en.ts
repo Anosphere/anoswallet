@@ -411,6 +411,16 @@ export const en = {
     askRemove: 'Remove this note?',
     cannotRead: '(cannot read)',
     withMoney: (kind: string, money: string) => `${kind} · ${money}`,
+    pageTitle: 'Noted transactions',
+    incomeChip: 'Income',
+    download: 'Download as CSV',
+    totalsLine: (bought: string, sold: string, income: string) => `Bought ${bought} · Sold ${sold} · Income ${income}`,
+    capped: 'Only the newest 1,000 notes are shown. Narrow the dates to see older ones.',
+    none: "No notes yet. Open an account's transaction history and add one.",
+    noneBetween: 'No notes between these dates.',
+    sentWord: 'sent',
+    receivedWord: 'received',
+    csvHeader: 'Date,Kind,Anos,Sent or received,Money,Currency,Price per anos,Memo,Account,Other account,Transaction id,Position',
   },
   escrow: {
     title: 'Escrow trade',
@@ -625,7 +635,6 @@ export const en = {
     buying: (anos: string, currency: string) => `Buying ${anos} anos for ${currency}`,
   },
   marketplace: {
-    all: 'All',
     sorts: { newest: 'Newest', priceLow: 'Price low to high', priceHigh: 'Price high to low' },
     filtersCount: (n: number) => `Filters · ${n}`,
     mineLine: (open: number, waiting: number) => `${open} open · ${waiting} waiting`,
@@ -1202,6 +1211,7 @@ export const en = {
     readBucket: (who: string, bucket: number, keys: number) => `${who} read bucket ${bucket === 1 ? 'one' : 'two'} (${keys} key${keys === 1 ? '' : 's'})`,
     dismissedBy: (who: string, reason: string) => `${who} dismissed the case: ${reason}`,
     personLine: (username: string, first: string | null, last: string | null) => `${username} · ${first ?? ''} ${last ?? ''}`,
+    all: 'All',
   },
 };
 

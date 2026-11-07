@@ -412,6 +412,16 @@ export const th: Words = {
     askRemove: 'ลบบันทึกนี้หรือไม่',
     cannotRead: '(อ่านไม่ได้)',
     withMoney: (kind: string, money: string) => `${kind} · ${money}`,
+    pageTitle: 'ธุรกรรมที่บันทึกไว้',
+    incomeChip: 'รายได้',
+    download: 'ดาวน์โหลดเป็น CSV',
+    totalsLine: (bought: string, sold: string, income: string) => `ซื้อ ${bought} · ขาย ${sold} · รายได้ ${income}`,
+    capped: 'แสดงเฉพาะบันทึก 1,000 รายการล่าสุด จำกัดช่วงวันที่ให้แคบลงเพื่อดูรายการที่เก่ากว่า',
+    none: 'ยังไม่มีบันทึก เปิดประวัติธุรกรรมของบัญชีแล้วเพิ่มบันทึก',
+    noneBetween: 'ไม่มีบันทึกระหว่างวันที่เหล่านี้',
+    sentWord: 'ส่ง',
+    receivedWord: 'รับ',
+    csvHeader: 'วันที่,ชนิด,Anos,ส่งหรือรับ,จำนวนเงิน,สกุลเงิน,ราคาต่อ anos,บันทึกช่วยจำ,บัญชี,บัญชีอีกฝ่าย,รหัสธุรกรรม,ตำแหน่ง',
   },
   escrow: {
     title: 'การซื้อขายแบบเอสโครว์',
@@ -623,7 +633,6 @@ export const th: Words = {
     buying: (anos: string, currency: string) => `ซื้อ ${anos} anos ด้วย ${currency}`,
   },
   marketplace: {
-    all: 'ทั้งหมด',
     sorts: { newest: 'ใหม่สุด', priceLow: 'ราคาต่ำไปสูง', priceHigh: 'ราคาสูงไปต่ำ' },
     filtersCount: (n: number) => `ตัวกรอง · ${n}`,
     mineLine: (open: number, waiting: number) => `เปิดอยู่ ${open} รายการ · ${waiting} คนกำลังรอ`,
@@ -1199,5 +1208,6 @@ export const th: Words = {
     readBucket: (who: string, bucket: number, keys: number) => `${who} อ่าน bucket ${bucket === 1 ? 'หนึ่ง' : 'สอง'} (กุญแจ ${keys} ดอก)`,
     dismissedBy: (who: string, reason: string) => `${who} ยกคำร้องเคส: ${reason}`,
     personLine: (username: string, first: string | null, last: string | null) => `${username} · ${first ?? ''} ${last ?? ''}`,
+    all: 'ทั้งหมด',
   },
 };

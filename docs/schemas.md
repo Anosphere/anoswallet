@@ -556,6 +556,7 @@ as in the test apps; a new tab unlocks again.
     /wallet/:accountId/escrow/:transactionId   one escrow trade: the details, the buttons for your side, the closed view
     /wallet/:accountId/assisted/:transactionId   one assisted transfer: the details, the stage, the case, Cancel transfer, the closed view
     /wallet/:accountId/history   the transaction history: the rows in plain words by day, a date range, Show more
+    /wallet/notes            the noted transactions: every account's notes, a date range, the kind chips, the totals, Download as CSV
     /chat                    the list of chats; on a desktop the pane beside it shows the child route
     /chat/requests           invites to me and join requests on my rooms
     /chat/new                start a chat: Message someone, New public room, Find public rooms
@@ -798,7 +799,8 @@ account is not on the ledger yet" and "1 account could not be read"
 (plural likewise); "No anos account yet." without an account; "Reading…"
 until the first read finished. The validator moves a balance only when a
 transfer is written, so Total stays whole while anos are spoken for.
-Then "Accounts": one card per account from /list-anos-accounts, in the
+Then (2026-11-07, section 11) a button "Noted transactions" to
+/wallet/notes. Then "Accounts": one card per account from /list-anos-accounts, in the
 masterpod's order (oldest first), in a grid; "No anos account yet. Open
 one below." when there are none. A card is named by its type, "Spending
 account", or "Spending account 1" and "Spending account 2" when the pod
@@ -994,6 +996,48 @@ time ("3:50:12 PM · Sold · 3,550.00 THB") and whole in the details
 which asks "Remove this note?" (Yes, Back). The notes are read once when
 the page opens (/list-noted-transactions, quiet); one note per
 transaction (the masterpod refuses a second with 409).
+
+Noted transactions (2026-11-07, section 11), at /wallet/notes, opened by
+the "Noted transactions" button on the Wallet page: the pod's notes over
+every account, newest transaction first, read from the masterpod
+(/list-noted-transactions, with from and to as the history page sends
+them, the start of the first day and the start of the day after the
+last; the accounts are listed into the session first when it has none).
+Back to the wallet; the date range field ("Dates", From and To, the
+toggle and the clear button), Refresh and "Download as CSV". Then the
+chips "All", "Bought", "Sold", "Income" and "Other" (the other chip is
+every kind of the drop-down and every tag, and a note that cannot be
+read), applied on the phone since the kind is inside the blob; the
+totals per currency over the rows shown, one line per currency in the
+order they first appear ("Bought 3,550.00 THB · Sold 1,200.00 THB ·
+Income 0.00 THB", each sum on the digits); "Only the newest 1,000 notes
+are shown. Narrow the dates to see older ones." when the read hit the
+masterpod's cap; a failed read in red. The rows in day headings as the
+history page's: an icon by sent or received, the title (the kind's
+words, the tag for other, "(cannot read)" for a blob that did not open),
+the anos with the account's name and the time ("−100 anos · Spending
+account 1 · 3:50:12 PM"), the money at the right ("3,550.00 THB"). A tap
+opens the details: Price per anos when there is one, Memo when there is
+one, Account (the name and the short id), To or From the other account's
+full id with a copy button (8.5) when there is one, Transaction with a
+copy button, Position, When; then Edit, which opens the note form
+(Transaction history above) filled, and Remove, which asks "Remove this
+note?" (Yes, Back). "No notes yet. Open an account's transaction history
+and add one." when empty without a range, "No notes between these
+dates." with one. The CSV, built on the phone with no package: the
+header "Date,Kind,Anos,Sent or received,Money,Currency,Price per
+anos,Memo,Account,Other account,Transaction id,Position", then one line
+per shown note, newest first: the date as ISO 8601, the kind's words as
+on screen, the anos as a decimal, "sent" or "received", the money as
+typed, the currency code, the price per anos, the memo, the account's
+name, the other account's full id, the transaction id, the position,
+each empty when there is none; a field holding a comma, a double quote,
+a line break or a leading or trailing space is wrapped in double quotes
+with its double quotes doubled; lines end with CR LF and the text starts
+with the UTF-8 byte order mark, so a spreadsheet opens Thai letters
+right; the file is noted-transactions.csv, or
+noted-transactions-<from>-<to>.csv with a range, the dates as
+YYYY-MM-DD.
 
 Escrow trade, at /wallet/:accountId/escrow/:transactionId, opened from a
 row of the Escrow trades list (2026-11-05, section 11). Titled "Escrow
@@ -1524,7 +1568,8 @@ The pages done so far, a list the later steps extend:
 Later changes add their words to the section of the page they change, in
 both files at once: the Protect your passkey pane of setup, in `setup`
 (2026-11-07, section 11); the note form and the notes of the history
-page, in `notes` (2026-11-07, section 11).
+page, in `notes` (2026-11-07, section 11); the Noted transactions page,
+in `notes`.
 
 ## 9. Configuration, and running it on this machine
 
@@ -3382,6 +3427,59 @@ part encrypted on the phone before it leaves.
 - `npx ng build` clean (1.94 MB initial). Not run in a browser here; the
   user tests with `ng serve` against a masterpod with the step 1 tables
   (locally `npm run db:setup` in the masterpod folder adds them).
+
+### The wallet memory, step 3 (2026-11-07)
+
+Step 3 of forclaude/wallet-notes-plan-1.md: the Noted transactions page,
+every account's notes in one place for the tax return. Why: the history
+page shows a note on its own row, account by account; the person doing
+their taxes needs all of a year's notes together, the totals per
+currency, and a file a spreadsheet opens.
+
+- `app.routes.ts`: `/wallet/notes` before `/wallet/:accountId`, since
+  the router takes the first match.
+- `pages/wallet.page.ts`: a "Noted transactions" button under the
+  balance card.
+- `pages/noted-transactions.page.ts`, new: the history page's card
+  layout; the Dates field, Refresh and "Download as CSV"; the chips All,
+  Bought, Sold, Income and Other; the totals per currency; the capped
+  line; the rows in day headings with the details, Edit (the note form,
+  the amount from the note) and Remove; the CSV of the plan's 3.4 built
+  on the phone.
+- `pages/marketplace.page.ts`: the All chip reads `common.all`.
+- `i18n/en.ts` and `th.ts`: eleven entries in `notes` after `withMoney`;
+  `marketplace.all` moved to `common.all`, the house rule for a sentence
+  two pages share; nothing else goes to `common`.
+- Tables typed `Record<string, string>` added to the dictionaries (the
+  type cannot check their keys in Thai): none in this step.
+- Readings where the plan left a detail open: the Other chip is every
+  note whose kind is not bought, sold or income, a note that cannot be
+  read among them, so no note hides from every chip but All; the rows
+  keep the masterpod's order (newest transacted_at, then the highest
+  position) and the day headings group them as the history page does; a
+  note with money contributes a totals line for its currency even when
+  its kind adds to none of the three sums, which then read 0; the sums
+  are in price units (10^-8, as `priceUnits` counts them) and a private
+  `unitsToText` in the page turns a sum into the decimal string
+  `formatPrice` takes, since prices.ts is not among the step's files;
+  `startOfDay` is repeated from the history page for the same reason;
+  the page's per-anos method is `priceOf`, since `perAnosOf` is the
+  imported function; the account's name falls back to "Account" for an
+  account the session does not hold; the CSV's kind column is the row's
+  title, so a blob that did not open writes "(cannot read)"; the Remove
+  ask closes whether the remove succeeded or failed, as on the history
+  page. Thai: "Noted transactions" reads ธุรกรรมที่บันทึกไว้; "Income",
+  the chip, reads รายได้; "Download as CSV" reads ดาวน์โหลดเป็น CSV;
+  "sent" and "received" in the CSV read ส่ง and รับ; the CSV header is
+  translated as a whole, its commas kept, with "Other account" as
+  บัญชีอีกฝ่าย (the other side's account) and "Anos" kept in Latin
+  letters; "Narrow the dates" reads จำกัดช่วงวันที่ให้แคบลง. No sentence
+  read odd.
+- Spec: 8.1, 8.2 (Wallet, Noted transactions), 8.8, this note; README:
+  the pages line.
+- `npx ng build` clean (1.95 MB initial). Not run in a browser here; the
+  user tests with `ng serve`: the Wallet page's button, the chips, a
+  range, the download.
 
 ## 12. Recovery and the moderator edition
 

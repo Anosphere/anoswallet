@@ -60,7 +60,7 @@ src/app/
   components/camera.component.ts   the camera: live preview, Take photo, a file input as the fallback
   components/note-form.component.ts   the note form under a history row: the kind, the money and the currency, the memo (spec 8.2)
   pages/                   one file per route: landing, create, recover, vouching, identity, setup,
-                           bucket-one, bucket-two, wallet, account, chat, marketplace, notifications, seed, log
+                           bucket-one, bucket-two, wallet, noted-transactions, account, chat, marketplace, notifications, seed, log
   services/
     config.service.ts      GET /api/config once
     language.service.ts    the language on screen: Thai when the browser's first language is Thai,

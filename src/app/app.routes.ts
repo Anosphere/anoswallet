@@ -24,6 +24,7 @@ import { ModerationCasePage } from './pages/moderation-case.page';
 import { ModerationPage } from './pages/moderation.page';
 import { MyCasePage } from './pages/my-case.page';
 import { MyListingsPage } from './pages/my-listings.page';
+import { NotedTransactionsPage } from './pages/noted-transactions.page';
 import { NotificationsPage } from './pages/notifications.page';
 import { RecoverCasePage } from './pages/recover-case.page';
 import { RecoverOpenPage } from './pages/recover-open.page';
@@ -61,6 +62,7 @@ export const routes: Routes = [
   { path: 'security/bucket-two', redirectTo: 'account/recovery/details', pathMatch: 'full' },
   { path: 'home', component: HomePage, canActivate: [sessionGuard], title: 'Home' },
   { path: 'wallet', component: WalletPage, canActivate: [sessionGuard], title: 'Wallet' },
+  { path: 'wallet/notes', component: NotedTransactionsPage, canActivate: [sessionGuard], title: 'Noted transactions' },
   { path: 'wallet/:accountId', component: AccountPage, canActivate: [sessionGuard], title: 'Account' },
   { path: 'wallet/:accountId/escrow/:transactionId', component: EscrowTradePage, canActivate: [sessionGuard], title: 'Escrow trade' },
   { path: 'wallet/:accountId/assisted/:transactionId', component: AssistedTransferPage, canActivate: [sessionGuard], title: 'Assisted transfer' },

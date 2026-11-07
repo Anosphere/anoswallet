@@ -37,7 +37,7 @@ import { ListingItem } from '../services/masterpod-api.service';
   template: `
     <div class="chips">
       <mat-chip-listbox [attr.aria-label]="t().common.side" [value]="side()" (change)="sideChanged($event)">
-        <mat-chip-option value="all">{{ t().marketplace.all }}</mat-chip-option>
+        <mat-chip-option value="all">{{ t().common.all }}</mat-chip-option>
         <mat-chip-option value="sell">{{ t().market.selling }}</mat-chip-option>
         <mat-chip-option value="buy">{{ t().market.buying }}</mat-chip-option>
       </mat-chip-listbox>
