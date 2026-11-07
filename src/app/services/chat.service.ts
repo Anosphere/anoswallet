@@ -84,10 +84,10 @@ export class ChatService {
   async wrapFor(chatRoomId: string, anopodId: string): Promise<string> {
     const room = this.session.chatRooms()?.rooms.find((r) => r.chatRoomId === chatRoomId);
     const roomKey = room ? await this.roomKeyOf(room) : this.session.roomKeys.get(chatRoomId);
-    if (!roomKey) throw new Error('No room key for this room in this tab');
+    if (!roomKey) throw new Error(this.lang.words().common.noRoomKeyInTab);
     const keys = await this.api.getChatPublicKeys([anopodId]);
     const target = keys.ok ? keys.body.keys.find((k) => k.anopodId === anopodId) : undefined;
-    if (!target) throw new Error('That anoPod has no chat keys (setup not complete)');
+    if (!target) throw new Error(this.lang.words().common.podHasNoChatKeys);
     return this.crypto.toHex(await this.crypto.wrapRoomKey(roomKey, target.chatPublicKey, target.chatPublicKeyPq));
   }
 
@@ -105,26 +105,31 @@ export class ChatService {
   // --- how a room reads -----------------------------------------------------
 
   /**
-   * The room's title: a public room's name; an old listing room's "Sell 50
-   * anos for THB"; a private room's other people, the invited marked, or
-   * "Just you", and for a private room about a listing (2026-11-06) the
-   * listing's words after them: "somchai · Selling 100 anos for THB".
+   * The room's title, in the app's language: a public room's name; an old
+   * listing room's "Sell 50 anos for THB"; a private room's other people, the
+   * invited marked, or "Just you", and for a private room about a listing
+   * (2026-11-06) the listing's words after them: "somchai · Selling 100 anos
+   * for THB".
    */
   title(room: RoomItem): string {
-    if (room.type === 'public') return room.name ?? 'Public room';
+    const rooms = this.lang.words().rooms;
+    if (room.type === 'public') return room.name ?? rooms.publicRoom;
     if (room.type === 'marketplace') {
       const listing = room.listing;
-      if (!listing) return 'Listing room';
-      return `${listing.side === 'sell' ? 'Sell' : 'Buy'} ${millionthsToAnos(listing.quantity)} anos for ${listing.currency}`;
+      if (!listing) return rooms.listingRoom;
+      const anos = millionthsToAnos(listing.quantity);
+      return listing.side === 'sell' ? rooms.sell(anos, listing.currency) : rooms.buy(anos, listing.currency);
     }
-    const names = [...this.otherMembers(room).map((m) => m.username), ...room.invited.map((m) => `${m.username} (invited)`)];
-    const people = names.length > 0 ? names.join(', ') : 'Just you';
+    const names = [...this.otherMembers(room).map((m) => m.username), ...room.invited.map((m) => rooms.invited(m.username))];
+    const people = names.length > 0 ? names.join(', ') : rooms.justYou;
     return room.listing ? `${people} · ${this.listingWords(room.listing)}` : people;
   }
 
-  /** A listing in a few words, for a room's title and a request (2026-11-06): "Selling 100 anos for THB". */
+  /** A listing in a few words, in the app's language, for a room's title and a request (2026-11-06): "Selling 100 anos for THB". */
   listingWords(listing: RoomListing): string {
-    return `${listing.side === 'sell' ? 'Selling' : 'Buying'} ${millionthsToAnos(listing.quantity)} anos for ${listing.currency}`;
+    const rooms = this.lang.words().rooms;
+    const anos = millionthsToAnos(listing.quantity);
+    return listing.side === 'sell' ? rooms.selling(anos, listing.currency) : rooms.buying(anos, listing.currency);
   }
 
   /** Direct for a private room with exactly one other person, member or invited; else group, public or marketplace. */

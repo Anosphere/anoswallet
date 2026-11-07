@@ -1327,6 +1327,9 @@ The pages done so far, a list the later steps extend:
 - step 4 (2026-11-06): the account page, the transaction history, the
   escrow trade and the assisted transfer, with the stage words, the
   history words, the minutes in words and the chat's day and time words.
+- step 5 (2026-11-06): the chat: the list of chats, the new chat, the
+  requests and the conversation, with the room titles and the listing
+  words of the chat service.
 
 ## 9. Configuration, and running it on this machine
 
@@ -2697,6 +2700,77 @@ person meets before the chat and the marketplace.
   is. No sentence read odd.
 - Spec: 8.8 (the list), this note.
 - `npx ng build` clean (1.78 MB initial). Not run in a browser here;
+  the user tests with `ng serve`.
+
+### The languages, step 5 (2026-11-06)
+
+Step 5 of forclaude/wallet-languages-plan-1.md: the chat, its four
+pages and the rest of the chat service. Why: after step 4 every page of
+the wallet's own money was Thai, while the chat, where a Thai buyer and
+seller meet, still spoke English; its day and time words came in step
+4, the rest comes here.
+
+- `i18n/en.ts` and `th.ts`: the sections `chat`, `chatNew`,
+  `chatRequests`, `chatRoom` and `rooms` (the room titles and the
+  listing words the chat service builds), and the `common` entries
+  Chats, "New chat", Requests, "Back to chats", Find, Accept, Create
+  (moved from `create`, the step label of the create stepper, since the
+  new public room's button shows the same word), Send (moved from
+  `account`, since the conversation's send button shows the same word),
+  Name, the shown "No chat keys in this tab: unlock again." (the chat
+  list, the new chat and the listing page), and the thrown 'No chat
+  keys in this tab', 'That anoPod has no chat keys (setup not
+  complete)', 'No room key for this room in this tab', 'No room key for
+  this room' and 'Find the username first', each thrown by two files;
+  the marketplace files read them in step 6. The sentences with a
+  number or a name are functions (`requestLine` of the two counts,
+  `byAndMembers`, `aboutListing`, `invitedToRoom`, `asksToJoin`, and
+  the room words `sell`, `buy`, `selling` and `buying` of the amount
+  and the currency, `invited` of the username).
+- `services/chat.service.ts`: `title` and `listingWords` read
+  `t().rooms`; the two thrown sentences from `common`. Kept: the room
+  types, `listing.side`, the icon names, the console line.
+- `pages/chat.page.ts`: `count()` gone, the Requests row's line a
+  function of the two counts; "You: ", "(cannot read)", "No messages
+  yet" and the list's pieces from the dictionary; the two "New chat"
+  aria labels as bindings. `pages/chat-new.page.ts`: the three tab
+  labels as `[label]`; "by <username> · N member(s)" a function; the
+  thrown sentences from `common` and `chatNew`.
+  `pages/chat-requests.page.ts`: `inviteText` reads the three functions
+  and entries; "asks to join <room>" a function, the username in bold
+  before it; "your room". `pages/chat-room.page.ts`: the menu items,
+  the aria words More, Send and "Back to chats" as bindings,
+  "(invited)", "(cannot decrypt)", "(no room key)", "Sending", "Load
+  older messages", the copy button's label as a binding; the members
+  line reads `rooms.invited` for the invited; the thrown sentences.
+  `pages/create.page.ts` and `pages/account.page.ts`: the one and the
+  two lines that now read `common.create` and `common.send`.
+- Tables typed `Record<string, string>` added to the dictionaries (the
+  type cannot check their keys in Thai): none in this step.
+- Readings where the plan left a detail open: a word the grep found on
+  another page, even one of a later step, went to `common` now rather
+  than to the page's section and a move later: Accept (the listing
+  people, step 6), Name (the staff pages' profile label, step 8), Send
+  (the listing page's button, step 6) and the shown and thrown chat-key
+  sentences; "Back to chats", an aria label on three chat pages, is
+  `common.backToChats` though the plan lists it under the conversation;
+  "No messages yet" (the list's preview, no period) and "No messages
+  yet." (the empty thread) are two entries, `chat.noMessages` and
+  `chatRoom.noMessages`, each English letter for letter; "<username>
+  (invited)" is one function, `rooms.invited`, read by the service's
+  title and by the conversation's members line, while the members
+  panel, where the username is its own element, reads the bare
+  `chatRoom.invited`; `invitedToRoom` takes `string | null`, the type
+  of an invite's `name`, so the English stays what it was; the " · "
+  between the people and the listing's words stays in the code,
+  punctuation the same in both languages. Thai: "Sell" and "Selling"
+  both read ขาย and "Buy" and "Buying" both ซื้อ, since Thai has no
+  participle ("ขาย 50 anos รับ THB", "ซื้อ 50 anos ด้วย THB"); Find
+  reads ค้นหา like Search; Leave reads ออกจากห้อง, the room named as
+  Thai needs; members are counted with their classifier ("สมาชิก 3
+  คน"). No sentence read odd.
+- Spec: 8.8 (the list), this note.
+- `npx ng build` clean (1.79 MB initial). Not run in a browser here;
   the user tests with `ng serve`.
 
 ## 12. Recovery and the moderator edition

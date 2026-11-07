@@ -13,6 +13,7 @@ import { FoundAccountId, PinnedListingComponent } from '../components/pinned-lis
 import { MESSAGES_PAGE, MESSAGES_POLL_MS } from '../constants';
 import { ChatService, Piece, piecesOf } from '../services/chat.service';
 import { CryptoService } from '../services/crypto.service';
+import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
 import { MasterpodApiService, MessageItem, Profile, RoomItem } from '../services/masterpod-api.service';
 import { SessionService } from '../services/session.service';
@@ -71,7 +72,7 @@ const FOLLOW_PX = 120;
   template: `
     @if (room(); as room) {
       <header class="head">
-        <a mat-icon-button class="back" routerLink="/chat" aria-label="Back to chats"><mat-icon>arrow_back</mat-icon></a>
+        <a mat-icon-button class="back" routerLink="/chat" [attr.aria-label]="t().common.backToChats"><mat-icon>arrow_back</mat-icon></a>
         @if (chat.otherPerson(room); as other) {
           <app-avatar [anopodId]="other.anopodId" [username]="other.username" />
         } @else {
@@ -81,27 +82,27 @@ const FOLLOW_PX = 120;
           <div class="title">{{ chat.title(room) }}</div>
           <div class="line">{{ membersLine(room) }}</div>
         </div>
-        <button mat-icon-button type="button" [matMenuTriggerFor]="menu" aria-label="More"><mat-icon>more_vert</mat-icon></button>
+        <button mat-icon-button type="button" [matMenuTriggerFor]="menu" [attr.aria-label]="t().chatRoom.more"><mat-icon>more_vert</mat-icon></button>
         <mat-menu #menu="matMenu">
           @if (canInvite()) {
-            <button mat-menu-item type="button" (click)="showInvite.set(!showInvite())"><mat-icon>person_add</mat-icon><span>Invite someone</span></button>
+            <button mat-menu-item type="button" (click)="showInvite.set(!showInvite())"><mat-icon>person_add</mat-icon><span>{{ t().chatRoom.inviteSomeone }}</span></button>
           }
-          <button mat-menu-item type="button" (click)="showMembers.set(!showMembers())"><mat-icon>group</mat-icon><span>Members</span></button>
+          <button mat-menu-item type="button" (click)="showMembers.set(!showMembers())"><mat-icon>group</mat-icon><span>{{ t().chatRoom.members }}</span></button>
           @if (!isCreator()) {
-            <button mat-menu-item type="button" (click)="leave()" [disabled]="busy()"><mat-icon>logout</mat-icon><span>Leave</span></button>
+            <button mat-menu-item type="button" (click)="leave()" [disabled]="busy()"><mat-icon>logout</mat-icon><span>{{ t().chatRoom.leave }}</span></button>
           }
         </mat-menu>
       </header>
       @if (showInvite()) {
         <div class="panel form">
-          <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>Invite by username</mat-label><input matInput [ngModel]="inviteName()" (ngModelChange)="inviteName.set($event)" (keyup.enter)="findInvitee()" /></mat-form-field>
-          <button mat-stroked-button type="button" (click)="findInvitee()" [disabled]="busy() || !inviteName().trim()">Find</button>
+          <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>{{ t().chatRoom.inviteByUsername }}</mat-label><input matInput [ngModel]="inviteName()" (ngModelChange)="inviteName.set($event)" (keyup.enter)="findInvitee()" /></mat-form-field>
+          <button mat-stroked-button type="button" (click)="findInvitee()" [disabled]="busy() || !inviteName().trim()">{{ t().common.find }}</button>
           @if (inviteTarget(); as found) {
             @if (found.selfie; as selfie) {
-              <img class="selfie" [src]="'data:' + selfie.contentType + ';base64,' + selfie.image" alt="selfie" />
+              <img class="selfie" [src]="'data:' + selfie.contentType + ';base64,' + selfie.image" [alt]="t().common.selfie" />
             }
             <span>{{ found.firstName }} {{ found.lastName }} <code>{{ found.username }}</code></span>
-            <button mat-flat-button type="button" (click)="invite()" [disabled]="busy()">Invite</button>
+            <button mat-flat-button type="button" (click)="invite()" [disabled]="busy()">{{ t().chatRoom.invite }}</button>
           }
         </div>
       }
@@ -111,7 +112,7 @@ const FOLLOW_PX = 120;
             <span class="member"><app-avatar [anopodId]="m.anopodId" [username]="m.username" [size]="28" /> {{ m.username }}</span>
           }
           @for (m of room.invited; track m.anopodId) {
-            <span class="member"><app-avatar [anopodId]="m.anopodId" [username]="m.username" [size]="28" /> {{ m.username }} <span class="muted">(invited)</span></span>
+            <span class="member"><app-avatar [anopodId]="m.anopodId" [username]="m.username" [size]="28" /> {{ m.username }} <span class="muted">{{ t().chatRoom.invited }}</span></span>
           }
         </div>
       }
@@ -120,7 +121,7 @@ const FOLLOW_PX = 120;
       }
       <div class="thread" #threadBox>
         @if (canLoadOlder()) {
-          <button mat-button type="button" class="older" (click)="loadOlder()" [disabled]="busy()">Load older messages</button>
+          <button mat-button type="button" class="older" (click)="loadOlder()" [disabled]="busy()">{{ t().chatRoom.loadOlder }}</button>
         }
         @for (item of thread(); track item.key) {
           @if (item.kind === 'day') {
@@ -139,7 +140,7 @@ const FOLLOW_PX = 120;
                     <span class="text">
                       @for (piece of m.pieces; track $index) {
                         @if (piece.accountId) {
-                          <code>{{ piece.text }}</code><app-copy-button [text]="piece.text" label="Copy the account id" />
+                          <code>{{ piece.text }}</code><app-copy-button [text]="piece.text" [label]="t().common.copyAccountId" />
                         } @else {
                           <span class="plain">{{ piece.text }}</span>
                         }
@@ -148,7 +149,7 @@ const FOLLOW_PX = 120;
                     @if (m.mine) {
                       <span class="state">
                         @if (m.pending) {
-                          Sending
+                          {{ t().chatRoom.sending }}
                         } @else {
                           <mat-icon class="tick">done</mat-icon>
                         }
@@ -161,7 +162,7 @@ const FOLLOW_PX = 120;
             </div>
           }
         } @empty {
-          <p class="muted empty">No messages yet.</p>
+          <p class="muted empty">{{ t().chatRoom.noMessages }}</p>
         }
       </div>
       @if (error(); as text) {
@@ -169,17 +170,17 @@ const FOLLOW_PX = 120;
       }
       <div class="composer">
         <mat-form-field appearance="outline" class="grow" subscriptSizing="dynamic">
-          <mat-label>Message</mat-label>
+          <mat-label>{{ t().chatRoom.message }}</mat-label>
           <textarea matInput cdkTextareaAutosize cdkAutosizeMinRows="1" cdkAutosizeMaxRows="5" [ngModel]="messageText()" (ngModelChange)="messageText.set($event)" (keydown.enter)="enter($event)"></textarea>
         </mat-form-field>
-        <button mat-mini-fab type="button" class="send" (click)="send()" [disabled]="busy() || !messageText().trim()" aria-label="Send"><mat-icon>send</mat-icon></button>
+        <button mat-mini-fab type="button" class="send" (click)="send()" [disabled]="busy() || !messageText().trim()" [attr.aria-label]="t().common.send"><mat-icon>send</mat-icon></button>
       </div>
     } @else if (!loaded()) {
-      <p class="muted note">Loading the chat.</p>
+      <p class="muted note">{{ t().chatRoom.loading }}</p>
     } @else {
       <div class="note">
-        <p class="muted">You are not in this chat.</p>
-        <a mat-button routerLink="/chat"><mat-icon>arrow_back</mat-icon> Chats</a>
+        <p class="muted">{{ t().chatRoom.notInChat }}</p>
+        <a mat-button routerLink="/chat"><mat-icon>arrow_back</mat-icon> {{ t().common.chats }}</a>
       </div>
     }
   `,
@@ -235,6 +236,8 @@ export class ChatRoomPage {
   private readonly crypto = inject(CryptoService);
   private readonly router = inject(Router);
   private readonly injector = inject(Injector);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
   private readonly threadBox = viewChild<ElementRef<HTMLElement>>('threadBox');
 
   /** True once the room list has arrived; the room is the one of the route, null when the pod is not in it. */
@@ -322,7 +325,7 @@ export class ChatRoomPage {
 
   /** The members' usernames, then the invited as "(invited)". */
   protected membersLine(room: RoomItem): string {
-    return [...room.members.map((m) => m.username), ...room.invited.map((m) => `${m.username} (invited)`)].join(', ');
+    return [...room.members.map((m) => m.username), ...room.invited.map((m) => this.t().rooms.invited(m.username))].join(', ');
   }
 
   /** Enter sends; Shift+Enter is left to the textarea, a new line. */
@@ -407,7 +410,7 @@ export class ChatRoomPage {
     const me = this.session.anopodId();
     const list: ShownMessage[] = [];
     for (const m of items) {
-      const text = (await this.chat.decryptMessage(room, m.message)) ?? (hasKey ? '(cannot decrypt)' : '(no room key)');
+      const text = (await this.chat.decryptMessage(room, m.message)) ?? (hasKey ? this.t().chatRoom.cannotDecrypt : this.t().chatRoom.noRoomKey);
       list.push({
         messageId: m.messageId,
         position: m.position,
@@ -432,9 +435,9 @@ export class ChatRoomPage {
     if (!text) return Promise.resolve();
     return this.run(async () => {
       const room = this.room();
-      if (!room) throw new Error('This chat is not open');
+      if (!room) throw new Error(this.t().chatRoom.notOpen);
       const key = await this.chat.roomKeyOf(room);
-      if (!key) throw new Error('No room key for this room');
+      if (!key) throw new Error(this.t().common.noRoomKey);
       const pending: ShownMessage = {
         messageId: `pending-${++this.pendingCount}`,
         position: 0,
@@ -481,7 +484,7 @@ export class ChatRoomPage {
     return this.run(async () => {
       const room = this.room();
       const target = this.inviteTarget();
-      if (!room || !target) throw new Error('Find the username first');
+      if (!room || !target) throw new Error(this.t().common.findUsernameFirst);
       const hpkeKey = await this.chat.wrapFor(room.chatRoomId, target.anopodId);
       const res = await this.api.inviteToChatRoom(room.chatRoomId, target.anopodId, hpkeKey);
       if (res.ok) {
@@ -497,7 +500,7 @@ export class ChatRoomPage {
   protected leave(): Promise<void> {
     return this.run(async () => {
       const room = this.room();
-      if (!room) throw new Error('This chat is not open');
+      if (!room) throw new Error(this.t().chatRoom.notOpen);
       const res = await this.api.leaveChatRoom(room.chatRoomId);
       if (res.ok) {
         this.session.roomKeys.delete(room.chatRoomId);

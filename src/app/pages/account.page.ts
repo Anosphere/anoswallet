@@ -149,7 +149,7 @@ interface Outcome {
           }
         </div>
 
-        <h3>{{ t().account.send }}</h3>
+        <h3>{{ t().common.send }}</h3>
         @if (item(); as item) {
           <div class="form send">
             @if (item.accountType === 'spending') {
@@ -180,7 +180,7 @@ interface Outcome {
               <mat-label>{{ t().account.amountAnos }}</mat-label>
               <input matInput [ngModel]="amount()" (ngModelChange)="amount.set($event)" [placeholder]="t().account.amountPlaceholder" />
             </mat-form-field>
-            <button mat-flat-button type="button" (click)="send()" [disabled]="busy() || pending().length > 0 || sellerEscrowOpen() || assisted() !== null || locked() !== null || minutesAhead() === null || !canSend()">{{ t().account.send }} {{ transferType() }}</button>
+            <button mat-flat-button type="button" (click)="send()" [disabled]="busy() || pending().length > 0 || sellerEscrowOpen() || assisted() !== null || locked() !== null || minutesAhead() === null || !canSend()">{{ t().common.send }} {{ transferType() }}</button>
           </div>
           @if (sellerEscrowOpen()) {
             <p class="muted">{{ t().account.escrowOpen }}</p>

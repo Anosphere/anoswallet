@@ -8,6 +8,7 @@ import { MatTabsModule } from '@angular/material/tabs';
 import { Router, RouterLink } from '@angular/router';
 import { ChatService } from '../services/chat.service';
 import { CryptoService } from '../services/crypto.service';
+import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
 import { MasterpodApiService, Profile, PublicRoomItem, RoomItem } from '../services/masterpod-api.service';
 import { SessionService } from '../services/session.service';
@@ -26,66 +27,66 @@ import { SessionService } from '../services/session.service';
   imports: [FormsModule, RouterLink, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, MatTabsModule],
   template: `
     <header class="head">
-      <a mat-icon-button class="back" routerLink="/chat" aria-label="Back to chats"><mat-icon>arrow_back</mat-icon></a>
-      <h2>New chat</h2>
+      <a mat-icon-button class="back" routerLink="/chat" [attr.aria-label]="t().common.backToChats"><mat-icon>arrow_back</mat-icon></a>
+      <h2>{{ t().common.newChat }}</h2>
     </header>
     @if (!session.hasChatKeys()) {
-      <p class="error note">No chat keys in this tab: unlock again.</p>
+      <p class="error note">{{ t().common.noChatKeysUnlock }}</p>
     }
     @if (error(); as text) {
       <p class="error note">{{ text }}</p>
     }
     <mat-tab-group (selectedIndexChange)="tabChanged($event)">
-      <mat-tab label="Message someone">
+      <mat-tab [label]="t().chatNew.tabMessage">
         <div class="tab">
           <div class="form">
-            <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>Username</mat-label><input matInput [ngModel]="username()" (ngModelChange)="username.set($event)" (keyup.enter)="find()" /></mat-form-field>
-            <button mat-stroked-button type="button" (click)="find()" [disabled]="busy() || !username().trim()">Find</button>
+            <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>{{ t().common.username }}</mat-label><input matInput [ngModel]="username()" (ngModelChange)="username.set($event)" (keyup.enter)="find()" /></mat-form-field>
+            <button mat-stroked-button type="button" (click)="find()" [disabled]="busy() || !username().trim()">{{ t().common.find }}</button>
           </div>
           @if (found(); as person) {
             <div class="person">
               @if (person.selfie; as selfie) {
-                <img class="selfie" [src]="'data:' + selfie.contentType + ';base64,' + selfie.image" alt="selfie" />
+                <img class="selfie" [src]="'data:' + selfie.contentType + ';base64,' + selfie.image" [alt]="t().common.selfie" />
               }
               <span class="texts">
                 <span class="title">{{ person.firstName }} {{ person.lastName }}</span>
                 <span class="line">{{ person.username }}</span>
               </span>
-              <button mat-flat-button type="button" (click)="startChat()" [disabled]="busy() || isMe() || !session.hasChatKeys()">Start chat</button>
+              <button mat-flat-button type="button" (click)="startChat()" [disabled]="busy() || isMe() || !session.hasChatKeys()">{{ t().chatNew.startChat }}</button>
             </div>
             @if (isMe()) {
-              <p class="muted">That is you.</p>
+              <p class="muted">{{ t().chatNew.thatIsYou }}</p>
             }
           }
         </div>
       </mat-tab>
-      <mat-tab label="New public room">
+      <mat-tab [label]="t().chatNew.tabPublic">
         <div class="tab form">
-          <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>Name</mat-label><input matInput [ngModel]="roomName()" (ngModelChange)="roomName.set($event)" (keyup.enter)="createPublic()" /></mat-form-field>
-          <button mat-flat-button type="button" (click)="createPublic()" [disabled]="busy() || !roomName().trim() || !session.hasChatKeys()">Create</button>
+          <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>{{ t().common.name }}</mat-label><input matInput [ngModel]="roomName()" (ngModelChange)="roomName.set($event)" (keyup.enter)="createPublic()" /></mat-form-field>
+          <button mat-flat-button type="button" (click)="createPublic()" [disabled]="busy() || !roomName().trim() || !session.hasChatKeys()">{{ t().common.create }}</button>
         </div>
       </mat-tab>
-      <mat-tab label="Find public rooms">
+      <mat-tab [label]="t().chatNew.tabFind">
         <div class="tab">
           @for (room of publicRooms(); track room.chatRoomId) {
             <div class="item">
               <span class="disc"><mat-icon>public</mat-icon></span>
               <span class="texts">
                 <span class="title">{{ room.name }}</span>
-                <span class="line">by {{ room.creator.username }} · {{ room.memberCount }} {{ room.memberCount === 1 ? 'member' : 'members' }}</span>
+                <span class="line">{{ t().chatNew.byAndMembers(room.creator.username, room.memberCount) }}</span>
               </span>
               @if (inRoom(room.chatRoomId)) {
-                <a mat-stroked-button [routerLink]="['/chat', room.chatRoomId]">Open</a>
+                <a mat-stroked-button [routerLink]="['/chat', room.chatRoomId]">{{ t().chatNew.open }}</a>
               } @else if (chat.requestedRooms().has(room.chatRoomId)) {
-                <button mat-stroked-button type="button" disabled>Requested</button>
+                <button mat-stroked-button type="button" disabled>{{ t().chatNew.requested }}</button>
               } @else {
-                <button mat-stroked-button type="button" (click)="requestToJoin(room.chatRoomId)" [disabled]="busy()">Request to join</button>
+                <button mat-stroked-button type="button" (click)="requestToJoin(room.chatRoomId)" [disabled]="busy()">{{ t().chatNew.requestToJoin }}</button>
               }
             </div>
           } @empty {
-            <p class="muted">No public rooms yet.</p>
+            <p class="muted">{{ t().chatNew.noPublicRooms }}</p>
           }
-          <button mat-button type="button" (click)="loadPublicRooms()" [disabled]="busy()">Refresh</button>
+          <button mat-button type="button" (click)="loadPublicRooms()" [disabled]="busy()">{{ t().common.refresh }}</button>
         </div>
       </mat-tab>
     </mat-tab-group>
@@ -117,6 +118,8 @@ export class ChatNewPage {
   private readonly api = inject(MasterpodApiService);
   private readonly crypto = inject(CryptoService);
   private readonly router = inject(Router);
+  protected readonly lang = inject(LanguageService);
+  protected readonly t = this.lang.words;
 
   protected readonly username = signal('');
   protected readonly found = signal<Profile | null>(null);
@@ -150,18 +153,18 @@ export class ChatNewPage {
     return this.run(async () => {
       const target = this.found();
       const me = this.session.anopodId();
-      if (!target || me === null) throw new Error('Find the username first');
-      if (target.anopodId === me) throw new Error('That is you.');
+      if (!target || me === null) throw new Error(this.t().common.findUsernameFirst);
+      if (target.anopodId === me) throw new Error(this.t().chatNew.thatIsYou);
       const existing = (this.session.chatRooms()?.rooms ?? []).find((room) => room.type === 'private' && justUs(room, me, target.anopodId));
       if (existing) {
         await this.router.navigate(['/chat', existing.chatRoomId]);
         return null;
       }
       const chat = this.session.getChatKeys();
-      if (!chat) throw new Error('No chat keys in this tab');
+      if (!chat) throw new Error(this.t().common.noChatKeys);
       const keys = await this.api.getChatPublicKeys([target.anopodId]);
       const theirs = keys.ok ? keys.body.keys.find((k) => k.anopodId === target.anopodId) : undefined;
-      if (!theirs) throw new Error('That anoPod has no chat keys (setup not complete)');
+      if (!theirs) throw new Error(this.t().common.podHasNoChatKeys);
       const roomKey = this.crypto.newRoomKey();
       const ownKey = await this.crypto.wrapRoomKey(roomKey, this.crypto.toHex(chat.p256Public), this.crypto.toHex(chat.kemPublic));
       const created = await this.api.createChatRoom('private', undefined, this.crypto.toHex(ownKey));
@@ -183,7 +186,7 @@ export class ChatNewPage {
   protected createPublic(): Promise<void> {
     return this.run(async () => {
       const chat = this.session.getChatKeys();
-      if (!chat) throw new Error('No chat keys in this tab');
+      if (!chat) throw new Error(this.t().common.noChatKeys);
       const roomKey = this.crypto.newRoomKey();
       const ownKey = await this.crypto.wrapRoomKey(roomKey, this.crypto.toHex(chat.p256Public), this.crypto.toHex(chat.kemPublic));
       const res = await this.api.createChatRoom('public', this.roomName().trim(), this.crypto.toHex(ownKey));

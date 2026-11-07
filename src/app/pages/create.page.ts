@@ -69,7 +69,7 @@ import { SessionService } from '../services/session.service';
             </div>
           </mat-step>
 
-          <mat-step [label]="t().create.stepCreate">
+          <mat-step [label]="t().common.create">
             @if (created()) {
               <p>{{ t().create.created }}</p>
               <button mat-flat-button type="button" (click)="continue()">{{ t().common.continue }}</button>
