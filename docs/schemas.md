@@ -1426,8 +1426,20 @@ link: chatInvite and joinRequest to /chat/requests; inviteAccepted,
 inviteDeclined and joinApproved to the room, /chat/:chatRoomId
 (2026-11-05, section 11).
 
-Seed: /list-vouch-requests with selfies, approve and decline, for a seed
-or super seed.
+Seed: the Vouch requests page, for a seed or super seed (2026-11-08,
+section 11). One small call, /list-vouch-requests, answers the open
+requests without pictures, so the seed sees every card at once; until
+that first answer the list's place shows a spinner and "Fetching…",
+never again after it. Each card shows the requester's avatar (8.6), the
+picture read through the profile cache (8.3) five at a time, the letter
+disc until it arrives. Approve and Decline disable only their own card's
+two buttons, so several can be approved back to back; on success, or on
+a 404 (the request was handled from another device), the card goes and
+nothing is fetched again; any other refusal stays on the card as its
+reason. A quiet 5-second poll (VOUCH_REQUESTS_POLL_MS) re-reads the list
+while the page is open, skipped while a read is in flight, and its
+answer never brings back a request handled on this page since it opened.
+Refresh is the manual retry after a page-level error.
 
 Log: the test apps' call log, newest 40, path, status and answer, polls
 excepted, with the keyholder and anos calls included.
@@ -1488,7 +1500,9 @@ excepted, with the keyholder and anos calls included.
                             waitingCount), stateOf, connect and connectAgain, and the country and currency this
                             device remembers (remembered, remember)
     profile-cache.service   one /get-anopod-profile per pod per tab, quiet, as a signal: undefined while it loads,
-                            null when there is no such pod (2026-11-05)
+                            null when there is no such pod (2026-11-05); at most PROFILE_READS_AT_ONCE (5) reads
+                            in flight, the other ids queued, so a page with many faces gets them a few at a time
+                            (2026-11-08)
     signing.service         /api/sign/public-keys and /api/sign
     crypto.service          the keyholder test app's crypto.service.ts plus the anos test app's (keys, the
                             builders, signing), plus section 7 and the public ledger id; wrapJson and
@@ -3897,6 +3911,48 @@ decided as follows.
   with anos and files the moves, the old cards reading "Moving the money:
   waiting for 2 attestors" after it, and step 6's attestor edition to
   sign them.
+
+### The vouch requests page (2026-11-08)
+
+Step 2 of `forclaude/wallet-vouch-requests-plan-1.md` (its section 2), one
+commit. Step 1, the masterpod's list without the selfie, is
+masterpodsoftware 846111b; either may be deployed first (the plan's
+decision 6).
+
+- `constants.ts`: `VOUCH_REQUESTS_POLL_MS` (5 000) under the polls and
+  `PROFILE_READS_AT_ONCE` (5) beside it.
+- `profile-cache.service`: `profile()` still creates the entry at once
+  (undefined while the read runs) but queues it instead of starting the
+  read; `pump()` starts reads from the front of the queue while fewer than
+  `PROFILE_READS_AT_ONCE` are in flight, and `load()` counts itself out in
+  a `finally` and pumps again, so a read that fails any way still frees
+  its place. Every page with avatars gets its faces five at a time from
+  now on; nothing else changed for them.
+- `seed.page.ts`: `requests`, `fetching`, `acting` (a set of
+  vouchIdNumbers), `cardErrors` (a map to the reason), `error` and
+  `listing` as signals, `handled` a plain set. `load(quiet)` sets the list
+  to the answer minus `handled` and clears the page error on success; a
+  quiet poll that fails changes nothing on screen; `fetching` and `listing`
+  clear in a `finally`. The poll is a `setInterval` of
+  `VOUCH_REQUESTS_POLL_MS` calling `load(true)` unless `listing`, cleared
+  with `DestroyRef`. `act(id, call)` disables one card's two buttons,
+  removes the card on ok or on status 404, prints any other refusal on the
+  card, and fetches nothing. `<app-avatar>` at 72 px replaces the `selfie`
+  branch and its style; an old masterpod's extra `selfie` field in the
+  list is unused.
+- One deviation from the plan: `listing` is a signal, not a plain boolean,
+  because Refresh's disabled state is bound to it in the template and the
+  app runs without a zone, so a plain field changing would not repaint it.
+- Words: `seed.fetching` ("Fetching…", Thai "กำลังดึงข้อมูล…", to be checked
+  by a Thai reader).
+- Spec: 8.2 (Seed), 8.3 (profile-cache.service) and this note.
+- `npx ng build` clean (2.03 MB initial, no warnings). Not run in a
+  browser here: the user runs it on the dev server and then on
+  wallet.anocloud.com with a seed that has several open requests,
+  expecting the spinner, then every card at once with the faces filling
+  in a few at a time; Approve on one card leaves the others live and the
+  card goes; a request from another pod appears within 5 seconds; the Log
+  page shows the first list read and the approve, not the polls.
 
 ## 12. Recovery and the moderator edition
 

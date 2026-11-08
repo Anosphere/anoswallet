@@ -152,6 +152,7 @@ export const en = {
     notSeed: 'This anoPod is not a seed, so nobody can ask it to vouch.',
     asked: (when: string) => `asked ${when}`,
     none: 'No open requests.',
+    fetching: 'Fetching…',
   },
   notifications: {
     title: 'Notifications',

@@ -155,6 +155,7 @@ export const th: Words = {
     notSeed: 'anoPod นี้ไม่ใช่ seed จึงไม่มีใครขอให้รับรองได้',
     asked: (when: string) => `ขอเมื่อ ${when}`,
     none: 'ไม่มีคำขอที่เปิดอยู่',
+    fetching: 'กำลังดึงข้อมูล…',
   },
   notifications: {
     title: 'การแจ้งเตือน',

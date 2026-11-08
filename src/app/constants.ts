@@ -5,10 +5,14 @@
 /** The PRF salt label: SHA-256 of it is the 32-byte prf.eval.first at every passkey ceremony. Public; it only labels the key. */
 export const PRF_SALT_LABEL = 'masterpod/prf-salt/v1';
 
-/** The polls: notifications (and the status with them), chat messages, an account waiting for the ledger. */
+/** The polls: notifications (and the status with them), chat messages, an account waiting for the ledger, the seed's Vouch requests page (it re-reads its list this often while open). */
 export const NOTIFICATIONS_POLL_MS = 5_000;
 export const MESSAGES_POLL_MS = 3_000;
 export const ACCOUNT_POLL_MS = 5_000;
+export const VOUCH_REQUESTS_POLL_MS = 5_000;
+
+/** The profile cache keeps at most this many /get-anopod-profile reads in flight, so a page with many faces gets them a few at a time (wallet spec 8.3). */
+export const PROFILE_READS_AT_ONCE = 5;
 
 /** A conversation opens with this many of its newest messages and loads older ones by as many (wallet spec 8.2, Chat). */
 export const MESSAGES_PAGE = 50;
