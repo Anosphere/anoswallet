@@ -530,6 +530,64 @@ export const ATTESTOR_DISMISS_REASONS = ['selfieMismatch', 'documentsMismatch', 
 
 export type AttestorDismissReason = (typeof ATTESTOR_DISMISS_REASONS)[number];
 
+// --- level attestor, the break-glass cases (masterpod 14.4.2, 2026-11-08) ----------
+
+/** One move as /list-break-glass-cases answers it: a BreakGlassMove without its createdAt. */
+export type BreakGlassListedMove = Omit<BreakGlassMove, 'createdAt'>;
+
+/** One row of /list-break-glass-cases (masterpod 14.4.2): a recovery case seen by the attestors, with the recovered pod's names (null when its row is gone), the count of distinct attestor pods that signed and the moves in account order. */
+export interface BreakGlassCaseRow {
+  caseId: string;
+  status: AttestorCaseStatus;
+  username: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  signOffs: number;
+  moves: BreakGlassListedMove[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One moderator approval of the recovery case, as /get-break-glass-case lists them: the approvalSigned recovery events in time order, the moderator's username (null when the pod's row is gone) and the time from the event's details. */
+export interface BreakGlassApproval {
+  username: string | null;
+  signedAt: string | null;
+}
+
+/**
+ * What /get-break-glass-case answers (masterpod 14.4.2): the case with the
+ * recovery case's lookup id, status and approvals, the recovered pod's
+ * profile with the public selfie, the moves in account order and every
+ * attestor event complete (the events' shape is CaseEvent; an
+ * attestationSigned event's details are { attestorId, attestations }, the
+ * whole follow-up objects in move order, which the Send step posts).
+ */
+export interface BreakGlassCaseAnswer {
+  case: {
+    caseId: string;
+    status: AttestorCaseStatus;
+    lookupId: string | null;
+    recoveryStatus: CaseStatus | null;
+    approvals: BreakGlassApproval[];
+    createdAt: string;
+    updatedAt: string;
+  };
+  profile: Profile | null;
+  moves: BreakGlassMove[];
+  events: CaseEvent[];
+}
+
+/** One entry of /sign-off-break-glass-case: a move's transaction id and the attestation follow-up on it, signed as the account page signs one. */
+export interface BreakGlassAttestation {
+  transactionId: string;
+  attestation: FollowUp<AttestationPayload>;
+}
+
+/** The preset reasons a break-glass case may be dismissed for (masterpod 14.4.2): the trade case's six without settled. */
+export const BREAK_GLASS_DISMISS_REASONS = ['selfieMismatch', 'documentsMismatch', 'noShow', 'withdrawn', 'other'] as const;
+
+export type BreakGlassDismissReason = (typeof BREAK_GLASS_DISMISS_REASONS)[number];
+
 // --- the person's side of a case (masterpod 13.4.5) ---------------------------------
 
 export interface MyTradeCase {
@@ -597,9 +655,10 @@ export interface ExistingEvidence {
  * All HTTP calls to the masterpod live here, one method per route (the
  * keyholder test app's api.service.ts, base path /api/masterpod, the two
  * changed routes and the four new ones added, then the recovery routes of
- * masterpod 12.4, the attesting routes of masterpod 13.4 and the wallet
- * memory routes of wallet spec 4.6 and 4.7 (2026-11-07)), so no page builds URLs
- * or envelopes. The session service holds the session and signs.
+ * masterpod 12.4, the attesting routes of masterpod 13.4, the wallet
+ * memory routes of wallet spec 4.6 and 4.7 (2026-11-07) and the break-glass
+ * routes of masterpod 14.4 (2026-11-08)), so no page builds URLs or
+ * envelopes. The session service holds the session and signs.
  */
 @Injectable({ providedIn: 'root' })
 export class MasterpodApiService {
@@ -947,6 +1006,43 @@ export class MasterpodApiService {
 
   dismissAttestorCase(caseId: string, reason: AttestorDismissReason, note: string): Promise<ApiResponse<{ caseId: string; status: 'dismissed' }>> {
     return this.signed('/dismiss-attestor-case', { caseId, reason, note });
+  }
+
+  // --- level attestor, the break-glass cases (masterpod 14.4.2, 2026-11-08) ----------
+
+  /** The break-glass cases in `statuses` (open and inReview when omitted: {} is sent), newest first, each with its moves and the count of attestor pods that signed. */
+  listBreakGlassCases(statuses?: AttestorCaseStatus[], quiet = false): Promise<ApiResponse<{ cases: BreakGlassCaseRow[] }>> {
+    return this.signed('/list-break-glass-cases', statuses === undefined ? {} : { statuses }, quiet);
+  }
+
+  /** One case with the recovery case's lookup id and approvals, the person's profile, the moves and the events; 404 unknown case. */
+  getBreakGlassCase(caseId: string, quiet = false): Promise<ApiResponse<BreakGlassCaseAnswer>> {
+    return this.signed('/get-break-glass-case', { caseId }, quiet);
+  }
+
+  /** The recovered pod's rows of one bucket, ciphertext under the bucket keys the keyholders hand out by the recovery case's lookup id; the masterpod records the view. */
+  listBreakGlassCaseSecurityRecords(caseId: string, bucket: 1 | 2): Promise<ApiResponse<SecurityRecords>> {
+    return this.signed('/list-break-glass-case-security-records', { caseId, bucket });
+  }
+
+  /** As /schedule-attestor-case; the person's wallet reads the event from /list-my-break-glass-moves, no notification is sent. */
+  scheduleBreakGlassCase(caseId: string, at: string, meetLink: string): Promise<ApiResponse<{ caseId: string; status: AttestorCaseStatus }>> {
+    return this.signed('/schedule-break-glass-case', { caseId, at, meetLink });
+  }
+
+  /** One attestation per move of the case, every move exactly once, one attestorId on all, each verified by the masterpod against the signer's stored creation; two distinct pods decide the case. */
+  signOffBreakGlassCase(caseId: string, attestations: BreakGlassAttestation[]): Promise<ApiResponse<{ caseId: string; status: AttestorCaseStatus; signOffs: number }>> {
+    return this.signed('/sign-off-break-glass-case', { caseId, attestations });
+  }
+
+  /** The validators' answers to the posted attestations, up to two per move (1 to 40 results), a failed post included; a later retry writes another event. */
+  markBreakGlassCaseSent(caseId: string, validator: number, results: SentResult[]): Promise<ApiResponse<{ caseId: string; status: 'decided' }>> {
+    return this.signed('/mark-break-glass-case-sent', { caseId, validator, results });
+  }
+
+  /** Final, with the five reasons; nothing happens on the ledger: the held moves stay until a cancel. */
+  dismissBreakGlassCase(caseId: string, reason: BreakGlassDismissReason, note: string): Promise<ApiResponse<{ caseId: string; status: 'dismissed' }>> {
+    return this.signed('/dismiss-break-glass-case', { caseId, reason, note });
   }
 
   // --- level setup: the person's side of a case (masterpod 13.4.5) --------------

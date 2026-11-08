@@ -4391,24 +4391,27 @@ complete.
     /attesting                    the trades and the disputes waiting for attestors (attestor edition)
     /attesting/trade/:caseId      one trade case: the person, the trade, the buckets, the sign-off
     /attesting/dispute/:caseId    one dispute case: the parties, the escrow, the evidence, the verdicts
+    /attesting/recovery/:caseId   one recovery's break-glass moves: the person, the recovery case, the moves, the buckets, the sign-off (2026-11-08)
     /cases                        my cases (every edition)
     /cases/:caseId                one of my cases: share the lookup id, upload evidence, the timeline
 
-The three Attesting pages need a session and the attestor edition
+The four Attesting pages need a session and the attestor edition
 (`attestingGuard`, the shape of `moderationGuard`); a pod that is not an
 attestor sees the masterpod's `403 not an attestor` as "This anoPod is not
 an attestor". The two Cases pages need a session (`sessionGuard`).
 
 ### 13.3 The screens
 
-**Attesting** (`/attesting`). Two tabs. The page asks the attestor for the
-staked account once per session (13.4, `AttestingService`): the picker
+**Attesting** (`/attesting`). Three tabs (the third since 2026-11-08). The
+page asks the attestor for the staked account once per session (13.4, `AttestingService`): the picker
 the moderation case page has, filled from `/list-anos-accounts`, the first
 spending account picked; the choice signs every validator read, keyholder
 pull and sign-off until the tab closes.
 
-The Trades tab: `/list-assisted-transfers` from the default validator,
-each row the sender as a person (`/list-anos-account-profiles` once for
+The Trades tab: the `assistedAnosTransfer` rows of `/list-assisted-transfers`
+from the default validator (since 2026-11-08 the list carries the
+break-glass moves too, told apart by `type`; those belong to the Recoveries
+tab's case pages), each row the sender as a person (`/list-anos-account-profiles` once for
 the whole list: selfie, username, names; an unknown account shows its id
 and "not on this masterpod"), the amount in anos, when the trade was made,
 and the case state from `/list-attestor-cases` matched by transaction id:
@@ -4425,9 +4428,16 @@ page makes the case pair (`generateHybridKeys`), fetches
 `/list-attestors`, wraps the 96 secret bytes to every attestor's chat
 public key (`wrapCaseSecret`, the opener included), runs
 `/open-dispute-case` with the public halves and the wraps, keeps the pair
-in RAM (13.4) and goes to the case page. A status filter above both tabs
+in RAM (13.4) and goes to the case page. A status filter above the tabs
 (the two review statuses by default, plus decided and dismissed) and a
 Refresh; a quiet 15 s poll (`CASES_POLL_MS`).
+
+The Recoveries tab (2026-11-08, break-glass plan 1 step 6):
+`/list-break-glass-cases`, one row per recovery whose finish filed
+break-glass moves (masterpod 14): the person's username and names, the
+number of moves, "n of 2 signed", and the status in words linking to the
+recovery case page. No Open a case: the person's recovery finish files the
+case (12.3). The status filter applies to this tab too.
 
 **Trade case** (`/attesting/trade/:caseId`), from `/get-trade-case`,
 refreshed by a button and every 15 s. Top to bottom:
@@ -4495,6 +4505,44 @@ refreshed by a button and every 15 s. Top to bottom:
   refusal; the deciding attestor's page runs it at once.
 - Dismiss, as the trade case.
 
+**Recovery case** (`/attesting/recovery/:caseId`, 2026-11-08, break-glass
+plan 1 step 6), from `/get-break-glass-case`, refreshed by a button and
+every 15 s, the trade case's frame. Top to bottom:
+
+- The person: public selfie, username, names, the status in words.
+- The recovery: the recovery case's status in words and the moderators'
+  approvals, each "username · time".
+- The moves: per move the old account with its type, the new account with
+  Copy, the transaction id with Copy, and what the default validator lists
+  for it (`/list-assisted-transfers` matched by transaction id, read again
+  on every refresh and poll): the amount, when it was made and the
+  attestations in its slots, or "not listed on this validator (both
+  attestations in, written, or cancelled)".
+- The timeline: every event in words, as the trade case; the filing reads
+  "<username> filed n moves", a sign-off "<attestor> signed n attestations
+  with account …".
+- Schedule: as the trade case (`/schedule-break-glass-case`).
+- The lookup id: the recovery case's, with Copy; no sharing step.
+- Bucket one and two: the trade case's pull, pointed at
+  `/list-break-glass-case-security-records`, by the recovery case's lookup
+  id.
+- Attest: "Signed by n of 2" and who; Sign all attestations builds one
+  `attestation` follow-up per move (`attestorId` the staked account,
+  `accountId` the move's old account, `transactionId` the move's; the
+  wallet pair from `/api/sign`) and runs `/sign-off-break-glass-case` with
+  every move once.
+- When the answer says decided: Send to the validators posts the stored
+  attestations the default validator does not hold yet (two per move once
+  two attestors signed, from the `attestationSigned` events; the listed
+  move's `attestorIds` tell which it holds) to `/attestation` one after the
+  other, then `/mark-break-glass-case-sent` with the answers; "Sent" once
+  the validator holds every attestation for the moves it still lists, Retry
+  otherwise; the page of the attestor whose sign-off decided the case runs
+  it at once.
+- Dismiss: one of the five reasons, a note, Dismiss behind an inline
+  confirmation (`/dismiss-break-glass-case`); the moves stay held on the
+  validators until a cancel.
+
 The case pair, the opened evidence and the bucket keys live in RAM and are
 zeroed when the page is left; a refresh fetches and opens them again.
 
@@ -4535,12 +4583,18 @@ your copies stay."
 
     attesting.service       the attestor's staked account for the session (accountId, its keyBlob opened per
                             signature as the account page does), the trade and dispute lists from the validator
-                            with their profiles, the case pairs and opened content keys per case while a page is
-                            open; everything in RAM
+                            with their profiles (the trade list carries the break-glass moves too since
+                            2026-11-08; tradeOf finds a move), the case pairs and opened content keys per case
+                            while a page is open; everything in RAM
     masterpod-api.service   one method per route of masterpod 13.4 (eighteen) and their shapes; listAttestorCases
-                            sends {} when no filter is given
+                            sends {} when no filter is given; since 2026-11-08 the seven attestor routes of
+                            masterpod 14.4.2 (listBreakGlassCases, getBreakGlassCase,
+                            listBreakGlassCaseSecurityRecords, scheduleBreakGlassCase, signOffBreakGlassCase,
+                            markBreakGlassCaseSent, dismissBreakGlassCase) with BreakGlassCaseRow,
+                            BreakGlassCaseAnswer, BreakGlassAttestation and BREAK_GLASS_DISMISS_REASONS
     anos-api.service        listAssistedTransfers(pairOne, accountId), listDisputedEscrows(pairOne, accountId):
-                            the account envelope of section 5.3, as getAccount builds it
+                            the account envelope of section 5.3, as getAccount builds it; AssistedTransferItem
+                            carries type since 2026-11-08 (assistedAnosTransfer or breakGlassTransfer)
     crypto.service          additions only: wrapCaseSecret(secret, chatP256PublicHex, chatKemPublicHex) and
                             unwrapCaseSecret(bytes, chat), the room key wrap of section 7 over the 96 secret
                             bytes (1725 bytes); newContentKey(); everything else reused as it is (encrypt,
@@ -4570,6 +4624,9 @@ your copies stay."
 - Several validators asked at once; the lists come from the default
   validator, as every anos call does.
 - A moderator who is also an attestor.
+- Notifications to attestors when a recovery's moves are filed, and to the
+  person when the case moves (2026-11-08; masterpod 14.7): the attestor
+  edition lists the cases, the person's wallet reads them.
 
 ### 13.7 Build notes
 
@@ -4724,3 +4781,115 @@ and how it was decided:
   attestor pages themselves need an attestor session, the live keyholders
   and the validators' stake; the Cases pages a person's session with a
   case: the user's run-through (13.5).
+
+#### Build 4, the recoveries (2026-11-08)
+
+Built from `forclaude/break-glass-plan-1.md` (FINAL), section 6, the
+wallet's third and last step of the plan, after the step 4 and step 5 notes
+of section 11; the three are deployed together after the testnet reset.
+Why: since step 5 the recovery's finish files one `breakGlassTransfer` per
+lost account that holds anos, and two attestors have to sign each move like
+an assisted transfer; the masterpod keeps a break-glass case per recovery
+(its section 14), and this build gives the attestor edition the list and
+the page that signs. Changed: `attesting.page.ts`, `app.routes.ts`,
+`attesting.guard.ts` (a comment), `masterpod-api.service.ts`,
+`anos-api.service.ts`, `en.ts`, `th.ts`, this spec; new:
+`pages/attesting-recovery-case.page.ts`. What the plan left open and how it
+was decided:
+
+- The Recoveries tab asks `/list-break-glass-cases` for all four statuses
+  and applies the page's status filter itself, as the Trades and Disputes
+  tabs do, so a filter change needs no new read; the tab starts at the
+  plan's default statuses (`open`, `inReview`) because the filter does. A
+  row shows the names the list carries (no selfie: the list answers no
+  account id to look a profile up by; the case page has the selfie), the
+  moves count, "n of 2 signed" (`attesting.signedOfTwo`, a key beyond the
+  plan's three) and the status in words linking to the case page; no Open a
+  case, the person's finish files the case. The Trades tab keeps the rows
+  whose `type` is `assistedAnosTransfer`; a row without a `type` (a
+  validator on old code) is left out too, as the plan reads.
+- `AttestingService` is unchanged: its `trades` list now carries the
+  break-glass moves as the validator lists them, and `tradeOf` finds a move
+  by transaction id, which the recovery page uses; the profiles are fetched
+  for the moves' old accounts too, harmlessly.
+- The recovery page reads the validator's lists again (`loadLists`, quiet)
+  on every load, the poll included, when an account is picked, so the
+  moves' amounts and slots are current; a refusal shows under The moves in
+  words (`recoveryCase.listRefused`) while the previous read's rows stay.
+  The trade page reads the lists once; the recovery page needs them fresh
+  for the Send (two bullets down).
+- The stage of a move: `/list-assisted-transfers` carries no stage word
+  (anossoftware 13.2), so the page shows what the list has, the amount, when
+  the move was made and the attestations in its slots ("1 attestation on
+  the validators", as the Trades tab reads), or "not listed on this
+  validator (both attestations in, written, or cancelled)". A listed move
+  is waiting for attestors by the list's own rule, an empty slot.
+- The Send: `/mark-break-glass-case-sent` records `{ signer, status,
+  error? }` per posted attestation, the signer alone (masterpod 14.10:
+  "nothing names the move"), so the trade page's rule, post only what no
+  sent event accepted, cannot be applied by signer when a signer has two or
+  more attestations. The validator's list is the record instead: for a move
+  the validator still lists, the stored attestations whose `attestorId` is
+  not among the listed `attestorIds` are pending; a move it no longer lists
+  has nothing to post. "Sent" reads once nothing is pending; the Send
+  refuses while the lists were never read this session
+  (`recoveryCase.listNotLoaded`), so an unread list is never taken for
+  nothing pending. The stored attestations come from the
+  `attestationSigned` events' `attestations`, the whole follow-up objects,
+  each naming its move in `payload.transactionId` (masterpod 14.10). They
+  are posted in event order then move order; the results under the button
+  are tracked by position, since one signer appears once per move.
+- Sign all attestations: `/api/sign` is called once per move, in move
+  order, before the one `/sign-off-break-glass-case` call; the button is
+  disabled for a case without moves (never: a case is made by a filing).
+- The refusals in words: `400 attestations do not match the moves`
+  (`recoveryCase.movesMismatch`, "refresh and sign again": the moves changed
+  under the page), `400 sign-off does not match the case` (`mismatch`),
+  `400 attestations differ in attestorId` (`differ`, unreachable from this
+  page, which signs with one account), the rest as the trade page's (`409
+  already signed off`, `409 case closed`, `409 case not decided`, `403 not
+  your account`, `401 bad signature`). `/get-break-glass-case` 404 reads
+  `recoveryCase.notFound`.
+- The recovery block: the recovery case's status in `recoveryStatus` words
+  and the approvals as "username · time" joined by commas
+  (`noApprovals` when the list is empty, never in practice: a filing needs
+  two). The lookup id is the recovery case's, shown with Copy, `noLookupId`
+  when null; there is no sharing step, so the trade page's "waiting for the
+  lookup id" has no counterpart and Pull key is enabled as soon as the case
+  is loaded. The timeline: `opened` reads "<username> filed n moves" (the
+  person's own filing, the count from the details), `attestationSigned`
+  "<attestor> signed n attestations with account …"; the other kinds as the
+  trade page. The Schedule outcome says the time and the link are recorded
+  on the case: the person's wallet shows no scheduled event (step 4 built
+  the five move states, none for a schedule), so the attestor sends the
+  link another way; a gap for a later plan.
+- The dismiss reasons are a third constant, `BREAK_GLASS_DISMISS_REASONS`
+  (the trade case's six without `settled`), with `BreakGlassDismissReason`;
+  the words are the staff dismiss reasons already in the dictionary. The
+  outcome says the moves stay held until a cancel (masterpod 14.4.2).
+- `MasterpodApiService`: the seven methods under a new heading, with
+  `BreakGlassCaseRow`, `BreakGlassListedMove` (a move without `createdAt`,
+  as the list answers it), `BreakGlassApproval`, `BreakGlassCaseAnswer`
+  (`recoveryStatus` typed as the recovery's `CaseStatus`),
+  `BreakGlassAttestation`; `listBreakGlassCases` sends `{}` with no filter,
+  as `listAttestorCases` does. `AnosApiService`: `AssistedTransferItem.type`.
+  The routes' and the guard's comments count four Attesting pages; 13.2
+  lists the route.
+- Words: `attesting.recoveriesTab`, `noRecoveries`, `movesCount`,
+  `signedOfTwo`; the `recoveryCase` section (the titles, the move lines,
+  the sign-off and Send lines, the refusals, the two event lines); the page
+  reuses `tradeCase.lookupIdTitle`, `attest`, `signedSoFar`, `stillToSend`,
+  `attestationBy`, `allAccepted`, `alreadySigned`, `noStake` and the
+  `attesting` and `common` sentences where the English is the same. The
+  Thai lines were written here by the glossary of
+  `forclaude/wallet-languages-plan-1.md` 1.6 ("break-glass" as ฉุกเฉิน, as
+  the step 4 and 5 words have it) and are to be checked by a Thai reader.
+- Spec: 13.2, 13.3, 13.4, 13.6 and this note; README unchanged.
+- `npx ng build` clean. Not run in a browser here: the user resets the
+  testnet, deploys the three wallet steps together and runs a recovery
+  through, then signs its moves from two attestor pods, expecting the
+  Recoveries tab to list the case after the finish's Move your money step,
+  the case page to show the moves with their amounts from the validator,
+  the second sign-off to decide the case and post two attestations per
+  move, and the lost accounts' cards to read "being written" and then
+  "Moved to …".

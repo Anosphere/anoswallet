@@ -19,6 +19,7 @@ import {
   AccountProfileItem,
   AttestorCaseStatus,
   AttestorCasesAnswer,
+  BreakGlassCaseRow,
   CaseKeyWrap,
   DisputeCaseItem,
   MasterpodApiService,
@@ -85,15 +86,21 @@ function groupByTransaction<T extends { transactionId: string }>(items: T[]): Ma
  * Attesting (wallet spec 13.3, /attesting, the attestor edition). The page
  * asks for the staked account once per session (the moderation case page's
  * picker, copied; AttestingService keeps the choice). The Trades tab lists
- * /list-assisted-transfers from the default validator, the Disputes tab
- * /list-disputed-escrows, each row the people behind the account ids from
- * /list-anos-account-profiles, the amount, when, what is already on the
- * validators, and the case state from /list-attestor-cases matched by
- * transaction id: No case yet with Open a case, or the status in words
- * linking to the case page. Open a case on a trade runs /open-trade-case; on
- * a dispute it makes the case pair, wraps its secret to every attestor's
- * chat key and runs /open-dispute-case, keeping the pair in RAM. A status
- * filter above both tabs, Refresh, and a quiet 15 s poll.
+ * the assistedAnosTransfer rows of /list-assisted-transfers from the default
+ * validator (the list carries the break-glass moves too since 2026-11-08,
+ * told apart by type), the Disputes tab /list-disputed-escrows, each row the
+ * people behind the account ids from /list-anos-account-profiles, the
+ * amount, when, what is already on the validators, and the case state from
+ * /list-attestor-cases matched by transaction id: No case yet with Open a
+ * case, or the status in words linking to the case page. Open a case on a
+ * trade runs /open-trade-case; on a dispute it makes the case pair, wraps
+ * its secret to every attestor's chat key and runs /open-dispute-case,
+ * keeping the pair in RAM. The Recoveries tab (2026-11-08, break-glass plan
+ * 1 step 6) lists /list-break-glass-cases: one row per recovery whose finish
+ * filed break-glass moves, the person, the number of moves, how many of the
+ * two attestors signed, and the status linking to the recovery case page;
+ * no case is opened here, the person's finish files it. A status filter
+ * above the tabs, Refresh, and a quiet 15 s poll.
  */
 @Component({
   selector: 'app-attesting-page',
@@ -212,6 +219,26 @@ function groupByTransaction<T extends { transactionId: string }>(items: T[]): Ma
               }
             }
           </mat-tab>
+
+          <mat-tab [label]="t().attesting.recoveriesTab(recoveryRows().length)">
+            @for (row of recoveryRows(); track row.caseId) {
+              <div class="item">
+                <mat-icon class="avatar-icon">key_off</mat-icon>
+                <div class="facts">
+                  <div class="title">{{ recoveryPersonText(row) }}</div>
+                  <div class="muted">{{ t().attesting.movesCount(row.moves.length) }} · {{ t().attesting.signedOfTwo(row.signOffs) }}</div>
+                  <div>
+                    <mat-icon class="inline">{{ icons[row.status] }}</mat-icon>
+                    <a [routerLink]="['/attesting/recovery', row.caseId]">{{ t().caseStatus[row.status] ?? row.status }}</a>
+                  </div>
+                </div>
+              </div>
+            } @empty {
+              @if (!busy() && !error()) {
+                <p class="muted">{{ t().attesting.noRecoveries }}</p>
+              }
+            }
+          </mat-tab>
         </mat-tab-group>
         @if (opening(); as id) {
           <p class="muted">{{ t().attesting.openingCase }} <code>{{ id }}</code>…</p>
@@ -255,18 +282,28 @@ export class AttestingPage {
   protected readonly statuses = signal<AttestorCaseStatus[]>(DEFAULT_STATUSES);
   /** The cases of every status from the masterpod; the filter is applied on the page, so a decided case is never taken for No case yet. */
   protected readonly cases = signal<AttestorCasesAnswer | null>(null);
+  /** The break-glass cases of every status (masterpod 14.4.2); the filter is applied on the page as for the trades, so a filter change needs no new read. */
+  protected readonly recoveries = signal<BreakGlassCaseRow[]>([]);
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
   /** The transaction id a case is being opened on, while it is. */
   protected readonly opening = signal<string | null>(null);
 
+  /** The trades: the assistedAnosTransfer rows of the validator's list; its breakGlassTransfer rows belong to the recovery case pages. */
   protected readonly tradeRows = computed<TradeRow[]>(() => {
     const byTransaction = groupByTransaction(this.cases()?.trades ?? []);
     const statuses = this.statuses();
     return this.attesting
       .trades()
+      .filter((trade) => trade.type === 'assistedAnosTransfer')
       .map((trade) => ({ trade, sender: this.attesting.profileOf(trade.accountId), state: stateOf(byTransaction.get(trade.transactionId) ?? []) }))
       .filter((row) => shown(row.state, statuses));
+  });
+
+  /** The break-glass cases in the filter's statuses, newest first as the masterpod lists them. */
+  protected readonly recoveryRows = computed<BreakGlassCaseRow[]>(() => {
+    const statuses = this.statuses();
+    return this.recoveries().filter((c) => statuses.includes(c.status));
   });
 
   protected readonly disputeRows = computed<DisputeRow[]>(() => {
@@ -298,7 +335,7 @@ export class AttestingPage {
     void this.load();
   }
 
-  /** The accounts (once), both validator lists with the people behind them, and the cases of every status. */
+  /** The accounts (once), both validator lists with the people behind them, and the cases of every status, the break-glass cases included. */
   protected async load(quiet = false): Promise<void> {
     this.busy.set(true);
     if (!quiet) this.error.set(null);
@@ -308,9 +345,15 @@ export class AttestingPage {
         this.error.set(this.t().attesting.noAccount);
         return;
       }
-      const [, cases] = await Promise.all([this.attesting.loadLists(quiet), this.masterpod.listAttestorCases(CASE_STATUSES, quiet)]);
+      const [, cases, recoveries] = await Promise.all([
+        this.attesting.loadLists(quiet),
+        this.masterpod.listAttestorCases(CASE_STATUSES, quiet),
+        this.masterpod.listBreakGlassCases(CASE_STATUSES, quiet),
+      ]);
       if (!cases.ok) throw new Error(attestingError(cases, '/list-attestor-cases', this.t()));
+      if (!recoveries.ok) throw new Error(attestingError(recoveries, '/list-break-glass-cases', this.t()));
       this.cases.set(cases.body);
+      this.recoveries.set(recoveries.body.cases);
       this.error.set(null);
     } catch (err) {
       this.error.set(err instanceof Error ? err.message : String(err));
@@ -329,6 +372,11 @@ export class AttestingPage {
   protected selfieOf(item: AccountProfileItem | null): string | null {
     const selfie = item?.profile?.selfie;
     return selfie ? `data:${selfie.contentType};base64,${selfie.image}` : null;
+  }
+
+  /** The recovered person of a break-glass case: the names the masterpod's row carries (no selfie on the list), or unknown pod when the row is gone. */
+  protected recoveryPersonText(row: BreakGlassCaseRow): string {
+    return row.username ? this.t().common.personLine(row.username, row.firstName, row.lastName) : this.t().common.unknownPod;
   }
 
   /** What the validators already hold for a trade: the attestations in the slots. */

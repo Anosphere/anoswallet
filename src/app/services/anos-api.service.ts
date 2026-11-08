@@ -57,9 +57,10 @@ export interface Accepted {
   transactionId: string;
 }
 
-/** One trade waiting for attestors, as /list-assisted-transfers answers it (anossoftware 13.2): attestorIds the attestations already in the slots, slot order. */
+/** One held transfer waiting for attestors, as /list-assisted-transfers answers it (anossoftware 13.2): type (2026-11-08) tells a trade, assistedAnosTransfer, from a break-glass move of a recovery, breakGlassTransfer (anossoftware 22); attestorIds the attestations already in the slots, slot order. */
 export interface AssistedTransferItem {
   transactionId: string;
+  type: 'assistedAnosTransfer' | 'breakGlassTransfer' | string;
   accountId: string;
   accountIdTo: string;
   amount: string;
@@ -225,7 +226,7 @@ export class AnosApiService {
 
   // --- the attestor reads (anossoftware 13.2): the account envelope as getAccount builds it, the signer staked for attestor ---
 
-  /** POST /list-assisted-transfers: the trades waiting for attestors on this validator, newest first. */
+  /** POST /list-assisted-transfers: the trades and, since 2026-11-08, the break-glass moves waiting for attestors on this validator, newest first, told apart by type. */
   listAssistedTransfers(pairOne: PairOne, accountId: string, quiet = false): Promise<ApiResponse<{ transfers: AssistedTransferItem[] }>> {
     return this.post('/list-assisted-transfers', this.crypto.signAccountEnvelope(pairOne, accountId, '/list-assisted-transfers', {}), quiet);
   }

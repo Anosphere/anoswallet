@@ -4,7 +4,7 @@ import { ConfigService } from './services/config.service';
 import { SessionService } from './services/session.service';
 
 /**
- * The three Attesting pages need a session and the attestor edition (wallet
+ * The four Attesting pages need a session and the attestor edition (wallet
  * spec 13.2, the shape of moderationGuard): anyone without a session goes
  * to the landing page, as sessionGuard sends them; a session in another
  * edition goes there too. Whether the pod is an attestor is the masterpod's

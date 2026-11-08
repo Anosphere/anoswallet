@@ -5,6 +5,7 @@ import { AccountProtectPage } from './pages/account-protect.page';
 import { AccountRecoveryPage } from './pages/account-recovery.page';
 import { AssistedTransferPage } from './pages/assisted-transfer.page';
 import { AttestingDisputeCasePage } from './pages/attesting-dispute-case.page';
+import { AttestingRecoveryCasePage } from './pages/attesting-recovery-case.page';
 import { AttestingTradeCasePage } from './pages/attesting-trade-case.page';
 import { AttestingPage } from './pages/attesting.page';
 import { CasesPage } from './pages/cases.page';
@@ -44,7 +45,7 @@ import { sessionGuard } from './session.guard';
  * The routes of wallet spec 8.1, 12.2 and 13.2. Every page but the landing
  * and the three Recover pages needs a session; /recover/case needs a
  * recovery session instead; the two Moderation pages need a session and the
- * moderator edition; the three Attesting pages a session and the attestor
+ * moderator edition; the four Attesting pages a session and the attestor
  * edition; the two Cases pages a session.
  */
 export const routes: Routes = [
@@ -91,6 +92,7 @@ export const routes: Routes = [
   { path: 'attesting', component: AttestingPage, canActivate: [attestingGuard], title: 'Attesting' },
   { path: 'attesting/trade/:caseId', component: AttestingTradeCasePage, canActivate: [attestingGuard], title: 'Trade case' },
   { path: 'attesting/dispute/:caseId', component: AttestingDisputeCasePage, canActivate: [attestingGuard], title: 'Dispute case' },
+  { path: 'attesting/recovery/:caseId', component: AttestingRecoveryCasePage, canActivate: [attestingGuard], title: 'Recovery case' },
   { path: 'cases', component: CasesPage, canActivate: [sessionGuard], title: 'Cases' },
   { path: 'cases/:caseId', component: MyCasePage, canActivate: [sessionGuard], title: 'My case' },
   { path: 'log', component: LogPage, canActivate: [sessionGuard], title: 'Log' },
