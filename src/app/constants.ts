@@ -19,6 +19,9 @@ export const HISTORY_PAGE = 20;
 /** The attesting lists, the two attestor case pages and My case refresh this often while open (wallet spec 13.3). */
 export const CASES_POLL_MS = 15_000;
 
+/** How long one keyholder has to answer a deposit call, the receiving-key fetch or the share (wallet spec 6): a stopped VM otherwise holds the deposit for the proxy's two minutes. */
+export const KEYHOLDER_DEPOSIT_TIMEOUT_MS = 15_000;
+
 /** The username check while typing. */
 export const USERNAME_DEBOUNCE_MS = 400;
 

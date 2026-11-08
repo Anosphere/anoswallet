@@ -203,7 +203,8 @@ export const th: Words = {
   },
   shares: {
     noIdentity: 'ไม่มีรหัสตัวตนสาธารณะใน RAM: ปลดล็อกอีกครั้ง',
-    refused: (keyholder: number, detail: string) => `ผู้ถือกุญแจ ${keyholder} ปฏิเสธส่วนแบ่ง: ${detail}`,
+    floorNotReached: (stored: number, keyholders: number, needed: number, keyholder: number, reason: string) =>
+      `ผู้ถือกุญแจเก็บส่วนแบ่งไว้เพียง ${stored} จาก ${keyholders} ราย ต้องมีอย่างน้อย ${needed} ราย ผู้ถือกุญแจ ${keyholder}: ${reason}`,
     keyNotFetched: (reason: string) => `ดึงกุญแจรับของผู้ถือกุญแจไม่ได้ (${reason})`,
   },
   signing: {
@@ -213,6 +214,7 @@ export const th: Words = {
   api: {
     noSession: 'ไม่มีเซสชัน: ปลดล็อกก่อน',
     network: 'ติดต่อพร็อกซีของกระเป๋าเงินไม่ได้ (ข้อผิดพลาดของเครือข่าย)',
+    noAnswer: (seconds: number) => `ไม่มีคำตอบภายใน ${seconds} วินาที`,
   },
   home: {
     hello: (name: string) => `สวัสดี ${name}`,

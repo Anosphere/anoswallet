@@ -59,6 +59,7 @@ on this machine).
     KEYHOLDER_URLS      http://localhost:3201,...,http://localhost:3205      comma separated, in keyholder order
     SIGNING_SERVER_URL  http://localhost:3300                                the signing server
     SHARE_THRESHOLD     3                                                    how many shares rebuild a secret
+    DEPOSIT_FLOOR_PERCENT  80    how many of the keyholders must store a share for a deposit to go through, in percent, 1 to 100 (section 6; 2026-11-07)
     DEFAULT_VALIDATOR   1                                                    the validator the wallet posts to
     DIST_DIR            dist/wallet/browser                                  the Angular build it serves
     RP_ID               localhost                                            the relying-party id the browser uses in both ceremonies; the masterpod's RP_ID
@@ -73,8 +74,8 @@ window, so the two files are changed together (2026-11-06, section 11).
 
 Routes
 
-    GET  /api/config                  200 { validators, keyholders, shareThreshold, defaultValidator, edition, rpId,
-                                      guardedLockMinutes, vaultLockMinutes, lockOffsetMinutes }: the two counts are the
+    GET  /api/config                  200 { validators, keyholders, shareThreshold, depositFloorPercent, defaultValidator, edition,
+                                      rpId, guardedLockMinutes, vaultLockMinutes, lockOffsetMinutes }: the two counts are the
                                       list lengths; the browser never sees an address
     GET  /api/health                  200 { status: "ok" }
     ANY  /api/masterpod/<path>        forwarded to MASTERPOD_URL/<path>
@@ -480,21 +481,38 @@ keyholder test app sends, with the stand-ins replaced:
 - keyId: 32 random bytes per secret, the same on every keyholder, and
   (new) the same value the masterpod gets with the bucket add.
 
-The deposit rule, everywhere a secret is made
+The deposit rule, everywhere a secret is made (as changed 2026-11-07 by
+forclaude/wallet-deposit-floor-plan-1.md; before it every keyholder had
+to answer 201, one at a time, in order)
 1. The secret is split into as many shares as /api/config says
-   keyholders (five), threshold shareThreshold (three), with
-   shamir-secret-sharing as today.
+   keyholders, threshold shareThreshold, with shamir-secret-sharing as
+   today. Shares and threshold are separate numbers: 27 keyholders get
+   exactly 27 shares, nothing is computed and thrown away.
 2. Share n goes to keyholder n through /api/keyholder/n/receive-share,
    the receiving key fetched through /api/keyholder/n/get-keyholder-public-key
-   once per session, in order 1 to 5.
-3. Every keyholder must answer 201 before the masterpod step that
-   follows (complete-setup, the bucket add, create-anos-account). One
-   failure stops the step: the screen says which keyholder refused, and
-   Retry starts the step again with a fresh secret and a fresh keyId.
-   The shares already stored are orphans under a keyId nothing names;
-   reads list newest first, so they never get in the way.
-4. So "stored on the masterpod" means "the keyholders have it". No
-   temporary table, no state column.
+   once per session, every keyholder at once, each call with a time limit
+   of 15 seconds (KEYHOLDER_DEPOSIT_TIMEOUT_MS in constants.ts): a
+   keyholder that has not answered by then counts as one that did not
+   store the share, so a stopped VM holds nobody for the proxy's two
+   minutes.
+3. The deposit goes through when at least the floor stored it:
+   depositFloorPercent of the keyholders, rounded up, never below
+   shareThreshold (22 of 27 at 80 percent; every keyholder when the proxy
+   sends no percent). The masterpod step that follows (complete-setup,
+   the bucket add, create-anos-account) then runs; the keyholders that
+   failed show only in the activity log. Below the floor the step stops:
+   the screen says how many stored, how many were needed and the first
+   failure ("Only 20 of 27 keyholders stored the share, 22 are needed.
+   Keyholder 12: HTTP 0: no answer in 15 s"), and Retry starts the step
+   again with a fresh secret and a fresh keyId. The shares already stored
+   are orphans under a keyId nothing names; reads list newest first, so
+   they never get in the way.
+4. So "stored on the masterpod" means "enough keyholders have it". A
+   keyholder that was down misses that share for good; the secret still
+   rebuilds from any shareThreshold of the others, and the reads already
+   tolerate a missing share (a pull needs the threshold, not everyone).
+   A catch-up that hands a keyholder the shares it missed is not built
+   (the plan's decision 1). No temporary table, no state column.
 
 ## 7. Client crypto, new or changed
 
@@ -1623,7 +1641,9 @@ network/testnet.env numbers (2026-11-06, section 11).
   checks of what it signs, no auth.
 - Keyholder discovery and ceremonies: the proxy's list is the truth.
 - A retry of a failed keyholder deposit: the step restarts with a new
-  secret.
+  secret. A catch-up that gives a keyholder the shares it missed while
+  it was down (2026-11-07, forclaude/wallet-deposit-floor-plan-1.md
+  decision 1): the user's list for after the production launch.
 - Reads of the holding tables: the pending row has /list-transactions,
   the open escrows /list-escrows (2026-11-05), the assisted transfer
   /get-assisted-transfer and the locked transfer /get-locked-transfer
@@ -3550,6 +3570,37 @@ Home can show "Protect your passkey" until it is on.
   user tests with `ng serve`: a pod set up on a Pixel-emulating Chrome
   that picks "Skip for now" sees "Protect your passkey" under Things to
   do on Home, and the page's Save with "I turned it on" removes it.
+
+### The deposit floor (2026-11-07)
+
+Built in the planning chat from `forclaude/wallet-deposit-floor-plan-1.md`
+(FINAL), one commit.
+
+- Proxy: `DEPOSIT_FLOOR_PERCENT`, default 80, 1 to 100 through a new
+  `percent()` helper in `server/config.js`, answered by `/api/config` as
+  `depositFloorPercent`; `network/wallet.env` carries 80.
+- Browser: `SharesService.deposit` sends every share at once (one `send`
+  per keyholder inside `Promise.all`, nothing in it throws), counts the
+  201s and compares them with needed = max(ceil(keyholders × percent /
+  100), shareThreshold), every keyholder when the proxy sends no percent.
+  `DepositError` carries `stored`, `needed` and `failed` (the keyholders'
+  numbers) instead of one keyholder; the five callers use `instanceof`
+  and `message` only and did not change. `LogService.post` takes an
+  optional `timeoutMs` (rxjs `timeout`; a `TimeoutError` becomes
+  `{ ok: false, status: 0, body: { error: api.noAnswer(seconds) } }`, so
+  it is logged and `reasonOf` reads it like any refusal);
+  `KeyholderApiService.getPublicKey` and `receiveShare` pass it through;
+  `KEYHOLDER_DEPOSIT_TIMEOUT_MS` is 15 000 in `constants.ts`.
+- Words: `shares.floorNotReached(stored, keyholders, needed, keyholder,
+  reason)` replaces `shares.refused`, which nothing else used;
+  `api.noAnswer(seconds)` is new. The Thai lines were written here and are
+  to be checked by a Thai reader.
+- Spec: sections 2, 6, 10 and this note; README: the variables line.
+- `npx ng build` clean (1.96 MB initial); `node --check` on the two server
+  files. Not run in a browser here: the user deploys and tries a create
+  account with one keyholder's VMs stopped, expecting the step to go green
+  after about 15 seconds and the log to show that keyholder's two calls at
+  status 0.
 
 ## 12. Recovery and the moderator edition
 

@@ -7,7 +7,8 @@ import { createProxyMiddleware } from 'http-proxy-middleware';
  * The wallet's proxy (wallet spec section 2): the one origin the browser
  * talks to. /api/config tells the browser how many validators and
  * keyholders there are, which edition this is (12.1), the relying-party
- * id and the three lock numbers (wallet spec 2); everything else under
+ * id, the three lock numbers and the deposit floor (wallet spec 2);
+ * everything else under
  * /api is forwarded to a backend with its prefix stripped, bodies
  * streamed, headers as received, the backend's status and body returned
  * unchanged; the rest is the Angular build. Nothing is logged but 502s.
@@ -71,6 +72,7 @@ export function createApp(config) {
       validators: config.validatorUrls.length,
       keyholders: config.keyholderUrls.length,
       shareThreshold: config.shareThreshold,
+      depositFloorPercent: config.depositFloorPercent,
       defaultValidator: config.defaultValidator,
       edition: config.edition,
       rpId: config.rpId,

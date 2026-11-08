@@ -52,18 +52,18 @@ export class KeyholderApiService {
   private readonly lang = inject(LanguageService);
   private readonly session = inject(SessionService);
 
-  /** POST /get-keyholder-public-key (level none) on keyholder n. */
-  getPublicKey(n: number): Promise<ApiResponse<KeyholderPublicKey>> {
-    return this.log.post(`/api/keyholder/${n}/get-keyholder-public-key`, {});
+  /** POST /get-keyholder-public-key (level none) on keyholder n. `timeoutMs` caps the wait (a deposit passes KEYHOLDER_DEPOSIT_TIMEOUT_MS). */
+  getPublicKey(n: number, timeoutMs?: number): Promise<ApiResponse<KeyholderPublicKey>> {
+    return this.log.post(`/api/keyholder/${n}/get-keyholder-public-key`, {}, false, timeoutMs);
   }
 
-  /** POST /receive-share (level pod) on keyholder n: the envelope signed by the pod's session keys with a fresh nonce. */
-  receiveShare(n: number, body: ReceiveShareBody): Promise<ApiResponse<ReceiveShareAnswer>> {
+  /** POST /receive-share (level pod) on keyholder n: the envelope signed by the pod's session keys with a fresh nonce. `timeoutMs` caps the wait. */
+  receiveShare(n: number, body: ReceiveShareBody, timeoutMs?: number): Promise<ApiResponse<ReceiveShareAnswer>> {
     const envelope = this.session.sign('/receive-share', body);
     if (!envelope) {
       return Promise.resolve({ ok: false, status: 0, body: { error: this.lang.words().api.noSession } as unknown as ReceiveShareAnswer });
     }
-    return this.log.post(`/api/keyholder/${n}/receive-share`, envelope);
+    return this.log.post(`/api/keyholder/${n}/receive-share`, envelope, false, timeoutMs);
   }
 
   /** POST /get-security-bucket-one-key (level moderator) on keyholder n: the account envelope with body { lookupId, responseKey }. */

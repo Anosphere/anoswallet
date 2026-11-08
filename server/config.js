@@ -26,6 +26,13 @@ function integer(name, fallback) {
   return Number(value);
 }
 
+/** A positive integer no larger than 100: a percent. */
+function percent(name, fallback) {
+  const value = integer(name, fallback);
+  if (value > 100) throw new Error(`${name} must be 1 to 100, got "${value}"`);
+  return value;
+}
+
 function url(name, fallback) {
   return (process.env[name] ?? fallback).replace(/\/+$/, '');
 }
@@ -59,6 +66,8 @@ export const config = Object.freeze({
   keyholderUrls: list('KEYHOLDER_URLS', ports(3201, 5)),
   signingServerUrl: url('SIGNING_SERVER_URL', 'http://localhost:3300'),
   shareThreshold: integer('SHARE_THRESHOLD', 3),
+  /** How many of the listed keyholders must store a share for a deposit to go through, in percent (wallet spec 6); the browser rounds up and never goes below shareThreshold. */
+  depositFloorPercent: percent('DEPOSIT_FLOOR_PERCENT', 80),
   defaultValidator: integer('DEFAULT_VALIDATOR', 1),
   /** The time locks on guarded and vault accounts and the offset, in minutes: the validators' numbers (wallet spec 2), answered to the browser by /api/config. The local defaults are this machine's validators'. */
   guardedLockMinutes: integer('GUARDED_LOCK_MINUTES', 1),
