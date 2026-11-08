@@ -168,11 +168,11 @@ export type BreakGlassKeys = Pick<BrowserAccountKeys, 'breakGlassKey' | 'breakGl
 /** The roles the browser signs a transfer or a follow-up with: pair one. The signing server adds the wallet pair. */
 export const PAIR_ONE_ROLES = ['key1', 'postQuantumKey1'] as const;
 
-/** Signatures over a payload's canonical bytes: pair one from the browser, the wallet pair from /api/sign. */
-export type TransferSignatures = Partial<Record<'key1' | 'postQuantumKey1' | 'walletKey' | 'walletPostQuantumKey', string>>;
+/** Signatures over a payload's canonical bytes: pair one from the browser and the wallet pair from /api/sign; or, on a breakGlassTransfer (2026-11-08), the break-glass pair alone, nothing else beside it. */
+export type TransferSignatures = Partial<Record<'key1' | 'postQuantumKey1' | 'breakGlassKey' | 'breakGlassPostQuantumKey' | 'walletKey' | 'walletPostQuantumKey', string>>;
 
-/** The five transfer types. */
-export type TransferType = 'anosTransfer' | 'guardedAnosTransfer' | 'vaultAnosTransfer' | 'assistedAnosTransfer' | 'escrowTransfer';
+/** The six transfer types; breakGlassTransfer (2026-11-08, anossoftware spec 4.5) moves a lost account's whole balance to a new account of the same type, signed by the break-glass pair alone. */
+export type TransferType = 'anosTransfer' | 'guardedAnosTransfer' | 'vaultAnosTransfer' | 'assistedAnosTransfer' | 'escrowTransfer' | 'breakGlassTransfer';
 
 export interface AnosTransferPayload {
   accountId: string;
@@ -342,8 +342,9 @@ const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
  * (keys, blobs, the backup code, the chat pair, rooms, messages, the
  * buckets), the keyholder hybrid encryption and the shares, the anos keys,
  * builders and signing, the wallet spec's section 7 additions (the
- * identity blob, the break-glass keys, the key blob, the account envelope)
- * and the recovery additions of masterpod 12.6 (the hybrid pair and its
+ * identity blob, the break-glass keys, the key blob, the account envelope,
+ * and since 2026-11-08 the break-glass transfer and the break-glass
+ * envelope the recovery's finish uses, wallet spec 12.3) and the recovery additions of masterpod 12.6 (the hybrid pair and its
  * blob, opening a hybrid ciphertext, combining shares, the sign-off), and
  * the attestation additions of masterpod 13.6 (a case secret wrapped to a
  * chat key, a content key). The public ledger id is beside this file, in
@@ -434,8 +435,24 @@ export class CryptoService {
    * 16 random bytes.
    */
   signAccountEnvelope(pairOne: PairOne, accountId: string, path: string, body: object): Envelope {
+    return this.signAccountEnvelopeWith({ ecdsa: pairOne.key1, mldsa: pairOne.postQuantumKey1 }, accountId, path, body);
+  }
+
+  /**
+   * The account envelope signed by the account's break-glass pair
+   * (2026-11-08): the validators' account level accepts it when pair one
+   * does not verify (anossoftware spec 22), so a recovery's finish reads a
+   * lost account's balance and latest transaction id with the recovered
+   * seed. The one read the wallet makes with a break-glass key.
+   */
+  signAccountEnvelopeAsBreakGlass(keys: BreakGlassKeys, accountId: string, path: string, body: object): Envelope {
+    return this.signAccountEnvelopeWith({ ecdsa: keys.breakGlassKey, mldsa: keys.breakGlassPostQuantumKey }, accountId, path, body);
+  }
+
+  /** The account envelope signed by `signer`, a P-256 key and an ML-DSA-87 key: pair one's or the break-glass pair's. */
+  private signAccountEnvelopeWith(signer: { ecdsa: SigningKey; mldsa: SigningKey }, accountId: string, path: string, body: object): Envelope {
     const payload = { accountId, path, timestamp: new Date().toISOString(), nonce: this.randomHex(16), body };
-    return { payload, signatures: this.signPayload({ ecdsa: pairOne.key1, mldsa: pairOne.postQuantumKey1 }, payload) };
+    return { payload, signatures: this.signPayload(signer, payload) };
   }
 
   // --- HKDF and AES-GCM ----------------------------------------------------
@@ -909,6 +926,37 @@ export class CryptoService {
     return { payload, signatures: this.signAsPairOne(pairOne, payload) };
   }
 
+  /**
+   * The break-glass move (2026-11-08, anossoftware spec 4.5): the whole
+   * balance of an account whose user keys died with the passkey, out of
+   * `accountId` into `accountIdTo`, a new account of the same type, chained
+   * on `previousTransactionId` (the account's latest transaction, read with
+   * the break-glass envelope), dated `createdAt`: now from a spending or
+   * assisted account, the lock plus the offset ahead from a guarded or vault
+   * one, as the account's own transfers are dated. Built like the other
+   * transfers, then signed by the break-glass pair alone: no pair one and no
+   * signing server, since the validators refuse any user-pair signature
+   * beside the break-glass pair. Two attestors attest it on the ledger.
+   */
+  buildBreakGlassTransferTransaction(
+    keys: BreakGlassKeys,
+    accountId: string,
+    previousTransactionId: string,
+    accountIdTo: string,
+    amount: bigint,
+    createdAt: Date,
+  ): AnosTransferTransaction {
+    const payload = this.withTransactionId({
+      accountId,
+      previousTransactionId,
+      transactionType: 'breakGlassTransfer' as const,
+      amount: amount.toString(),
+      accountIdTo,
+      createdAt: createdAt.toISOString(),
+    });
+    return { payload, signatures: this.signAsBreakGlass(keys, payload) };
+  }
+
   /** A transfer to the fund staking `amount` (millionths) for `stakeFor`, dated now. */
   buildTransferToFund(pairOne: PairOne, accountId: string, previousTransactionId: string, amount: bigint, stakeFor: StakePurpose): TransferToFundTransaction {
     const payload = this.withTransactionId({
@@ -962,6 +1010,15 @@ export class CryptoService {
     return {
       key1: bytesToHex(this.sign(pairOne.key1, message)),
       postQuantumKey1: bytesToHex(this.sign(pairOne.postQuantumKey1, message)),
+    };
+  }
+
+  /** Signatures over the payload's canonical bytes by the break-glass pair, and nothing else: the validators' break-glass rule (anossoftware spec 22) refuses a user-pair signature beside them. */
+  private signAsBreakGlass(keys: BreakGlassKeys, payload: object): TransferSignatures {
+    const message = this.canonicalBytes(payload);
+    return {
+      breakGlassKey: bytesToHex(this.sign(keys.breakGlassKey, message)),
+      breakGlassPostQuantumKey: bytesToHex(this.sign(keys.breakGlassPostQuantumKey, message)),
     };
   }
 

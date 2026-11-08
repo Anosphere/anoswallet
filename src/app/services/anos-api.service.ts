@@ -6,6 +6,7 @@ import {
   AttestationPayload,
   CreateAccountTransaction,
   CryptoService,
+  Envelope,
   EscrowSignaturePayload,
   EscrowVerdictPayload,
   FollowUp,
@@ -105,10 +106,10 @@ export interface EscrowItem {
   verdicts: EscrowVerdictSummary[];
 }
 
-/** Where a held assisted transfer is, as the validator names it (anossoftware spec 17.2). A word the wallet does not know is shown as held with no action. */
-export type AssistedStage = 'waiting' | 'attesting' | 'writing' | 'cancelling';
+/** Where a held assisted transfer is, as the validator names it (anossoftware spec 17.2); locked (2026-11-08) is a break-glass move out of a guarded or vault account waiting out its lock with both attestations in. A word the wallet does not know is shown as held with no action. */
+export type AssistedStage = 'waiting' | 'attesting' | 'locked' | 'writing' | 'cancelling';
 
-/** The signer's own held assisted transfer, as /get-assisted-transfer answers it (anossoftware spec 17): accountId the sender, accountIdTo the receiver, attestations the slots holding one, 0, 1 or 2. */
+/** The signer's own held assisted transfer, as /get-assisted-transfer answers it (anossoftware spec 17): accountId the sender, accountIdTo the receiver, attestations the slots holding one, 0, 1 or 2; unlocksAt (2026-11-08) the moment a break-glass move out of a guarded or vault account may be written, null for every other row. */
 export interface HeldAssistedTransfer {
   transactionId: string;
   accountId: string;
@@ -117,6 +118,7 @@ export interface HeldAssistedTransfer {
   createdAt: string;
   stage: AssistedStage | string;
   attestations: number;
+  unlocksAt: string | null;
 }
 
 /** Where a locked transfer is, as the validator names it (anossoftware spec 18.2). A word the wallet does not know is shown as held with no action. */
@@ -154,7 +156,7 @@ export class AnosApiService {
     return this.post('/create-account', tx);
   }
 
-  /** POST /anos-transfer: any of the five transfer types. */
+  /** POST /anos-transfer: any of the six transfer types, the breakGlassTransfer of the recovery's finish included (2026-11-08). */
   anosTransfer(tx: AnosTransferTransaction): Promise<ApiResponse<Accepted>> {
     return this.post('/anos-transfer', tx);
   }
@@ -193,7 +195,12 @@ export class AnosApiService {
 
   /** POST /get-account, signed by pair one. */
   getAccount(pairOne: PairOne, accountId: string, quiet = false): Promise<ApiResponse<AccountAnswer>> {
-    return this.post('/get-account', this.crypto.signAccountEnvelope(pairOne, accountId, '/get-account', {}), quiet);
+    return this.getAccountAs(this.crypto.signAccountEnvelope(pairOne, accountId, '/get-account', {}), quiet);
+  }
+
+  /** POST /get-account with an envelope the caller signed: pair one's (getAccount) or, since 2026-11-08, the break-glass pair's (CryptoService.signAccountEnvelopeAsBreakGlass), which the validator accepts when pair one does not verify (anossoftware spec 22), so the recovery's finish reads a lost account's balance and latest transaction id with the recovered seed. */
+  getAccountAs(envelope: Envelope, quiet = false): Promise<ApiResponse<AccountAnswer>> {
+    return this.post('/get-account', envelope, quiet);
   }
 
   /** POST /list-transactions, signed by pair one; from and to (ISO 8601) cut the list to a date range (anossoftware spec 18.3). */

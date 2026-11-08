@@ -261,7 +261,7 @@ interface Outcome {
                 <mat-list-item lines="2">
                   <mat-icon matListItemIcon>call_made</mat-icon>
                   <a matListItemTitle [routerLink]="['/wallet', accountId(), 'assisted', held.transactionId]">{{ t().common.anos(millionthsToAnos(held.amount)) }} {{ t().account.to }} <code>{{ held.accountIdTo }}</code></a>
-                  <span matListItemLine>{{ assistedStageWords(held.stage, t().assistedStages) }} · {{ lang.dateTime(held.createdAt) }}</span>
+                  <span matListItemLine>{{ assistedStageWords(held.stage, t().assistedStages, held.unlocksAt ? lang.dateTime(held.unlocksAt) : '') }} · {{ lang.dateTime(held.createdAt) }}</span>
                 </mat-list-item>
               </mat-list>
             } @else {

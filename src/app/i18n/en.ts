@@ -261,6 +261,7 @@ export const en = {
     waitingOutLock: (anos: string) => `${anos} waiting out a lock`,
     pending: (anos: string) => `${anos} pending`,
     retryFresh: (message: string) => `${message}. Retry starts over with fresh keys.`,
+    notOnLedgerYet: (seconds: number) => `The account is not on the ledger yet after ${seconds} seconds. It may still land: refresh in a moment.`,
   },
   accountHome: {
     intro: 'These are what a moderator would use to give your account back if you were ever locked out. The more you add, the easier it will be to recover your account.',
@@ -518,6 +519,7 @@ export const en = {
   assistedStages: {
     waiting: 'Waiting for the validators',
     attesting: 'Waiting for attestors',
+    locked: (until: string) => `Locked until ${until}`,
     writing: 'Attested, being written',
     cancelling: 'Being cancelled',
     open: 'Open',
@@ -772,6 +774,14 @@ export const en = {
     backInDone: "You're back in.",
     closeCaseText: "Close the case: the lost device's passkey and session no longer unlock anything.",
     completeRecovery: 'Complete my recovery',
+    stepMove: 'Move your money',
+    moveText:
+      "Your old accounts' keys are gone with the lost passkey. For each account that holds anos the wallet opens a new account of the same type and files a move signed by its break-glass key. Two attestors check you and sign; a guarded or vault account's move also waits out its lock.",
+    moveMoney: 'Move my money',
+    moveResult: (filed: number, empty: number, unmatched: number) =>
+      `${filed === 1 ? '1 move' : `${filed} moves`} filed, ${empty === 1 ? '1 account was' : `${empty} accounts were`} empty, ${unmatched === 1 ? '1 seed' : `${unmatched} seeds`} matched no account`,
+    moveNoSeeds: 'No break-glass seeds were recovered, so there is nothing to move.',
+    moveRefused: (account: string, reason: string) => `The validator refused the move out of ${account}: ${reason}`,
     yourEmail: 'your email',
     statusOpen: (email: string) => `Open: a moderator will contact you at ${email} and meet you on a video call`,
     statusInReview: 'In review: a moderator is checking your case',

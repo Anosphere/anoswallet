@@ -13,24 +13,20 @@ import { millionthsToAnos } from '../amounts';
 import { BalanceCardComponent } from '../components/balance-card.component';
 import { CopyButtonComponent } from '../components/copy-button.component';
 import { ACCOUNT_POLL_MS } from '../constants';
-import { AnosApiService } from '../services/anos-api.service';
+import { AccountCreationService, CreationStepState } from '../services/account-creation.service';
 import { AccountBalance, BalancesService } from '../services/balances.service';
-import { ACCOUNT_TYPES, AccountType, BrowserAccountKeys, CreateAccountTransaction, CryptoService } from '../services/crypto.service';
+import { ACCOUNT_TYPES, AccountType, CreateAccountTransaction } from '../services/crypto.service';
 import { LanguageService } from '../services/language.service';
 import { reasonOf } from '../services/log.service';
 import { MasterpodApiService } from '../services/masterpod-api.service';
 import { AnosAccountItem, SessionService } from '../services/session.service';
-import { DepositError, SharesService } from '../services/shares.service';
-import { SigningService } from '../services/signing.service';
+import { DepositError } from '../services/shares.service';
 import { shortId } from '../short-id';
 
 interface Step {
   label: string;
-  state: 'todo' | 'doing' | 'done' | 'failed';
+  state: 'todo' | CreationStepState;
 }
-
-/** A 400 from the validator that means the creation is already there, which counts as submitted. */
-const ALREADY_THERE = /already (exists|pending|in the garlic chain)/;
 
 /**
  * The wallet page (wallet spec 8.2, Wallet): the balance card on top
@@ -41,7 +37,10 @@ const ALREADY_THERE = /already (exists|pending|in the garlic chain)/;
  * ledger, what is available and held while something is held, its state
  * while it is not on the ledger, the id in short form with a copy button
  * (8.5) and Resubmit for a creation that never reached the validator; then
- * Open a new account, the six-step progress list. The balances are read
+ * Open a new account, the six-step progress list over
+ * account-creation.service (since 2026-11-08 the steps run there, so the
+ * recovery's finish opens accounts the same way; this page keeps the
+ * stepper through the service's step callback). The balances are read
  * when the page opens, by Refresh and every 5 seconds while an account is
  * not on the ledger yet or any anos are held or pending. A lost account
  * (its keyBlob does not open under the key blob key: the keys went with
@@ -162,10 +161,7 @@ export class WalletPage {
   protected readonly session = inject(SessionService);
   protected readonly balances = inject(BalancesService);
   private readonly masterpod = inject(MasterpodApiService);
-  private readonly anos = inject(AnosApiService);
-  private readonly crypto = inject(CryptoService);
-  private readonly shares = inject(SharesService);
-  private readonly signing = inject(SigningService);
+  private readonly creation = inject(AccountCreationService);
   protected readonly lang = inject(LanguageService);
   protected readonly t = this.lang.words;
 
@@ -236,14 +232,19 @@ export class WalletPage {
     this.steps.update((steps) => steps.map((step, i) => (i === index ? { ...step, state } : step)));
   }
 
-  /** The six steps of 8.2 Wallet. A failure before step 4 shows Retry (fresh keys); at 5 or 6 the row is unsubmitted and its card shows Resubmit. The key blob goes under the key blob key (2026-11-08), so both keys of the session are asked for first. */
+  /** The step callback for account-creation.service: the list follows the steps, and a failure before step 4 (the masterpod row) means Retry starts over with fresh keys. */
+  private readonly onStep = (step: number, state: CreationStepState): void => {
+    this.setStep(step, state);
+    if (state === 'failed' && step < 3) this.failedBeforeRegister.set(true);
+  };
+
+  /** The six steps of 8.2 Wallet and the wait for the ledger, in account-creation.service (2026-11-08). A failure before step 4 shows Retry (fresh keys); at 5 or 6 the row is unsubmitted and its card shows Resubmit. The key blob goes under the key blob key, so both keys of the session are asked for first. */
   protected async create(): Promise<void> {
-    const keyBlobKey = this.session.getKeyBlobKey();
     if (!this.session.getEncryptionKey()) {
       this.error.set(this.t().common.noKeyInRamSentence);
       return;
     }
-    if (!keyBlobKey) {
+    if (!this.session.getKeyBlobKey()) {
       this.error.set(this.t().common.noKeyBlobKey);
       return;
     }
@@ -251,83 +252,26 @@ export class WalletPage {
     this.error.set(null);
     this.failedBeforeRegister.set(false);
     this.steps.set(this.t().wallet.steps.map((label) => ({ label, state: 'todo' })));
-    let step = 0;
     try {
-      // 1. The keys and the creation signed by the six keys here.
-      this.setStep(0, 'doing');
-      const secrets = this.crypto.generateAccountSecrets();
-      const pairs = this.crypto.pairKeysFromSecrets(secrets);
-      const seed = this.crypto.newBreakGlassSeed();
-      const breakGlass = await this.crypto.breakGlassKeys(seed);
-      const keys: BrowserAccountKeys = { ...pairs, ...breakGlass };
-      const walletKeys = await this.signing.publicKeys();
-      const unsigned = this.crypto.buildCreateAccountTransaction(keys, walletKeys, this.accountType());
-      const keyBlob = this.crypto.toHex(await this.crypto.wrapKeyBlob(secrets, keyBlobKey));
-      this.setStep(0, 'done');
-
-      // 2. The break-glass seed to the keyholders, then wiped.
-      step = 1;
-      this.setStep(1, 'doing');
-      await this.shares.deposit(seed, 'breakglasskey');
-      seed.fill(0);
-      this.setStep(1, 'done');
-
-      // 3. The wallet signatures.
-      step = 2;
-      this.setStep(2, 'doing');
-      const creation = await this.signing.sign(unsigned);
-      this.setStep(2, 'done');
-
-      // 4. The masterpod row.
-      step = 3;
-      this.setStep(3, 'doing');
-      const registered = await this.masterpod.createAnosAccount({ accountId: creation.payload.accountId, accountType: this.accountType(), keyBlob, creation });
-      if (!registered.ok) throw new Error(`/create-anos-account: ${reasonOf(registered)}`);
-      this.setStep(3, 'done');
-      await this.load();
-
-      // 5. and 6. The validator, then the mark.
-      step = 4;
-      await this.submit(creation, 4);
+      await this.creation.createAccount(this.accountType(), this.onStep);
     } catch (err) {
-      this.setStep(step, 'failed');
-      if (step < 3) this.failedBeforeRegister.set(true);
       this.error.set(err instanceof DepositError ? this.t().wallet.retryFresh(err.message) : err instanceof Error ? err.message : String(err));
     } finally {
       this.busy.set(false);
     }
   }
 
-  /** Resubmit: the stored creation to the validator, then the mark. */
+  /** Resubmit: the stored creation to the validator, then the mark (steps 5 and 6, account-creation.service submitCreation). */
   protected async resubmit(account: AnosAccountItem): Promise<void> {
     this.busy.set(true);
     this.error.set(null);
     this.steps.set(this.t().wallet.steps.map((label, i) => ({ label, state: i < 4 ? 'done' : 'todo' })));
     try {
-      await this.submit(account.creation as unknown as CreateAccountTransaction, 4);
+      await this.creation.submitCreation(account.creation as unknown as CreateAccountTransaction, this.onStep);
     } catch (err) {
       this.error.set(err instanceof Error ? err.message : String(err));
     } finally {
       this.busy.set(false);
     }
-  }
-
-  private async submit(creation: CreateAccountTransaction, firstStep: number): Promise<void> {
-    this.setStep(firstStep, 'doing');
-    const res = await this.anos.createAccount(creation);
-    const alreadyThere = !res.ok && res.status === 400 && ALREADY_THERE.test(reasonOf(res));
-    if (!res.ok && !alreadyThere) {
-      this.setStep(firstStep, 'failed');
-      throw new Error(`/create-account: ${reasonOf(res)}`);
-    }
-    this.setStep(firstStep, 'done');
-    this.setStep(firstStep + 1, 'doing');
-    const marked = await this.masterpod.markAnosAccountSubmitted(creation.payload.accountId);
-    if (!marked.ok) {
-      this.setStep(firstStep + 1, 'failed');
-      throw new Error(`/mark-anos-account-submitted: ${reasonOf(marked)}`);
-    }
-    this.setStep(firstStep + 1, 'done');
-    await this.load();
   }
 }

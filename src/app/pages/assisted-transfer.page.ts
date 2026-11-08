@@ -69,7 +69,7 @@ interface Outcome {
             <div><span class="label">{{ t().common.amount }}</span><span class="value">{{ t().common.anos(millionthsToAnos(held.amount)) }}</span></div>
             <div><span class="label">{{ t().common.to }}</span><code class="value">{{ held.accountIdTo }}</code></div>
             <div><span class="label">{{ t().common.made }}</span><span class="value">{{ lang.dateTime(held.createdAt) }}</span></div>
-            <div><span class="label">{{ t().common.stage }}</span><span class="value">{{ assistedStageWords(held.stage, t().assistedStages) }}</span></div>
+            <div><span class="label">{{ t().common.stage }}</span><span class="value">{{ assistedStageWords(held.stage, t().assistedStages, held.unlocksAt ? lang.dateTime(held.unlocksAt) : '') }}</span></div>
             <div><span class="label">{{ t().assisted.attestations }}</span><span class="value">{{ t().assisted.ofTwo(held.attestations) }}</span></div>
             <div><span class="label">{{ t().common.transaction }}</span><code class="value">{{ held.transactionId }}</code></div>
           </div>

@@ -437,7 +437,8 @@ fifth, /get-locked-transfer, and the date range on /list-transactions on
     POST /get-assisted-transfer (account)
     body { }
     answer: 200 { transfer: { transactionId, accountId, accountIdTo, amount: string, createdAt,
-      stage: waiting | attesting | writing | cancelling, attestations: 0 | 1 | 2 } | null }
+      stage: waiting | attesting | locked | writing | cancelling, attestations: 0 | 1 | 2,
+      unlocksAt: ISO 8601 | null } | null }
     transfer: the assisted_transfers row whose account_id is the signer, or null when there is none. There is
       at most one: account_id is unique there, and the validator holds one transaction per account. The
       sender's only: the receiver can do nothing with the transfer and sees it in the history when it lands.
@@ -448,7 +449,11 @@ fifth, /get-locked-transfer, and the date range on /list-transactions on
       cancel on it; writing with both attestations approved, until the next round writes it (the sender may
       still cancel); attesting otherwise, accepted and waiting for two approved attestations. attestations
       counts the attestation slots holding one; the two reach the validator together, posted by the
-      deciding attestor's app, so it is nearly always 0 or 2.
+      deciding attestor's app, so it is nearly always 0 or 2. Since 2026-11-08 (anossoftware spec 22) the
+      row may be a breakGlassTransfer, the recovery finish's move out of a lost account (12.3): unlocksAt is
+      then the moment a move out of a guarded or vault account may be written (null for every other row),
+      and a fifth stage, locked, is both attestations approved with that moment ahead; the wallet reads it
+      "Locked until <date>" (assistedStages.locked).
 
     POST /get-locked-transfer (account)
     body { }
@@ -874,8 +879,10 @@ when the page opens, by the card's refresh button, by Refresh (which
 reloads the account list too) and every 5 seconds while an account is
 not on the ledger yet or any anos are held or pending; quiet in the log,
 as the polls are. Then "Open a new account": a type select (spending,
-guarded, vault, assisted) and Create anos account, which runs, as a
-progress list:
+guarded, vault, assisted) and Create anos account, which runs
+account-creation.service's createAccount (8.3; since 2026-11-08 the steps
+live there, so the recovery's finish opens accounts the same way, 12.3)
+and shows its steps as a progress list:
 1. pair one, pair two, the break-glass seed and its two keys; the
    wallet public keys from /api/sign/public-keys; accountId; the
    creation payload (the test wallet's buildCreateAccountTransaction,
@@ -887,12 +894,18 @@ progress list:
 5. /api/anos/1/create-account with the signed creation; a 202, or a 400
    saying the account or its transaction already exists, counts as
    submitted;
-6. /mark-anos-account-submitted.
-A failure before step 4 shows Retry, which starts over with fresh keys. A
-failure at step 5 or 6 leaves the row unsubmitted; its card shows
-Resubmit, which re-posts the stored creation (step 5) and marks it (step
-6). After step 4 and after step 6 the list is read again, so the new
-card shows "Waiting for the ledger…" and the 5-second poll picks it up.
+6. /mark-anos-account-submitted;
+then the service waits for the account to be on the ledger, /get-account
+with the new pair one every 5 seconds for up to 90 seconds, the page busy
+meanwhile. A failure before step 4 shows Retry, which starts over with
+fresh keys. A failure at step 5 or 6 leaves the row unsubmitted; its card
+shows Resubmit, which re-posts the stored creation (step 5) and marks it
+(step 6) through the service's submitCreation. After step 4 and after
+step 6 the service reads the list and the balances again, so the new card
+shows "Waiting for the ledger…" until the wait sees it land; past 90
+seconds the page says "The account is not on the ledger yet after 90
+seconds. It may still land: refresh in a moment." and the 5-second poll
+picks it up.
 
 Account. The account id in the title with a copy button (8.5). Then, in
 this order: balance, type, the latest transaction id, created; Refresh,
@@ -951,9 +964,12 @@ transfer is waiting." when there is none; the read's refusal in red when
 it fails (a validator or doorman without the route), the rest of the
 page unharmed. The stage words, from the validator's stage (anossoftware
 spec 17.2): waiting, "Waiting for the validators"; attesting, "Waiting
-for attestors"; writing, "Attested, being written"; cancelling, "Being
-cancelled"; a word the wallet does not know, "Open". The row opens the
-transfer page. On any other account type nothing is read and nothing
+for attestors"; locked, "Locked until <unlocksAt>" (2026-11-08: a
+break-glass move out of a guarded or vault account with both attestations
+in, waiting out its lock; the wallet knows the word for completeness,
+since a lost account's page reads nothing); writing, "Attested, being
+written"; cancelling, "Being cancelled"; a word the wallet does not know,
+"Open". The row opens the transfer page. On any other account type nothing is read and nothing
 shows.
 
 Locked transfer (2026-11-06, section 11), after Escrow trades, on a
@@ -1436,11 +1452,13 @@ excepted, with the keyholder and anos calls included.
                             listingId on createChatRoom, mine and status any on listListings, no hpkeKey on
                             createListing, the fuller RoomListing and the listing on an invite; the four noted
                             transaction routes and the two settings routes (2026-11-07); listMyBreakGlassMoves
-                            (2026-11-08), storeBreakGlassBlob gone
+                            and fileBreakGlassMoves (2026-11-08), storeBreakGlassBlob gone
     keyholder-api.service   the keyholder test app's, base path /api/keyholder/<n>
     anos-api.service        the anos test app's account-api.service.ts, base path /api/anos/<defaultValidator>,
                             plus the five signed reads (listEscrows added 2026-11-05, getAssistedTransfer and
-                            getLockedTransfer 2026-11-06; listTransactions takes from and to, 2026-11-06)
+                            getLockedTransfer 2026-11-06; listTransactions takes from and to, 2026-11-06);
+                            getAccountAs, the /get-account read with an envelope the caller signed, the
+                            break-glass pair's at the recovery's finish (2026-11-08)
     balances.service        what Home and the Wallet page share (2026-11-06): one entry per account (landed,
                             balance, what is pending, in escrow, assisted or locked, held, available, partial)
                             read by refresh from /get-account, /list-transactions, /list-escrows and the
@@ -1475,9 +1493,20 @@ excepted, with the keyholder and anos calls included.
     crypto.service          the keyholder test app's crypto.service.ts plus the anos test app's (keys, the
                             builders, signing), plus section 7 and the public ledger id; wrapJson and
                             unwrapJson (2026-11-07); deriveKekKeys, the key blob under it and KeyBlobLostError
-                            (2026-11-08)
+                            (2026-11-08); the break-glass transfer and the account envelope signed by the
+                            break-glass pair (buildBreakGlassTransferTransaction, signAccountEnvelopeAsBreakGlass,
+                            2026-11-08)
     passkey.service         the keyholder test app's, unchanged
     shares.service          the deposit rule of section 6, one function: deposit(secret, shareType)
+    account-creation.service
+                            opening an anos account (2026-11-08): createAccount(type, onStep) runs the six steps
+                            of 8.2 Wallet (the keys and the creation, the seed's deposit, the signing server,
+                            /create-anos-account, /create-account, /mark-anos-account-submitted), reads the list
+                            and the balances again after steps 4 and 6, then waits up to 90 seconds for
+                            /get-account to answer with the new pair one; resolves { accountId, pairOne };
+                            submitCreation runs steps 5 and 6 alone, for Resubmit; ALREADY_THERE, the validator's
+                            "already there" wording, the holding tables' included; used by the Wallet page and
+                            the recovery finish's Move your money (12.3)
     log.service             the activity log
 
 Keys are regenerated from blobs at each unlock; nothing secret touches
@@ -3752,6 +3781,123 @@ and the money moves to new accounts through the break-glass transfer
   passkey" after Get back in and the move line once step 5 files the
   moves.
 
+### The finish moves the money, step 5 (2026-11-08)
+
+Built from `forclaude/break-glass-plan-1.md` (FINAL), section 5, one
+commit, after step 4 above; step 6 (the attestor edition) follows, and
+the three are deployed together after the testnet reset. Why: since step
+4 a lost passkey kills the old accounts' keys, so the recovery's finish
+has to move the money itself: one new account per old account that holds
+anos and a `breakGlassTransfer` into it, signed by the recovered seed's
+break-glass pair, attested by two attestors. What the plan left open was
+decided as follows.
+
+- `crypto.service`: `TransferType` has `breakGlassTransfer`;
+  `TransferSignatures` allows the two break-glass keys;
+  `buildBreakGlassTransferTransaction(keys, accountId,
+  previousTransactionId, accountIdTo, amount, createdAt)` with the
+  private `signAsBreakGlass`, the break-glass pair's two signatures and
+  nothing else; `signAccountEnvelopeWith(signer, ...)`, private, behind
+  `signAccountEnvelope` (pair one) and
+  `signAccountEnvelopeAsBreakGlass(keys, ...)`.
+- `anos-api.service`: `getAccountAs(envelope, quiet)`, which `getAccount`
+  calls; `anosTransfer` unchanged. Beyond the plan's list: `AssistedStage`
+  gains `locked` and `HeldAssistedTransfer` gains `unlocksAt: string |
+  null`, what `/get-assisted-transfer` answers since the validator's step
+  1, so that `assistedStages.locked` has a date to show.
+- `account-creation.service` (new): `createAccount(accountType, onStep?)`
+  with the six steps of the Wallet page's `create()` as they were, step by
+  step, then the wait; `onStep(step, state)` reports `doing`, `done` and
+  `failed` per step index (0 to 5), so the Wallet page's list and its
+  `failedBeforeRegister` (a failure before step 4) follow it. The plan
+  said `submit` moves into `createAccount` and `resubmit` stays on the
+  page: `submit` became the public `submitCreation(creation, onStep?)`
+  (steps 5 and 6), which `createAccount` and the page's `resubmit` both
+  call, so the code exists once. The page's `load()` after steps 4 and 6
+  became the service's `reload()`: the session's account list, quiet,
+  then `balances.refresh(true)`, so a caller with no page (the finish)
+  still leaves the session and the balances current. The wait:
+  `/get-account` with the new pair one, quiet, every `ACCOUNT_POLL_MS` (5
+  seconds) for up to `LANDING_WAIT_MS` (90 seconds); any refusal means
+  not yet (an unknown account while the creation has not landed, or a
+  blip), and past the limit `wallet.notOnLedgerYet` ("The account is not
+  on the ledger yet after 90 seconds. It may still land: refresh in a
+  moment."), a sentence added beyond the plan's list because the wait
+  can end that way. The Wallet page now stays busy through the wait,
+  which it did not before (the card showed "Waiting for the ledger…" and
+  the poll picked it up; it still does). At the finish a timeout fails
+  the step after the new account was made, and Retry makes another one
+  of that type: the plan names no reuse of an empty new account, so the
+  one that landed late stays, empty. The key blob key is checked by the
+  service (`common.noKeyBlobKey`); the page keeps its two guards.
+- `recover-case.page`: the step "Move your money" after New backup code
+  and before Done, as the plan's 5.4 says (its 5.5 calls it "step 3" of
+  the finish list, the removed step's place; 5.4's order is the one
+  built, and 12.3 numbers it 4 and Done 5). `moveMoney` as 12.3 now says,
+  with these choices: every `/get-account` read happens before any
+  account is created or any move posted, so a refused read stops the run
+  before a side effect; `accountOfBreakGlassKeys` is back as it was,
+  typed over `AnosAccountItem`; an account's type goes to `createAccount`
+  as the masterpod lists it (its CHECK constrains it to the four); the
+  minutes ahead come from `config.load()` as the account page computes
+  them, and when the proxy sent no lock numbers the step fails with
+  `account.lockNotLoaded`; a read answering no latest transaction id
+  fails with `common.noLatest` (an account with a balance always has
+  one); the moves of a run go to `/file-break-glass-moves` in one call
+  (the masterpod takes 20 per call; a pod with more lost accounts than
+  that is not handled); the result keeps the seed count, and with no
+  recovered seed at all the step completes with `recoverCase.moveNoSeeds`
+  ("No break-glass seeds were recovered, so there is nothing to move.")
+  rather than refusing, since the stepper is linear and Done comes after;
+  the `moveRefused(account, reason)` line names the account by its short
+  id. `recovery.setCombined([], [])` after the wipe also drops the backup
+  code candidates and clears `hasCombined`, which nothing reads by then
+  (the rotation is done).
+- A gap the plan leaves, recorded for a later plan: a move posted to the
+  validator whose filing never reached the masterpod (a later account's
+  creation or move failed in the same run, or `/file-break-glass-moves`
+  was refused) is counted as filed on Retry through the validator's
+  "already held" refusal, as the plan says, but the masterpod has no row
+  for it, so the attestor edition never lists it and the anos stay held
+  until a cancel; that Retry also opens another new account of the type
+  first. Reading the held row with `/get-assisted-transfer` signed by the
+  break-glass pair and filing it would close the gap; the plan did not ask
+  for it, so it is not built.
+- `ALREADY_THERE` moved to `account-creation.service`, exported, and
+  reads `/already (exists|pending|locked|held in (assisted|escrow)_transfers|open|in the garlic chain)/`:
+  the creation's three wordings and the `account_id` conflict reasons of
+  the validator's five holding tables (pending, locked_transactions,
+  assisted_transfers, escrow_transfers and fund_proposals' "a fund
+  proposal is already open"). The creation check keeps its `400` test;
+  the move checks the wording alone.
+- `masterpod-api.service`: `fileBreakGlassMoves(caseId, moves)` with
+  `BreakGlassMoveToFile` (the three ids of a move), answering `{ caseId,
+  status, moves }`.
+- `assisted-stage.ts`: `assistedStageWords(stage, words, unlocksAt = '')`
+  reads `locked` as `assistedStages.locked(unlocksAt)`; the account page
+  and the assisted transfer page pass `lang.dateTime(held.unlocksAt)`
+  when the read answered one. The transfer page's `explain` keeps its
+  default sentence for `locked` (held, nothing offered): the wallet's own
+  held reads never meet the stage, since a lost account's page reads
+  nothing with pair one and the new account is the receiver. Spec 5.4 and
+  the Account paragraph of 8.2 name the stage and `unlocksAt`.
+- Words: `recoverCase.stepMove`, `moveText` (the plan's English),
+  `moveMoney` ("Move my money"), `moveResult(filed, empty, unmatched)`
+  ("2 moves filed, 1 account was empty, 0 seeds matched no account", with
+  the plurals), `moveNoSeeds`, `moveRefused(account, reason)`;
+  `assistedStages.locked(until)` ("Locked until <date>");
+  `wallet.notOnLedgerYet(seconds)`; in both languages, the Thai by the
+  glossary and to be checked by a Thai reader.
+- Spec: 5.4, 8.2 (Wallet, Account), 8.3, 12.3, 12.4, 12.6 and this note;
+  README unchanged.
+- `npx ng build` clean (1.96 MB initial, no warnings). Not run in a
+  browser here: the user resets the testnet, deploys the three wallet
+  steps together and runs a recovery through, expecting after New backup
+  code a Move your money step that opens one new account per old account
+  with anos and files the moves, the old cards reading "Moving the money:
+  waiting for 2 attestors" after it, and step 6's attestor edition to
+  sign them.
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`
@@ -3860,22 +4006,48 @@ a second stepper on the same page:
    `/rotate-backup-code`; then the deposit as `backupcode` through
    `SharesService.deposit`, a new `keyId`. "Your old backup code is now
    worthless."
-4. Done: `/complete-recovery-case`; "You're back in." Continue to
+4. Move your money (2026-11-08, `forclaude/break-glass-plan-1.md` step 5,
+   section 11; in place of the "Break-glass keys" step that stood third
+   from 2026-10-26, which matched each recovered seed to its account and
+   stored it there with `/store-break-glass-blob`, and left with step 4 of
+   that plan): "Your old accounts' keys are gone with the lost passkey.
+   For each account that holds anos the wallet opens a new account of the
+   same type and files a move signed by its break-glass key. Two attestors
+   check you and sign; a guarded or vault account's move also waits out
+   its lock." The button Move my money runs: (1) `/list-anos-accounts`
+   into the session; each recovered seed's two break-glass public keys
+   find the account whose `creation.payload.publicKeys` names them, and a
+   seed that matches none is unmatched; (2) an account whose move
+   `/list-my-break-glass-moves` already lists is filed and skipped; every
+   other matched account is read with `/get-account` signed by its
+   break-glass pair (the validators accept it since the user keys are
+   gone, anossoftware 22), a balance of 0 is empty and skipped, every
+   read before any write; (3) for each account left, a new account of the
+   same type through `account-creation.service` (8.3), waited for on the
+   ledger; (4) the `breakGlassTransfer` of the whole balance into it,
+   chained on the latest transaction id read, dated now plus the type's
+   minutes ahead (guarded and vault the lock plus the offset by the
+   proxy's numbers, else 0), signed by the break-glass pair alone and
+   posted to `/anos-transfer`, no signing server; a refusal saying the
+   account already has a held transaction counts as filed; (5)
+   `/file-break-glass-moves` with the case id and this run's moves, a
+   `409 move already filed` counting as filed; (6) the seeds wiped and
+   dropped from `RecoveryService`. The result: "2 moves filed, 1 account
+   was empty, 0 seeds matched no account", or "No break-glass seeds were
+   recovered, so there is nothing to move." The step is complete when the
+   run ended without an error, even with nothing to move; Retry runs it
+   again and skips what is filed. This is the one place in the wallet
+   that uses a break-glass key: no card, account page or Account entry
+   offers one. The old accounts' key blobs do not open under the new
+   passkey's key blob key (section 7), so the wallet shows them as lost,
+   with the move's progress (8.2).
+5. Done: `/complete-recovery-case`; "You're back in." Continue to
    `/wallet`.
 
-The "Break-glass keys" step that stood third until 2026-11-08 (each
-recovered seed matched to its account by the two derived public keys and
-stored there with `/store-break-glass-blob` under the encryption key) left
-with step 4 of `forclaude/break-glass-plan-1.md` (section 11): the
-recovered seeds stay in RAM unused until step 5 of that plan puts "Move
-your money" in its place, where each seed signs the move of its account's
-whole balance to a new account of the same type. The old accounts' key
-blobs do not open under the new passkey's key blob key (section 7), so
-the wallet shows them as lost (8.2).
-
 Each step keeps its result in RAM and can be retried; a refresh of the
-page loses the combined code, and the person starts the finish again from
-Combine after unlocking the recovery pod.
+page loses the combined code and the seeds, and the person starts the
+finish again from Combine after unlocking the recovery pod (Move your
+money then skips the moves already filed).
 
 **Moderation** (`/moderation`). The cases from `/list-recovery-cases`, a
 status filter (the four open statuses by default, plus completed and
@@ -3920,14 +4092,23 @@ button and every 15 s
                             answer, the combined backup code and seeds while the finish runs; sign(path, body)
                             builds the recovery envelope (caseId as the signer); everything in RAM
     masterpod-api.service   one method per new route (masterpod 12.4); challenge() takes the three new purposes,
-                            openCase with the username; listAnosAccounts items carry breakGlassBlob
+                            openCase with the username; listAnosAccounts items carry breakGlassBlob;
+                            listMyBreakGlassMoves and fileBreakGlassMoves (masterpod 14.4.1, 2026-11-08)
+    anos-api.service        getAccountAs(envelope, quiet) (2026-11-08): /get-account with an envelope the caller
+                            signed, the break-glass pair's at the finish; getAccount calls it
+    account-creation.service
+                            the new accounts of Move your money, opened as the Wallet page opens one (8.3;
+                            2026-11-08)
     keyholder-api.service   getSecurityBucketOneKey(n, envelope), getSecurityBucketTwoKey(n, envelope): the
                             keyholder's moderator routes, the account envelope as the body
     crypto.service          generateHybridKeys(), wrapHybridPrivateKey / unwrapHybridPrivateKey (124-byte blob),
                             decryptFromHybrid (the mirror of encryptToHybrid: X25519 and ML-KEM-1024 decapsulation,
                             the same HKDF and aad), combineShares (shamir-secret-sharing combine), signSignOff
                             (pair one over the canonical sign-off), backupCodeProof (the backup code keys over a
-                            canonical payload); everything else reused as it is
+                            canonical payload); buildBreakGlassTransferTransaction and
+                            signAccountEnvelopeAsBreakGlass (2026-11-08): the break-glass move and the account
+                            envelope signed by the break-glass pair, signAccountEnvelopeWith behind both envelopes;
+                            everything else reused as it is
     config.service          edition in WalletConfig
     identity form           the nine-field form of the identity page becomes a component both the identity page
                             and the locked-out stepper use; the identity page's behaviour does not change
@@ -3952,7 +4133,12 @@ paragraph).
 ### 12.6 Out of scope, not built
 
 - Email or any message to the person; the app is the channel.
-- Moving anos with the recovered break-glass keys.
+- A cancel of a break-glass move by either key (`breakGlassCancel` by the
+  break-glass pair, `assistedTransferCancel` by the owner's own keys, both
+  accepted by the validators since 2026-11-08) and the owner's dispute
+  path (a cached key blob, a "Dispute a recovery" button, a warning): a
+  later plan. Moving anos with the recovered break-glass keys was built
+  2026-11-08 (12.3, Move your money; section 11).
 - A moderator's history, several moderators on a call, a reject rule.
 - Any change to the bankers' GUI; it takes the packet as it is.
 

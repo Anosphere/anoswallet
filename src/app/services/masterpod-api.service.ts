@@ -97,6 +97,9 @@ export interface BreakGlassMove {
   createdAt: string;
 }
 
+/** One move as the recovery's finish files it (masterpod 14.4.1, /file-break-glass-moves): the old account, the new account of the same type, the breakGlassTransfer's id. */
+export type BreakGlassMoveToFile = Pick<BreakGlassMove, 'accountId' | 'accountIdTo' | 'transactionId'>;
+
 /** One event of the person's subset on a break-glass case (masterpod 14.4.1): scheduled (at, meetLink), decided ({}), sent ({}) or dismissed (reason only). */
 export interface BreakGlassEvent {
   kind: 'scheduled' | 'decided' | 'sent' | 'dismissed' | string;
@@ -840,6 +843,11 @@ export class MasterpodApiService {
   /** The caller's break-glass cases, newest first, each with its moves and the events the person may see (masterpod 14.4.1): what a lost account's card reads. /store-break-glass-blob is no longer called (2026-11-08). */
   listMyBreakGlassMoves(quiet = false): Promise<ApiResponse<{ cases: BreakGlassCaseItem[] }>> {
     return this.signed('/list-my-break-glass-moves', {}, quiet);
+  }
+
+  /** The moves of one run of the recovery finish's Move your money step (masterpod 14.4.1): the recovery case's id and 1 to 20 moves; 201 { caseId, status, moves } with the count now on the case, 409 move already filed when a transaction id was filed before, 409 case not ready while the recovery case is neither delivering nor completed. A second call for the same case adds moves. */
+  fileBreakGlassMoves(caseId: string, moves: BreakGlassMoveToFile[]): Promise<ApiResponse<{ caseId: string; status: AttestorCaseStatus; moves: number }>> {
+    return this.signed('/file-break-glass-moves', { caseId, moves });
   }
 
   // --- level moderator (masterpod 12.4.4) ------------------------------------

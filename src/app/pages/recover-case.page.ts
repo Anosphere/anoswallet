@@ -6,15 +6,18 @@ import { MatListModule } from '@angular/material/list';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatStepper, MatStepperModule } from '@angular/material/stepper';
 import { Router, RouterLink } from '@angular/router';
-import { ConfigService } from '../services/config.service';
-import { BackupCodeKeys, CryptoService } from '../services/crypto.service';
+import { ALREADY_THERE, AccountCreationService } from '../services/account-creation.service';
+import { AnosApiService } from '../services/anos-api.service';
+import { ConfigService, WalletConfig } from '../services/config.service';
+import { AccountType, BackupCodeKeys, BreakGlassKeys, CryptoService } from '../services/crypto.service';
 import { LanguageService } from '../services/language.service';
 import { ApiError, reasonOf } from '../services/log.service';
-import { MasterpodApiService, RotationMessage } from '../services/masterpod-api.service';
+import { BreakGlassMoveToFile, MasterpodApiService, RotationMessage } from '../services/masterpod-api.service';
 import { Bytes, PasskeyService } from '../services/passkey.service';
 import { RECOVERY_POLL_MS, RecoveryEvent, RecoveryPodAnswer, RecoveryService } from '../services/recovery.service';
-import { SessionService } from '../services/session.service';
+import { AnosAccountItem, SessionService } from '../services/session.service';
 import { DepositError, SharesService } from '../services/shares.service';
+import { shortId } from '../short-id';
 import { unlockWithPasskey } from '../unlock';
 
 /** One line of the timeline. */
@@ -33,6 +36,20 @@ interface Combined {
   skipped: number;
 }
 
+/** What Move your money did: the moves filed (this run's and the ones found filed already), the accounts with no anos, the seeds that matched no account, and how many seeds there were (none: nothing to move). */
+interface Moved {
+  filed: number;
+  empty: number;
+  unmatched: number;
+  seeds: number;
+}
+
+/** A seed matched to its account: the two break-glass keys it derives and the account whose creation names them. */
+interface MatchedAccount {
+  keys: BreakGlassKeys;
+  account: AnosAccountItem;
+}
+
 /** The final statuses: the poll stops there. */
 const FINAL_STATUSES = ['completed', 'dismissed'];
 
@@ -44,12 +61,18 @@ const FINISH_STATUSES = ['approved', 'delivering'];
  * status in words, the timeline from the events the person may see, a
  * Refresh button, and a 15-second poll of /get-recovery-pod while the page
  * is open. When three shares of one backup code keyId are in, the finish
- * appears as a second stepper (Combine, Get back in, New backup code, Done),
- * each step retryable, the ordinary unlock reused from unlock.ts and the
- * deposit from SharesService; the combined code and seeds live in
- * RecoveryService while it runs and die with the tab. The Break-glass keys
- * step left on 2026-11-08 (break-glass plan 1, step 4): the recovered seeds
- * stay in RecoveryService unused until step 5 puts "Move your money" here.
+ * appears as a second stepper (Combine, Get back in, New backup code, Move
+ * your money, Done), each step retryable, the ordinary unlock reused from
+ * unlock.ts and the deposit from SharesService; the combined code and seeds
+ * live in RecoveryService while it runs and die with the tab. Move your
+ * money (2026-11-08, break-glass plan 1, step 5, in place of the Break-glass
+ * keys step that stored the seeds): the old accounts' keys died with the
+ * lost passkey, so for each account that holds anos a new account of the
+ * same type is opened (account-creation.service) and a breakGlassTransfer
+ * of the whole balance into it is signed by the recovered seed's
+ * break-glass pair, posted to the validator and filed on the masterpod for
+ * the attestors; then the seeds are wiped. The one place in the wallet
+ * that uses a break-glass key.
  */
 @Component({
   selector: 'app-recover-case-page',
@@ -133,6 +156,14 @@ const FINISH_STATUSES = ['approved', 'delivering'];
               }
             </mat-step>
 
+            <mat-step [completed]="moved() !== null" [editable]="false" [label]="t().recoverCase.stepMove">
+              <p>{{ t().recoverCase.moveText }}</p>
+              @if (moved(); as m) {
+                <p class="result">{{ movedText(m) }}</p>
+              }
+              <button mat-flat-button type="button" (click)="moveMoney(finish)" [disabled]="finishBusy()">{{ t().recoverCase.moveMoney }}</button>
+            </mat-step>
+
             <mat-step [completed]="completed()" [label]="t().common.done">
               @if (completed()) {
                 <p class="result">{{ t().recoverCase.backInDone }}</p>
@@ -165,6 +196,8 @@ const FINISH_STATUSES = ['approved', 'delivering'];
 export class RecoverCasePage {
   protected readonly recovery = inject(RecoveryService);
   private readonly api = inject(MasterpodApiService);
+  private readonly anos = inject(AnosApiService);
+  private readonly creation = inject(AccountCreationService);
   private readonly config = inject(ConfigService);
   private readonly crypto = inject(CryptoService);
   private readonly passkey = inject(PasskeyService);
@@ -190,6 +223,7 @@ export class RecoverCasePage {
   /** The rotation landed on the masterpod; only the deposit is left (a retry deposits the same new code again). */
   protected readonly rotated = signal(false);
   protected readonly deposited = signal(false);
+  protected readonly moved = signal<Moved | null>(null);
   protected readonly completed = signal(false);
 
   // The finish's secrets, in plain fields, dropped as each step is done with them.
@@ -476,7 +510,133 @@ export class RecoverCasePage {
     }, stepper);
   }
 
-  /** Step 4, Done: /complete-recovery-case with the recovery envelope; a case already completed counts as done. */
+  /**
+   * Step 4, Move your money (wallet spec 12.3; break-glass plan 1, 5.4):
+   * 1. /list-anos-accounts into the session; each recovered seed's two
+   *    break-glass public keys find the account whose creation names them;
+   *    a seed that matches none is unmatched.
+   * 2. The moves /list-my-break-glass-moves already lists count as filed;
+   *    every other matched account is read with /get-account signed by its
+   *    break-glass pair (the validator accepts it since the user keys are
+   *    gone); a balance of 0 is empty. Every read is made before anything
+   *    is written.
+   * 3. A new account of the same type through account-creation.service,
+   *    waited for on the ledger.
+   * 4. The breakGlassTransfer of the whole balance into it, chained on the
+   *    latest transaction id read, dated the type's lock plus the offset
+   *    ahead (guarded, vault) or now, signed by the break-glass pair alone,
+   *    to /anos-transfer; a refusal saying the account already has a held
+   *    transaction counts as filed.
+   * 5. /file-break-glass-moves with the case id and this run's moves; 409
+   *    move already filed counts as filed.
+   * 6. The seeds wiped and dropped from RecoveryService; the result line.
+   * The step is complete when the run ended without an error, even with
+   * nothing to move; Retry runs it again and skips what is filed. A page
+   * refresh loses the seeds: Combine again.
+   */
+  protected async moveMoney(stepper: MatStepper): Promise<void> {
+    await this.runStep(async () => {
+      const words = this.t().recoverCase;
+      const caseId = this.recovery.caseId();
+      if (!caseId) throw new Error(words.podNotOpen);
+      if (!this.session.anopodId()) throw new Error(words.noSessionInTab);
+
+      // 1. The accounts and the seeds.
+      const listed = await this.api.listAnosAccounts();
+      if (!listed.ok) throw new Error(`/list-anos-accounts: ${reasonOf(listed)}`);
+      this.session.accounts.set(listed.body.accounts);
+      const seeds = this.recovery.getBreakGlassSeeds();
+      const matched: MatchedAccount[] = [];
+      let unmatched = 0;
+      for (const seed of seeds) {
+        const keys = await this.crypto.breakGlassKeys(seed);
+        const account = this.accountOfBreakGlassKeys(listed.body.accounts, this.crypto.toHex(keys.breakGlassKey.publicKey), this.crypto.toHex(keys.breakGlassPostQuantumKey.publicKey));
+        if (account) matched.push({ keys, account });
+        else unmatched += 1;
+      }
+
+      // 2. What is filed already, then each account's balance with its break-glass pair.
+      const cases = await this.api.listMyBreakGlassMoves();
+      if (!cases.ok) throw new Error(`/list-my-break-glass-moves: ${reasonOf(cases)}`);
+      const filedBefore = new Set(cases.body.cases.flatMap((c) => c.moves.map((m) => m.accountId)));
+      const config = await this.config.load();
+      let filed = 0;
+      let empty = 0;
+      const toMove: { keys: BreakGlassKeys; account: AnosAccountItem; balance: bigint; previous: string; ahead: number }[] = [];
+      for (const { keys, account } of matched) {
+        if (filedBefore.has(account.accountId)) {
+          filed += 1;
+          continue;
+        }
+        const read = await this.anos.getAccountAs(this.crypto.signAccountEnvelopeAsBreakGlass(keys, account.accountId, '/get-account', {}));
+        if (!read.ok) throw new Error(`/get-account: ${reasonOf(read)}`);
+        const balance = BigInt(read.body.balance);
+        if (balance === 0n) {
+          empty += 1;
+          continue;
+        }
+        if (!read.body.latestTransactionId) throw new Error(this.t().common.noLatest);
+        const ahead = this.minutesAhead(account.accountType, config);
+        if (ahead === null) throw new Error(this.t().account.lockNotLoaded);
+        toMove.push({ keys, account, balance, previous: read.body.latestTransactionId, ahead });
+      }
+
+      // 3. and 4. A new account of the same type, then the move into it.
+      const moves: BreakGlassMoveToFile[] = [];
+      for (const { keys, account, balance, previous, ahead } of toMove) {
+        const created = await this.creation.createAccount(account.accountType as AccountType);
+        const createdAt = new Date(Date.now() + ahead * 60_000);
+        const tx = this.crypto.buildBreakGlassTransferTransaction(keys, account.accountId, previous, created.accountId, balance, createdAt);
+        const res = await this.anos.anosTransfer(tx);
+        if (!res.ok) {
+          if (ALREADY_THERE.test(reasonOf(res))) {
+            filed += 1;
+            continue;
+          }
+          throw new Error(words.moveRefused(shortId(account.accountId), reasonOf(res)));
+        }
+        moves.push({ accountId: account.accountId, accountIdTo: created.accountId, transactionId: tx.payload.transactionId });
+      }
+
+      // 5. This run's moves to the masterpod, for the attestors.
+      if (moves.length > 0) {
+        const res = await this.api.fileBreakGlassMoves(caseId, moves);
+        if (!res.ok && !(res.status === 409 && /move already filed/.test(reasonOf(res)))) throw new Error(`/file-break-glass-moves: ${reasonOf(res)}`);
+        filed += moves.length;
+      }
+
+      // 6. The seeds wiped.
+      for (const seed of seeds) seed.fill(0);
+      this.recovery.setCombined([], []);
+      this.moved.set({ filed, empty, unmatched, seeds: seeds.length });
+    }, stepper);
+  }
+
+  /** The account whose creation.payload.publicKeys names these two break-glass keys (hex), or undefined. */
+  private accountOfBreakGlassKeys(accounts: AnosAccountItem[], p256Hex: string, mldsaHex: string): AnosAccountItem | undefined {
+    return accounts.find((account) => {
+      const keys = account.creation.payload['publicKeys'];
+      if (typeof keys !== 'object' || keys === null) return false;
+      const named = keys as Record<string, unknown>;
+      return named['breakGlassKey'] === p256Hex && named['breakGlassPostQuantumKey'] === mldsaHex;
+    });
+  }
+
+  /** How many minutes ahead a move out of an account of this type is dated, as the account page dates the account's own transfers: 0 from a spending or assisted account; the lock plus the offset from a guarded or vault one, by the proxy's numbers; null when the proxy sent none. */
+  private minutesAhead(type: string, config: WalletConfig): number | null {
+    if (type !== 'guarded' && type !== 'vault') return 0;
+    const lock = type === 'guarded' ? config.guardedLockMinutes : config.vaultLockMinutes;
+    const offset = config.lockOffsetMinutes;
+    return typeof lock === 'number' && typeof offset === 'number' ? lock + offset : null;
+  }
+
+  /** The result line of Move your money: the counts, or that there were no seeds to move with. */
+  protected movedText(m: Moved): string {
+    const words = this.t().recoverCase;
+    return m.seeds === 0 ? words.moveNoSeeds : words.moveResult(m.filed, m.empty, m.unmatched);
+  }
+
+  /** Step 5, Done: /complete-recovery-case with the recovery envelope; a case already completed counts as done. */
   protected async complete(): Promise<void> {
     await this.runStep(async () => {
       const envelope = this.recovery.sign('/complete-recovery-case', {});
