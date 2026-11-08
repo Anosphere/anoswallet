@@ -11,6 +11,7 @@ import { millionthsToAnos } from '../amounts';
 import { CASES_POLL_MS } from '../constants';
 import { AssistedTransferItem, DisputedEscrowItem } from '../services/anos-api.service';
 import { AttestingService, attestingError } from '../services/attesting.service';
+import { BalancesService } from '../services/balances.service';
 import { CryptoService } from '../services/crypto.service';
 import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
@@ -110,12 +111,12 @@ function groupByTransaction<T extends { transactionId: string }>(items: T[]): Ma
           <mat-form-field appearance="outline" class="wide">
             <mat-label>{{ t().common.anosAccount }}</mat-label>
             <mat-select [value]="attesting.accountId()" (valueChange)="pickAccount($event)">
-              @for (account of session.accounts(); track account.accountId) {
+              @for (account of balances.usableAccounts(); track account.accountId) {
                 <mat-option [value]="account.accountId">{{ t().wallet.typeOption(account.accountType) }} · {{ account.accountId }}</mat-option>
               }
             </mat-select>
           </mat-form-field>
-          @if (session.accounts().length === 0) {
+          @if (balances.usableAccounts().length === 0) {
             <span class="muted">{{ t().attesting.noAccount }}</span>
           }
         </div>
@@ -238,6 +239,8 @@ function groupByTransaction<T extends { transactionId: string }>(items: T[]): Ma
 })
 export class AttestingPage {
   protected readonly session = inject(SessionService);
+  /** The picker lists the usable accounts only: a lost account, whose keyBlob does not open, is left out (wallet spec 8.2, 2026-11-08). */
+  protected readonly balances = inject(BalancesService);
   protected readonly attesting = inject(AttestingService);
   private readonly masterpod = inject(MasterpodApiService);
   private readonly crypto = inject(CryptoService);

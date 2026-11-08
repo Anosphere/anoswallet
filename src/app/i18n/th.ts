@@ -234,6 +234,17 @@ export const th: Words = {
     partial: 'การอ่านบางรายการของบัญชีนี้ล้มเหลว ยอดที่ถูกกันไว้อาจไม่ครบ',
     notSubmitted: 'ยังไม่ได้ส่งไปยังผู้ตรวจสอบ',
     waitingForLedger: 'กำลังรอบัญชีแยกประเภท…',
+    lost: 'สูญหายไปพร้อมพาสคีย์เก่า',
+    moveState: (stage: string, signOffs: number, newAccount: string) =>
+      stage === 'moved'
+        ? `ย้ายไปยัง ${newAccount} แล้ว`
+        : stage === 'dismissed'
+          ? 'ผู้ยืนยันยกคำร้องการย้ายเงินแล้ว'
+          : stage === 'writing'
+            ? 'กำลังย้ายเงิน: กำลังเขียน'
+            : stage === 'signed'
+              ? `กำลังย้ายเงิน: ผู้ยืนยันลงนามแล้ว ${signOffs} จาก 2 คน`
+              : 'กำลังย้ายเงิน: กำลังรอผู้ยืนยัน 2 คน',
     noAccounts: 'ยังไม่มีบัญชี anos เปิดบัญชีด้านล่าง',
     resubmit: 'ส่งอีกครั้ง',
     openTitle: 'เปิดบัญชีใหม่',
@@ -366,6 +377,8 @@ export const th: Words = {
     no: 'ไม่',
     addPayout: 'เพิ่มการจ่ายออก',
     notLanded: 'ยังไม่อยู่บนบัญชีแยกประเภท: รายการสร้างบัญชียังมาไม่ถึง',
+    lostTitle: 'สูญหายไปพร้อมพาสคีย์เก่า',
+    lostText: 'กุญแจของบัญชีนี้สูญหายไปพร้อมพาสคีย์เก่า เงินของบัญชีนี้จะย้ายไปยังบัญชีใหม่ผ่านการกู้คืน',
     clipboardRefused: 'เบราว์เซอร์ไม่อนุญาตให้อ่านคลิปบอร์ด วางลงในช่องตามปกติ',
     clipboardNoId: 'ไม่มีสิ่งใดในคลิปบอร์ดที่ดูเหมือนรหัสบัญชี',
     accepted: (id: string) => `รับแล้ว: ${id}`,
@@ -531,12 +544,15 @@ export const th: Words = {
     receivedFromFund: 'รับจากกองทุน',
     fundPayoutTo: (id: string) => `กองทุนจ่ายออกไปยัง ${id}`,
     fundPayout: 'กองทุนจ่ายออก',
+    recoveredFromOld: 'กู้คืนจากบัญชีเก่า',
+    movedToNew: 'ย้ายไปยังบัญชีใหม่',
     kinds: {
       accountCreation: 'การสร้างบัญชี',
       escrowTransfer: 'การโอนแบบเอสโครว์',
       stake: 'หลักประกัน',
       fundProposal: 'ข้อเสนอกองทุน',
       fundPayout: 'การจ่ายออกจากกองทุน',
+      breakGlassTransfer: 'การย้ายเงินฉุกเฉิน',
     },
     transferKinds: {
       anosTransfer: 'การโอนธรรมดา',
@@ -744,9 +760,6 @@ export const th: Words = {
     getBackIn: 'กลับเข้ามา',
     backInText:
       'รหัสสำรองของคุณเปิดกุญแจเข้ารหัสของคุณและพิสูจน์ตัวเองต่อ masterpod ซึ่งทำให้พาสคีย์ของเคสนี้กลายเป็นพาสคีย์ของ anoPod ของคุณ จากนั้นคุณปลดล็อกตามปกติ ที่นี่ ด้วยพาสคีย์นั้น: เลือกพาสคีย์นั้นเมื่อถูกถาม',
-    stepBreakGlass: 'กุญแจฉุกเฉิน',
-    breakGlassText: 'seed ฉุกเฉินที่กู้คืนได้แต่ละตัวจะถูกจับคู่กับบัญชี anos ของมันและเก็บไว้ที่นั่นภายใต้กุญแจเข้ารหัสของคุณ',
-    storeBreakGlass: 'เก็บกุญแจฉุกเฉิน',
     stepNewCode: 'รหัสสำรองใหม่',
     newCodeText: 'รหัสสำรองเก่าของคุณผ่านมือนายธนาคารมาแล้ว: สร้างรหัสใหม่ รหัสใหม่จะแทนที่รหัสเก่าบน masterpod และถูกฝากไว้กับผู้ถือกุญแจ',
     newCodeTitle: 'รหัสสำรองใหม่ของคุณ',
@@ -784,9 +797,6 @@ export const th: Words = {
     codesRecovered: (n: number) => (n === 1 ? 'กู้คืนรหัสสำรองได้แล้ว' : `กู้คืนรหัสสำรองที่เป็นไปได้ ${n} รหัส (จะลองรหัสใหม่สุดก่อน)`),
     seedsRecovered: (n: number) => `กู้คืน seed ฉุกเฉินได้ ${n} ตัว`,
     sharesSkipped: (n: number) => `ส่วนแบ่ง ${n} ส่วนเปิดด้วยกุญแจของเคสนี้ไม่ได้`,
-    noSeedStored: 'ไม่มี seed ฉุกเฉินถูกเก็บ',
-    storedOn: (ids: string) => `เก็บไว้ที่ ${ids}`,
-    seedsUnmatched: (n: number) => `seed ${n} ตัวไม่ตรงกับบัญชีใดของคุณ`,
     eventOpened: 'เปิดเคสแล้ว',
     eventApproved: 'ผู้ดูแลสองคนอนุมัติแล้ว',
     eventRecovered: 'พาสคีย์ของคุณถูกกู้คืนแล้ว: คุณกลับเข้ามาแล้ว',
@@ -1150,6 +1160,7 @@ export const th: Words = {
     dismissed: (reason: string) => `ถูกยกคำร้อง: ${reason}`,
     yourAccount: 'บัญชีของคุณ',
     noKeyInRamSentence: 'กุญแจเข้ารหัสไม่อยู่ใน RAM: ปลดล็อกอีกครั้ง',
+    noKeyBlobKey: 'กุญแจที่ใช้เปิดกุญแจบัญชีของคุณไม่อยู่ใน RAM: ปลดล็อกอีกครั้ง',
     seller: 'ผู้ขาย',
     buyer: 'ผู้ซื้อ',
     email: 'อีเมล',

@@ -525,11 +525,20 @@ flows/how_a_wallet_builds_a_transaction.md). New or changed:
     break-glass seed    32 random bytes per anos account. breakGlassKey: P-256 scalar = HKDF(seed, "anos/break-glass-p256/v1", 48)
                         as an integer mod (n - 1), plus 1, the backup code's rule; breakGlassPostQuantumKey: ML-DSA-87
                         keygen(HKDF(seed, "anos/break-glass-mldsa/v1", 32)). HKDF-SHA-256, empty salt. The seed is
-                        split and deposited as breakglasskey, then wiped; it is never sent to the masterpod.
-    keyBlob             AES-256-GCM under the encryption key of key1 scalar (32) || postQuantumKey1 seed (32) ||
-                        key2 scalar (32) || postQuantumKey2 seed (32), 156 bytes. ML-DSA-87 keys come back from
-                        their seeds (the test wallet's generateMlDsaKey(seed)), P-256 public keys from the scalars.
-                        Opened only to sign, then dropped; the ciphertext stays in RAM for the session.
+                        split and deposited as breakglasskey, then wiped; it is never sent to the masterpod. At a
+                        recovery's finish the recovered seed signs the account's break-glass move (step 5 of
+                        forclaude/break-glass-plan-1.md) and is wiped again; nothing of it is stored on the
+                        masterpod (2026-11-08; from 2026-10-26 to then the finish stored it as breakGlassBlob).
+    keyBlob             AES-256-GCM under the key blob key of key1 scalar (32) || postQuantumKey1 seed (32) ||
+                        key2 scalar (32) || postQuantumKey2 seed (32), 156 bytes. The key blob key (2026-11-08,
+                        forclaude/break-glass-plan-1.md) = HKDF(PRF output, "masterpod/kek-keys/v1", 32): from the
+                        passkey's PRF output alone, a sibling of KEK_prf, derived at every unlock and create and
+                        kept in RAM with the PRF output (session.service); not the encryption key, which the backup
+                        code also opens, so a backup-code recovery returns the pod and not the signing keys, and a
+                        lost passkey loses the key blobs for good (the wallet shows such an account as lost, 8.2).
+                        ML-DSA-87 keys come back from their seeds (the test wallet's generateMlDsaKey(seed)), P-256
+                        public keys from the scalars. Opened only to sign, then dropped; the ciphertext stays in
+                        RAM for the session. Before 2026-11-08 the blob was under the encryption key.
     the wallet pair     fetched once per session from /api/sign/public-keys; a creation payload carries them as
                         walletKey and walletPostQuantumKey; the browser makes the other six signatures and
                         /api/sign adds the two. Every transfer, fund proposal and follow-up is signed by pair one
@@ -848,7 +857,17 @@ refused, "Some of this account's reads failed; what is held may be
 incomplete."; "Not submitted to the validator" for a creation that never
 reached the validator; "Waiting for the ledger…" while the creation has
 not landed (unknown account); another refusal in red; "Reading…" before
-the first read. The card's footer: the id in short form ("a1b2c3d4…e5f6",
+the first read. A lost account (2026-11-08, section 11: its keyBlob does
+not open under the key blob key, the keys went with an old passkey) shows
+the lock-off icon and "Lost with the old passkey" in place of the balance;
+nothing is read for it and it counts in no total and no poll. When
+/list-my-break-glass-moves (masterpod 14.4.1, read with the balances
+while an account is lost) lists a move for it, the move's state sits
+under the line: "Moving the money: waiting for 2 attestors", "Moving the
+money: 1 of 2 attestors signed", "Moving the money: being written" once
+the case is decided, "Moved to Spending account 2" once the new account's
+history lists the move, "The attestors dismissed the move". The card's
+footer: the id in short form ("a1b2c3d4…e5f6",
 the first 8 and the last 4 characters), a copy button (8.5) with the
 full id, and Resubmit on an unsubmitted account. The balances are read
 when the page opens, by the card's refresh button, by Refresh (which
@@ -863,7 +882,8 @@ progress list:
    with the wallet keys from the server) signed by the six keys here;
 2. the break-glass seed deposited (section 6, breakglasskey);
 3. /api/sign: the two wallet signatures added;
-4. /create-anos-account with keyBlob and the signed creation;
+4. /create-anos-account with keyBlob (under the key blob key, section 7;
+   2026-11-08) and the signed creation;
 5. /api/anos/1/create-account with the signed creation; a 202, or a 400
    saying the account or its transaction already exists, counts as
    submitted;
@@ -894,6 +914,22 @@ guarded or vault transfer of this account waits out its lock, "5 anos of
 this are waiting out a lock." (2026-11-06, section 11). The validator
 moves a balance only when the trade or the transfer is written, so the
 balance stays whole while the anos are spoken for.
+
+A lost account (2026-11-08, section 11), whose keyBlob does not open under
+the key blob key, shows "Lost with the old passkey" with the lock-off icon
+and "The keys of this account were lost with the old passkey. Its money
+moves to a new account through the recovery." in place of the summary,
+then the move's state as the Wallet card shows it; Refresh and the
+Transaction history button stay (the history page itself shows the lost
+line, since its read needs pair one), and Send, Pending, the trades, the
+lock sections and the two panels are left out. Every other page that
+opens a keyBlob treats one that does not open the same way: the escrow
+trade, assisted transfer and history pages show "Lost with the old
+passkey" where the read's refusal would show; the attestor's and the
+moderator's account pickers, the pinned listing's account lists and the
+Home to-do lines list the usable accounts only (balances.service,
+usableAccounts); Cases shows the id where the account's transactions
+would be known.
 
 Escrow trades (2026-11-05, section 11), after Pending: one row per
 open trade, "5 anos to <buyer>" when this
@@ -1389,7 +1425,8 @@ excepted, with the keyholder and anos calls included.
                             time; sets the page's lang, the date adapter's locale and Material's Optional
                             (2026-11-06)
     session.service         signals: anopodId, username, firstName, lastName, the session keys, the PRF output
-                            while needed, the encryption key, the chat keys, the PLID and lookup id, the status
+                            while needed and the key blob key derived from it (2026-11-08), the encryption key,
+                            the chat keys, the PLID and lookup id, the status
                             from /check-anopod-status, the keyholder receiving keys, the wallet public keys, the
                             accounts (keyBlob ciphertext and creation, never open keys), the chat rooms (the
                             latest /list-chat-rooms answer), the seen positions with markSeen and the unread
@@ -1398,7 +1435,8 @@ excepted, with the keyholder and anos calls included.
                             routes and the four new ones added; the marketplace routes of 2026-11-06: getListing,
                             listingId on createChatRoom, mine and status any on listListings, no hpkeKey on
                             createListing, the fuller RoomListing and the listing on an invite; the four noted
-                            transaction routes and the two settings routes (2026-11-07)
+                            transaction routes and the two settings routes (2026-11-07); listMyBreakGlassMoves
+                            (2026-11-08), storeBreakGlassBlob gone
     keyholder-api.service   the keyholder test app's, base path /api/keyholder/<n>
     anos-api.service        the anos test app's account-api.service.ts, base path /api/anos/<defaultValidator>,
                             plus the five signed reads (listEscrows added 2026-11-05, getAssistedTransfer and
@@ -1408,7 +1446,12 @@ excepted, with the keyholder and anos calls included.
                             read by refresh from /get-account, /list-transactions, /list-escrows and the
                             held-transfer read of the account's type, every account at once; the totals over
                             the session's accounts; needsPoll while an account is not on the ledger yet or
-                            any anos are held or pending
+                            any anos are held or pending; a lost account (2026-11-08: its keyBlob does not open
+                            under the session's key blob key) gets the lost entry and counts in no total and no
+                            poll, isLost and usableAccounts tell the pages and the pickers, markLost tries every
+                            keyBlob whenever the account list changes, and the lost accounts' break-glass moves
+                            (moves, moveOf, loadMoves over /list-my-break-glass-moves and the new account's
+                            history) are read with the balances
     notes.service           the noted transactions (2026-11-07): the last list read with its blobs opened,
                             byTransaction, add, update and remove, the preset kind and the starting currency
     settings.service        the wallet settings (2026-11-07): one encrypted object on the masterpod (4.7), read once
@@ -1431,7 +1474,8 @@ excepted, with the keyholder and anos calls included.
     signing.service         /api/sign/public-keys and /api/sign
     crypto.service          the keyholder test app's crypto.service.ts plus the anos test app's (keys, the
                             builders, signing), plus section 7 and the public ledger id; wrapJson and
-                            unwrapJson (2026-11-07)
+                            unwrapJson (2026-11-07); deriveKekKeys, the key blob under it and KeyBlobLostError
+                            (2026-11-08)
     passkey.service         the keyholder test app's, unchanged
     shares.service          the deposit rule of section 6, one function: deposit(secret, shareType)
     log.service             the activity log
@@ -1688,6 +1732,14 @@ network/testnet.env numbers (2026-11-06, section 11).
   beyond the Protect answer (the settings blob is ready for them); the
   Protect line for a pod with no recorded answer; the Protect pane on an
   iPhone or a computer.
+- From the break-glass plan (forclaude/break-glass-plan-1.md, 2026-11-08):
+  the owner's dispute path for a false recovery (a cached key blob, a
+  "Dispute a recovery" button, a warning) and a cancel page for either
+  key; forwarding, a closed flag or a repeat sweep for money that lands
+  in an old account after the move; a notification to the person or the
+  attestors about a move; a migration of old key blobs (the testnet is
+  reset with a fresh genesis instead); the break-glass blob's removal
+  from the masterpod.
 - Several passkeys, push delivery, a custom theme, rate limits.
 
 ## 11. Build notes
@@ -3602,6 +3654,104 @@ Built in the planning chat from `forclaude/wallet-deposit-floor-plan-1.md`
   after about 15 seconds and the log to show that keyholder's two calls at
   status 0.
 
+### The key blob under the passkey's key, step 4 (2026-11-08)
+
+Built from `forclaude/break-glass-plan-1.md` (FINAL), section 4, one
+commit; steps 5 and 6 follow in this repo, and the three are deployed
+together after the testnet reset. Why: the key blob was under the
+encryption key, which the backup code also opens, so a backup-code
+recovery handed a person the original signing keys; from now on it is
+under a key from the passkey's PRF output alone, a lost passkey loses it,
+and the money moves to new accounts through the break-glass transfer
+(step 5). What the plan left open was decided as follows.
+
+- `crypto.service`: `INFO.kekKeys`, `deriveKekKeys(prfOutput)`;
+  `wrapKeyBlob`, `unwrapKeyBlob` and `pairOneFromKeyBlob` take the key
+  blob key; `wrapBreakGlassSeed` is gone. Added beyond the plan:
+  `KeyBlobLostError`, thrown by `unwrapKeyBlob` when the AES-GCM open
+  fails, so the pages tell a blob that does not open (a lost account) from
+  any other failure without reading error strings; the length check stays
+  a plain error.
+- `session.service`: `keyBlobKey` with `setKeyBlobKey`, `getKeyBlobKey`
+  and `hasKeyBlobKey`, cleared in `close()`. Set right after
+  `setPrfOutput` in `unlock.ts` and on the create page (null there when
+  the authenticator gave no PRF output at registration, as the PRF output
+  itself is). The setup page has no `setPrfOutput` of its own: it runs
+  `unlockWithPasskey` when the PRF output is not in RAM and gets the key
+  with it. The recovery service's PRF output is the recovery passkey's
+  and is not touched.
+- The key blob callers: the wallet page's create asks for the encryption
+  key as before and for the key blob key, and wraps under the latter; the
+  nine `pairOneFromKeyBlob` callers pass the key blob key and refuse with
+  `common.noKeyBlobKey` ("The key that opens your account keys is not in
+  RAM: unlock again.", one string where two forms of the old one were
+  used).
+- Lost accounts (`balances.service`): `AccountBalance.lost`; `readOne`
+  turns `KeyBlobLostError` into the lost entry (landed false, error null,
+  nothing read); the totals and `needsPoll` skip it; `isLost(accountId)`.
+  Beyond the plan: `usableAccounts`, the session's accounts that are not
+  lost, and `markLost()`, which tries every keyBlob without an entry under
+  the key blob key with no ledger read, run by an effect whenever the
+  session's account list changes and awaited by the attestor's and the
+  moderator's `loadAccounts` before they pick a default account, so a
+  picker neither shows nor picks a lost account even on a page that reads
+  no balance. The balance card says nothing about lost accounts (the plan
+  names no line); they are not counted.
+- The moves: `listMyBreakGlassMoves(quiet)` in `masterpod-api.service`
+  with `BreakGlassCaseItem`, `BreakGlassMove` and `BreakGlassEvent` as
+  masterpod 14.4.1 answers them. Where the plan put the loading on the
+  Wallet page, it lives in `balances.service` so the Account page shows
+  the same state: `refresh` reads the moves (`loadMoves`) when an account
+  is lost, so the page's open, Refresh, the balance card's button and the
+  polls keep the state current, and the Account page calls `loadMoves`
+  when it finds its account lost. One state per old account, the newest
+  case's. The stage: `dismissed` from the case status; `decided` reads
+  "being written" until the new account's history lists the move's
+  transaction id, read from the new account's first page of
+  `/list-transactions` (50 rows, newest first, signed by its pair one),
+  then "Moved to <the new account's name>"; an open or in-review case
+  reads "1 of 2 attestors signed" when `signOffs` is above zero, else
+  "waiting for 2 attestors". `wallet.moveState` takes the stage, the count
+  and the new account's name (the plan named the first two; the moved
+  line needs the name).
+- The Wallet card and the Account page as 8.2 now says; the lock-off icon
+  is Material Symbols' `no_encryption`. On the Account page the two panels
+  (follow-ups, fund proposal) are left out with Send, Pending, the trades
+  and the lock sections, since every one needs pair one; History stays,
+  and the history page of a lost account shows the lost line where the
+  read's refusal would show, as the escrow trade and assisted transfer
+  pages do. The attestor's three pickers and the moderator's (the plan
+  named the attestor's; the moderator's is the same list), and the pinned
+  listing's share menu, seller's From and named accounts, list the usable
+  accounts; the Home to-do "Finish creating" line skips a lost account
+  ("Open your first anos account" still waits for an empty list, lost or
+  not). Cases already showed the id for a keyBlob that did not open. The
+  notes pages have no account choice, so nothing changed there.
+- `history-words`: `breakGlassTransfer` reads "Recovered from an old
+  account" (+, icon `restore`) when received and "Moved to a new account"
+  (−, icon `key_off`) when sent; the details' kind is "break-glass move".
+- `recover-case.page`: the Break-glass keys step is gone with
+  `storeBreakGlass`, `BreakGlassResult`, `breakGlassText` and
+  `accountOfBreakGlassKeys` (the plan's 5.4 says the last is "kept from the
+  old step"; it was removed here so the build has no unused member, and
+  step 5 brings the logic back with its Move your money step); the stepper
+  runs Combine, Get back in, New backup code, Done; the recovered seeds
+  stay in `RecoveryService` unused; `storeBreakGlassBlob` left
+  `masterpod-api.service`, `breakGlassBlob` stays on `AnosAccountListItem`
+  (null from now on). The six dictionary entries of the removed step left
+  `en.ts` and `th.ts`.
+- Words: `wallet.lost`, `wallet.moveState`, `account.lostTitle` (the
+  card's line again), `account.lostText`, `common.noKeyBlobKey`, the two
+  history titles and the kind, in both languages; the Thai lines were
+  written here by the glossary and are to be checked by a Thai reader.
+- Spec: sections 7, 8.2, 8.3, 10, 12.3 and this note; README unchanged.
+- `npx ng build` clean (1.96 MB initial, no warnings). Not run in a browser
+  here: the user resets the
+  testnet, deploys the three wallet steps together and runs a recovery
+  through, expecting the old accounts' cards to read "Lost with the old
+  passkey" after Get back in and the move line once step 5 files the
+  moves.
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`
@@ -3705,18 +3855,23 @@ a second stepper on the same page:
    ordinary unlock (`/challenge` unlock, the assertion, `/unlock`), which
    opens the normal session in this tab with the same passkey: `blob1`,
    the chat keys, the identity blob, the status.
-3. Break-glass keys: `/list-anos-accounts`; for each recovered seed derive
-   the two break-glass public keys and find the account whose
-   `creation.payload.publicKeys` has them; `/store-break-glass-blob` with
-   the seed under the encryption key. Shows which accounts got theirs and
-   any seed that matched no account.
-4. New backup code: a new code shown once as on Setup, with Complete;
+3. New backup code: a new code shown once as on Setup, with Complete;
    `newBlob2`, the new backup code keys, the proof by the old keys,
    `/rotate-backup-code`; then the deposit as `backupcode` through
    `SharesService.deposit`, a new `keyId`. "Your old backup code is now
    worthless."
-5. Done: `/complete-recovery-case`; "You're back in." Continue to
+4. Done: `/complete-recovery-case`; "You're back in." Continue to
    `/wallet`.
+
+The "Break-glass keys" step that stood third until 2026-11-08 (each
+recovered seed matched to its account by the two derived public keys and
+stored there with `/store-break-glass-blob` under the encryption key) left
+with step 4 of `forclaude/break-glass-plan-1.md` (section 11): the
+recovered seeds stay in RAM unused until step 5 of that plan puts "Move
+your money" in its place, where each seed signs the move of its account's
+whole balance to a new account of the same type. The old accounts' key
+blobs do not open under the new passkey's key blob key (section 7), so
+the wallet shows them as lost (8.2).
 
 Each step keeps its result in RAM and can be retried; a refresh of the
 page loses the combined code, and the person starts the finish again from

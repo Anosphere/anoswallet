@@ -103,7 +103,7 @@ export class HomePage {
   /** The tiles: the side panel's entries except Home itself and Log. */
   protected readonly tiles = computed(() => this.navigation.items().filter((i) => i.path !== '/home' && i.path !== '/log'));
 
-  /** The Things to do lines, in the plan's order, each only when it applies. */
+  /** The Things to do lines, in the plan's order, each only when it applies; a lost account (its keyBlob does not open, 2026-11-08) gets no line. */
   protected readonly todo = computed((): TodoLine[] => {
     const home = this.t().home;
     const lines: TodoLine[] = [];
@@ -117,7 +117,7 @@ export class HomePage {
     if (this.accountsLoaded() && accounts.length === 0) lines.push({ path: '/wallet', icon: 'account_balance_wallet', words: home.openFirst });
     const names = accountNames(accounts, this.t().accountKinds);
     for (const account of accounts) {
-      if (!account.submittedAt) lines.push({ path: '/wallet', icon: 'error', words: home.finishCreating(names.get(account.accountId) ?? '') });
+      if (!account.submittedAt && !this.balances.isLost(account.accountId)) lines.push({ path: '/wallet', icon: 'error', words: home.finishCreating(names.get(account.accountId) ?? '') });
     }
     const unreadRooms = this.session.unreadRoomCount();
     if (unreadRooms > 0) lines.push({ path: '/chat', icon: 'chat', words: home.unreadChats(unreadRooms) });

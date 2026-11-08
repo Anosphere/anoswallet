@@ -22,7 +22,7 @@ export interface Identity {
   lookupId: string;
 }
 
-/** An anos account as the masterpod lists it: the keyBlob ciphertext and the creation, never open keys. */
+/** An anos account as the masterpod lists it: the keyBlob ciphertext (under the key blob key since 2026-11-08) and the creation, never open keys. */
 export interface AnosAccountItem {
   accountId: string;
   accountType: string;
@@ -61,6 +61,8 @@ export class SessionService {
   // --- secrets, never in a signal and never on the wire -------------------
   private sessionKeys: SessionKeys | null = null;
   private prfOutput: Bytes | null = null;
+  /** The key blob key (CryptoService.deriveKekKeys), what the account key blobs open under since 2026-11-08; set with the PRF output at every unlock and create. */
+  private keyBlobKey: Bytes | null = null;
   private encryptionKey: Bytes | null = null;
   private chatKeys: ChatKeys | null = null;
   private identity: Identity | null = null;
@@ -78,6 +80,7 @@ export class SessionService {
   readonly lastName = signal('');
   readonly status = signal<StatusAnswer | null>(null);
   readonly hasPrf = signal(false);
+  readonly hasKeyBlobKey = signal(false);
   readonly hasEncryptionKey = signal(false);
   readonly hasChatKeys = signal(false);
   readonly hasIdentity = signal(false);
@@ -125,6 +128,7 @@ export class SessionService {
   close(): void {
     this.sessionKeys = null;
     this.prfOutput = null;
+    this.keyBlobKey = null;
     this.encryptionKey = null;
     this.chatKeys = null;
     this.identity = null;
@@ -136,6 +140,7 @@ export class SessionService {
     this.lastName.set('');
     this.status.set(null);
     this.hasPrf.set(false);
+    this.hasKeyBlobKey.set(false);
     this.hasEncryptionKey.set(false);
     this.hasChatKeys.set(false);
     this.hasIdentity.set(false);
@@ -168,6 +173,15 @@ export class SessionService {
 
   getPrfOutput(): Bytes | null {
     return this.prfOutput;
+  }
+
+  setKeyBlobKey(key: Bytes | null): void {
+    this.keyBlobKey = key;
+    this.hasKeyBlobKey.set(key !== null);
+  }
+
+  getKeyBlobKey(): Bytes | null {
+    return this.keyBlobKey;
   }
 
   setEncryptionKey(key: Bytes | null): void {

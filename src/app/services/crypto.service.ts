@@ -142,6 +142,20 @@ export interface AccountSecrets {
   postQuantumKey2Seed: Uint8Array;
 }
 
+/**
+ * Thrown by unwrapKeyBlob (and so by pairOneFromKeyBlob) when a keyBlob does
+ * not open under the key blob key: the blob was wrapped under the key of
+ * another passkey, the one that was lost, or was changed. Since 2026-11-08
+ * the pages show such an account as lost (wallet spec 8.2); nothing
+ * re-wraps or recovers its keys.
+ */
+export class KeyBlobLostError extends Error {
+  constructor() {
+    super('the key blob does not open under the key blob key: the account keys are lost');
+    this.name = 'KeyBlobLostError';
+  }
+}
+
 /** Pair one and pair two as signing keys. */
 export type PairKeys = Pick<BrowserAccountKeys, 'key1' | 'postQuantumKey1' | 'key2' | 'postQuantumKey2'>;
 
@@ -298,6 +312,8 @@ const TAG_BYTES = 16;
 /** The HKDF info strings; a new version of any derivation gets a new string. */
 const INFO = {
   kekPrf: 'masterpod/kek-prf/v1',
+  /** The key the account key blobs are wrapped under, from the same PRF output as KEK_prf, a different derivation (wallet spec 7). */
+  kekKeys: 'masterpod/kek-keys/v1',
   kekBackup: 'masterpod/kek-backup/v1',
   backupP256: 'masterpod/backup-p256/v1',
   backupMldsa: 'masterpod/backup-mldsa/v1',
@@ -478,6 +494,11 @@ export class CryptoService {
     return this.hkdf(prfOutput, INFO.kekPrf, 32);
   }
 
+  /** The key blob key = HKDF(prf output, 'masterpod/kek-keys/v1', 32): what the account key blobs are wrapped under since 2026-11-08 (wallet spec 7). A lost passkey loses it, and the key blobs with it. */
+  deriveKekKeys(prfOutput: Uint8Array): Promise<Bytes> {
+    return this.hkdf(prfOutput, INFO.kekKeys, 32);
+  }
+
   /** KEK_backup = HKDF(backup code, 'masterpod/kek-backup/v1', 32). */
   deriveKekBackup(code: Uint8Array): Promise<Bytes> {
     return this.hkdf(code, INFO.kekBackup, 32);
@@ -596,12 +617,6 @@ export class CryptoService {
   async backupCodeProof(code: Uint8Array, payload: unknown): Promise<Signatures> {
     return this.signPayload(await this.backupCodeSigningKeys(code), payload);
   }
-
-  /** breakGlassBlob (masterpod 12.6): an account's 32-byte break-glass seed under the encryption key, 60 bytes. */
-  wrapBreakGlassSeed(seed: Uint8Array, encryptionKey: Uint8Array): Promise<Bytes> {
-    return this.encrypt(encryptionKey, seed);
-  }
-
 
   /** identityBlob (wallet spec 7): PLID (32) || lookupId (32) under the encryption key, 92 bytes. */
   wrapIdentity(publicLedgerIdHex: string, lookupIdHex: string, encryptionKey: Uint8Array): Promise<Bytes> {
@@ -794,14 +809,19 @@ export class CryptoService {
     };
   }
 
-  /** keyBlob: key1 scalar || postQuantumKey1 seed || key2 scalar || postQuantumKey2 seed under the encryption key, 156 bytes. */
-  wrapKeyBlob(secrets: AccountSecrets, encryptionKey: Uint8Array): Promise<Bytes> {
-    return this.encrypt(encryptionKey, concatBytes(secrets.key1Scalar, secrets.postQuantumKey1Seed, secrets.key2Scalar, secrets.postQuantumKey2Seed));
+  /** keyBlob: key1 scalar || postQuantumKey1 seed || key2 scalar || postQuantumKey2 seed, 156 bytes, under the key blob key (deriveKekKeys), not the encryption key, since 2026-11-08. */
+  wrapKeyBlob(secrets: AccountSecrets, keyBlobKey: Uint8Array): Promise<Bytes> {
+    return this.encrypt(keyBlobKey, concatBytes(secrets.key1Scalar, secrets.postQuantumKey1Seed, secrets.key2Scalar, secrets.postQuantumKey2Seed));
   }
 
-  /** The secrets back from keyBlob. */
-  async unwrapKeyBlob(blob: Uint8Array, encryptionKey: Uint8Array): Promise<AccountSecrets> {
-    const plain = await this.decrypt(encryptionKey, blob);
+  /** The secrets back from keyBlob, under the key blob key (deriveKekKeys), not the encryption key, since 2026-11-08. A blob that does not open under it throws KeyBlobLostError: the account's keys went with another passkey. */
+  async unwrapKeyBlob(blob: Uint8Array, keyBlobKey: Uint8Array): Promise<AccountSecrets> {
+    let plain: Bytes;
+    try {
+      plain = await this.decrypt(keyBlobKey, blob);
+    } catch {
+      throw new KeyBlobLostError();
+    }
     if (plain.length !== 128) throw new Error(`keyBlob must open to 128 bytes, got ${plain.length}`);
     return {
       key1Scalar: plain.subarray(0, 32),
@@ -811,9 +831,9 @@ export class CryptoService {
     };
   }
 
-  /** Pair one out of a keyBlob, for one signature; the caller drops it afterwards. */
-  async pairOneFromKeyBlob(blob: Uint8Array, encryptionKey: Uint8Array): Promise<PairOne> {
-    const secrets = await this.unwrapKeyBlob(blob, encryptionKey);
+  /** Pair one out of a keyBlob, for one signature; the caller drops it afterwards. Under the key blob key (deriveKekKeys), not the encryption key, since 2026-11-08; KeyBlobLostError when the blob does not open under it. */
+  async pairOneFromKeyBlob(blob: Uint8Array, keyBlobKey: Uint8Array): Promise<PairOne> {
+    const secrets = await this.unwrapKeyBlob(blob, keyBlobKey);
     return { key1: this.p256KeyFromScalar(secrets.key1Scalar), postQuantumKey1: this.generateMlDsaKey(secrets.postQuantumKey1Seed) };
   }
 

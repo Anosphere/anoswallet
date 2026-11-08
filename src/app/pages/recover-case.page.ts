@@ -10,7 +10,7 @@ import { ConfigService } from '../services/config.service';
 import { BackupCodeKeys, CryptoService } from '../services/crypto.service';
 import { LanguageService } from '../services/language.service';
 import { ApiError, reasonOf } from '../services/log.service';
-import { AnosAccountListItem, MasterpodApiService, RotationMessage } from '../services/masterpod-api.service';
+import { MasterpodApiService, RotationMessage } from '../services/masterpod-api.service';
 import { Bytes, PasskeyService } from '../services/passkey.service';
 import { RECOVERY_POLL_MS, RecoveryEvent, RecoveryPodAnswer, RecoveryService } from '../services/recovery.service';
 import { SessionService } from '../services/session.service';
@@ -33,12 +33,6 @@ interface Combined {
   skipped: number;
 }
 
-/** What Break-glass keys did: the accounts that got their seed, and the seeds that matched no account. */
-interface BreakGlassResult {
-  stored: string[];
-  unmatched: number;
-}
-
 /** The final statuses: the poll stops there. */
 const FINAL_STATUSES = ['completed', 'dismissed'];
 
@@ -50,10 +44,12 @@ const FINISH_STATUSES = ['approved', 'delivering'];
  * status in words, the timeline from the events the person may see, a
  * Refresh button, and a 15-second poll of /get-recovery-pod while the page
  * is open. When three shares of one backup code keyId are in, the finish
- * appears as a second stepper (Combine, Get back in, Break-glass keys, New
- * backup code, Done), each step retryable, the ordinary unlock reused from
- * unlock.ts and the deposit from SharesService; the combined code and seeds
- * live in RecoveryService while it runs and die with the tab.
+ * appears as a second stepper (Combine, Get back in, New backup code, Done),
+ * each step retryable, the ordinary unlock reused from unlock.ts and the
+ * deposit from SharesService; the combined code and seeds live in
+ * RecoveryService while it runs and die with the tab. The Break-glass keys
+ * step left on 2026-11-08 (break-glass plan 1, step 4): the recovered seeds
+ * stay in RecoveryService unused until step 5 puts "Move your money" here.
  */
 @Component({
   selector: 'app-recover-case-page',
@@ -119,14 +115,6 @@ const FINISH_STATUSES = ['approved', 'delivering'];
             <mat-step [completed]="backIn()" [editable]="false" [label]="t().recoverCase.getBackIn">
               <p>{{ t().recoverCase.backInText }}</p>
               <button mat-flat-button type="button" (click)="getBackIn(finish)" [disabled]="finishBusy()">{{ t().recoverCase.getBackIn }}</button>
-            </mat-step>
-
-            <mat-step [completed]="breakGlass() !== null" [editable]="false" [label]="t().recoverCase.stepBreakGlass">
-              <p>{{ t().recoverCase.breakGlassText }}</p>
-              @if (breakGlass(); as b) {
-                <p class="result">{{ breakGlassText(b) }}</p>
-              }
-              <button mat-flat-button type="button" (click)="storeBreakGlass(finish)" [disabled]="finishBusy()">{{ t().recoverCase.storeBreakGlass }}</button>
             </mat-step>
 
             <mat-step [completed]="deposited()" [editable]="false" [label]="t().recoverCase.stepNewCode">
@@ -198,7 +186,6 @@ export class RecoverCasePage {
   private readonly finishActive = signal(false);
   protected readonly combined = signal<Combined | null>(null);
   protected readonly backIn = signal(false);
-  protected readonly breakGlass = signal<BreakGlassResult | null>(null);
   protected readonly newCodeText = signal<string | null>(null);
   /** The rotation landed on the masterpod; only the deposit is left (a retry deposits the same new code again). */
   protected readonly rotated = signal(false);
@@ -431,47 +418,7 @@ export class RecoverCasePage {
     this.recoveredCode = code;
   }
 
-  /**
-   * Step 3, Break-glass keys: /list-anos-accounts; each recovered seed finds
-   * the account whose creation names its two derived public keys and is
-   * stored there under the encryption key.
-   */
-  protected async storeBreakGlass(stepper: MatStepper): Promise<void> {
-    await this.runStep(async () => {
-      const encryptionKey = this.session.getEncryptionKey();
-      if (!encryptionKey) throw new Error(this.t().recoverCase.noKeyInTab);
-      const listed = await this.api.listAnosAccounts();
-      if (!listed.ok) throw new Error(`/list-anos-accounts: ${reasonOf(listed)}`);
-      this.session.accounts.set(listed.body.accounts);
-      const stored: string[] = [];
-      let unmatched = 0;
-      for (const seed of this.recovery.getBreakGlassSeeds()) {
-        const keys = await this.crypto.breakGlassKeys(seed);
-        const account = this.accountOfBreakGlassKeys(listed.body.accounts, this.crypto.toHex(keys.breakGlassKey.publicKey), this.crypto.toHex(keys.breakGlassPostQuantumKey.publicKey));
-        if (!account) {
-          unmatched += 1;
-          continue;
-        }
-        const blob = await this.crypto.wrapBreakGlassSeed(seed, encryptionKey);
-        const res = await this.api.storeBreakGlassBlob(account.accountId, this.crypto.toHex(blob));
-        if (!res.ok) throw new Error(`/store-break-glass-blob: ${reasonOf(res)}`);
-        stored.push(account.accountId);
-      }
-      this.breakGlass.set({ stored, unmatched });
-    }, stepper);
-  }
-
-  /** The account whose creation.payload.publicKeys names these two break-glass keys (masterpod 12.6), or undefined. */
-  private accountOfBreakGlassKeys(accounts: AnosAccountListItem[], p256Hex: string, mldsaHex: string): AnosAccountListItem | undefined {
-    return accounts.find((account) => {
-      const keys = account.creation.payload['publicKeys'];
-      if (typeof keys !== 'object' || keys === null) return false;
-      const named = keys as Record<string, unknown>;
-      return named['breakGlassKey'] === p256Hex && named['breakGlassPostQuantumKey'] === mldsaHex;
-    });
-  }
-
-  /** Step 4, first half: a fresh backup code, its blob2 and keys, shown once as on Setup. */
+  /** Step 3, first half: a fresh backup code, its blob2 and keys, shown once as on Setup. */
   protected async makeNewCode(): Promise<void> {
     this.finishError.set(null);
     const encryptionKey = this.session.getEncryptionKey();
@@ -488,7 +435,7 @@ export class RecoverCasePage {
   }
 
   /**
-   * Step 4, Complete: /rotate-backup-code with the new blob2 and keys and the
+   * Step 3, Complete: /rotate-backup-code with the new blob2 and keys and the
    * proof by the old code (once), then the deposit of the new code as
    * backupcode under a fresh keyId through SharesService. A failed deposit
    * leaves the rotation standing: Retry deposits the same new code again.
@@ -529,7 +476,7 @@ export class RecoverCasePage {
     }, stepper);
   }
 
-  /** Step 5, Done: /complete-recovery-case with the recovery envelope; a case already completed counts as done. */
+  /** Step 4, Done: /complete-recovery-case with the recovery envelope; a case already completed counts as done. */
   protected async complete(): Promise<void> {
     await this.runStep(async () => {
       const envelope = this.recovery.sign('/complete-recovery-case', {});
@@ -571,13 +518,6 @@ export class RecoverCasePage {
     const seeds = words.seedsRecovered(c.seeds);
     const skipped = c.skipped > 0 ? ` · ${words.sharesSkipped(c.skipped)}` : '';
     return `${codes} · ${seeds}${skipped}`;
-  }
-
-  protected breakGlassText(b: BreakGlassResult): string {
-    const words = this.t().recoverCase;
-    const stored = b.stored.length === 0 ? words.noSeedStored : words.storedOn(b.stored.map((id) => id.slice(0, 8) + '…').join(', '));
-    const unmatched = b.unmatched > 0 ? ` · ${words.seedsUnmatched(b.unmatched)}` : '';
-    return `${stored}${unmatched}`;
   }
 
   private dismissReason(pod: RecoveryPodAnswer | null): string {

@@ -231,6 +231,17 @@ export const en = {
     partial: "Some of this account's reads failed; what is held may be incomplete.",
     notSubmitted: 'Not submitted to the validator',
     waitingForLedger: 'Waiting for the ledger…',
+    lost: 'Lost with the old passkey',
+    moveState: (stage: string, signOffs: number, newAccount: string) =>
+      stage === 'moved'
+        ? `Moved to ${newAccount}`
+        : stage === 'dismissed'
+          ? 'The attestors dismissed the move'
+          : stage === 'writing'
+            ? 'Moving the money: being written'
+            : stage === 'signed'
+              ? `Moving the money: ${signOffs} of 2 attestors signed`
+              : 'Moving the money: waiting for 2 attestors',
     noAccounts: 'No anos account yet. Open one below.',
     resubmit: 'Resubmit',
     openTitle: 'Open a new account',
@@ -365,6 +376,8 @@ export const en = {
     no: 'no',
     addPayout: 'Add payout',
     notLanded: 'Not on the ledger yet: the creation has not landed.',
+    lostTitle: 'Lost with the old passkey',
+    lostText: 'The keys of this account were lost with the old passkey. Its money moves to a new account through the recovery.',
     clipboardRefused: 'The browser did not allow reading the clipboard. Paste into the box the usual way.',
     clipboardNoId: 'Nothing on the clipboard looks like an account id.',
     accepted: (id: string) => `accepted: ${id}`,
@@ -530,12 +543,15 @@ export const en = {
     receivedFromFund: 'Received from the fund',
     fundPayoutTo: (id: string) => `Fund payout to ${id}`,
     fundPayout: 'Fund payout',
+    recoveredFromOld: 'Recovered from an old account',
+    movedToNew: 'Moved to a new account',
     kinds: {
       accountCreation: 'account creation',
       escrowTransfer: 'escrow transfer',
       stake: 'stake',
       fundProposal: 'fund proposal',
       fundPayout: 'fund payout',
+      breakGlassTransfer: 'break-glass move',
     },
     transferKinds: {
       anosTransfer: 'plain transfer',
@@ -746,9 +762,6 @@ export const en = {
     getBackIn: 'Get back in',
     backInText:
       "Your backup code opens your encryption key and proves itself to the masterpod, which makes this case's passkey your anoPod's passkey. Then you unlock as usual, here, with that passkey: pick it when asked.",
-    stepBreakGlass: 'Break-glass keys',
-    breakGlassText: 'Each recovered break-glass seed is matched to its anos account and stored there under your encryption key.',
-    storeBreakGlass: 'Store break-glass keys',
     stepNewCode: 'New backup code',
     newCodeText: "Your old backup code went through the bankers' hands: make a new one. It replaces the old one on the masterpod and is deposited with the keyholders.",
     newCodeTitle: 'Your new backup code',
@@ -786,9 +799,6 @@ export const en = {
     codesRecovered: (n: number) => (n === 1 ? 'backup code recovered' : `${n} backup code candidates recovered (the newest is tried first)`),
     seedsRecovered: (n: number) => `${n} break-glass ${n === 1 ? 'seed' : 'seeds'} recovered`,
     sharesSkipped: (n: number) => `${n} ${n === 1 ? 'share' : 'shares'} did not open with this case's key`,
-    noSeedStored: 'No break-glass seed was stored',
-    storedOn: (ids: string) => `Stored on ${ids}`,
-    seedsUnmatched: (n: number) => `${n} ${n === 1 ? 'seed' : 'seeds'} matched no account of yours`,
     eventOpened: 'Case opened',
     eventApproved: 'Approved by two moderators',
     eventRecovered: 'Your passkey is restored: you are back in',
@@ -1153,6 +1163,7 @@ export const en = {
     dismissed: (reason: string) => `Dismissed: ${reason}`,
     yourAccount: 'Your account',
     noKeyInRamSentence: 'The encryption key is not in RAM: unlock again.',
+    noKeyBlobKey: 'The key that opens your account keys is not in RAM: unlock again.',
     seller: 'Seller',
     buyer: 'Buyer',
     email: 'Email',

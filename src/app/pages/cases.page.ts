@@ -145,13 +145,14 @@ export class CasesPage {
    * keyBlob opened for the signature and dropped), the chain links and the
    * pending row, and for an assisted account its held transfer from
    * /get-assisted-transfer (quiet), so a trade row knows its amount and the
-   * receiver while the transfer waits. An account not in the session, or no
-   * encryption key in RAM, knows nothing; the id shows instead.
+   * receiver while the transfer waits. An account not in the session, no
+   * key blob key in RAM, or a lost account (its keyBlob does not open,
+   * 2026-11-08) knows nothing; the id shows instead.
    */
   private async knownTransactions(accountIds: string[]): Promise<Map<string, KnownTransaction>> {
     const known = new Map<string, KnownTransaction>();
-    const encryptionKey = this.session.getEncryptionKey();
-    if (!encryptionKey || accountIds.length === 0) return known;
+    const keyBlobKey = this.session.getKeyBlobKey();
+    if (!keyBlobKey || accountIds.length === 0) return known;
     if (this.session.accounts().length === 0) {
       const listed = await this.masterpod.listAnosAccounts(true);
       if (listed.ok) this.session.accounts.set(listed.body.accounts);
@@ -160,7 +161,7 @@ export class CasesPage {
       const item = this.session.accounts().find((a) => a.accountId === accountId);
       if (!item) continue;
       try {
-        const pairOne = await this.crypto.pairOneFromKeyBlob(this.crypto.fromHex(item.keyBlob), encryptionKey);
+        const pairOne = await this.crypto.pairOneFromKeyBlob(this.crypto.fromHex(item.keyBlob), keyBlobKey);
         if (item.accountType === 'assisted') {
           const held = await this.anos.getAssistedTransfer(pairOne, accountId, true);
           if (held.ok && held.body.transfer) known.set(held.body.transfer.transactionId, { amount: held.body.transfer.amount, accountId: held.body.transfer.accountId, accountIdTo: held.body.transfer.accountIdTo });
@@ -170,7 +171,7 @@ export class CasesPage {
         for (const t of res.body.transactions) known.set(t.transactionId, { amount: t.amount, accountId: t.accountId, accountIdTo: t.accountIdTo });
         for (const p of res.body.pending) known.set(p.transactionId, { amount: p.amount, accountId: p.accountId, accountIdTo: p.accountIdTo });
       } catch {
-        // A keyBlob that does not open: the id shows.
+        // A keyBlob that does not open (a lost account): the id shows.
       }
     }
     return known;

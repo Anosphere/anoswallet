@@ -14,8 +14,9 @@ export interface UnlockServices {
 
 /**
  * The unlock flow (wallet spec 8.2, Landing): /challenge (unlock), the
- * passkey assertion with the PRF salt, /unlock; opens blob1,
- * chatPrivateKeyBlob and identityBlob; then /check-anopod-status. Shared by
+ * passkey assertion with the PRF salt, /unlock; the key blob key from the
+ * PRF output (2026-11-08, wallet spec 7); opens blob1, chatPrivateKeyBlob
+ * and identityBlob; then /check-anopod-status. Shared by
  * the landing page and by setup, which unlocks first when the PRF output is
  * not in RAM. Returns the status; throws with the reason on any refusal.
  */
@@ -35,6 +36,7 @@ export async function unlockWithPasskey({ api, crypto, passkey, session }: Unloc
 
   session.open(res.body.anopodId, keys, res.body.username);
   session.setPrfOutput(prfOutput);
+  session.setKeyBlobKey(await crypto.deriveKekKeys(prfOutput));
   if (res.body.setupComplete && res.body.blob1) {
     const kek = await crypto.deriveKekPrf(prfOutput);
     const encryptionKey = await crypto.decrypt(kek, crypto.fromHex(res.body.blob1));

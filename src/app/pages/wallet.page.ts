@@ -43,7 +43,11 @@ const ALREADY_THERE = /already (exists|pending|in the garlic chain)/;
  * (8.5) and Resubmit for a creation that never reached the validator; then
  * Open a new account, the six-step progress list. The balances are read
  * when the page opens, by Refresh and every 5 seconds while an account is
- * not on the ledger yet or any anos are held or pending.
+ * not on the ledger yet or any anos are held or pending. A lost account
+ * (its keyBlob does not open under the key blob key: the keys went with
+ * an old passkey, 2026-11-08) shows the lock-off icon and "Lost with the
+ * old passkey" in place of the balance and, when /list-my-break-glass-moves
+ * lists a move for it, the move's state under it (balances.service).
  */
 @Component({
   selector: 'app-wallet-page',
@@ -70,7 +74,12 @@ const ALREADY_THERE = /already (exists|pending|in the garlic chain)/;
                   {{ names().get(account.accountId) }}
                 </span>
                 @if (balances.byAccount()[account.accountId]; as entry) {
-                  @if (entry.landed) {
+                  @if (entry.lost) {
+                    <span class="lost"><mat-icon>no_encryption</mat-icon> {{ t().wallet.lost }}</span>
+                    @if (moveWords(account.accountId); as words) {
+                      <span class="small muted">{{ words }}</span>
+                    }
+                  } @else if (entry.landed) {
                     <span class="balance">{{ balanceWords(entry) }}</span>
                     @if (heldWords(entry); as held) {
                       <span class="small muted">{{ held }}</span>
@@ -140,6 +149,7 @@ const ALREADY_THERE = /already (exists|pending|in the garlic chain)/;
     .main { display: flex; flex-direction: column; gap: 4px; padding: 16px 16px 8px; color: inherit; text-decoration: none; }
     .name { display: flex; align-items: center; gap: 8px; font-weight: 500; }
     .balance { font-size: 28px; font-weight: 500; line-height: 1.2; margin-top: 4px; }
+    .lost { display: flex; align-items: center; gap: 8px; margin-top: 4px; color: var(--mat-sys-on-surface-variant); }
     .small { font-size: 13px; }
     .footer { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 0 8px 8px 16px; }
     .footer code { flex: 1; }
@@ -191,6 +201,13 @@ export class WalletPage {
     return this.t().common.anos(millionthsToAnos(entry.balance ?? 0n));
   }
 
+  /** The line under a lost account's card: the state of its break-glass move (balances.service, moveOf), with the new account's name once moved; null while no move is listed for it. */
+  protected moveWords(accountId: string): string | null {
+    const move = this.balances.moveOf(accountId);
+    if (!move) return null;
+    return this.t().wallet.moveState(move.stage, move.signOffs, this.names().get(move.accountIdTo) ?? shortId(move.accountIdTo));
+  }
+
   /** The small line under the balance while something is held: what is available, then the held part named by its kind (one at a time, by the validator's rule). */
   protected heldWords(entry: AccountBalance): string | null {
     if (entry.held <= 0n) return null;
@@ -219,11 +236,15 @@ export class WalletPage {
     this.steps.update((steps) => steps.map((step, i) => (i === index ? { ...step, state } : step)));
   }
 
-  /** The six steps of 8.2 Wallet. A failure before step 4 shows Retry (fresh keys); at 5 or 6 the row is unsubmitted and its card shows Resubmit. */
+  /** The six steps of 8.2 Wallet. A failure before step 4 shows Retry (fresh keys); at 5 or 6 the row is unsubmitted and its card shows Resubmit. The key blob goes under the key blob key (2026-11-08), so both keys of the session are asked for first. */
   protected async create(): Promise<void> {
-    const encryptionKey = this.session.getEncryptionKey();
-    if (!encryptionKey) {
+    const keyBlobKey = this.session.getKeyBlobKey();
+    if (!this.session.getEncryptionKey()) {
       this.error.set(this.t().common.noKeyInRamSentence);
+      return;
+    }
+    if (!keyBlobKey) {
+      this.error.set(this.t().common.noKeyBlobKey);
       return;
     }
     this.busy.set(true);
@@ -241,7 +262,7 @@ export class WalletPage {
       const keys: BrowserAccountKeys = { ...pairs, ...breakGlass };
       const walletKeys = await this.signing.publicKeys();
       const unsigned = this.crypto.buildCreateAccountTransaction(keys, walletKeys, this.accountType());
-      const keyBlob = this.crypto.toHex(await this.crypto.wrapKeyBlob(secrets, encryptionKey));
+      const keyBlob = this.crypto.toHex(await this.crypto.wrapKeyBlob(secrets, keyBlobKey));
       this.setStep(0, 'done');
 
       // 2. The break-glass seed to the keyholders, then wiped.

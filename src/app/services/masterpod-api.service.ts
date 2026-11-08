@@ -77,12 +77,42 @@ export interface RotateBackupCodeBody {
 
 /**
  * An anos account as /list-anos-accounts answers it since recovery build 3
- * (masterpod 12.4.5): the item with its breakGlassBlob, hex, or null until
- * a recovery's finish stored it. The item without it is session.service's
- * AnosAccountItem, which is what the session keeps.
+ * (masterpod 12.4.5): the item with its breakGlassBlob, hex, which the
+ * recovery's finish stored until 2026-11-08 and the wallet no longer writes
+ * (break-glass plan 1, step 4: the recovered seed signs the move and is
+ * wiped); null from now on, kept because the masterpod still answers it.
+ * The item without it is session.service's AnosAccountItem, which is what
+ * the session keeps.
  */
 export interface AnosAccountListItem extends AnosAccountItem {
   breakGlassBlob: string | null;
+}
+
+/** One move of a break-glass case (masterpod 14.4.1): the old account whose keys were lost, the new account of the same type, the breakGlassTransfer's id, and when the finish filed it. */
+export interface BreakGlassMove {
+  accountId: string;
+  accountIdTo: string;
+  transactionId: string;
+  accountType: string;
+  createdAt: string;
+}
+
+/** One event of the person's subset on a break-glass case (masterpod 14.4.1): scheduled (at, meetLink), decided ({}), sent ({}) or dismissed (reason only). */
+export interface BreakGlassEvent {
+  kind: 'scheduled' | 'decided' | 'sent' | 'dismissed' | string;
+  details: Record<string, unknown>;
+  createdAt: string;
+}
+
+/** A break-glass case as /list-my-break-glass-moves answers it (masterpod 14.4.1): the recovery case's id, a trade case's statuses, the count of attestor pods that signed, the moves in account order and the person's events. */
+export interface BreakGlassCaseItem {
+  caseId: string;
+  status: AttestorCaseStatus;
+  signOffs: number;
+  moves: BreakGlassMove[];
+  events: BreakGlassEvent[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 /** The clear part of a note as /add-noted-transaction takes it (wallet spec 4.6): the ledger's facts and the encrypted private part, hex. */
@@ -800,18 +830,17 @@ export class MasterpodApiService {
     return this.signed('/set-wallet-settings', { settingsBlob });
   }
 
-  // --- level setup: after a recovery (masterpod 12.4.5) -----------------------
+  // --- level setup: after a recovery (masterpod 12.4.5) and the break-glass moves (masterpod 14.4.1) ---
 
   /** The new backup code's blob2 and keys, with the proof by the current code (CryptoService.backupCodeProof over the RotationMessage). */
   rotateBackupCode(body: RotateBackupCodeBody): Promise<ApiResponse<{ anopodId: string; rotated: boolean }>> {
     return this.signed('/rotate-backup-code', body);
   }
 
-  /** An account's break-glass seed under the encryption key (CryptoService.wrapBreakGlassSeed), stored on the caller's account; a second call replaces it. */
-  storeBreakGlassBlob(accountId: string, breakGlassBlob: string): Promise<ApiResponse<{ accountId: string; stored: boolean }>> {
-    return this.signed('/store-break-glass-blob', { accountId, breakGlassBlob });
+  /** The caller's break-glass cases, newest first, each with its moves and the events the person may see (masterpod 14.4.1): what a lost account's card reads. /store-break-glass-blob is no longer called (2026-11-08). */
+  listMyBreakGlassMoves(quiet = false): Promise<ApiResponse<{ cases: BreakGlassCaseItem[] }>> {
+    return this.signed('/list-my-break-glass-moves', {}, quiet);
   }
-
 
   // --- level moderator (masterpod 12.4.4) ------------------------------------
 
