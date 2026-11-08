@@ -1,6 +1,6 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
+import { TimeoutError, firstValueFrom, timeout } from 'rxjs';
 import { LOG_MAX_ENTRIES, LOG_STRING_MAX } from '../constants';
 import { LanguageService } from './language.service';
 
@@ -30,7 +30,9 @@ export interface LogEntry {
  * call of the wallet goes through so it can be logged: the newest 40 calls,
  * path, status and answer, polls excepted (they pass `quiet`). Every path is
  * on the wallet's own origin: /api/masterpod/..., /api/anos/<n>/...,
- * /api/keyholder/<n>/..., /api/sign.
+ * /api/keyholder/<n>/..., /api/sign. A post may carry a time limit
+ * (`timeoutMs`, the keyholder deposit does): past it the call answers like
+ * a network error, status 0, with api.noAnswer as its reason.
  */
 @Injectable({ providedIn: 'root' })
 export class LogService {
@@ -51,9 +53,12 @@ export class LogService {
     this.entries.set([]);
   }
 
-  /** POST `body` as JSON to `path` on this origin. */
-  async post<T>(path: string, body: unknown, quiet = false): Promise<ApiResponse<T>> {
-    const result = await this.request<T>(() => this.http.post<T>(path, body, { observe: 'response' }));
+  /** POST `body` as JSON to `path` on this origin. `timeoutMs`, when given, caps the wait: a call that has not answered by then is `{ ok: false, status: 0 }` with api.noAnswer as its reason. */
+  async post<T>(path: string, body: unknown, quiet = false, timeoutMs?: number): Promise<ApiResponse<T>> {
+    const result = await this.request<T>(() => {
+      const call = this.http.post<T>(path, body, { observe: 'response' });
+      return timeoutMs === undefined ? call : call.pipe(timeout(timeoutMs));
+    }, timeoutMs);
     if (!quiet) this.record('POST', path, result);
     return result;
   }
@@ -65,11 +70,14 @@ export class LogService {
     return result;
   }
 
-  private async request<T>(call: () => import('rxjs').Observable<import('@angular/common/http').HttpResponse<T>>): Promise<ApiResponse<T>> {
+  private async request<T>(call: () => import('rxjs').Observable<import('@angular/common/http').HttpResponse<T>>, timeoutMs?: number): Promise<ApiResponse<T>> {
     try {
       const res = await firstValueFrom(call());
       return { ok: true, status: res.status, body: res.body as T };
     } catch (err) {
+      if (err instanceof TimeoutError) {
+        return { ok: false, status: 0, body: { error: this.lang.words().api.noAnswer(Math.round((timeoutMs ?? 0) / 1000)) } as T };
+      }
       if (!(err instanceof HttpErrorResponse)) throw err;
       const reason = err.status === 0 ? { error: this.lang.words().api.network } : err.error;
       return { ok: false, status: err.status, body: reason as T };

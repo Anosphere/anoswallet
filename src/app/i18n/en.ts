@@ -200,7 +200,8 @@ export const en = {
   },
   shares: {
     noIdentity: 'no public ledger id in RAM: unlock again',
-    refused: (keyholder: number, detail: string) => `keyholder ${keyholder} refused the share: ${detail}`,
+    floorNotReached: (stored: number, keyholders: number, needed: number, keyholder: number, reason: string) =>
+      `Only ${stored} of ${keyholders} keyholders stored the share, ${needed} are needed. Keyholder ${keyholder}: ${reason}`,
     keyNotFetched: (reason: string) => `its receiving key could not be fetched (${reason})`,
   },
   signing: {
@@ -210,6 +211,7 @@ export const en = {
   api: {
     noSession: 'no session: unlock first',
     network: 'could not reach the wallet proxy (network error)',
+    noAnswer: (seconds: number) => `no answer in ${seconds} s`,
   },
   home: {
     hello: (name: string) => `Hello, ${name}`,

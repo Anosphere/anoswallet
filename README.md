@@ -38,7 +38,7 @@ unavailable" }`. Everything else is the Angular build (`dist/wallet/browser`),
 with `index.html` for the router's deep links. Variables, each with a
 local default (`server/config.js`): `PORT` 4300, `MASTERPOD_URL`,
 `VALIDATOR_URLS`, `KEYHOLDER_URLS`, `SIGNING_SERVER_URL`, `SHARE_THRESHOLD`
-3, `DEFAULT_VALIDATOR` 1, `DIST_DIR`, `RP_ID` localhost,
+3, `DEPOSIT_FLOOR_PERCENT` 80, `DEFAULT_VALIDATOR` 1, `DIST_DIR`, `RP_ID` localhost,
 `GUARDED_LOCK_MINUTES` 1, `VAULT_LOCK_MINUTES` 2, `LOCK_OFFSET_MINUTES` 1
 (the validators' lock numbers, answered in `/api/config`).
 
