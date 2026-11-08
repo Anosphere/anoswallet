@@ -1537,7 +1537,12 @@ a canvas and encoded as JPEG (quality 0.92 normal, 0.95 high), preview,
 Retake. Below it always a file input, accept image/*, with capture set to
 the same facing so a phone offers that camera, as the fallback when the
 camera is refused or absent. The output is { contentType, bytes } for the
-caller to encrypt or send.
+caller to encrypt or send. Since 2026-11-08 (section 11) a chosen file
+whose longer side exceeds the quality's width (1280 normal, 1920 high) is
+scaled so that side is the width, the aspect kept, and encoded as JPEG at
+the quality's factor (0.92, 0.95), the size and quality a photo from the
+live camera has, before anything else is done with it; a smaller or
+undecodable file passes unchanged.
 
 ### 8.5 The copy button
 
@@ -3953,6 +3958,36 @@ decision 6).
   in a few at a time; Approve on one card leaves the others live and the
   card goes; a request from another pod appears within 5 seconds; the Log
   page shows the first list read and the approve, not the polls.
+
+### The camera shrinks a picked photo (2026-11-08)
+
+Step 3 of `forclaude/wallet-vouch-requests-plan-1.md` (its section 3), one
+commit, independent of step 2. Why: a photo picked from the phone's camera
+app went out as it came, up to 10 MB, where the live camera makes about
+200 KB. The public selfie is stored plain on the masterpod and read back
+by every page that shows the face; the bucket images are encrypted by the
+wallet before they leave; the shrink happens before either, so the
+masterpod keeps storing exactly what it receives.
+
+- `camera.component.ts`: `fileChosen` calls a new `shrink(file)` before
+  `emit`. It decodes the file with `createImageBitmap(file,
+  { imageOrientation: 'from-image' })`, so a phone photo keeps the way it
+  was held; when the bitmap's longer side exceeds `SIZES[quality].width`
+  it draws the bitmap onto a canvas with that side at the width and the
+  other scaled with it (rounded to whole pixels), encodes
+  `toBlob('image/jpeg', SIZES[quality].jpeg)`, and the photo goes out as
+  that JPEG with type `image/jpeg`. A bitmap no larger than the limit, a
+  file `createImageBitmap` cannot decode, and a canvas whose `toBlob`
+  answers null all return null, and the file is emitted unchanged with its
+  own type, as before. The bitmap is closed in a `finally`. The preview
+  shows the emitted blob, so what the user sees is what is sent.
+  `takePhoto` is unchanged.
+- Spec: 8.4 and this note. No words, no constants, no proxy change.
+- `npx ng build` clean (2.03 MB initial, no warnings). Not run in a
+  browser here: the user picks a phone photo on the create page of the dev
+  server and reads the selfie's length on the Log page, expecting a few
+  hundred thousand characters, not millions, and the preview the right way
+  up.
 
 ## 12. Recovery and the moderator edition
 

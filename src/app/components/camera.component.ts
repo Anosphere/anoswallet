@@ -27,7 +27,9 @@ const SIZES: Record<CameraQuality, { width: number; height: number; jpeg: number
  * preview, Retake. Below it always a file input, accept image/*, capture set
  * to the same facing, so a phone offers that camera, as the fallback when the
  * camera is refused or absent. Every photo taken or file chosen is emitted as
- * `photo`; Retake emits `cleared`.
+ * `photo`; Retake emits `cleared`. A chosen file larger than the quality's
+ * size is scaled down to it first (2026-11-08), so a phone's photo weighs
+ * what a photo from the live camera weighs.
  */
 @Component({
   selector: 'app-camera',
@@ -133,14 +135,47 @@ export class CameraComponent implements OnDestroy {
     this.stop();
   }
 
-  /** A file from the input: a phone's camera or a picked image. */
+  /** A file from the input: a phone's camera or a picked image, scaled to the quality's size when it is larger. */
   protected async fileChosen(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     input.value = '';
     if (!file) return;
-    await this.emit(file, file.type || 'image/jpeg');
+    const shrunk = await this.shrink(file);
+    if (shrunk) await this.emit(shrunk, 'image/jpeg');
+    else await this.emit(file, file.type || 'image/jpeg');
     this.stop();
+  }
+
+  /**
+   * A picked photo whose longer side exceeds the quality's width, scaled so
+   * that side is the width, the aspect kept, and encoded as JPEG at the
+   * quality's factor: the size and quality a photo from the live camera has.
+   * Null when the file is already small enough, when the browser cannot
+   * decode it, or when the canvas cannot encode it; the file then goes out
+   * unchanged, as it did before 2026-11-08. The bitmap is decoded with the
+   * orientation from the file, so a phone photo keeps the way it was held.
+   */
+  private async shrink(file: File): Promise<Blob | null> {
+    const { width: limit, jpeg } = SIZES[this.quality()];
+    let bitmap: ImageBitmap;
+    try {
+      bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    } catch {
+      return null;
+    }
+    try {
+      const longer = Math.max(bitmap.width, bitmap.height);
+      if (longer <= limit) return null;
+      const scale = limit / longer;
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(bitmap.width * scale);
+      canvas.height = Math.round(bitmap.height * scale);
+      canvas.getContext('2d')?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      return await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', jpeg));
+    } finally {
+      bitmap.close();
+    }
   }
 
   protected retake(): void {
