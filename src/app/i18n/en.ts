@@ -226,6 +226,7 @@ export const en = {
     unreadChats: (n: number) => `${n} unread chat${n === 1 ? '' : 's'}`,
     chatRequests: (n: number) => `${n} chat request${n === 1 ? '' : 's'}`,
     unreadNotifications: (n: number) => `${n} unread notification${n === 1 ? '' : 's'}`,
+    openVotes: (n: number) => `${n} proposal${n === 1 ? '' : 's'} open for your vote`,
   },
   wallet: {
     title: 'Wallet',

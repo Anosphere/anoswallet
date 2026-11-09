@@ -601,7 +601,7 @@ as in the test apps; a new tab unlocks again.
     /marketplace/:listingId  one listing: the details, the owner, Connect / Waiting / Open chat; the owner's view
     /dao                     DAO: the notice, three tabs (Open votes, Pending, Decided), the cards, New proposal
     /dao/new                 a new proposal: the title, the text, Post
-    /dao/:proposalId         one proposal: the text, the proposer, the numbers, your action, the votes (step 5)
+    /dao/:proposalId         one proposal: the status, the title and the text, the proposer, the numbers, your support or vote with a confirm in place, the votes and the supporters
     /notifications           the list, mark read
     /seed                    the vouch request inbox (seeds only)
     /log                     the activity log, newest 40 calls, polls excepted (the test apps' Log)
@@ -828,7 +828,9 @@ the recorded answer skipped, to /account/protect; 2026-11-07, section
 accounts read and none, to /wallet); "Finish creating your Spending
 account 2" (an account not submitted to the validator, by its name, to
 /wallet); "3 unread chats" (to /chat); "2 chat requests" (the invites to
-this pod and the join requests on its rooms, to /chat/requests); "4
+this pod and the join requests on its rooms, to /chat/requests); "2
+proposals open for your vote" (the open DAO proposals this pod has
+votes in and has not voted on, to /dao; 2026-11-08, section 11); "4
 unread notifications" (to /notifications), each singular when it is
 one; then the tiles, one square per side-panel entry except Home itself
 and Log, with the entry's icon and label, Chat and Notifications
@@ -837,7 +839,10 @@ as the side panel (navigation.service, 8.3). On open /list-anos-accounts
 (quiet) fills the session's accounts, a refusal in red, then the
 balances are read; every 5 seconds they are read again while an account
 is not on the ledger yet or any anos are held or pending, as the Wallet
-page does.
+page does. Beside the accounts, /list-dao-proposals { status: 'open',
+limit: 100 } (quiet) counts the proposals with yourWeight at least 1 and
+no vote of this pod for the open-votes line; a refusal shows no line,
+the line is a convenience (2026-11-08, section 11).
 
 Wallet. Titled "Wallet" (the subtitle left on 2026-11-06, section 11).
 On top the balance card (balance-card.component over balances.service,
@@ -1489,10 +1494,56 @@ until it goes to a vote or expires."; validators unreachable, "The
 validators did not answer. Try again in a moment."; the rest
 "/create-dao-proposal: HTTP 400: invalid title" and the like.
 
-Proposal, at /dao/:proposalId: step 5 (the plan's section 5): the text,
-the proposer, the numbers, the caller's support or vote with a confirm in
-place, the public lists of the votes and the supports, and the Home line
-"2 proposals open for your vote".
+Proposal, at /dao/:proposalId (step 5, 2026-11-08, section 11), in the
+frame of the listing page: a back arrow to /dao and a Refresh icon
+button; /get-dao-proposal when the page opens, after each action and on
+Refresh, "Loading" until the first answer, "This proposal does not
+exist." on a 404, any other refusal in red ("/get-dao-proposal: HTTP
+404: Not Found" against a masterpod without the routes). Top to bottom:
+the status as a small bordered label ("Pending", "Open for votes",
+"Accepted" in green, "Rejected" in red, "Expired" muted); the title as
+the heading; the proposer's avatar (8.6, 40 px) with "by somchai ·
+posted Nov 8, 2026" (the date without the time); the text in a
+paragraph with white-space pre-wrap, shown as typed, line breaks kept
+and nothing rendered; the numbers: pending, and expired, "25 of 180
+votes in support" with the progress bar and "until Nov 15, 2026,
+12:00:00 PM"; open, "For 120 · Against 40" in large type and "closes
+Nov 22, 2026, 3:50:12 PM"; decided, "For 120 · Against 40" and "decided
+Nov 22, 2026, 3:50:12 PM" (the label at the top is the result); then
+"1200 DAO votes in this proposal's snapshot". Your part: "Your votes in
+this proposal: 12", or at 0 "You have no votes in this proposal's
+snapshot. Anos staked after it was posted count from the next
+proposal." Then the action, one per pod per stage, no undo, asked in
+place: pending, with votes and not yet supported, one big outlined
+button with the green thumb_up, "Support with 12 votes", which asks
+"Add your 12 votes in support of this proposal? It cannot be undone."
+with "Yes, support" and Back; Yes calls /support-dao-proposal, shows
+"Your support is recorded." in green and reads the proposal again (it
+may now be open). Open, with votes and not yet voted, two big outlined
+buttons side by side, the green thumb_up "For" and the red thumb_down
+"Against"; either asks "Vote for this proposal with 12 votes? It cannot
+be undone." with "Yes, vote for" and Back; Yes calls /vote-dao-proposal,
+shows "Your vote for is recorded." in green and reads again. After the
+caller acted: "You supported this" on a pending proposal, "You voted
+for" or "You voted against" on an open or decided one, with the icon
+and no button; without votes in the snapshot, no button. The refusals
+in words: already supported and already voted, "You already acted on
+this proposal."; no DAO votes in this proposal, the no-votes sentence;
+proposal not pending, proposal not open, proposal expired and voting
+closed, "This proposal is no longer taking votes." with the proposal
+read again; validators unreachable, "The validators did not answer. Try
+again in a moment."; the rest "/vote-dao-proposal: HTTP 400: invalid
+vote" and the like. Below, the public lists from /list-dao-votes, 50
+rows at a time, newest first, Show more by offset while a page came
+back full: once the proposal has opened, a heading "Votes" with the
+official-stage rows; then a heading "Supported by" with the
+pending-stage rows. A row: the username ("unknown pod" when the pod's
+row is gone) with a small "you" tag on the caller's own row (the row's
+anopodId against the session's), the time under it, and at the right
+the colored thumb icon with "12 votes". "No votes yet." under an empty
+heading once its list answered; a refused list in red under its heading.
+The Home line "2 proposals open for your vote" is in the Home paragraph
+above.
 
 Notifications: the list, newest first, mark read; the 5-second poll
 runs while a session is open and updates the status (vouched, counts),
@@ -1777,11 +1828,11 @@ both files at once: the Protect your passkey pane of setup, in `setup`
 (2026-11-07, section 11); the note form and the notes of the history
 page, in `notes` (2026-11-07, section 11); the Noted transactions page,
 in `notes`; the protect page and the Home line, in `common` and `home`.
-The DAO page and the New proposal page (2026-11-08, section 11) take
-their words from `dao` and `daoNew`, with `nav.dao`, like every page,
-the proposal page's words of step 5 among them; the Thai is the build
-chat's, by the glossary ("โหวต DAO" for DAO votes), for Thai readers to
-correct.
+The DAO page, the New proposal page and the proposal page (2026-11-08,
+section 11) take their words from `dao` and `daoNew`, with `nav.dao`,
+like every page, and Home's "2 proposals open for your vote" its words
+from `home` (2026-11-08); the Thai is the build chat's, by the glossary
+("โหวต DAO" for DAO votes), for Thai readers to correct.
 
 ## 9. Configuration, and running it on this machine
 
@@ -4156,6 +4207,90 @@ works everywhere else.
   landing page until step 5), then the Pending tab's card with its bar and
   "You supported this"; against an older masterpod, the red
   "/list-dao-proposals: HTTP 404: Not Found" and no notice.
+
+### The DAO, step 5 (2026-11-08)
+
+Step 5 of `forclaude/dao-voting-plan-1.md` (its section 5), one commit,
+on top of step 4 (the note above): the proposal page, its route, the
+Home line. The wallet is deployed last, wallet1 then wallet2, steps 4
+and 5 together, after the validators, the doormen and the masterpod
+(the plan's section 7).
+
+- `dao-proposal.page.ts` (new), DaoProposalPage at /dao/:proposalId, as
+  5.1 says and 8.2 (DAO, Proposal) describes, in the frame of the
+  listing page: `proposalId` is an input the router binds from the
+  route, and an effect reads the proposal when it is set. Where the plan
+  was silent: the status label at the top is the result label of a
+  decided proposal, so Accepted or Rejected is not drawn twice; an
+  expired proposal shows the pending numbers under its Expired label
+  (the support over the support needed, the bar and "until" the deadline
+  it missed), since it has no for and against; the proposer's row is the
+  avatar and the by-line, which carries the username, so the name is
+  not printed twice; the by-line's date is the date alone through
+  dateOf, as the cards, the other times through lang.dateTime; the
+  your-votes line shows for every status; the action buttons are
+  outlined (mat-stroked-button), so the colored thumb stays visible on
+  them, with Yes filled and Back plain as the listing page's confirm;
+  one `asking` signal holds what is asked (support, for or against) and
+  one `confirm` method sends it; the green of "Your support is
+  recorded." and "Your vote for is recorded." is the thumb green
+  (#2e7d32), not the primary colour the other pages' `.ok` uses; an
+  action clears the two messages, Refresh clears them too, and after an
+  action the proposal and both lists are read again with the old ones
+  on screen meanwhile ("Loading" shows only before the first answer); a
+  refusal that means the stage is over (proposal not pending, proposal
+  not open, proposal expired, voting closed) shows "This proposal is no
+  longer taking votes." and reads the proposal again; the supporters
+  (stage pending) are read for every proposal and the votes (stage
+  official) once openedAt is set, each 50 at a time (PAGE, a constant of
+  the page) with Show more by offset while the last page came back full,
+  a refused list in red under its heading, "No votes yet." once a list
+  answered empty; a row is in the history page's shape, the username
+  with a small bordered "you" tag on the caller's own row and the time
+  under it, the colored thumb and the votes at the right; the body
+  paragraph has overflow-wrap: anywhere besides white-space: pre-wrap,
+  so a long unbroken string wraps in the column. The thumb classes `for`
+  (#2e7d32) and `against` (var(--mat-sys-error)) are repeated in this
+  page's styles: the plan's 5.1 puts them in `src/app/app.css`, which
+  step 4 found to be the shell's own scoped stylesheet, and two one-line
+  rules in each of the two pages are simpler than a global class in
+  `src/styles.css`; `dao.page.ts` is unchanged.
+- `app.routes.ts`: `dao/:proposalId` (DaoProposalPage, "Proposal") right
+  after `dao/new`, so the static path keeps winning; the import between
+  dao-new and dao. A card's link and a posted proposal's /dao/<id> now
+  open the page instead of falling to the catch-all.
+- `home.page.ts`: when Home opens, beside the accounts,
+  /list-dao-proposals { status: 'open', limit: 100 } (quiet) into the
+  signal `openVotes`, the count of items with yourWeight at least 1 and
+  yourVote null; the Things to do line "2 proposals open for your vote"
+  ("1 proposal open for your vote" at one), icon how_to_vote, to /dao,
+  after the chat requests line and before the notifications line, when
+  the count is above 0; a refusal leaves the count at 0 and shows
+  nothing, the line is a convenience. No new service use: the read is
+  masterpod-api.service's listDaoProposals, already there.
+- Words: `home.openVotes(n)` in both files, the only key added; every key
+  of the plan's 5.1 was already in `dao` since step 4 (checked against
+  5.1 one by one), and `daoNew.unreachable` serves the validators'
+  refusal here too. The Thai "${n} ข้อเสนอที่เปิดให้คุณโหวต", in the shape of
+  the other Home lines, to be checked by a Thai reader.
+- Spec: 8.1 (the route's words), 8.2 (Home's list and its open read; the
+  Proposal paragraph), 8.8 (the Home line's words) and this note. 8.3
+  unchanged: no service changed. README: nothing. No new package, no
+  proxy change, nothing under server/.
+- `npx ng build` clean (2.06 MB initial, no warnings). Not run in a
+  browser here: the user opens a posted proposal from a card or lands on
+  it after Post, expecting the Pending label, the title, the avatar and
+  the by-line, the text, the support over the support needed with the bar
+  and "until ...", the snapshot total, "Your votes in this proposal: n",
+  "You supported this" (the post counts as the proposer's support) and the
+  "Supported by" list with their own row tagged "you"; a second pod with
+  votes sees the Support button, the ask, "Your support is recorded." and,
+  once the support reaches needed, the Open for votes label with For and
+  Against and the "Votes" heading; Home shows "1 proposal open for your
+  vote" for a pod with votes that has not voted; a pod without votes sees
+  the no-votes sentence and no button; an old link to an expired proposal
+  shows the Expired label and its numbers; against an older masterpod,
+  "/get-dao-proposal: HTTP 404: Not Found" in red.
 
 ## 12. Recovery and the moderator edition
 

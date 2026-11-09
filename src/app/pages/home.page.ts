@@ -35,7 +35,8 @@ interface TodoLine {
  * accounts are listed (/list-anos-accounts, quiet) into the session and
  * the balances read; every 5 seconds they are read again while an account
  * is not on the ledger yet or any anos are held or pending, as the Wallet
- * page does.
+ * page does. Beside the accounts the open DAO proposals are listed
+ * (quiet) for the line "2 proposals open for your vote" (2026-11-08).
  */
 @Component({
   selector: 'app-home-page',
@@ -97,6 +98,8 @@ export class HomePage {
   protected readonly listError = signal<string | null>(null);
   /** True once /list-anos-accounts answered, so "Open your first anos account" waits for the list. */
   private readonly accountsLoaded = signal(false);
+  /** The open DAO proposals this pod has votes in and has not voted on, from a quiet read of the open list when Home opens (wallet spec 8.2, DAO); 0 when the read was refused, since the line is a convenience. */
+  private readonly openVotes = signal(0);
   /** An Android phone, where the passkey is usually kept by Google: the Protect your passkey line shows while the recorded answer is skipped (wallet spec 8.2). */
   private readonly android = /Android/.test(navigator.userAgent);
 
@@ -124,6 +127,8 @@ export class HomePage {
     const rooms = this.session.chatRooms();
     const requests = rooms ? rooms.invites.length + rooms.joinRequests.length : 0;
     if (requests > 0) lines.push({ path: '/chat/requests', icon: 'mail', words: home.chatRequests(requests) });
+    const openVotes = this.openVotes();
+    if (openVotes > 0) lines.push({ path: '/dao', icon: 'how_to_vote', words: home.openVotes(openVotes) });
     const unread = this.session.unread().length;
     if (unread > 0) lines.push({ path: '/notifications', icon: 'notifications', words: home.unreadNotifications(unread) });
     return lines;
@@ -139,9 +144,12 @@ export class HomePage {
     inject(DestroyRef).onDestroy(() => clearInterval(timer));
   }
 
-  /** The accounts from the masterpod into the session (a refusal shown in red), then the balances. */
+  /** The accounts from the masterpod into the session (a refusal shown in red), then the balances; beside them the open proposals for the open-votes line (quiet, a refusal shows nothing). */
   private async load(): Promise<void> {
     this.listError.set(null);
+    void this.masterpod.listDaoProposals({ status: 'open', limit: 100 }, true).then((open) => {
+      if (open.ok) this.openVotes.set(open.body.proposals.filter((p) => p.yourWeight >= 1 && p.yourVote === null).length);
+    });
     const res = await this.masterpod.listAnosAccounts(true);
     if (res.ok) {
       this.session.accounts.set(res.body.accounts);

@@ -233,6 +233,7 @@ export const th: Words = {
     unreadChats: (n: number) => `${n} แชทที่ยังไม่ได้อ่าน`,
     chatRequests: (n: number) => `${n} คำขอแชท`,
     unreadNotifications: (n: number) => `${n} การแจ้งเตือนที่ยังไม่ได้อ่าน`,
+    openVotes: (n: number) => `${n} ข้อเสนอที่เปิดให้คุณโหวต`,
   },
   wallet: {
     title: 'กระเป๋าเงิน',

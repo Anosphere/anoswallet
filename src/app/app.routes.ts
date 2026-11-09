@@ -15,6 +15,7 @@ import { ChatRequestsPage } from './pages/chat-requests.page';
 import { ChatRoomPage } from './pages/chat-room.page';
 import { CreatePage } from './pages/create.page';
 import { DaoNewPage } from './pages/dao-new.page';
+import { DaoProposalPage } from './pages/dao-proposal.page';
 import { DaoPage } from './pages/dao.page';
 import { EscrowTradePage } from './pages/escrow-trade.page';
 import { HomePage } from './pages/home.page';
@@ -89,6 +90,7 @@ export const routes: Routes = [
   { path: 'marketplace/:listingId', component: ListingPage, canActivate: [sessionGuard], title: 'Listing' },
   { path: 'dao', component: DaoPage, canActivate: [sessionGuard], title: 'DAO' },
   { path: 'dao/new', component: DaoNewPage, canActivate: [sessionGuard], title: 'New proposal' },
+  { path: 'dao/:proposalId', component: DaoProposalPage, canActivate: [sessionGuard], title: 'Proposal' },
   { path: 'notifications', component: NotificationsPage, canActivate: [sessionGuard], title: 'Notifications' },
   { path: 'seed', component: SeedPage, canActivate: [sessionGuard], title: 'Vouch requests' },
   { path: 'moderation', component: ModerationPage, canActivate: [moderationGuard], title: 'Moderation' },
