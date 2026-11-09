@@ -1,6 +1,7 @@
 #!/bin/sh
 # Puts the wallet's deploy/ files in place on a wallet server and starts or
-# reloads what reads them: the TLS folder, the nginx site, the three units.
+# reloads what reads them: the TLS folder, the nginx site, the closed page,
+# the three units.
 # Run as root from the repo root:
 #
 #   sh scripts/install-system-files.sh
@@ -53,6 +54,10 @@ if [ ! -e "$ACCESS_LOG" ]; then
   chown root:adm "$ACCESS_LOG"
   chmod 640 "$ACCESS_LOG"
 fi
+# 2b. The closed page the site shows while /etc/wallet/closed exists or the
+#     wallet does not answer; nginx reads it from /var/www/wallet.
+install -D -m 0644 "$DEPLOY/nginx/closed.html" /var/www/wallet/closed.html
+
 nginx -t
 systemctl enable --now nginx
 systemctl reload nginx
@@ -64,7 +69,7 @@ systemctl enable wallet wallet-attestor wallet-moderator
 systemctl restart wallet wallet-attestor wallet-moderator
 
 # 4. What happened.
-echo "Installed: $TLS, nginx site wallet ($site), units wallet.service, wallet-attestor.service, wallet-moderator.service."
+echo "Installed: $TLS, nginx site wallet ($site), the closed page at /var/www/wallet/closed.html, units wallet.service, wallet-attestor.service, wallet-moderator.service."
 echo "The three units were restarted: journalctl -fu wallet"
 if [ "$site" = skipped ]; then
   echo "Next: the certificate into $TLS (the deploy plan, section 7), then this script again."

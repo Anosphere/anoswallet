@@ -114,9 +114,18 @@ servers from a chat. On each server:
   loopback. The certificate is the operator's, at
   `/etc/wallet/tls/fullchain.pem` and `/etc/wallet/tls/key.pem`, with a
   renewal hook that ends in `systemctl reload nginx`.
+- The closed page, `deploy/nginx/closed.html`: nginx shows it in place of
+  the wallet, on all three names, while the file `/etc/wallet/closed`
+  exists, and whenever the wallet proxy does not answer. The three units
+  keep running behind it and the balancer's `/api/health` check is let
+  through, so both servers stay in the rotation. Closing the wallet is
+  `touch /etc/wallet/closed` as root on each server, opening it is
+  `rm /etc/wallet/closed`; neither needs a restart or a reload. The page
+  reloads itself every two minutes, so a phone left on it shows the
+  wallet once it opens.
 - `scripts/install-system-files.sh`, run as root from the repo root, puts
-  the deploy files in place (the TLS folder, the nginx site, the three
-  units) and restarts the three units. It runs twice at setup: before the
+  the deploy files in place (the TLS folder, the nginx site, the closed
+  page, the three units) and restarts the three units. It runs twice at setup: before the
   certificate exists it skips the site, after it installs the site; and
   again after any pull that touched `deploy/`.
 

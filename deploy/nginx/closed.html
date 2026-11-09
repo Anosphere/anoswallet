@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta http-equiv="refresh" content="120">
+  <title>anoPod wallet: back soon</title>
+  <style>
+    :root {
+      --bg-top: #0b1020;
+      --bg-glow: #1a2147;
+      --text: #eef1f8;
+      --muted: #aab3cc;
+      --faint: #7d87a6;
+      --accent: #ff7a45;
+      --light: #6ef3b0;
+      --dim: #2b3350;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans Thai", sans-serif;
+      color: var(--text);
+      background: radial-gradient(ellipse at 50% 25%, var(--bg-glow) 0%, var(--bg-top) 70%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+      text-align: center;
+    }
+    main { max-width: 560px; width: 100%; }
+    svg { width: min(72vw, 300px); height: auto; display: block; margin: 0 auto 8px; overflow: visible; }
+    h1 { font-size: clamp(1.5rem, 5.5vw, 2.1rem); line-height: 1.2; margin: 8px 0 12px; }
+    p { font-size: 1.05rem; line-height: 1.5; color: var(--muted); margin: 0 0 10px; }
+    .thai { font-size: 1.1rem; }
+    .small { font-size: 0.85rem; color: var(--faint); margin-top: 18px; }
+
+    .rocket, .flame, .flame-inner, .ring { transform-box: view-box; }
+    .rocket { animation: bob 3s ease-in-out infinite; }
+    .flame { transform-origin: 160px 224px; animation: flicker 0.35s ease-in-out infinite alternate; }
+    .flame-inner { transform-origin: 160px 224px; animation: flicker 0.25s ease-in-out infinite alternate-reverse; }
+    .star { animation: twinkle 2.6s ease-in-out infinite; }
+    .ring { transform-origin: 160px 168px; animation: turn 90s linear infinite; }
+    .dot { fill: var(--dim); stroke: transparent; stroke-width: 7; animation: light 6s ease-in-out infinite; }
+
+    @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+    @keyframes flicker { from { transform: scale(0.9, 0.75); } to { transform: scale(1.05, 1.15); } }
+    @keyframes twinkle { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
+    @keyframes turn { to { transform: rotate(360deg); } }
+    @keyframes light {
+      0%, 8% { fill: var(--dim); stroke: transparent; }
+      14%, 60% { fill: var(--light); stroke: rgba(110, 243, 176, 0.3); }
+      70%, 100% { fill: var(--dim); stroke: transparent; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .rocket, .flame, .flame-inner, .star, .ring, .dot { animation: none; }
+      .dot { fill: var(--light); }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <svg viewBox="0 0 320 340" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+      <g fill="#ffffff">
+        <circle class="star" cx="22" cy="40" r="1.4" style="animation-delay:-0.4s"/>
+        <circle class="star" cx="48" cy="96" r="1.1" style="animation-delay:-1.3s"/>
+        <circle class="star" cx="70" cy="20" r="1.6" style="animation-delay:-2.1s"/>
+        <circle class="star" cx="104" cy="52" r="1.0" style="animation-delay:-0.9s"/>
+        <circle class="star" cx="12" cy="150" r="1.3" style="animation-delay:-1.7s"/>
+        <circle class="star" cx="60" cy="180" r="1.0" style="animation-delay:-0.2s"/>
+        <circle class="star" cx="40" cy="250" r="1.5" style="animation-delay:-2.4s"/>
+        <circle class="star" cx="18" cy="300" r="1.2" style="animation-delay:-1.1s"/>
+        <circle class="star" cx="96" cy="320" r="1.4" style="animation-delay:-0.6s"/>
+        <circle class="star" cx="130" cy="24" r="1.1" style="animation-delay:-1.9s"/>
+        <circle class="star" cx="204" cy="18" r="1.5" style="animation-delay:-0.3s"/>
+        <circle class="star" cx="236" cy="36" r="1.0" style="animation-delay:-2.2s"/>
+        <circle class="star" cx="272" cy="80" r="1.6" style="animation-delay:-1.5s"/>
+        <circle class="star" cx="306" cy="60" r="1.2" style="animation-delay:-0.8s"/>
+        <circle class="star" cx="260" cy="130" r="1.0" style="animation-delay:-2.0s"/>
+        <circle class="star" cx="300" cy="160" r="1.4" style="animation-delay:-1.2s"/>
+        <circle class="star" cx="284" cy="250" r="1.1" style="animation-delay:-0.5s"/>
+        <circle class="star" cx="310" cy="300" r="1.5" style="animation-delay:-1.8s"/>
+        <circle class="star" cx="250" cy="320" r="1.2" style="animation-delay:-2.5s"/>
+        <circle class="star" cx="200" cy="332" r="1.0" style="animation-delay:-0.7s"/>
+        <circle class="star" cx="110" cy="290" r="1.3" style="animation-delay:-1.4s"/>
+        <circle class="star" cx="150" cy="332" r="1.1" style="animation-delay:-2.3s"/>
+      </g>
+
+      <circle class="ring" cx="160" cy="168" r="138" fill="none" stroke="#2b3350" stroke-width="1.5" stroke-dasharray="3 9"/>
+      <g>
+        <circle class="dot" cx="160" cy="30" r="5.5" style="animation-delay:0s"/>
+        <circle class="dot" cx="241" cy="56" r="5.5" style="animation-delay:0.6s"/>
+        <circle class="dot" cx="291" cy="125" r="5.5" style="animation-delay:1.2s"/>
+        <circle class="dot" cx="291" cy="211" r="5.5" style="animation-delay:1.8s"/>
+        <circle class="dot" cx="241" cy="280" r="5.5" style="animation-delay:2.4s"/>
+        <circle class="dot" cx="160" cy="306" r="5.5" style="animation-delay:3s"/>
+        <circle class="dot" cx="79" cy="280" r="5.5" style="animation-delay:3.6s"/>
+        <circle class="dot" cx="29" cy="211" r="5.5" style="animation-delay:4.2s"/>
+        <circle class="dot" cx="29" cy="125" r="5.5" style="animation-delay:4.8s"/>
+        <circle class="dot" cx="79" cy="56" r="5.5" style="animation-delay:5.4s"/>
+      </g>
+
+      <g class="rocket">
+        <g class="flame"><path d="M148 224 Q160 270 172 224 Z" fill="#ff9f43"/></g>
+        <g class="flame-inner"><path d="M153 224 Q160 252 167 224 Z" fill="#ffe082"/></g>
+        <path d="M160 68 C140 92 139 108 139 130 V206 Q139 216 149 216 H171 Q181 216 181 206 V130 C181 108 180 92 160 68 Z" fill="#eef1f8"/>
+        <path d="M160 68 C147 84 142 98 140.5 114 H179.5 C178 98 173 84 160 68 Z" fill="#ff7a45"/>
+        <path d="M139 178 L120 212 L139 204 Z" fill="#ff7a45"/>
+        <path d="M181 178 L200 212 L181 204 Z" fill="#ff7a45"/>
+        <rect x="149" y="216" width="22" height="8" rx="2" fill="#7b86a6"/>
+        <rect x="139" y="160" width="42" height="4" fill="#c9d0e3"/>
+        <circle cx="160" cy="138" r="11" fill="#1b2240" stroke="#8fd3ff" stroke-width="3"/>
+        <circle cx="156" cy="134" r="3" fill="#8fd3ff" opacity="0.7"/>
+      </g>
+    </svg>
+
+    <h1>Wallets down while we prepare Test&nbsp;Net Phase&nbsp;2!</h1>
+    <p>We are wiping the slate clean and launching a fresh network tonight. Back soon.</p>
+    <p class="thai" lang="th">กระเป๋าเงินปิดชั่วคราว เรากำลังเตรียม Test Net Phase 2 แล้วพบกันเร็ว ๆ นี้</p>
+    <p class="small">This page checks back on its own every two minutes.</p>
+  </main>
+</body>
+</html>
