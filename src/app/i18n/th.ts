@@ -3,6 +3,10 @@ import type { Words } from './en';
 /** The four account types' words, used in several sentences; a type the wallet does not know keeps its raw word. */
 const KINDS: Record<string, string> = { spending: 'ใช้จ่าย', guarded: 'หน่วงเวลา', vault: 'นิรภัย', assisted: 'มีผู้ยืนยัน' };
 
+/** The two sides of a DAO vote from the wire words `for` and `against`, used in several sentences; a word the wallet does not know stays as it is. */
+const SIDES: Record<string, string> = { for: 'เห็นด้วย', against: 'ไม่เห็นด้วย' };
+const sideWord = (side: string): string => SIDES[side] ?? side;
+
 /**
  * The Thai words of the wallet (wallet spec 8.8): the same shape as en.ts,
  * section by section in the same order, written by the build chat from the
@@ -26,6 +30,7 @@ export const th: Words = {
     cases: 'เคส',
     chat: 'แชท',
     marketplace: 'ตลาด',
+    dao: 'DAO',
     account: 'บัญชี',
     moderation: 'การดูแล',
     attesting: 'การยืนยัน',
@@ -726,6 +731,65 @@ export const th: Words = {
     buying: 'ซื้อ',
     firstSell: 'สวัสดี ยังมีอยู่ไหม',
     firstBuy: 'สวัสดี ฉันขาย anos ให้คุณได้ ยังซื้ออยู่ไหม',
+  },
+  dao: {
+    title: 'DAO',
+    notice: (percent: number, voteDays: number) =>
+      `ข้อเสนอ DAO มาจากผู้ที่วางหลักประกัน anos เพื่อ daoVote ทุก 1 anos ที่วางหลักประกันเท่ากับ 1 โหวต ใครก็ตามที่มีโหวตสามารถโพสต์ข้อเสนอได้ ข้อเสนอจะเข้าสู่การโหวตเมื่อได้รับการสนับสนุนจาก ${percent} เปอร์เซ็นต์ของโหวต DAO ทั้งหมด จากนั้นทุกคนโหวตเห็นด้วยหรือไม่เห็นด้วยเป็นเวลา ${voteDays} วัน ข้อเสนอที่ได้รับการยอมรับเป็นการบันทึกสิ่งที่ชุมชนตัดสินใจ ข้อเสนอนั้นไม่ได้โอนเงินและไม่ได้เปลี่ยนแปลงสิ่งใดด้วยตัวเอง`,
+    openVotes: 'กำลังโหวต',
+    pending: 'รอดำเนินการ',
+    decided: 'ตัดสินแล้ว',
+    newProposal: 'ข้อเสนอใหม่',
+    by: (username: string, when: string) => `โดย ${username} · โพสต์เมื่อ ${when}`,
+    supportLine: (support: number, needed: number) => `สนับสนุนแล้ว ${support} จาก ${needed} โหวต`,
+    timeLeft: (days: number, hours: number) => (days >= 1 ? `เหลืออีก ${days} วัน` : `เหลืออีก ${hours} ชั่วโมง`),
+    forAgainst: (f: number, a: number) => `เห็นด้วย ${f} · ไม่เห็นด้วย ${a}`,
+    closes: (when: string) => `ปิดโหวต ${when}`,
+    accepted: 'ได้รับการยอมรับ',
+    rejected: 'ถูกปฏิเสธ',
+    expired: 'หมดอายุ',
+    openForVotes: 'เปิดให้โหวต',
+    pendingLabel: 'รอดำเนินการ',
+    decidedOn: (when: string) => `ตัดสินเมื่อ ${when}`,
+    youSupported: 'คุณสนับสนุนข้อเสนอนี้แล้ว',
+    youVoted: (vote: string) => `คุณโหวต${sideWord(vote)}แล้ว`,
+    votesWord: (n: number) => `${n} โหวต`,
+    noOpen: 'ไม่มีข้อเสนอที่เปิดให้โหวต',
+    noPending: 'ไม่มีข้อเสนอที่กำลังรวบรวมการสนับสนุน',
+    noDecided: 'ยังไม่มีข้อเสนอที่ตัดสินแล้ว',
+    showMore: 'แสดงเพิ่มเติม',
+    notFound: 'ไม่มีข้อเสนอนี้',
+    until: (when: string) => `จนถึง ${when}`,
+    snapshotTotal: (n: number) => `โหวต DAO ${n} โหวตในสแนปช็อตของข้อเสนอนี้`,
+    yourWeight: (n: number) => `โหวตของคุณในข้อเสนอนี้: ${n}`,
+    noWeight: 'คุณไม่มีโหวตในสแนปช็อตของข้อเสนอนี้ anos ที่วางหลักประกันหลังจากโพสต์ข้อเสนอนี้จะนับตั้งแต่ข้อเสนอถัดไป',
+    support: (n: number) => `สนับสนุนด้วย ${n} โหวต`,
+    askSupport: (n: number) => `เพิ่ม ${n} โหวตของคุณเพื่อสนับสนุนข้อเสนอนี้หรือไม่ การกระทำนี้ไม่สามารถยกเลิกได้`,
+    yesSupport: 'ใช่ สนับสนุน',
+    supported: 'บันทึกการสนับสนุนของคุณแล้ว',
+    for: 'เห็นด้วย',
+    against: 'ไม่เห็นด้วย',
+    askVote: (side: string, n: number) => `โหวต${sideWord(side)}ข้อเสนอนี้ด้วย ${n} โหวตหรือไม่ การกระทำนี้ไม่สามารถยกเลิกได้`,
+    yesVote: (side: string) => `ใช่ โหวต${sideWord(side)}`,
+    voted: (side: string) => `บันทึกโหวต${sideWord(side)}ของคุณแล้ว`,
+    alreadyActed: 'คุณได้ดำเนินการกับข้อเสนอนี้ไปแล้ว',
+    closedNow: 'ข้อเสนอนี้ไม่รับโหวตอีกต่อไป',
+    votes: 'โหวต',
+    supporters: 'สนับสนุนโดย',
+    you: 'คุณ',
+    noVotesYet: 'ยังไม่มีโหวต',
+  },
+  daoNew: {
+    title: 'ข้อเสนอใหม่',
+    titleLabel: 'หัวข้อ',
+    bodyLabel: 'ข้อเสนอของคุณ',
+    counter: (n: number, max: number) => `${n}/${max}`,
+    rule: (percent: number, pendingDays: number, minVotes: number) =>
+      `ข้อเสนอของคุณต้องได้รับการสนับสนุนจาก ${percent} เปอร์เซ็นต์ของโหวต DAO ทั้งหมดภายใน ${pendingDays} วันจึงจะเข้าสู่การโหวต การโพสต์นับเป็นการสนับสนุนของคุณเอง คุณต้องมีโหวต DAO อย่างน้อย ${minVotes} โหวตจึงจะโพสต์ได้`,
+    post: 'โพสต์ข้อเสนอ',
+    notEnough: (min: number) => `คุณต้องมีโหวต DAO อย่างน้อย ${min} โหวตจึงจะโพสต์ข้อเสนอได้ วางหลักประกัน anos เพื่อ daoVote จากบัญชีใช้จ่าย`,
+    alreadyPending: 'คุณมีข้อเสนอที่รอดำเนินการอยู่แล้ว รอจนกว่าข้อเสนอนั้นจะเข้าสู่การโหวตหรือหมดอายุ',
+    unreachable: 'ผู้ตรวจสอบไม่ตอบ ลองอีกครั้งในอีกสักครู่',
   },
   recover: {
     lockedOutText:

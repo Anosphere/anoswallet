@@ -599,19 +599,22 @@ as in the test apps; a new tab unlocks again.
     /marketplace/new         a new listing
     /marketplace/mine        your listings, open first, with who connected and Close
     /marketplace/:listingId  one listing: the details, the owner, Connect / Waiting / Open chat; the owner's view
+    /dao                     DAO: the notice, three tabs (Open votes, Pending, Decided), the cards, New proposal
+    /dao/new                 a new proposal: the title, the text, Post
+    /dao/:proposalId         one proposal: the text, the proposer, the numbers, your action, the votes (step 5)
     /notifications           the list, mark read
     /seed                    the vouch request inbox (seeds only)
     /log                     the activity log, newest 40 calls, polls excepted (the test apps' Log)
 
 A guard sends anyone without a session to /. Which pages the navigation
 shows follows the status: vouching until vouched; identity and setup
-until setup is complete; home first, then wallet, chat, marketplace and
-account once it is (2026-11-06, section 11); seed when isSeed. The Chat
-entry carries the number of unread rooms (8.2, Chat; 2026-11-05, section
-11) and the Notifications entry the number of unread notifications
-(2026-11-06); the side panel and the Home tiles draw one list,
-navigation.service (8.3). The toolbar's "anoPod wallet" is a link to
-/home once setup is complete.
+until setup is complete; home first, then wallet, chat, marketplace, DAO
+(2026-11-08) and account once it is (2026-11-06, section 11); seed when
+isSeed. The Chat entry carries the number of unread rooms (8.2, Chat;
+2026-11-05, section 11) and the Notifications entry the number of unread
+notifications (2026-11-06); the side panel and the Home tiles draw one
+list, navigation.service (8.3). The toolbar's "anoPod wallet" is a link
+to /home once setup is complete.
 
 The next-step rule, applied after an unlock and after each step
 finishes:
@@ -1419,6 +1422,78 @@ listing is not made any more; old marketplace rooms stay in Chat for the
 people in them, and Request to join stays for public rooms (Chat, New
 chat).
 
+DAO (2026-11-08, section 11; the plan is forclaude/dao-voting-plan-1.md,
+the masterpod's routes its spec's section 15): three screens, two of them
+step 4 and the third step 5. The wallet reads and writes the ledger
+through the masterpod alone; it never asks a validator for DAO stake. One
+staked anos of the daoVote purpose is one DAO vote; a pod's weight in a
+proposal is fixed by the masterpod's snapshot when the proposal is posted
+and again when it goes to a vote, so stake added later counts from the
+next proposal.
+
+DAO, at /dao: a header "DAO" with a Refresh icon button and, on a
+desktop, a New proposal button (a round + at the bottom right on a
+phone, as Browse); then the notice, an info icon and one paragraph in the
+plain muted style on a surface-container background with 12 px corners,
+never the error container: "DAO proposals come from people who staked
+anos for daoVote. One staked anos is one vote. Anyone with votes can post
+a proposal. It goes to a vote once 15 percent of all DAO votes support
+it, and then everyone votes for or against for 14 days. An accepted
+proposal records what the community decided. It moves no money and
+changes nothing by itself.", the two numbers from the `settings` the
+masterpod answers with every list (the minutes turned into days by
+Math.round(minutes / 1440)), shown once the first list answered; then
+three tabs, Open votes, Pending and Decided. A tab reads
+/list-dao-proposals for its status (open, pending, decided: accepted and
+rejected together) when it is first shown and on Refresh, 20 at a time,
+newest first, and Show more reads 20 more by offset while the last page
+came back full (the list has no more flag); Refresh forgets every tab and
+reads the one on screen again, the others when they are shown next. The
+Decided tab has a date range above its cards, as the history page: both
+days picked, or both cleared, read again, with from at the start of the
+first day and to at the start of the day after the last (the masterpod
+takes from inclusive and to exclusive, on decidedAt). The cards, one
+column on a phone and two on a desktop: the title in bold; "by somchai ·
+posted Nov 8, 2026" (the date without the time); then the state line.
+Pending: "25 of 180 votes in support" with a progress bar of the support
+over the support needed and "5 days left" (the whole days to
+pendingUntil, or the hours, rounded up, under a day). Open: "For 120 ·
+Against 40" and "closes Nov 22, 2026, 3:50:12 PM". Decided: Accepted or
+Rejected as a small label, green or red, the for and against, and
+"decided Nov 22, 2026, 3:50:12 PM". Under it, when the caller acted: "You
+supported this" with a green thumb_up on a pending card; "You voted for"
+or "You voted against" with the green thumb_up or the red thumb_down on
+an open or decided one (a support is not a vote, everyone votes fresh).
+The green is #2e7d32 and the red var(--mat-sys-error), Material's icons,
+never emojis. A card opens /dao/<id>. The tab's empty line when nothing
+came back: "No proposal is open for votes.", "No proposal is collecting
+support.", "No proposal has been decided yet."; a refused read in red
+under the tab ("/list-dao-proposals: HTTP 404: Not Found" against a
+masterpod without the routes), and the rest of the wallet works.
+
+New proposal, at /dao/new (step 4): a back arrow to /dao; Title (100
+characters at most, a counter "12/100" under it); Your proposal, a
+textarea of 10 rows (5,000 at most, its counter); under them the rule
+once the settings came, read quietly with /list-dao-proposals { status:
+'open', limit: 1 } when the page opens: "Your proposal needs support from
+15 percent of all DAO votes within 7 days to go to a vote. Posting it
+counts as your own support. You need at least 1 DAO vote(s) to post.";
+Post proposal, disabled until both fields have text and while busy. Post
+calls /create-dao-proposal with the trimmed fields; a 201 opens
+/dao/<proposalId> (the masterpod answers status pending, or open when the
+proposer's own weight alone reaches the support needed). The refusals in
+words: not enough DAO votes, "You need at least 1 DAO votes to post a
+proposal. Stake anos for daoVote from a spending account."; a pending
+proposal is already open, "You already have a pending proposal. Wait
+until it goes to a vote or expires."; validators unreachable, "The
+validators did not answer. Try again in a moment."; the rest
+"/create-dao-proposal: HTTP 400: invalid title" and the like.
+
+Proposal, at /dao/:proposalId: step 5 (the plan's section 5): the text,
+the proposer, the numbers, the caller's support or vote with a confirm in
+place, the public lists of the votes and the supports, and the Home line
+"2 proposals open for your vote".
+
 Notifications: the list, newest first, mark read; the 5-second poll
 runs while a session is open and updates the status (vouched, counts),
 and the chat rooms with them once setup is complete. The chat kinds
@@ -1464,7 +1539,11 @@ excepted, with the keyholder and anos calls included.
                             listingId on createChatRoom, mine and status any on listListings, no hpkeKey on
                             createListing, the fuller RoomListing and the listing on an invite; the four noted
                             transaction routes and the two settings routes (2026-11-07); listMyBreakGlassMoves
-                            and fileBreakGlassMoves (2026-11-08), storeBreakGlassBlob gone
+                            and fileBreakGlassMoves (2026-11-08), storeBreakGlassBlob gone; the six DAO routes of
+                            masterpod 15 (2026-11-08): createDaoProposal, supportDaoProposal, voteDaoProposal,
+                            listDaoProposals (with the quiet flag), getDaoProposal and listDaoVotes, with the
+                            types DaoStatus, DaoListStatus, DaoSettings, DaoListFilters, DaoProposalItem,
+                            DaoProposal and DaoVoteItem
     keyholder-api.service   the keyholder test app's, base path /api/keyholder/<n>
     anos-api.service        the anos test app's account-api.service.ts, base path /api/anos/<defaultValidator>,
                             plus the five signed reads (listEscrows added 2026-11-05, getAssistedTransfer and
@@ -1489,7 +1568,7 @@ excepted, with the keyholder and anos calls included.
     navigation.service      the one navigation list (2026-11-06): NavItem (path, label, icon, badge) and items,
                             the side panel's entries by the status and the edition, Home first once setup is
                             complete, Chat and Notifications with their unread counts; the side panel and the
-                            Home tiles both draw it
+                            Home tiles both draw it; DAO after Marketplace and before Account (2026-11-08)
     chat.service            what the chat pages share (2026-11-05): room keys (roomKeyOf, wrapFor), decryptMessage,
                             piecesOf, a room's title, kind, icon and other person, the order by activity, shortWhen,
                             timeOf and dayLabel, requestedRooms, refreshRooms; listingWords, a listing in a few
@@ -1698,6 +1777,11 @@ both files at once: the Protect your passkey pane of setup, in `setup`
 (2026-11-07, section 11); the note form and the notes of the history
 page, in `notes` (2026-11-07, section 11); the Noted transactions page,
 in `notes`; the protect page and the Home line, in `common` and `home`.
+The DAO page and the New proposal page (2026-11-08, section 11) take
+their words from `dao` and `daoNew`, with `nav.dao`, like every page,
+the proposal page's words of step 5 among them; the Thai is the build
+chat's, by the glossary ("โหวต DAO" for DAO votes), for Thai readers to
+correct.
 
 ## 9. Configuration, and running it on this machine
 
@@ -1788,6 +1872,15 @@ network/testnet.env numbers (2026-11-06, section 11).
   attestors about a move; a migration of old key blobs (the testnet is
   reset with a fresh genesis instead); the break-glass blob's removal
   from the masterpod.
+- From the DAO voting plan (forclaude/dao-voting-plan-1.md, 2026-11-08,
+  its section 8): a moderator hide for a proposal's text; votes signed by
+  pair one of a staked account instead of the pod's session keys;
+  notifications about proposals; editing or withdrawing a proposal;
+  comments on a proposal (the chat is there); a quorum; any weighting but
+  one staked anos one vote; a cursor on the lists (offset paging
+  instead); a vote list export; a logged-out public view of the
+  proposals; the stake withdrawal lock (the guardians work it by hand
+  from the vote rows' times).
 - Several passkeys, push delivery, a custom theme, rate limits.
 
 ## 11. Build notes
@@ -3988,6 +4081,81 @@ masterpod keeps storing exactly what it receives.
   server and reads the selfie's length on the Log page, expecting a few
   hundred thousand characters, not millions, and the preview the right way
   up.
+
+### The DAO, step 4 (2026-11-08)
+
+Step 4 of `forclaude/dao-voting-plan-1.md` (its section 4), one commit.
+Steps 1 to 3 are in the other repos: the validator's public
+/list-dao-stakes (anossoftware b8c8d32), the doorman's line
+(doormansoftware 637ccd6 and 5f84895) and the masterpod's tables, routes
+and clock (masterpodsoftware 68b8ba2, its spec's section 15). The wallet
+is deployed last, wallet1 then wallet2, together with step 5 (the plan's
+section 7). A wallet against a masterpod without the routes shows
+"/list-dao-proposals: HTTP 404: Not Found" in red on the DAO page and
+works everywhere else.
+
+- `app.routes.ts`: `dao` (DaoPage, "DAO") and `dao/new` (DaoNewPage, "New
+  proposal") after the marketplace routes, behind `sessionGuard`. The plan
+  lists a third line, `dao/:proposalId`, and marks it step 5: a route to a
+  page that does not exist yet cannot build, so the line goes in with its
+  page in step 5, after `dao/new`, where the static path keeps winning.
+  Until then a link to /dao/<id> (a card, a posted proposal) falls to the
+  catch-all and lands on the landing page, which sends a session on to
+  Home; the two steps are deployed together.
+- `navigation.service`: `{ path: '/dao', label: nav.dao, icon:
+  'how_to_vote' }` after Marketplace and before Account; the Home tiles
+  draw the same list.
+- `masterpod-api.service`: under "level setup: DAO (masterpod spec 15)" the
+  types `DaoStatus`, `DaoListStatus`, `DaoSettings`, `DaoProposalItem`,
+  `DaoProposal` and `DaoVoteItem`, and one the plan does not name,
+  `DaoListFilters`, the list's body (status, from, to, limit, offset); the
+  six methods, each `this.signed(path, body)`, `listDaoProposals(filters,
+  quiet = false)` with the quiet flag as the other reads have it,
+  `listDaoVotes(proposalId, stage, limit = 50, offset = 0)`.
+- `dao.page.ts` (new), as 4.4 says. Where the plan was silent: Refresh
+  forgets all three tabs and reads the one on screen again, the others
+  when they are shown next; the notice waits for the first list that
+  answers, since its numbers are the masterpod's `settings`, so a
+  masterpod without the routes shows the refusal and no notice; the time
+  left is the whole days to pendingUntil, or the hours rounded up under a
+  day, never below zero; the card's "posted" date is the date alone
+  (toLocaleDateString with dateStyle medium by the language's tag), while
+  "closes" and "decided" carry the time through lang.dateTime; a pending
+  card shows the caller's support, an open or decided card the caller's
+  vote (a support is not a vote, the plan's decision 8); a proposer whose
+  pod row is gone reads "unknown pod" (common.unknownPod); a thin
+  indeterminate bar runs under the notice while a read is out, as the
+  history page has one; the page size 20 is a constant of the page. The
+  green `for` (#2e7d32) and red `against` (var(--mat-sys-error)) classes
+  of the thumb icons are the page's own: the plan's 5.1 puts them in
+  `src/app/app.css`, but that file is the shell component's own stylesheet
+  (the `styleUrl` of app.ts), scoped to its template by Angular's view
+  encapsulation, so a class there does not reach a page; step 5 either
+  repeats the two lines in its page or puts them in `src/styles.css`, the
+  global file, and takes them out of this page.
+- `dao-new.page.ts` (new), as 4.5 says, in the frame of the new-listing
+  page; the counters are Material hints at the end of the fields;
+  `maxlength` is bound from two constants of the page; the back arrow's
+  label is common.back; `notEnough` carries the settings' proposeMinVotes,
+  or 1 when the quiet read did not answer; the refusals are matched on the
+  masterpod's reason text, as the attesting page matches its own.
+- Words: `nav.dao`; the `dao` section with every key of 4.2, the proposal
+  page's words of the plan's 5.1 included now since 4.2 lists them in the
+  section (step 5 adds `home.openVotes` only); the `daoNew` section. The
+  side words `for` and `against` reach the sentences as the wire words:
+  the English prints them, the Thai turns them into เห็นด้วย and
+  ไม่เห็นด้วย (a `sideWord` helper beside `KINDS` in th.ts). The Thai by
+  the glossary ("โหวต DAO" for DAO votes), to be checked by a Thai reader;
+  "Pending" is the glossary's รอดำเนินการ, "Open votes" กำลังโหวต.
+- Spec: 8.1, 8.2 (DAO), 8.3, 8.8, 10 and this note. README: nothing. No
+  constant in constants.ts, no proxy change, no new package.
+- `npx ng build` clean (2.05 MB initial, no warnings). Not run in a
+  browser here: the user opens /dao on the dev server against a masterpod
+  with step 3, expecting the notice with 15 and 14, the three tabs with
+  their empty lines, New proposal posting and landing on /dao/<id> (the
+  landing page until step 5), then the Pending tab's card with its bar and
+  "You supported this"; against an older masterpod, the red
+  "/list-dao-proposals: HTTP 404: Not Found" and no notice.
 
 ## 12. Recovery and the moderator edition
 
