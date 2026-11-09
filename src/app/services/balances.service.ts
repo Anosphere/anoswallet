@@ -30,6 +30,8 @@ export interface AccountBalance {
   available: bigint;
   /** Landed, but a held-amount read was refused, so held may be short. */
   partial: boolean;
+  /** The account's guardian votes as /get-account answers them (anossoftware 25.1), 0 while not landed or on a validator without the field; Home's fund proposal line reads it (2026-11-08). */
+  guardianVotes: number;
 }
 
 /** The pod's anos added up over its landed accounts, for the balance card. A lost account counts nowhere. */
@@ -245,6 +247,7 @@ export class BalancesService {
             held,
             available: balance > held ? balance - held : 0n,
             partial: !list.ok || !escrows.ok || (assisted !== null && !assisted.ok) || (locked !== null && !locked.ok),
+            guardianVotes: account.body.guardianVotes ?? 0,
           };
         }
       } catch (err) {
@@ -299,7 +302,7 @@ export class BalancesService {
 
 /** The entry of an account /get-account did not answer for, or that could not be asked: nothing landed, nothing held. */
 function notLanded(error: string): AccountBalance {
-  return { landed: false, lost: false, balance: null, error, pending: 0n, escrow: 0n, assisted: 0n, locked: 0n, held: 0n, available: 0n, partial: false };
+  return { landed: false, lost: false, balance: null, error, pending: 0n, escrow: 0n, assisted: 0n, locked: 0n, held: 0n, available: 0n, partial: false, guardianVotes: 0 };
 }
 
 /** The entry of a lost account (wallet spec 8.2): the keyBlob did not open under the key blob key, so nothing was read. */

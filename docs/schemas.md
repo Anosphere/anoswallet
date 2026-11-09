@@ -656,7 +656,7 @@ as in the test apps; a new tab unlocks again.
     /dao/:proposalId         one proposal: the status, the title and the text, the proposer, the numbers, your support or vote with a confirm in place, the votes and the supporters
     /dao/guardians           Guardians: the notice, your guardian accounts, two tabs (Open vote, Decided), the cards, New proposal
     /dao/guardians/new       a new fund proposal: the account that proposes, the payouts, Post
-    /dao/guardians/:transactionId   one proposal: the status, the payouts, the numbers, your vote with a confirm in place, the votes (the Guardians plan's step 4)
+    /dao/guardians/:transactionId   one fund proposal: the status, the payouts, the numbers, Voting as and your vote with a confirm in place, the votes
     /notifications           the list, mark read
     /seed                    the vouch request inbox (seeds only)
     /log                     the activity log, newest 40 calls, polls excepted (the test apps' Log)
@@ -892,9 +892,12 @@ account 2" (an account not submitted to the validator, by its name, to
 /wallet); "3 unread chats" (to /chat); "2 chat requests" (the invites to
 this pod and the join requests on its rooms, to /chat/requests); "2
 proposals open for your vote" (the open DAO proposals this pod has
-votes in and has not voted on, to /dao; 2026-11-08, section 11); "4
-unread notifications" (to /notifications), each singular when it is
-one; then the tiles, one square per side-panel entry except Home itself
+votes in and has not voted on, to /dao; 2026-11-08, section 11); "A fund
+proposal is open for your vote" (a fund proposal is open and one of the
+pod's accounts with guardian votes neither proposed it nor voted on it,
+to /dao/guardians; 2026-11-08, section 11); "4 unread notifications" (to
+/notifications), each singular when it is one; then the tiles, one
+square per side-panel entry except Home itself
 and Log, with the entry's icon and label, Chat and Notifications
 carrying their unread counts at the top right, drawn from the same list
 as the side panel (navigation.service, 8.3). On open /list-anos-accounts
@@ -903,8 +906,13 @@ balances are read; every 5 seconds they are read again while an account
 is not on the ledger yet or any anos are held or pending, as the Wallet
 page does. Beside the accounts, /list-dao-proposals { status: 'open',
 limit: 100 } (quiet) counts the proposals with yourWeight at least 1 and
-no vote of this pod for the open-votes line; a refusal shows no line,
-the line is a convenience (2026-11-08, section 11).
+no vote of this pod for the open-votes line, and /list-fund-proposals {
+status: 'open' } (quiet) brings the open fund proposal for the fund line,
+which shows while its status is open and one of the pod's accounts whose
+balance entry has guardianVotes at least 1 (balances.service, 8.3, from
+the /get-account read Home already makes) is neither its proposer nor in
+its votes; a refusal shows no line, the lines are a convenience
+(2026-11-08, section 11).
 
 Wallet. Titled "Wallet" (the subtitle left on 2026-11-06, section 11).
 On top the balance card (balance-card.component over balances.service,
@@ -1740,9 +1748,78 @@ proposer has no guardian vote", "This account has no guardian votes.";
 the rest "/fund-proposal: HTTP 400: payload.payouts[0].reason must be a
 string" and the like.
 
-Fund proposal, at /dao/guardians/:transactionId (step 4): the status, the
-payouts, the numbers, your vote with a confirm in place, the votes; its
-paragraph comes with the page.
+Fund proposal, at /dao/guardians/:transactionId (step 4, 2026-11-08,
+section 11), in the frame of the DAO's Proposal page: a back arrow to
+/dao/guardians and a Refresh icon button; /get-fund-proposal when the
+page opens, after each action and on Refresh, "Loading" until the first
+answer, "This proposal does not exist." on the validator's 404 unknown
+proposal, any other refusal in red ("/get-fund-proposal: HTTP 404: Not
+Found" against a validator or a doorman without the route). Top to
+bottom: the status as a small bordered label, the five words of the
+Guardians page's cards, "Passed, the money moved" in green and "Failed"
+in red (a word the wallet does not know as it is, no colour); "Fund
+proposal a1b2c3d4…e5f6" as the heading with a copy button for the id;
+"proposed by a1b2c3d4…e5f6 · Nov 8, 2026" (the date without the time);
+the payouts, one row each in the validator's index order: "1500 anos to
+a1b2c3d4…e5f6" with a copy button for the recipient, the reason under
+it when there is one, and "returns guardian stake" (the purpose's wire
+word, as the notice says "for guardian") when the payout returns stake;
+then the total line, "2 payouts · 1500 anos" ("1 payout" at one); the
+numbers: "For 5 · Against 2", in large type while the vote is open, with
+the progress bar of for over for plus against and "needs 70 percent for
+· closes Nov 8, 2026, 4:50:12 PM" on an open proposal; the tally and the
+needs and closes line on a waiting one (the label at the top says it
+waits for the validators); the tally alone on a closing one; the tally
+and "decided Nov 8, 2026, 5:00:00 PM" on a decided one (the label at the
+top is the result). Your part (the plan's decision 8: every guardian
+account of the pod votes, one at a time): "Reading…" while the pod's
+guardian accounts are read (guardian-accounts.service, 8.3, as the
+Guardians page reads them); with none, the become-a-guardian sentence of
+the Guardians page with the least stake from the settings and no select;
+else "Voting as", a select of the guardian accounts, each option the
+short id, "3 votes" and its state, "You proposed this", "You voted for"
+/ "You voted against" or, while the vote is open, "can vote" (nothing
+for an account that neither proposed nor voted on a proposal that is
+not open); the first account that can still vote is selected when the
+page opens, the first in the list when none can (with one guardian
+account the select has one option). Under the select the selected
+account's state: "You proposed this" with the green thumb_up, "You voted
+for" / "You voted against" with the colored thumb, or, while the status
+is open and the account is neither the proposer nor in the votes, two
+big outlined buttons side by side, the green thumb_up "For" and the red
+thumb_down "Against", the DAO page's pair; either asks in place, "Vote
+for with 3 votes from a1b2c3d4…e5f6? It cannot be undone." with "Yes,
+vote for" and Back (a new pick in the select closes the question, which
+named the account). Yes opens pair one of the selected account from its
+keyBlob for the signature and drops it, builds the guardianVote
+follow-up (crypto.buildFollowUp: type guardianVote, the proposal's
+transactionId, the account as guardianId, the vote), has /api/sign add
+the wallet pair and posts /guardian-vote; a 202 shows "Your vote for is
+sent to the validators." in green (the thumb green, #2e7d32) and reads
+the proposal again, where the vote shows as waiting for approval until
+every validator accepted it, and the select moves to the next account
+that can still vote, so the next vote is one pick away (it stays when
+none can). The refusals in words, matched on the validator's own text
+(anossoftware src/fund/guardian-vote.js): "the vote on this proposal has
+closed", "The vote on this proposal has closed." with the proposal read
+again; "this guardian has already voted on this proposal", "This account
+already voted."; "the guardian has no guardian vote", "This account has
+no guardian votes."; "payload.guardianId is the proposer, whose vote for
+is already counted", "You proposed this"; the rest with the path,
+"/guardian-vote: HTTP 400: payload.vote must be …" and the like. Below,
+a heading "Votes": the first row the proposer, the short id with a copy
+button (tagged "you" when it is one of the pod's accounts), the time the
+proposal was made under it, and at the right the green thumb_up with
+"proposer · 3 votes for" (proposerWeight, the proposer's votes when the
+proposal was stored); then one row per vote in the validator's order
+(guardian id order): the short id with a copy button and the "you" tag
+on the pod's own, "approved" or "waiting for approval" and the time
+under it, and at the right the colored thumb with "3 votes"; "No votes
+yet." under the proposer alone. Refresh reads the proposal and the
+guardian accounts again and clears the two messages. The green is
+#2e7d32 and the red var(--mat-sys-error), as on the DAO pages. The Home
+line "A fund proposal is open for your vote" is in the Home paragraph
+above.
 
 Notifications: the list, newest first, mark read; the 5-second poll
 runs while a session is open and updates the status (vouched, counts),
@@ -1814,7 +1891,9 @@ excepted, with the keyholder and anos calls included.
                             left out); pairOne(accountId), pair one of one of the session's accounts for one
                             signature; what the Guardians page, New fund proposal and the proposal page share
     balances.service        what Home and the Wallet page share (2026-11-06): one entry per account (landed,
-                            balance, what is pending, in escrow, assisted or locked, held, available, partial)
+                            balance, what is pending, in escrow, assisted or locked, held, available, partial,
+                            and guardianVotes as /get-account answers them, 0 while not landed or on a validator
+                            without the field, which Home's fund proposal line reads, 2026-11-08)
                             read by refresh from /get-account, /list-transactions, /list-escrows and the
                             held-transfer read of the account's type, every account at once; the totals over
                             the session's accounts; needsPoll while an account is not on the ledger yet or
@@ -2051,7 +2130,12 @@ entries in `dao`; the words of the two account panels left `account` with
 the panels; the five status words are one table, `guardians.statuses`,
 keyed by the validator's word; the Thai is the build chat's, by the
 glossary ("ผู้คุ้มครอง" guardian, "ข้อเสนอกองทุน" fund proposal), for Thai
-readers to correct.
+readers to correct. The Fund proposal page (2026-11-08, section 11)
+takes its words from `guardians` too, where step 3 had already put them,
+plus `guardians.payoutTo`, the payout row's "1500 anos to
+a1b2c3d4…e5f6"; Home's "A fund proposal is open for your vote" is
+`home.openFundVote`; the Thai is the build chat's, for Thai readers to
+correct.
 
 ## 9. Configuration, and running it on this machine
 
@@ -4726,6 +4810,113 @@ the tab of the Guardians page and works everywhere else.
   money moved" or "Failed"; against an older validator or doorman, the red
   "/list-fund-proposals: HTTP 404: Not Found" under the tab and no notice.
   The account page shows no panel under the Transaction history button.
+
+### The Guardians, step 4 (2026-11-08)
+
+Step 4 of `forclaude/wallet-guardians-plan-1.md` (its section 4), one
+commit, on top of step 3 (the note above): the Fund proposal page, its
+route, the Home line. The wallet is deployed last, wallet1 then wallet2,
+steps 3 and 4 together, after the validators and their doormen (the
+plan's section 6). Step 5, the architecture records, is another chat.
+
+- `guardian-proposal.page.ts` (new), GuardianProposalPage at
+  /dao/guardians/:transactionId, as 4.1 says and 8.2 (Guardians, Fund
+  proposal) describes, in the frame of the DAO's Proposal page:
+  `transactionId` is an input the router binds from the route, and an
+  effect reads the proposal when it is set. Where the plan was silent:
+  the status label at the top carries the status word for every status,
+  so a decided proposal's result is not drawn twice and a waiting or
+  closing one does not repeat its word in the numbers (the DAO's Proposal
+  page does the same); the numbers block shows "For n · Against n" for
+  every status, large while open, the bar only while open, the needs and
+  closes line while the vote is ahead (open and waiting), "decided …"
+  once decidedAt is set, so a closing proposal shows its tally as it
+  stands; the payouts are rows in the shape of the vote rows, "1500 anos
+  to a1b2c3d4…e5f6" with the copy button, the reason and the
+  returns-stake line under it, one new word `guardians.payoutTo` (the
+  plan's "to"; the Thai "ไปยัง", the history's word for a recipient), and
+  the total line is the cards' `payouts(n, anos)`; `returnsStake` takes
+  the purpose's wire word, as the notice and the rule say "for guardian"
+  and 8.8 keeps wire words as they are; the "proposed by" date is the
+  date alone through dateOf, the other times through lang.dateTime, as
+  the cards; "not found" is the validator's 404 with "unknown proposal"
+  in its reason, while any other 404 (a doorman or a validator without
+  the route) shows in red with the path, as the Guardians page shows its
+  list's 404; the select's option says "can vote" only while the status
+  is open, and nothing for an account that neither proposed nor voted on
+  a proposal that is not open; the pick is made once the proposal and the
+  accounts are both known (the first account that can still vote, else
+  the first), stays while its account is listed (a Refresh does not undo
+  it), and after a vote moves to the next account that can still vote
+  and otherwise stays, so the person sees their vote; a new pick closes a
+  question asked for the previous account, since the question names it;
+  one `asking` signal holds the side and one `confirm` method sends it,
+  as on the DAO's page; the payload is typed GuardianVotePayload before
+  buildFollowUp, so the wire shape is the compiler's to check; the "you"
+  tag matches a row's account against the session's account list, not
+  the guardian list, so an account that voted and has since returned its
+  stake is still tagged; Refresh reads the proposal and the accounts
+  again, with the old ones on screen meanwhile ("Loading" shows only
+  before the first answer); the green of "Your vote for is sent to the
+  validators." is the thumb green; the `for` and `against` lines are the
+  page's own, as on the other pages. The proposer's row in the votes list
+  carries the short id with the copy button, the "you" tag and the time
+  the proposal was made, in the shape of the vote rows, with "proposer ·
+  3 votes for" at the right, so the proposer's id is copied where every
+  other id is.
+- `app.routes.ts`: `dao/guardians/:transactionId` (GuardianProposalPage,
+  "Fund proposal") in place of the comment after `dao/guardians/new`,
+  before `dao/:proposalId`; the import between guardian-new and
+  guardians. A card's link and a posted proposal's /dao/guardians/<id>
+  now open the page instead of falling to the catch-all.
+- `balances.service`: `AccountBalance` gains `guardianVotes`, the number
+  /get-account answers (anossoftware 25.1), 0 while not landed or on a
+  validator without the field; `readOne` sets it from the read Home
+  already makes. The plan's 4.2 wanted the Home line's guardian votes
+  "from the balance reads Home already makes" and step 3 left the choice
+  open (a field here, or a second /get-account per account through
+  guardian-accounts.service); the field is one line and no extra read
+  for every pod at every unlock, where very few are guardians.
+- `home.page.ts`: when Home opens, beside the accounts,
+  /list-fund-proposals { status: 'open' } (quiet, anos-api.service) into
+  the signal `openFund`, the one open proposal or null; `openFundVote` is
+  computed from it and the balance entries: the status is open and one
+  of the session's accounts has guardianVotes at least 1, is not the
+  proposer and is not in the votes; the Things to do line "A fund
+  proposal is open for your vote", icon shield, to /dao/guardians, after
+  the DAO line and before the notifications line; a refusal leaves the
+  signal null and shows nothing, the line is a convenience. The line
+  follows the balances as they come, since the computed reads them.
+- Words: `home.openFundVote` in both files, the plan's one key, and
+  `guardians.payoutTo(anos, shortId)`, the payout row's sentence the plan
+  wrote as the word "to"; every other key of 4.1 was already in
+  `guardians` since step 3 (checked against 4.1 one by one), and
+  `guardianNew.noVotes` serves the vote's no-guardian-vote refusal, as
+  the plan says. The Thai "มีข้อเสนอกองทุนที่เปิดให้คุณโหวต" in the shape of
+  the other Home lines and "${anos} anos ไปยัง ${shortId}" with the
+  history's word for a recipient, to be checked by a Thai reader.
+- Spec: 8.1 (the route's words), 8.2 (Home's list and its open read; the
+  Fund proposal paragraph in place of the step 4 placeholder), 8.3
+  (balances.service), 8.8 (the words) and this note. README: nothing. No
+  new package, no constant, no proxy change, nothing under server/.
+- `npx ng build` clean (2.09 MB initial, no warnings). Not run in a
+  browser here: the user opens a card on the Guardians page or lands on
+  the page after Post, expecting the Open for votes label, "Fund proposal
+  a1b2…" with the copy button, "proposed by …", the payout rows and "1
+  payout · 1500 anos", "For 3 · Against 0" in large type with the bar and
+  "needs 70 percent for · closes …", "Voting as" with the proposing
+  account and "You proposed this" under it, the "Votes" heading with the
+  proposer's row tagged "you" and "No votes yet."; a second pod with a
+  guardian account sees its account selected with "can vote", For and
+  Against, the ask, "Your vote for is sent to the validators." and its
+  row as "waiting for approval" until the other validators accepted it,
+  then "approved"; Home shows "A fund proposal is open for your vote" for
+  a pod with a guardian account that has not voted and nothing for the
+  proposer; a pod without a guardian account sees the become-a-guardian
+  sentence and no select; after the hour and the next transaction, the
+  label "Passed, the money moved" or "Failed" with "decided …"; against
+  an older validator or doorman, "/get-fund-proposal: HTTP 404: Not
+  Found" in red.
 
 ## 12. Recovery and the moderator edition
 

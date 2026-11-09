@@ -227,6 +227,7 @@ export const en = {
     chatRequests: (n: number) => `${n} chat request${n === 1 ? '' : 's'}`,
     unreadNotifications: (n: number) => `${n} unread notification${n === 1 ? '' : 's'}`,
     openVotes: (n: number) => `${n} proposal${n === 1 ? '' : 's'} open for your vote`,
+    openFundVote: 'A fund proposal is open for your vote',
   },
   wallet: {
     title: 'Wallet',
@@ -833,6 +834,7 @@ export const en = {
     approvedWord: 'approved',
     waitingWord: 'waiting for approval',
     noVotesYet: 'No votes yet.',
+    payoutTo: (anos: string, shortId: string) => `${anos} anos to ${shortId}`,
     returnsStake: (purpose: string) => `returns ${purpose} stake`,
     you: 'you',
   },

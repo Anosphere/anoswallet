@@ -19,6 +19,7 @@ import { DaoProposalPage } from './pages/dao-proposal.page';
 import { DaoPage } from './pages/dao.page';
 import { EscrowTradePage } from './pages/escrow-trade.page';
 import { GuardianNewPage } from './pages/guardian-new.page';
+import { GuardianProposalPage } from './pages/guardian-proposal.page';
 import { GuardiansPage } from './pages/guardians.page';
 import { HomePage } from './pages/home.page';
 import { IdentityPage } from './pages/identity.page';
@@ -95,7 +96,7 @@ export const routes: Routes = [
   // The Guardians routes sit between dao/new and dao/:proposalId: the router takes the first match, and dao/:proposalId would otherwise swallow dao/guardians (2026-11-08).
   { path: 'dao/guardians', component: GuardiansPage, canActivate: [sessionGuard], title: 'Guardians' },
   { path: 'dao/guardians/new', component: GuardianNewPage, canActivate: [sessionGuard], title: 'New fund proposal' },
-  // dao/guardians/:transactionId (GuardianProposalPage, "Fund proposal") goes in with its page in the Guardians plan's step 4.
+  { path: 'dao/guardians/:transactionId', component: GuardianProposalPage, canActivate: [sessionGuard], title: 'Fund proposal' },
   { path: 'dao/:proposalId', component: DaoProposalPage, canActivate: [sessionGuard], title: 'Proposal' },
   { path: 'notifications', component: NotificationsPage, canActivate: [sessionGuard], title: 'Notifications' },
   { path: 'seed', component: SeedPage, canActivate: [sessionGuard], title: 'Vouch requests' },

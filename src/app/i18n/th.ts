@@ -238,6 +238,7 @@ export const th: Words = {
     chatRequests: (n: number) => `${n} คำขอแชท`,
     unreadNotifications: (n: number) => `${n} การแจ้งเตือนที่ยังไม่ได้อ่าน`,
     openVotes: (n: number) => `${n} ข้อเสนอที่เปิดให้คุณโหวต`,
+    openFundVote: 'มีข้อเสนอกองทุนที่เปิดให้คุณโหวต',
   },
   wallet: {
     title: 'กระเป๋าเงิน',
@@ -835,6 +836,7 @@ export const th: Words = {
     approvedWord: 'อนุมัติแล้ว',
     waitingWord: 'กำลังรอการอนุมัติ',
     noVotesYet: 'ยังไม่มีโหวต',
+    payoutTo: (anos: string, shortId: string) => `${anos} anos ไปยัง ${shortId}`,
     returnsStake: (purpose: string) => `คืนหลักประกัน ${purpose}`,
     you: 'คุณ',
   },
