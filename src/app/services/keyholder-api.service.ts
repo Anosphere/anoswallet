@@ -37,14 +37,24 @@ export interface BucketKeyAnswer {
   shares: BucketKeyShare[];
 }
 
+/** What /get-owner answers (keyholder spec 15.1): the anoPod that deposited for the lookup id, in full. A keyholder that knows no such lookup id answers 404 unknown lookup id. */
+export interface OwnerAnswer {
+  lookupId: string;
+  anopodId: string;
+  keyholderId: number;
+}
+
 /**
  * The HTTP calls to the keyholders (the keyholder test app's, base path
  * /api/keyholder/<n>), one method per route, each taking the keyholder's
- * number since there are five. A pod-level request is the masterpod's
- * envelope with `path` the keyholder route, signed by the session keys; a
- * moderator-level request is the account envelope (keyholder spec 3.2),
- * signed by pair one of the moderator's staked anos account, which the
- * caller builds with CryptoService.signAccountEnvelope.
+ * number since there are five. Two routes are level none, a plain body:
+ * /get-keyholder-public-key and, since 2026-11-08, /get-owner, the owner
+ * lookup a locked-out person's wallet makes (keyholder spec section 15).
+ * A pod-level request is the masterpod's envelope with `path` the
+ * keyholder route, signed by the session keys; a moderator-level request
+ * is the account envelope (keyholder spec 3.2), signed by pair one of the
+ * moderator's staked anos account, which the caller builds with
+ * CryptoService.signAccountEnvelope.
  */
 @Injectable({ providedIn: 'root' })
 export class KeyholderApiService {
@@ -55,6 +65,11 @@ export class KeyholderApiService {
   /** POST /get-keyholder-public-key (level none) on keyholder n. `timeoutMs` caps the wait (a deposit passes KEYHOLDER_DEPOSIT_TIMEOUT_MS). */
   getPublicKey(n: number, timeoutMs?: number): Promise<ApiResponse<KeyholderPublicKey>> {
     return this.log.post(`/api/keyholder/${n}/get-keyholder-public-key`, {}, false, timeoutMs);
+  }
+
+  /** POST /get-owner (level none) on keyholder n: which anoPod deposited for `lookupId`. Quiet, since 404 unknown lookup id is the ordinary answer of a keyholder that does not know the id; `timeoutMs` caps the wait (the lookup passes KEYHOLDER_DEPOSIT_TIMEOUT_MS). */
+  getOwner(n: number, lookupId: string, timeoutMs?: number): Promise<ApiResponse<OwnerAnswer>> {
+    return this.log.post(`/api/keyholder/${n}/get-owner`, { lookupId }, true, timeoutMs);
   }
 
   /** POST /receive-share (level pod) on keyholder n: the envelope signed by the pod's session keys with a fresh nonce. `timeoutMs` caps the wait. */

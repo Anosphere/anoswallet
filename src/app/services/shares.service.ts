@@ -2,9 +2,9 @@ import { Injectable, inject } from '@angular/core';
 import { KEYHOLDER_DEPOSIT_TIMEOUT_MS } from '../constants';
 import { ConfigService } from './config.service';
 import { CryptoService } from './crypto.service';
-import { KeyholderApiService, ShareType } from './keyholder-api.service';
+import { KeyholderApiService, OwnerAnswer, ShareType } from './keyholder-api.service';
 import { LanguageService } from './language.service';
-import { reasonOf } from './log.service';
+import { ApiError, ApiResponse, reasonOf } from './log.service';
 import { KeyholderPublicKey, SessionService } from './session.service';
 
 /** What a deposit left behind: the key id every share and the masterpod row carry. */
@@ -25,6 +25,9 @@ export class DepositError extends Error {
   }
 }
 
+/** What the owner lookup came to: the anoPod id the first keyholder to answer 200 named, or not found with how many keyholders said so (zero: none could be reached). */
+export type OwnerLookup = { found: true; anopodId: string } | { found: false; answered: number };
+
 /** One keyholder's part of a deposit: `reason` is null when it answered 201. */
 interface Outcome {
   n: number;
@@ -32,6 +35,10 @@ interface Outcome {
 }
 
 /**
+ * The two things the wallet does with the keyholders as a set: the deposit
+ * of a secret and, since 2026-11-08, the owner lookup of a locked-out
+ * person (findOwner, below the deposit).
+ *
  * The deposit rule of wallet spec section 6, one function: the secret is
  * split into as many shares as /api/config says keyholders, threshold
  * shareThreshold; share n goes to keyholder n through /receive-share, the
@@ -88,6 +95,27 @@ export class SharesService {
       throw new DepositError(stored, needed, failed.map((o) => o.n), message);
     }
     return { keyId };
+  }
+
+  /**
+   * The owner lookup of a locked-out person (wallet spec 12.3; keyholder
+   * spec section 15, /get-owner): every keyholder of /api/config is asked
+   * at once, each with KEYHOLDER_DEPOSIT_TIMEOUT_MS. Found when any answers
+   * 200, the first in keyholder order winning; a 404 whose reason is
+   * "unknown lookup id" is a keyholder that said not found; anything else
+   * (no answer in time, 502, a doorman without the route answering 404 Not
+   * Found) is a keyholder that did not answer. With no 200, `answered` is
+   * how many said not found: zero means the keyholders could not be reached.
+   */
+  async findOwner(lookupId: string): Promise<OwnerLookup> {
+    const { keyholders } = await this.config.load();
+    const results = await Promise.all(
+      Array.from({ length: keyholders }, (_, i) => this.keyholders.getOwner(i + 1, lookupId, KEYHOLDER_DEPOSIT_TIMEOUT_MS)),
+    );
+    const hit = results.find((res) => res.ok && res.status === 200);
+    if (hit) return { found: true, anopodId: hit.body.anopodId };
+    const saidNotFound = (res: ApiResponse<OwnerAnswer>) => res.status === 404 && (res.body as unknown as Partial<ApiError> | null)?.error === 'unknown lookup id';
+    return { found: false, answered: results.filter(saidNotFound).length };
   }
 
   /** Keyholder n's receiving key, fetched the first time it is needed in this session, within the deposit's time limit. */

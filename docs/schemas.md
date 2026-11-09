@@ -527,8 +527,12 @@ first.
 
 ## 6. The keyholders
 
-No change to keyholdersoftware. What the wallet sends them is what the
-keyholder test app sends, with the stand-ins replaced:
+Since 2026-11-08 the wallet also asks every keyholder `/get-owner` (level
+none, keyholder spec section 15) who owns a lookup id, all at once with
+the deposit's 15 second limit, found when any answers: the locked-out
+stepper's step 1 (12.3), `SharesService.findOwner`. Before that, nothing
+here changed keyholdersoftware. What the wallet sends them in a deposit is
+what the keyholder test app sends, with the stand-ins replaced:
 
 - publicLedgerId: the real PLID, 32 bytes (docs/public-ledger-id.md).
 - lookupId: the real rule, section 6 there.
@@ -4965,9 +4969,9 @@ the moderator edition; a pod that is not a moderator sees the masterpod's
 
 **Recover** (`/recover`). Two cards. "I'm locked out": "If you lost the
 device with your passkey, we can get you back in. You'll need your birth
-record, your username and an email where a moderator can reach you. A
-moderator will meet you on a video call and check your security buckets
-before anything is released." Button: Start, to `/recover/open`. "Continue
+record and an email where a moderator can reach you. A moderator will
+meet you on a video call and check your security buckets before anything
+is released." Button: Start, to `/recover/open`. "Continue
 a recovery": "Already opened a case on this device? Unlock it with the
 passkey you made then." Button: Continue, which runs `/challenge`
 (unlockCase), the passkey assertion with the PRF salt,
@@ -4981,19 +4985,34 @@ the authenticator's message shows.
    identity page has them (the same form, moved into a component the two
    pages share, 12.4), "We turn this into the same lookup id you made at
    setup, on this device; nothing you type is sent." Next computes
-   `lookupId` with `identityIdsOf` and drops the public ledger id.
-2. Who you are: username (lowercased; `/check-username` says taken, which
-   here means found; a free username means "no anoPod has that username")
-   and contact email. Next.
-3. Open my case: one button. `/challenge` (openCase, the username) gives
-   the challenge and the pod's id; the passkey registration with the PRF
-   extension and that id as user handle; the PRF output from the
-   registration or, when it returned none, one local assertion with a
-   random challenge; `KEK_prf`; the recovery hybrid pair and
-   `hybridKeyBlob`; the ephemeral keys; `/open-recovery-case`. On 201 the
+   `lookupId` with `identityIdsOf`, drops the public ledger id, then,
+   under the progress bar ("Finding your account…"), finds the account
+   (since 2026-11-08): `SharesService.findOwner` asks every keyholder
+   `/get-owner` at once (section 6), and the first `200` names the anoPod
+   id; `/challenge` (openCase, that id) answers the pod's username (this
+   challenge is never used: it is too short-lived to carry to step 3, and
+   the masterpod sweeps it with the expired ones). Found, the answers are
+   dropped and the stepper moves on. Not found, the page stays on step 1
+   with the answers in the form, so one field can be fixed and Next
+   pressed again: "No account was set up with this birth record. Check
+   each field against your birth certificate and try again." No keyholder
+   answered: "The keyholders could not be reached. Try again in a moment."
+   A masterpod refusal shows as `/challenge: <reason>`. Once found, with
+   the form empty, a line says the account was found and the answers
+   dropped, and that filling the form in again starts over.
+2. Your account: "We found your account: alice" and the contact email.
+   Next. Nobody types a username; there is no username path.
+3. Open my case: one button. `/challenge` (openCase, the anoPod id) gives
+   a fresh challenge and the username; the passkey registration with the
+   PRF extension, that id as user handle and the username as name and
+   display name; the PRF output from the registration or, when it
+   returned none, one local assertion with a random challenge; `KEK_prf`;
+   the recovery hybrid pair and `hybridKeyBlob`; the ephemeral keys;
+   `/open-recovery-case`, the payload without a username. On 201 the
    recovery session is open and the page goes to `/recover/case`. The
-   refusals shown: "a case is already open for this identity" (409), "no
-   anoPod has that username", the passkey messages as on Create.
+   refusals shown: "a case is already open for this identity" (409), a
+   masterpod refusal as `/challenge: <reason>` or `/open-recovery-case:
+   <reason>`, the passkey messages as on Create.
 
 **My recovery** (`/recover/case`). The case id (short, with Copy), the
 status in words ("Open: a moderator will contact you at <email> and meet
@@ -5112,7 +5131,8 @@ button and every 15 s
                             answer, the combined backup code and seeds while the finish runs; sign(path, body)
                             builds the recovery envelope (caseId as the signer); everything in RAM
     masterpod-api.service   one method per new route (masterpod 12.4); challenge() takes the three new purposes,
-                            openCase with the username; listAnosAccounts items carry breakGlassBlob;
+                            openCase with the anoPod id the keyholders named, and answers its username
+                            (2026-11-08); listAnosAccounts items carry breakGlassBlob;
                             listMyBreakGlassMoves and fileBreakGlassMoves (masterpod 14.4.1, 2026-11-08)
     anos-api.service        getAccountAs(envelope, quiet) (2026-11-08): /get-account with an envelope the caller
                             signed, the break-glass pair's at the finish; getAccount calls it
@@ -5120,7 +5140,12 @@ button and every 15 s
                             the new accounts of Move your money, opened as the Wallet page opens one (8.3;
                             2026-11-08)
     keyholder-api.service   getSecurityBucketOneKey(n, envelope), getSecurityBucketTwoKey(n, envelope): the
-                            keyholder's moderator routes, the account envelope as the body
+                            keyholder's moderator routes, the account envelope as the body; getOwner(n, lookupId,
+                            timeoutMs) (2026-11-08): the keyholder's /get-owner, level none, quiet in the log
+    shares.service          findOwner(lookupId) (2026-11-08): every keyholder asked /get-owner at once with the
+                            deposit's 15 second limit; { found: true, anopodId } on the first 200, else { found:
+                            false, answered }, answered the keyholders that said unknown lookup id (zero: none
+                            could be reached)
     crypto.service          generateHybridKeys(), wrapHybridPrivateKey / unwrapHybridPrivateKey (124-byte blob),
                             decryptFromHybrid (the mirror of encryptToHybrid: X25519 and ML-KEM-1024 decapsulation,
                             the same HKDF and aad), combineShares (shamir-secret-sharing combine), signSignOff
@@ -5370,6 +5395,54 @@ Built from `~/Desktop/Z/forclaude/build-3-delivery-and-finish.md`;
   browser: `/recover/case` without a session lands on `/recover`, no
   console errors. The stepper needs a case with three delivered shares
   and a passkey ceremony: the user's run-through (the plan's step 4).
+
+#### The lookup through the keyholders (2026-11-08)
+
+Built 2026-11-08 from
+`~/Desktop/Z-TestNet/forclaude/recovery-lookup-plan-1.md` (FINAL,
+2026-11-08), step 4 of five, after the keyholder's `/get-owner` (its spec
+section 15), the doorman's route line and the masterpod's `/challenge` by
+anoPod id (its spec 12.10). The username step of the locked-out stepper
+is gone: step 1 finds the account through the keyholders and the masterpod
+names it, step 2 shows it. Where the plan was silent the simplest thing
+was chosen and is recorded here.
+
+- `computing` was widened to cover the whole of step 1's Next (the lookup
+  id, the keyholders, the masterpod) rather than a second signal; the
+  progress bar shows "Finding your account…" under it throughout, scrypt
+  taking well under a second of it. A `lookupError` signal carries step
+  1's three refusals in red under the form, apart from step 3's `error`.
+- The lookup id is not kept on a miss: the page sets `lookupId`,
+  `anopodId` and `foundUsername` together, only once the keyholders named
+  the pod and the masterpod its username, and the step's `[completed]` is
+  `anopodId() !== null`. A miss leaves the form as it was (plan decision
+  9); `form.reset()` runs only on the found path and when the page is
+  destroyed.
+- `findOwner` tells "not found" from "did not answer" by the status and
+  the reason: `404` with `error` `unknown lookup id` is a keyholder that
+  said not found; the doorman's own `404 Not Found` (a doorman without
+  the route), a timeout (`status` 0) and a `502` count as no answer. With
+  every keyholder unreached the line reads "The keyholders could not be
+  reached"; with at least one "not found" and none found, the not-found
+  line, since a keyholder that holds no owners row for the id is the
+  truth whatever the others did.
+- `getOwner` is quiet in the activity log, as the plan says, so a lookup
+  does not write five lines, four of them 404s. The deposit's calls stay
+  logged as before.
+- Step 3's `username` is the fresh challenge's answer, falling back to
+  the one step 1 showed (`foundUsername`) should the answer lack it; the
+  payload no longer carries `username`, and `recovery.username` is set
+  from the same value. `recoverOpen.noAnopodId` stays for a `200` without
+  an id; `noAnopod`, `usernameHint`, `noSuchUsername` and `found` went
+  with the username field; `USERNAME_DEBOUNCE_MS` stays for the create
+  page.
+- The Thai words for the new and changed keys (`finding`, `foundAccount`,
+  `notFound`, `keyholdersUnreachable`, `computed`, `stepWho` and
+  `recover.lockedOutText`) are the build chat's, with "ผู้ถือกุญแจ" for the
+  keyholders as the deposit's words have it, to be checked by a Thai
+  reader.
+- Checked with `npx ng build` (clean). No server was started; the user's
+  run-through is section 8 of the Test Net 2 deploy list.
 
 ## 13. The attestor edition
 

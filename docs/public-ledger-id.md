@@ -90,8 +90,10 @@ with the person's answers recomputes both ids.
   (64 bytes) encrypted under the anoPod encryption key. /unlock hands it
   back and the phone opens it. The masterpod cannot read it.
 - Nowhere else. The form's answers stay in RAM until the review step is
-  confirmed and are dropped once the two ids exist. Nothing goes to
-  browser storage.
+  confirmed and are dropped once the two ids exist. On the locked-out
+  page they stay until the keyholders have found the account (since
+  2026-11-08), so a miss can be corrected without typing the record
+  again. Nothing goes to browser storage.
 
 ## 8. Test vector
 

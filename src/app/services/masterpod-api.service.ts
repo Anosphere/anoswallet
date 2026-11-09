@@ -33,6 +33,8 @@ export type ChallengePurpose = 'create' | 'unlock' | 'openCase' | 'unlockCase' |
 export interface ChallengeAnswer {
   challenge: string;
   anopodId?: string;
+  /** openCase only (2026-11-08): the username of the pod the anoPod id names, shown as the account found. */
+  username?: string;
   expiresAt: string;
 }
 
@@ -736,9 +738,9 @@ export class MasterpodApiService {
 
   // --- level none ---------------------------------------------------------
 
-  /** A challenge for `purpose`; openCase takes the username of the pod being recovered. */
-  challenge(purpose: ChallengePurpose, username?: string): Promise<ApiResponse<ChallengeAnswer>> {
-    return this.post('/challenge', username === undefined ? { purpose } : { purpose, username });
+  /** A challenge for `purpose`; openCase takes the anoPod id the keyholders named for the lookup id and answers that pod's username (masterpod 12.4.2, 2026-11-08). */
+  challenge(purpose: ChallengePurpose, anopodId?: string): Promise<ApiResponse<ChallengeAnswer>> {
+    return this.post('/challenge', anopodId === undefined ? { purpose } : { purpose, anopodId });
   }
 
   checkUsername(username: string, quiet = false): Promise<ApiResponse<{ username: string; available: boolean }>> {
