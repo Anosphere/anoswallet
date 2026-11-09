@@ -1,4 +1,4 @@
-import { Component, DestroyRef, Injector, afterNextRender, computed, effect, inject, signal, untracked } from '@angular/core';
+import { Component, DestroyRef, Injector, afterNextRender, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -8,7 +8,6 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatStepper, MatStepperModule } from '@angular/material/stepper';
 import { Router } from '@angular/router';
 import { IdentityFormComponent, IdentityFormState } from '../components/identity-form.component';
-import { USERNAME_DEBOUNCE_MS } from '../constants';
 import { CryptoService } from '../services/crypto.service';
 import { LanguageService } from '../services/language.service';
 import { reasonOf } from '../services/log.service';
@@ -16,6 +15,7 @@ import { MasterpodApiService } from '../services/masterpod-api.service';
 import { PasskeyService } from '../services/passkey.service';
 import { identityIdsOf } from '../services/public-ledger-id';
 import { RecoveryService } from '../services/recovery.service';
+import { SharesService } from '../services/shares.service';
 
 /** True for a contact email as the masterpod takes it: 3 to 254 characters with an @ that is not first. */
 function isContactEmail(value: string): boolean {
@@ -26,15 +26,21 @@ function isContactEmail(value: string): boolean {
 /**
  * The locked-out stepper (wallet spec 12.3, /recover/open). 1. Your birth
  * record: the shared identity form; Next computes the lookup id on this
- * device with identityIdsOf and drops the public ledger id and the answers.
- * 2. Who you are: the username (lowercased; /check-username's "taken" means
- * found) and a contact email. 3. Open my case: /challenge (openCase, the
- * username) gives the challenge and the pod's id; the passkey registration
- * with the PRF extension and that id as user handle; the PRF output from
- * the registration or, when it returned none, one local assertion with a
- * random challenge; KEK_prf; the recovery hybrid pair and hybridKeyBlob;
- * the ephemeral keys; /open-recovery-case. On 201 the recovery session is
- * open and the page goes to /recover/case.
+ * device with identityIdsOf and drops the public ledger id, asks every
+ * keyholder at once who owns the lookup id (SharesService.findOwner, the
+ * keyholder's /get-owner) and the masterpod for that pod's username
+ * (/challenge openCase with the anoPod id; this challenge is never used
+ * and expires), then drops the answers. A miss keeps the answers in the
+ * form so one field can be fixed and Next pressed again. 2. Your account:
+ * "We found your account: <username>" and a contact email. 3. Open my
+ * case: /challenge (openCase, the anoPod id) gives a fresh challenge and
+ * the username again; the passkey registration with the PRF extension,
+ * the anoPod id as user handle and the username as its name; the PRF
+ * output from the registration or, when it returned none, one local
+ * assertion with a random challenge; KEK_prf; the recovery hybrid pair and
+ * hybridKeyBlob; the ephemeral keys; /open-recovery-case, the payload
+ * without a username. On 201 the recovery session is open and the page
+ * goes to /recover/case.
  */
 @Component({
   selector: 'app-recover-open-page',
@@ -47,25 +53,25 @@ function isContactEmail(value: string): boolean {
       </mat-card-header>
       <mat-card-content>
         <mat-stepper linear orientation="vertical" #stepper>
-          <mat-step [completed]="lookupId() !== null" [label]="t().recoverOpen.stepRecord">
+          <mat-step [completed]="anopodId() !== null" [label]="t().recoverOpen.stepRecord">
             <p>{{ t().recoverOpen.recordText }}</p>
             <app-identity-form [state]="form" />
             @if (computing()) {
               <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+              <p class="muted">{{ t().recoverOpen.finding }}</p>
             }
-            @if (lookupId() !== null && !form.complete()) {
+            @if (lookupError(); as text) {
+              <p class="error">{{ text }}</p>
+            }
+            @if (anopodId() !== null && !form.complete()) {
               <p class="muted">{{ t().recoverOpen.computed }}</p>
             }
-            <button mat-flat-button type="button" (click)="next(stepper)" [disabled]="computing() || (!form.complete() && lookupId() === null)">{{ t().common.next }}</button>
+            <button mat-flat-button type="button" (click)="next(stepper)" [disabled]="computing() || (!form.complete() && anopodId() === null)">{{ t().common.next }}</button>
           </mat-step>
 
           <mat-step [completed]="whoDone()" [label]="t().recoverOpen.stepWho">
+            <p>{{ t().recoverOpen.foundAccount(foundUsername()) }}</p>
             <div class="fields">
-              <mat-form-field appearance="outline">
-                <mat-label>{{ t().common.username }}</mat-label>
-                <input matInput [ngModel]="username()" (ngModelChange)="username.set($event)" autocomplete="username" />
-                <mat-hint>{{ usernameHint() }}</mat-hint>
-              </mat-form-field>
               <mat-form-field appearance="outline">
                 <mat-label>{{ t().recoverOpen.contactEmail }}</mat-label>
                 <input matInput type="email" [ngModel]="email()" (ngModelChange)="email.set($event)" autocomplete="email" />
@@ -108,67 +114,63 @@ export class RecoverOpenPage {
   private readonly crypto = inject(CryptoService);
   private readonly passkey = inject(PasskeyService);
   private readonly recovery = inject(RecoveryService);
+  private readonly shares = inject(SharesService);
   private readonly router = inject(Router);
   private readonly injector = inject(Injector);
   protected readonly lang = inject(LanguageService);
   protected readonly t = this.lang.words;
 
   protected readonly form = new IdentityFormState();
+  /** What step 1 ends with: the lookup id, the anoPod id the keyholders named for it, and that pod's username from the masterpod. */
   protected readonly lookupId = signal<string | null>(null);
+  protected readonly anopodId = signal<string | null>(null);
+  protected readonly foundUsername = signal('');
+  /** Step 1's work in progress: the lookup id, the keyholders, the masterpod. */
   protected readonly computing = signal(false);
-  protected readonly username = signal('');
-  protected readonly usernameHint = signal(this.t().recoverOpen.usernameHint);
-  protected readonly usernameFound = signal(false);
+  protected readonly lookupError = signal<string | null>(null);
   protected readonly email = signal('');
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
 
-  protected readonly whoDone = computed(() => this.usernameFound() && isContactEmail(this.email().trim()));
+  protected readonly whoDone = computed(() => isContactEmail(this.email().trim()));
 
   constructor() {
-    // The username lookup, debounced 400 ms, as typed: "taken" means found here.
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    effect(() => {
-      const typed = this.username().trim().toLowerCase();
-      untracked(() => {
-        this.usernameFound.set(false);
-        if (timer) clearTimeout(timer);
-        if (typed === '') {
-          this.usernameHint.set(this.t().recoverOpen.usernameHint);
-          return;
-        }
-        this.usernameHint.set(this.t().common.checking);
-        timer = setTimeout(() => void this.checkUsername(typed), USERNAME_DEBOUNCE_MS);
-      });
-    });
-    inject(DestroyRef).onDestroy(() => {
-      if (timer) clearTimeout(timer);
-      this.form.reset();
-    });
+    inject(DestroyRef).onDestroy(() => this.form.reset());
   }
 
-  private async checkUsername(typed: string): Promise<void> {
-    const res = await this.api.checkUsername(typed, true);
-    if (this.username().trim().toLowerCase() !== typed) return;
-    if (!res.ok) {
-      this.usernameHint.set(reasonOf(res));
-      return;
-    }
-    this.usernameFound.set(!res.body.available);
-    this.usernameHint.set(res.body.available ? this.t().recoverOpen.noSuchUsername : this.t().recoverOpen.found(res.body.username));
-  }
-
-  /** Step 1's Next: the lookup id from the answers (scrypt takes well under a second), the answers dropped. */
+  /**
+   * Step 1's Next: the lookup id from the answers (scrypt takes well under a
+   * second), every keyholder asked who owns it, the masterpod asked for the
+   * account's username; found, the answers are dropped and the stepper moves
+   * on. Not found, no keyholder reached, or the masterpod refused: the line
+   * under the form says so and the answers stay, so one field can be fixed
+   * and Next pressed again.
+   */
   protected async next(stepper: MatStepper): Promise<void> {
     const answers = this.form.answers();
     if (answers) {
       this.computing.set(true);
-      this.error.set(null);
+      this.lookupError.set(null);
       try {
         // Let the progress bar paint before scrypt blocks the thread.
         await new Promise((resolve) => setTimeout(resolve, 20));
         const ids = identityIdsOf(answers);
+        const owner = await this.shares.findOwner(ids.lookupId);
+        if (!owner.found) {
+          this.lookupError.set(owner.answered > 0 ? this.t().recoverOpen.notFound : this.t().recoverOpen.keyholdersUnreachable);
+          return;
+        }
+        // The account's username. This challenge is never used: CHALLENGE_SECONDS
+        // (120) is too short to carry to step 3, and the masterpod sweeps it
+        // with the expired ones.
+        const challenge = await this.api.challenge('openCase', owner.anopodId);
+        if (!challenge.ok) {
+          this.lookupError.set(`/challenge: ${reasonOf(challenge)}`);
+          return;
+        }
         this.lookupId.set(ids.lookupId);
+        this.anopodId.set(owner.anopodId);
+        this.foundUsername.set(challenge.body.username ?? '');
         this.form.reset();
       } finally {
         this.computing.set(false);
@@ -177,21 +179,22 @@ export class RecoverOpenPage {
       // been rendered true, so wait for that render before asking it to.
       await new Promise<void>((resolve) => afterNextRender(() => resolve(), { injector: this.injector }));
     }
-    if (this.lookupId() !== null) stepper.next();
+    if (this.anopodId() !== null) stepper.next();
   }
 
-  /** Step 3: the challenge, the recovery passkey, the PRF output, the hybrid pair, the signed payload, the case. */
+  /** Step 3: the challenge, the recovery passkey named with the username, the PRF output, the hybrid pair, the signed payload, the case. */
   protected async open(): Promise<void> {
     const lookupId = this.lookupId();
-    if (!lookupId) return;
+    const anopodId = this.anopodId();
+    if (!lookupId || !anopodId) return;
     this.busy.set(true);
     this.error.set(null);
     try {
-      const username = this.username().trim().toLowerCase();
       const contactEmail = this.email().trim();
-      const challenge = await this.api.challenge('openCase', username);
-      if (!challenge.ok) throw new Error(challenge.status === 404 ? this.t().recoverOpen.noAnopod : `/challenge: ${reasonOf(challenge)}`);
+      const challenge = await this.api.challenge('openCase', anopodId);
+      if (!challenge.ok) throw new Error(`/challenge: ${reasonOf(challenge)}`);
       if (!challenge.body.anopodId) throw new Error(this.t().recoverOpen.noAnopodId);
+      const username = challenge.body.username ?? this.foundUsername();
       const registration = await this.passkey.register(challenge.body.challenge, challenge.body.anopodId, username, username);
       let prf = registration.prfOutput;
       if (!prf) {
@@ -205,7 +208,6 @@ export class RecoverOpenPage {
       const payload = {
         anopodId: challenge.body.anopodId,
         challenge: challenge.body.challenge,
-        username,
         lookupId,
         contactEmail,
         passkey: registration.passkey,
@@ -226,6 +228,8 @@ export class RecoverOpenPage {
       this.recovery.setKekPrf(kek);
       this.recovery.setHybridKeys(hybrid);
       this.lookupId.set(null);
+      this.anopodId.set(null);
+      this.foundUsername.set('');
       await this.router.navigateByUrl('/recover/case');
     } catch (err) {
       this.error.set(err instanceof Error ? err.message : String(err));

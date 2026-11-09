@@ -1,6 +1,7 @@
 import { Injectable, effect, inject, signal } from '@angular/core';
 import type { Words } from '../i18n/en';
 import { AnosApiService, AssistedTransferItem, DisputedEscrowItem } from './anos-api.service';
+import { BalancesService } from './balances.service';
 import { CryptoService, HybridKeys, PairOne } from './crypto.service';
 import { LanguageService } from './language.service';
 import { ApiResponse, reasonOf } from './log.service';
@@ -21,6 +22,7 @@ const PROFILE_IDS_PER_CALL = 200;
 @Injectable({ providedIn: 'root' })
 export class AttestingService {
   private readonly session = inject(SessionService);
+  private readonly balances = inject(BalancesService);
   private readonly masterpod = inject(MasterpodApiService);
   private readonly anos = inject(AnosApiService);
   private readonly crypto = inject(CryptoService);
@@ -48,14 +50,15 @@ export class AttestingService {
 
   // --- the staked account ------------------------------------------------------
 
-  /** The attestor's anos accounts, for the picker; the first spending one is picked when none is yet. */
+  /** The attestor's anos accounts, for the picker; the first usable spending one is picked when none is yet, a lost account (its keyBlob does not open, 2026-11-08) left out. */
   async loadAccounts(): Promise<void> {
     if (this.session.accounts().length === 0) {
       const res = await this.masterpod.listAnosAccounts(true);
       if (res.ok) this.session.accounts.set(res.body.accounts);
     }
     if (this.accountId() === '') {
-      const accounts = this.session.accounts();
+      await this.balances.markLost();
+      const accounts = this.balances.usableAccounts();
       const first = accounts.find((a) => a.accountType === 'spending') ?? accounts[0];
       if (first) this.accountId.set(first.accountId);
     }
@@ -64,10 +67,10 @@ export class AttestingService {
   /** The picked account and pair one out of its keyBlob, for one signature; the caller drops it. */
   async pairOne(): Promise<{ account: AnosAccountItem; pairOne: PairOne }> {
     const account = this.session.accounts().find((a) => a.accountId === this.accountId());
-    const encryptionKey = this.session.getEncryptionKey();
+    const keyBlobKey = this.session.getKeyBlobKey();
     if (!account) throw new Error(this.lang.words().common.pickAccountFirst);
-    if (!encryptionKey) throw new Error(this.lang.words().common.noKeyInRamSentence);
-    return { account, pairOne: await this.crypto.pairOneFromKeyBlob(this.crypto.fromHex(account.keyBlob), encryptionKey) };
+    if (!keyBlobKey) throw new Error(this.lang.words().common.noKeyBlobKey);
+    return { account, pairOne: await this.crypto.pairOneFromKeyBlob(this.crypto.fromHex(account.keyBlob), keyBlobKey) };
   }
 
   // --- the lists -----------------------------------------------------------------

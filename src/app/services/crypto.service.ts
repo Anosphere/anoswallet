@@ -142,6 +142,20 @@ export interface AccountSecrets {
   postQuantumKey2Seed: Uint8Array;
 }
 
+/**
+ * Thrown by unwrapKeyBlob (and so by pairOneFromKeyBlob) when a keyBlob does
+ * not open under the key blob key: the blob was wrapped under the key of
+ * another passkey, the one that was lost, or was changed. Since 2026-11-08
+ * the pages show such an account as lost (wallet spec 8.2); nothing
+ * re-wraps or recovers its keys.
+ */
+export class KeyBlobLostError extends Error {
+  constructor() {
+    super('the key blob does not open under the key blob key: the account keys are lost');
+    this.name = 'KeyBlobLostError';
+  }
+}
+
 /** Pair one and pair two as signing keys. */
 export type PairKeys = Pick<BrowserAccountKeys, 'key1' | 'postQuantumKey1' | 'key2' | 'postQuantumKey2'>;
 
@@ -154,11 +168,11 @@ export type BreakGlassKeys = Pick<BrowserAccountKeys, 'breakGlassKey' | 'breakGl
 /** The roles the browser signs a transfer or a follow-up with: pair one. The signing server adds the wallet pair. */
 export const PAIR_ONE_ROLES = ['key1', 'postQuantumKey1'] as const;
 
-/** Signatures over a payload's canonical bytes: pair one from the browser, the wallet pair from /api/sign. */
-export type TransferSignatures = Partial<Record<'key1' | 'postQuantumKey1' | 'walletKey' | 'walletPostQuantumKey', string>>;
+/** Signatures over a payload's canonical bytes: pair one from the browser and the wallet pair from /api/sign; or, on a breakGlassTransfer (2026-11-08), the break-glass pair alone, nothing else beside it. */
+export type TransferSignatures = Partial<Record<'key1' | 'postQuantumKey1' | 'breakGlassKey' | 'breakGlassPostQuantumKey' | 'walletKey' | 'walletPostQuantumKey', string>>;
 
-/** The five transfer types. */
-export type TransferType = 'anosTransfer' | 'guardedAnosTransfer' | 'vaultAnosTransfer' | 'assistedAnosTransfer' | 'escrowTransfer';
+/** The six transfer types; breakGlassTransfer (2026-11-08, anossoftware spec 4.5) moves a lost account's whole balance to a new account of the same type, signed by the break-glass pair alone. */
+export type TransferType = 'anosTransfer' | 'guardedAnosTransfer' | 'vaultAnosTransfer' | 'assistedAnosTransfer' | 'escrowTransfer' | 'breakGlassTransfer';
 
 export interface AnosTransferPayload {
   accountId: string;
@@ -298,6 +312,8 @@ const TAG_BYTES = 16;
 /** The HKDF info strings; a new version of any derivation gets a new string. */
 const INFO = {
   kekPrf: 'masterpod/kek-prf/v1',
+  /** The key the account key blobs are wrapped under, from the same PRF output as KEK_prf, a different derivation (wallet spec 7). */
+  kekKeys: 'masterpod/kek-keys/v1',
   kekBackup: 'masterpod/kek-backup/v1',
   backupP256: 'masterpod/backup-p256/v1',
   backupMldsa: 'masterpod/backup-mldsa/v1',
@@ -326,8 +342,9 @@ const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
  * (keys, blobs, the backup code, the chat pair, rooms, messages, the
  * buckets), the keyholder hybrid encryption and the shares, the anos keys,
  * builders and signing, the wallet spec's section 7 additions (the
- * identity blob, the break-glass keys, the key blob, the account envelope)
- * and the recovery additions of masterpod 12.6 (the hybrid pair and its
+ * identity blob, the break-glass keys, the key blob, the account envelope,
+ * and since 2026-11-08 the break-glass transfer and the break-glass
+ * envelope the recovery's finish uses, wallet spec 12.3) and the recovery additions of masterpod 12.6 (the hybrid pair and its
  * blob, opening a hybrid ciphertext, combining shares, the sign-off), and
  * the attestation additions of masterpod 13.6 (a case secret wrapped to a
  * chat key, a content key). The public ledger id is beside this file, in
@@ -418,8 +435,24 @@ export class CryptoService {
    * 16 random bytes.
    */
   signAccountEnvelope(pairOne: PairOne, accountId: string, path: string, body: object): Envelope {
+    return this.signAccountEnvelopeWith({ ecdsa: pairOne.key1, mldsa: pairOne.postQuantumKey1 }, accountId, path, body);
+  }
+
+  /**
+   * The account envelope signed by the account's break-glass pair
+   * (2026-11-08): the validators' account level accepts it when pair one
+   * does not verify (anossoftware spec 22), so a recovery's finish reads a
+   * lost account's balance and latest transaction id with the recovered
+   * seed. The one read the wallet makes with a break-glass key.
+   */
+  signAccountEnvelopeAsBreakGlass(keys: BreakGlassKeys, accountId: string, path: string, body: object): Envelope {
+    return this.signAccountEnvelopeWith({ ecdsa: keys.breakGlassKey, mldsa: keys.breakGlassPostQuantumKey }, accountId, path, body);
+  }
+
+  /** The account envelope signed by `signer`, a P-256 key and an ML-DSA-87 key: pair one's or the break-glass pair's. */
+  private signAccountEnvelopeWith(signer: { ecdsa: SigningKey; mldsa: SigningKey }, accountId: string, path: string, body: object): Envelope {
     const payload = { accountId, path, timestamp: new Date().toISOString(), nonce: this.randomHex(16), body };
-    return { payload, signatures: this.signPayload({ ecdsa: pairOne.key1, mldsa: pairOne.postQuantumKey1 }, payload) };
+    return { payload, signatures: this.signPayload(signer, payload) };
   }
 
   // --- HKDF and AES-GCM ----------------------------------------------------
@@ -476,6 +509,11 @@ export class CryptoService {
   /** KEK_prf = HKDF(prf output, 'masterpod/kek-prf/v1', 32). */
   deriveKekPrf(prfOutput: Uint8Array): Promise<Bytes> {
     return this.hkdf(prfOutput, INFO.kekPrf, 32);
+  }
+
+  /** The key blob key = HKDF(prf output, 'masterpod/kek-keys/v1', 32): what the account key blobs are wrapped under since 2026-11-08 (wallet spec 7). A lost passkey loses it, and the key blobs with it. */
+  deriveKekKeys(prfOutput: Uint8Array): Promise<Bytes> {
+    return this.hkdf(prfOutput, INFO.kekKeys, 32);
   }
 
   /** KEK_backup = HKDF(backup code, 'masterpod/kek-backup/v1', 32). */
@@ -596,12 +634,6 @@ export class CryptoService {
   async backupCodeProof(code: Uint8Array, payload: unknown): Promise<Signatures> {
     return this.signPayload(await this.backupCodeSigningKeys(code), payload);
   }
-
-  /** breakGlassBlob (masterpod 12.6): an account's 32-byte break-glass seed under the encryption key, 60 bytes. */
-  wrapBreakGlassSeed(seed: Uint8Array, encryptionKey: Uint8Array): Promise<Bytes> {
-    return this.encrypt(encryptionKey, seed);
-  }
-
 
   /** identityBlob (wallet spec 7): PLID (32) || lookupId (32) under the encryption key, 92 bytes. */
   wrapIdentity(publicLedgerIdHex: string, lookupIdHex: string, encryptionKey: Uint8Array): Promise<Bytes> {
@@ -794,14 +826,19 @@ export class CryptoService {
     };
   }
 
-  /** keyBlob: key1 scalar || postQuantumKey1 seed || key2 scalar || postQuantumKey2 seed under the encryption key, 156 bytes. */
-  wrapKeyBlob(secrets: AccountSecrets, encryptionKey: Uint8Array): Promise<Bytes> {
-    return this.encrypt(encryptionKey, concatBytes(secrets.key1Scalar, secrets.postQuantumKey1Seed, secrets.key2Scalar, secrets.postQuantumKey2Seed));
+  /** keyBlob: key1 scalar || postQuantumKey1 seed || key2 scalar || postQuantumKey2 seed, 156 bytes, under the key blob key (deriveKekKeys), not the encryption key, since 2026-11-08. */
+  wrapKeyBlob(secrets: AccountSecrets, keyBlobKey: Uint8Array): Promise<Bytes> {
+    return this.encrypt(keyBlobKey, concatBytes(secrets.key1Scalar, secrets.postQuantumKey1Seed, secrets.key2Scalar, secrets.postQuantumKey2Seed));
   }
 
-  /** The secrets back from keyBlob. */
-  async unwrapKeyBlob(blob: Uint8Array, encryptionKey: Uint8Array): Promise<AccountSecrets> {
-    const plain = await this.decrypt(encryptionKey, blob);
+  /** The secrets back from keyBlob, under the key blob key (deriveKekKeys), not the encryption key, since 2026-11-08. A blob that does not open under it throws KeyBlobLostError: the account's keys went with another passkey. */
+  async unwrapKeyBlob(blob: Uint8Array, keyBlobKey: Uint8Array): Promise<AccountSecrets> {
+    let plain: Bytes;
+    try {
+      plain = await this.decrypt(keyBlobKey, blob);
+    } catch {
+      throw new KeyBlobLostError();
+    }
     if (plain.length !== 128) throw new Error(`keyBlob must open to 128 bytes, got ${plain.length}`);
     return {
       key1Scalar: plain.subarray(0, 32),
@@ -811,9 +848,9 @@ export class CryptoService {
     };
   }
 
-  /** Pair one out of a keyBlob, for one signature; the caller drops it afterwards. */
-  async pairOneFromKeyBlob(blob: Uint8Array, encryptionKey: Uint8Array): Promise<PairOne> {
-    const secrets = await this.unwrapKeyBlob(blob, encryptionKey);
+  /** Pair one out of a keyBlob, for one signature; the caller drops it afterwards. Under the key blob key (deriveKekKeys), not the encryption key, since 2026-11-08; KeyBlobLostError when the blob does not open under it. */
+  async pairOneFromKeyBlob(blob: Uint8Array, keyBlobKey: Uint8Array): Promise<PairOne> {
+    const secrets = await this.unwrapKeyBlob(blob, keyBlobKey);
     return { key1: this.p256KeyFromScalar(secrets.key1Scalar), postQuantumKey1: this.generateMlDsaKey(secrets.postQuantumKey1Seed) };
   }
 
@@ -889,6 +926,37 @@ export class CryptoService {
     return { payload, signatures: this.signAsPairOne(pairOne, payload) };
   }
 
+  /**
+   * The break-glass move (2026-11-08, anossoftware spec 4.5): the whole
+   * balance of an account whose user keys died with the passkey, out of
+   * `accountId` into `accountIdTo`, a new account of the same type, chained
+   * on `previousTransactionId` (the account's latest transaction, read with
+   * the break-glass envelope), dated `createdAt`: now from a spending or
+   * assisted account, the lock plus the offset ahead from a guarded or vault
+   * one, as the account's own transfers are dated. Built like the other
+   * transfers, then signed by the break-glass pair alone: no pair one and no
+   * signing server, since the validators refuse any user-pair signature
+   * beside the break-glass pair. Two attestors attest it on the ledger.
+   */
+  buildBreakGlassTransferTransaction(
+    keys: BreakGlassKeys,
+    accountId: string,
+    previousTransactionId: string,
+    accountIdTo: string,
+    amount: bigint,
+    createdAt: Date,
+  ): AnosTransferTransaction {
+    const payload = this.withTransactionId({
+      accountId,
+      previousTransactionId,
+      transactionType: 'breakGlassTransfer' as const,
+      amount: amount.toString(),
+      accountIdTo,
+      createdAt: createdAt.toISOString(),
+    });
+    return { payload, signatures: this.signAsBreakGlass(keys, payload) };
+  }
+
   /** A transfer to the fund staking `amount` (millionths) for `stakeFor`, dated now. */
   buildTransferToFund(pairOne: PairOne, accountId: string, previousTransactionId: string, amount: bigint, stakeFor: StakePurpose): TransferToFundTransaction {
     const payload = this.withTransactionId({
@@ -942,6 +1010,15 @@ export class CryptoService {
     return {
       key1: bytesToHex(this.sign(pairOne.key1, message)),
       postQuantumKey1: bytesToHex(this.sign(pairOne.postQuantumKey1, message)),
+    };
+  }
+
+  /** Signatures over the payload's canonical bytes by the break-glass pair, and nothing else: the validators' break-glass rule (anossoftware spec 22) refuses a user-pair signature beside them. */
+  private signAsBreakGlass(keys: BreakGlassKeys, payload: object): TransferSignatures {
+    const message = this.canonicalBytes(payload);
+    return {
+      breakGlassKey: bytesToHex(this.sign(keys.breakGlassKey, message)),
+      breakGlassPostQuantumKey: bytesToHex(this.sign(keys.breakGlassPostQuantumKey, message)),
     };
   }
 

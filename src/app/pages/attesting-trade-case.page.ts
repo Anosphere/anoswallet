@@ -13,6 +13,7 @@ import { millionthsToAnos } from '../amounts';
 import { CASES_POLL_MS } from '../constants';
 import { AnosApiService } from '../services/anos-api.service';
 import { AttestingService, attestingError } from '../services/attesting.service';
+import { BalancesService } from '../services/balances.service';
 import { ConfigService } from '../services/config.service';
 import { AttestationPayload, CryptoService, FollowUp, PairOne } from '../services/crypto.service';
 import { BucketKeyAnswer, KeyholderApiService, ShareType } from '../services/keyholder-api.service';
@@ -209,12 +210,12 @@ function accepted(result: SentResult): boolean {
             <mat-form-field appearance="outline" class="wide">
               <mat-label>{{ t().common.anosAccount }}</mat-label>
               <mat-select [value]="attesting.accountId()" (valueChange)="attesting.accountId.set($event)">
-                @for (account of session.accounts(); track account.accountId) {
+                @for (account of balances.usableAccounts(); track account.accountId) {
                   <mat-option [value]="account.accountId">{{ t().wallet.typeOption(account.accountType) }} · {{ account.accountId }}</mat-option>
                 }
               </mat-select>
             </mat-form-field>
-            @if (session.accounts().length === 0) {
+            @if (balances.usableAccounts().length === 0) {
               <span class="muted">{{ t().attesting.noAccount }}</span>
             }
           </div>
@@ -352,6 +353,8 @@ export class AttestingTradeCasePage {
   readonly caseId = input.required<string>();
 
   protected readonly session = inject(SessionService);
+  /** The picker lists the usable accounts only: a lost account, whose keyBlob does not open, is left out (wallet spec 8.2, 2026-11-08). */
+  protected readonly balances = inject(BalancesService);
   protected readonly attesting = inject(AttestingService);
   private readonly masterpod = inject(MasterpodApiService);
   private readonly keyholders = inject(KeyholderApiService);

@@ -8,7 +8,7 @@ import { millionthsToAnos } from '../amounts';
 import { assistedStageWords } from '../assisted-stage';
 import { ACCOUNT_POLL_MS } from '../constants';
 import { AnosApiService, HeldAssistedTransfer } from '../services/anos-api.service';
-import { CryptoService, PairOne } from '../services/crypto.service';
+import { CryptoService, KeyBlobLostError, PairOne } from '../services/crypto.service';
 import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
 import { MasterpodApiService, MyTradeCase } from '../services/masterpod-api.service';
@@ -69,7 +69,7 @@ interface Outcome {
             <div><span class="label">{{ t().common.amount }}</span><span class="value">{{ t().common.anos(millionthsToAnos(held.amount)) }}</span></div>
             <div><span class="label">{{ t().common.to }}</span><code class="value">{{ held.accountIdTo }}</code></div>
             <div><span class="label">{{ t().common.made }}</span><span class="value">{{ lang.dateTime(held.createdAt) }}</span></div>
-            <div><span class="label">{{ t().common.stage }}</span><span class="value">{{ assistedStageWords(held.stage, t().assistedStages) }}</span></div>
+            <div><span class="label">{{ t().common.stage }}</span><span class="value">{{ assistedStageWords(held.stage, t().assistedStages, held.unlocksAt ? lang.dateTime(held.unlocksAt) : '') }}</span></div>
             <div><span class="label">{{ t().assisted.attestations }}</span><span class="value">{{ t().assisted.ofTwo(held.attestations) }}</span></div>
             <div><span class="label">{{ t().common.transaction }}</span><code class="value">{{ held.transactionId }}</code></div>
           </div>
@@ -237,10 +237,10 @@ export class AssistedTransferPage {
       if (res.ok) this.session.accounts.set(res.body.accounts);
       item = this.session.accounts().find((a) => a.accountId === this.accountId());
     }
-    const encryptionKey = this.session.getEncryptionKey();
+    const keyBlobKey = this.session.getKeyBlobKey();
     if (!item) throw new Error(this.t().common.notMyAccount);
-    if (!encryptionKey) throw new Error(this.t().common.noKeyInRam);
-    return this.crypto.pairOneFromKeyBlob(this.crypto.fromHex(item.keyBlob), encryptionKey);
+    if (!keyBlobKey) throw new Error(this.t().common.noKeyBlobKey);
+    return this.crypto.pairOneFromKeyBlob(this.crypto.fromHex(item.keyBlob), keyBlobKey);
   }
 
   /** /get-assisted-transfer, this page's transfer when the answer's id is the route's; gone after being seen held, the closed view from /list-transactions. */
@@ -266,7 +266,8 @@ export class AssistedTransferPage {
         this.transfer.set(null);
       }
     } catch (err) {
-      this.readError.set(err instanceof Error ? err.message : String(err));
+      // A keyBlob that does not open is a lost account (wallet spec 8.2, 2026-11-08): the lost line where the refusal would show.
+      this.readError.set(err instanceof KeyBlobLostError ? this.t().wallet.lost : err instanceof Error ? err.message : String(err));
     } finally {
       this.loaded.set(true);
     }

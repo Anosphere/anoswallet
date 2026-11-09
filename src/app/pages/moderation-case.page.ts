@@ -9,6 +9,7 @@ import { MatListModule } from '@angular/material/list';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { RouterLink } from '@angular/router';
+import { BalancesService } from '../services/balances.service';
 import { ConfigService } from '../services/config.service';
 import { CryptoService, PairOne } from '../services/crypto.service';
 import { BucketKeyAnswer, KeyholderApiService, ShareType } from '../services/keyholder-api.service';
@@ -167,12 +168,12 @@ interface Outcome {
             <mat-form-field appearance="outline" class="wide">
               <mat-label>{{ t().common.anosAccount }}</mat-label>
               <mat-select [value]="accountId()" (valueChange)="accountId.set($event)">
-                @for (account of session.accounts(); track account.accountId) {
+                @for (account of balances.usableAccounts(); track account.accountId) {
                   <mat-option [value]="account.accountId">{{ t().wallet.typeOption(account.accountType) }} · {{ account.accountId }}</mat-option>
                 }
               </mat-select>
             </mat-form-field>
-            @if (session.accounts().length === 0) {
+            @if (balances.usableAccounts().length === 0) {
               <span class="muted">{{ t().moderationCase.noAccount }}</span>
             }
           </div>
@@ -312,6 +313,8 @@ export class ModerationCasePage {
   readonly caseId = input.required<string>();
 
   protected readonly session = inject(SessionService);
+  /** The picker lists the usable accounts only: a lost account, whose keyBlob does not open, is left out (wallet spec 8.2, 2026-11-08). */
+  protected readonly balances = inject(BalancesService);
   private readonly masterpod = inject(MasterpodApiService);
   private readonly keyholders = inject(KeyholderApiService);
   private readonly config = inject(ConfigService);
@@ -403,14 +406,15 @@ export class ModerationCasePage {
     }
   }
 
-  /** The moderator's anos accounts, for the picker; the first spending one is picked. */
+  /** The moderator's anos accounts, for the picker; the first usable spending one is picked, a lost account (its keyBlob does not open, 2026-11-08) left out. */
   private async loadAccounts(): Promise<void> {
     if (this.session.accounts().length === 0) {
       const res = await this.masterpod.listAnosAccounts(true);
       if (res.ok) this.session.accounts.set(res.body.accounts);
     }
     if (this.accountId() === '') {
-      const accounts = this.session.accounts();
+      await this.balances.markLost();
+      const accounts = this.balances.usableAccounts();
       const first = accounts.find((a) => a.accountType === 'spending') ?? accounts[0];
       if (first) this.accountId.set(first.accountId);
     }
@@ -419,10 +423,10 @@ export class ModerationCasePage {
   /** The picked account and pair one out of its keyBlob, for one signature; the caller drops it. */
   private async pairOne(): Promise<{ account: AnosAccountItem; pairOne: PairOne }> {
     const account = this.session.accounts().find((a) => a.accountId === this.accountId());
-    const encryptionKey = this.session.getEncryptionKey();
+    const keyBlobKey = this.session.getKeyBlobKey();
     if (!account) throw new Error(this.t().common.pickAccountFirst);
-    if (!encryptionKey) throw new Error(this.t().common.noKeyInRamSentence);
-    return { account, pairOne: await this.crypto.pairOneFromKeyBlob(this.crypto.fromHex(account.keyBlob), encryptionKey) };
+    if (!keyBlobKey) throw new Error(this.t().common.noKeyBlobKey);
+    return { account, pairOne: await this.crypto.pairOneFromKeyBlob(this.crypto.fromHex(account.keyBlob), keyBlobKey) };
   }
 
   // --- schedule --------------------------------------------------------------------

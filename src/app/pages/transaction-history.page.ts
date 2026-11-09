@@ -16,7 +16,7 @@ import { HistoryWords, historyWords } from '../history-words';
 import { formatPrice, perAnosOf } from '../prices';
 import { AnosApiService, TransactionItem } from '../services/anos-api.service';
 import { ChatService } from '../services/chat.service';
-import { CryptoService, PairOne } from '../services/crypto.service';
+import { CryptoService, KeyBlobLostError, PairOne } from '../services/crypto.service';
 import { LanguageService } from '../services/language.service';
 import { reasonOf } from '../services/log.service';
 import { MasterpodApiService } from '../services/masterpod-api.service';
@@ -299,10 +299,10 @@ export class TransactionHistoryPage {
       if (res.ok) this.session.accounts.set(res.body.accounts);
       item = this.session.accounts().find((a) => a.accountId === this.accountId());
     }
-    const encryptionKey = this.session.getEncryptionKey();
+    const keyBlobKey = this.session.getKeyBlobKey();
     if (!item) throw new Error(this.t().common.notMyAccount);
-    if (!encryptionKey) throw new Error(this.t().common.noKeyInRam);
-    return this.crypto.pairOneFromKeyBlob(this.crypto.fromHex(item.keyBlob), encryptionKey);
+    if (!keyBlobKey) throw new Error(this.t().common.noKeyBlobKey);
+    return this.crypto.pairOneFromKeyBlob(this.crypto.fromHex(item.keyBlob), keyBlobKey);
   }
 
   /** The body of a read: HISTORY_PAGE rows, below beforePosition when given and, with a range, from the start of the first day to the start of the day after the last. */
@@ -332,7 +332,8 @@ export class TransactionHistoryPage {
       this.transactions.set(res.body.transactions);
       this.canLoadMore.set(res.body.transactions.length >= HISTORY_PAGE);
     } catch (err) {
-      this.readError.set(err instanceof Error ? err.message : String(err));
+      // A keyBlob that does not open is a lost account (wallet spec 8.2, 2026-11-08): the lost line where the refusal would show.
+      this.readError.set(err instanceof KeyBlobLostError ? this.t().wallet.lost : err instanceof Error ? err.message : String(err));
     } finally {
       this.busy.set(false);
     }

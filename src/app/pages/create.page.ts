@@ -184,6 +184,7 @@ export class CreatePage {
       this.session.firstName.set(firstName);
       this.session.lastName.set(lastName);
       this.session.setPrfOutput(registration.prfOutput);
+      this.session.setKeyBlobKey(registration.prfOutput ? await this.crypto.deriveKekKeys(registration.prfOutput) : null);
       const status = await this.api.checkAnopodStatus();
       if (status.ok) this.session.status.set(status.body);
       this.created.set(true);

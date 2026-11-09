@@ -16,7 +16,9 @@ export interface HistoryWords {
  * from the dictionary, `words` (wallet spec 8.8): "Sent to a1b2c3d4…e5f6",
  * "Received from …", "Account created", "Escrow released to …", "Escrow
  * received from …", "Staked with the fund", "Fund proposal", "Received
- * from the fund", "Fund payout to …". The other side is accountIdTo when
+ * from the fund", "Fund payout to …", and for a breakGlassTransfer
+ * (2026-11-08) "Recovered from an old account" when received and "Moved to
+ * a new account" when sent. The other side is accountIdTo when
  * this account sent and accountId otherwise, shown short; "to …" or
  * "from …" is dropped when there is none. A type word the wallet does not
  * know keeps the raw word, with the sign by the side.
@@ -47,6 +49,11 @@ export function historyWords(t: TransactionItem, accountId: string, words: Words
       return t.accountIdTo === accountId
         ? { title: words.receivedFromFund, kind: words.kinds.fundPayout, sign: '+', icon: 'account_balance' }
         : { title: short === null ? words.fundPayout : words.fundPayoutTo(short), kind: words.kinds.fundPayout, sign: '', icon: 'account_balance' };
+    case 'breakGlassTransfer':
+      // The whole balance of an account whose keys were lost with its passkey, moved to a new account of the same type by its break-glass key (wallet spec 8.2, 2026-11-08).
+      return sent
+        ? { title: words.movedToNew, kind: words.kinds.breakGlassTransfer, sign: '-', icon: 'key_off' }
+        : { title: words.recoveredFromOld, kind: words.kinds.breakGlassTransfer, sign: '+', icon: 'restore' };
     default:
       return { title: t.type, kind: t.type, sign: sent ? '-' : t.accountIdTo === accountId ? '+' : '', icon: 'receipt_long' };
   }

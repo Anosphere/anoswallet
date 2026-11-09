@@ -162,6 +162,12 @@ POST /check-anopod-status answers three more integers: bucketOneImages,
 bucketTwoImages, bucketTwoInfos, the caller's rows in each. The wallet's
 next-step rule reads them (section 8.1).
 
+Since 2026-11-08 the answer also carries role, after isSuperSeed:
+"moderator", "attestor" or null, the pod's live appointment (masterpod
+spec section 16, forclaude/appointments-plan-1.md). The account page's
+Stake for list reads it (8.2). An older masterpod sends no role field,
+and the wallet then shows all six purposes.
+
 ### 4.4 anos accounts
 
 A new table, one row per anos account a pod made, and a feature folder
@@ -390,6 +396,8 @@ with their comments pointed at this server, and require-account.js:
 
 src/reads/ (router, handlers, service, queries), wired in app.js. All
 five answer the signer's own account only; nothing about anyone else.
+Since 2026-11-08 two public reads sit beside them, /list-fund-proposals
+and /get-fund-proposal, the block at the end of this section.
 The third, /list-escrows, was added 2026-11-05 for the escrow trades
 (anossoftware spec section 16); the fourth, /get-assisted-transfer, on
 2026-11-06 for the assisted transfer (anossoftware spec section 17); the
@@ -400,8 +408,13 @@ fifth, /get-locked-transfer, and the date range on /list-transactions on
     POST /get-account (account)
     body { }
     answer: 200 { accountId, type, balance: millionths as a decimal string, latestTransactionId: hex | null,
-      createdAt: ISO 8601 }. latestTransactionId is the transaction_id of the garlic_chain link with the
+      createdAt: ISO 8601, stakes: { daoVote, moderator, attestor, guardian, validator, masterPod },
+      guardianVotes: number }. latestTransactionId is the transaction_id of the garlic_chain link with the
       highest position whose account_id is the signer: what the next transfer names as previousTransactionId.
+    stakes and guardianVotes (2026-11-08, anossoftware spec 25.1): the account's stake per purpose, millionths
+      as decimal strings, "0" each when the account has no stakes row, and floor(guardian / GUARDIAN_VOTE_ANOS)
+      as a number, the account's guardian votes. A validator without the fund proposal reads sends neither;
+      the wallet's AccountAnswer has both optional, and only the Guardians pages read them.
 
     POST /list-transactions (account)
     body { beforePosition?: integer, limit?: integer (default 50, at most 200), from?: ISO 8601, to?: ISO 8601 }
@@ -437,7 +450,8 @@ fifth, /get-locked-transfer, and the date range on /list-transactions on
     POST /get-assisted-transfer (account)
     body { }
     answer: 200 { transfer: { transactionId, accountId, accountIdTo, amount: string, createdAt,
-      stage: waiting | attesting | writing | cancelling, attestations: 0 | 1 | 2 } | null }
+      stage: waiting | attesting | locked | writing | cancelling, attestations: 0 | 1 | 2,
+      unlocksAt: ISO 8601 | null } | null }
     transfer: the assisted_transfers row whose account_id is the signer, or null when there is none. There is
       at most one: account_id is unique there, and the validator holds one transaction per account. The
       sender's only: the receiver can do nothing with the transfer and sees it in the history when it lands.
@@ -448,7 +462,11 @@ fifth, /get-locked-transfer, and the date range on /list-transactions on
       cancel on it; writing with both attestations approved, until the next round writes it (the sender may
       still cancel); attesting otherwise, accepted and waiting for two approved attestations. attestations
       counts the attestation slots holding one; the two reach the validator together, posted by the
-      deciding attestor's app, so it is nearly always 0 or 2.
+      deciding attestor's app, so it is nearly always 0 or 2. Since 2026-11-08 (anossoftware spec 22) the
+      row may be a breakGlassTransfer, the recovery finish's move out of a lost account (12.3): unlocksAt is
+      then the moment a move out of a guarded or vault account may be written (null for every other row),
+      and a fifth stage, locked, is both attestations approved with that moment ahead; the wallet reads it
+      "Locked until <date>" (assistedStages.locked).
 
     POST /get-locked-transfer (account)
     body { }
@@ -468,10 +486,53 @@ fifth, /get-locked-transfer, and the date range on /list-transactions on
 Refusals are 400 or 401 + { error }, logged "failed: <reason>" like
 every other route. The 1 MB JSON limit stays.
 
+The public reads (2026-11-08; anossoftware spec 25, the plan
+forclaude/wallet-guardians-plan-1.md): no envelope, no signature, the body
+a plain JSON object (400 bad request shape otherwise), built like
+/list-dao-stakes (anossoftware 23); the doorman passes them at 4 KB with
+the object check (doormansoftware spec 7), the fields are the validator's.
+Everything they answer is the fund's business: a written proposal's
+payouts are on the public chain, and the votes are the guardians' public
+act on the fund's money. A validator or a doorman without them answers
+404, which the wallet shows in red under the tab of the Guardians page
+while everything else works, so the validators and their doormen deploy
+first.
+
+    POST /list-fund-proposals (public)
+    body { status: 'open' | 'decided', limit?: integer (default 20, at most 200), offset?: integer, from?: ISO 8601, to?: ISO 8601 }
+    answer: 200 { settings, proposals: [ item ] }
+    settings: { anosPerVote, minimumStake, percent, minutes }, the validator's GUARDIAN_VOTE_ANOS and
+      STAKE_MIN_GUARDIAN_ANOS as millionths (decimal strings) and GUARDIAN_VOTE_PERCENT and GUARDIAN_VOTE_MINUTES
+      as numbers, with every answer, so the wallet's notice, its rule and its become-a-guardian sentence carry
+      the validator's own numbers.
+    item: { transactionId, guardianId (the proposer's account), createdAt, voteClosesAt, status, approved,
+      payoutCount, total: millionths as a decimal string, forWeight (the proposer's weight plus the approved
+      votes for), againstWeight (the approved votes against), passing, decidedAt: ISO 8601 | null,
+      votes: [ { guardianId, vote: for | against, weight, approved, votedAt } ] } (anossoftware 25.1).
+    status (anossoftware 25.2): waiting until every validator accepted the proposal (no vote is accepted on it
+      yet); open while voteClosesAt is ahead; closing once it has passed and the next ready list has not tallied
+      it yet; written for an archived proposal that passed and whose payouts the round wrote; failed for one that
+      did not. A word the wallet does not know is shown as it is, with no button.
+    open lists the fund_proposals rows, one at most (limit, offset, from and to are not read); decided lists the
+      archives rows of fund proposals, newest first by the decision, after offset rows, with the decision at or
+      after from and before to when given (to is the first moment after the range, as /list-transactions takes
+      them). 400 invalid status / invalid limit / invalid offset / invalid from / invalid to.
+
+    POST /get-fund-proposal (public)
+    body { transactionId: hex }
+    answer: 200 { settings, proposal }, the item plus proposerWeight (the proposer's votes when the proposal was
+      stored) and payouts: [ { index, accountIdTo, amount, reason, stakeFor: purpose | null } ] in index order,
+      the fields as the proposer sent them; the open row first, then the archives. 400 invalid transactionId
+      for anything but 64 hex characters; 404 unknown proposal.
+
 ## 6. The keyholders
 
-No change to keyholdersoftware. What the wallet sends them is what the
-keyholder test app sends, with the stand-ins replaced:
+Since 2026-11-08 the wallet also asks every keyholder `/get-owner` (level
+none, keyholder spec section 15) who owns a lookup id, all at once with
+the deposit's 15 second limit, found when any answers: the locked-out
+stepper's step 1 (12.3), `SharesService.findOwner`. Before that, nothing
+here changed keyholdersoftware. What the wallet sends them in a deposit is
+what the keyholder test app sends, with the stand-ins replaced:
 
 - publicLedgerId: the real PLID, 32 bytes (docs/public-ledger-id.md).
 - lookupId: the real rule, section 6 there.
@@ -525,11 +586,20 @@ flows/how_a_wallet_builds_a_transaction.md). New or changed:
     break-glass seed    32 random bytes per anos account. breakGlassKey: P-256 scalar = HKDF(seed, "anos/break-glass-p256/v1", 48)
                         as an integer mod (n - 1), plus 1, the backup code's rule; breakGlassPostQuantumKey: ML-DSA-87
                         keygen(HKDF(seed, "anos/break-glass-mldsa/v1", 32)). HKDF-SHA-256, empty salt. The seed is
-                        split and deposited as breakglasskey, then wiped; it is never sent to the masterpod.
-    keyBlob             AES-256-GCM under the encryption key of key1 scalar (32) || postQuantumKey1 seed (32) ||
-                        key2 scalar (32) || postQuantumKey2 seed (32), 156 bytes. ML-DSA-87 keys come back from
-                        their seeds (the test wallet's generateMlDsaKey(seed)), P-256 public keys from the scalars.
-                        Opened only to sign, then dropped; the ciphertext stays in RAM for the session.
+                        split and deposited as breakglasskey, then wiped; it is never sent to the masterpod. At a
+                        recovery's finish the recovered seed signs the account's break-glass move (step 5 of
+                        forclaude/break-glass-plan-1.md) and is wiped again; nothing of it is stored on the
+                        masterpod (2026-11-08; from 2026-10-26 to then the finish stored it as breakGlassBlob).
+    keyBlob             AES-256-GCM under the key blob key of key1 scalar (32) || postQuantumKey1 seed (32) ||
+                        key2 scalar (32) || postQuantumKey2 seed (32), 156 bytes. The key blob key (2026-11-08,
+                        forclaude/break-glass-plan-1.md) = HKDF(PRF output, "masterpod/kek-keys/v1", 32): from the
+                        passkey's PRF output alone, a sibling of KEK_prf, derived at every unlock and create and
+                        kept in RAM with the PRF output (session.service); not the encryption key, which the backup
+                        code also opens, so a backup-code recovery returns the pod and not the signing keys, and a
+                        lost passkey loses the key blobs for good (the wallet shows such an account as lost, 8.2).
+                        ML-DSA-87 keys come back from their seeds (the test wallet's generateMlDsaKey(seed)), P-256
+                        public keys from the scalars. Opened only to sign, then dropped; the ciphertext stays in
+                        RAM for the session. Before 2026-11-08 the blob was under the encryption key.
     the wallet pair     fetched once per session from /api/sign/public-keys; a creation payload carries them as
                         walletKey and walletPostQuantumKey; the browser makes the other six signatures and
                         /api/sign adds the two. Every transfer, fund proposal and follow-up is signed by pair one
@@ -572,7 +642,7 @@ as in the test apps; a new tab unlocks again.
     /security/bucket-two     forwards to /account/recovery/details
     /home                    home: the greeting, the balance card, things to do, the tiles
     /wallet                  the anos accounts and Create anos account
-    /wallet/:accountId       one account: balance, send, pending, escrow trades, follow-ups, fund proposal
+    /wallet/:accountId       one account: balance, send, pending, escrow trades, the held or locked transfer
     /wallet/:accountId/escrow/:transactionId   one escrow trade: the details, the buttons for your side, the closed view
     /wallet/:accountId/assisted/:transactionId   one assisted transfer: the details, the stage, the case, Cancel transfer, the closed view
     /wallet/:accountId/history   the transaction history: the rows in plain words by day, a date range, Show more
@@ -585,19 +655,32 @@ as in the test apps; a new tab unlocks again.
     /marketplace/new         a new listing
     /marketplace/mine        your listings, open first, with who connected and Close
     /marketplace/:listingId  one listing: the details, the owner, Connect / Waiting / Open chat; the owner's view
+    /dao                     DAO: the notice, three tabs (Open votes, Pending, Decided), the cards, New proposal
+    /dao/new                 a new proposal: the title, the text, Post
+    /dao/:proposalId         one proposal: the status, the title and the text, the proposer, the numbers, your support or vote with a confirm in place, the votes and the supporters
+    /dao/guardians           Guardians: the notice, your guardian accounts, two tabs (Open vote, Decided), the cards, New proposal
+    /dao/guardians/new       a new fund proposal: the account that proposes, the payouts, Post
+    /dao/guardians/:transactionId   one fund proposal: the status, the payouts, the numbers, Voting as and your vote with a confirm in place, the votes
     /notifications           the list, mark read
     /seed                    the vouch request inbox (seeds only)
     /log                     the activity log, newest 40 calls, polls excepted (the test apps' Log)
 
+In app.routes.ts the three Guardians routes (2026-11-08, section 11; the
+plan is forclaude/wallet-guardians-plan-1.md) sit between dao/new and
+dao/:proposalId: the router takes the first route that matches, and
+dao/:proposalId would otherwise swallow dao/guardians. The Guardians have
+no entry of their own in the side panel or the Home tiles: the DAO page
+carries a card to them (8.2).
+
 A guard sends anyone without a session to /. Which pages the navigation
 shows follows the status: vouching until vouched; identity and setup
-until setup is complete; home first, then wallet, chat, marketplace and
-account once it is (2026-11-06, section 11); seed when isSeed. The Chat
-entry carries the number of unread rooms (8.2, Chat; 2026-11-05, section
-11) and the Notifications entry the number of unread notifications
-(2026-11-06); the side panel and the Home tiles draw one list,
-navigation.service (8.3). The toolbar's "anoPod wallet" is a link to
-/home once setup is complete.
+until setup is complete; home first, then wallet, chat, marketplace, DAO
+(2026-11-08) and account once it is (2026-11-06, section 11); seed when
+isSeed. The Chat entry carries the number of unread rooms (8.2, Chat;
+2026-11-05, section 11) and the Notifications entry the number of unread
+notifications (2026-11-06); the side panel and the Home tiles draw one
+list, navigation.service (8.3). The toolbar's "anoPod wallet" is a link
+to /home once setup is complete.
 
 The next-step rule, applied after an unlock and after each step
 finishes:
@@ -811,16 +894,29 @@ the recorded answer skipped, to /account/protect; 2026-11-07, section
 accounts read and none, to /wallet); "Finish creating your Spending
 account 2" (an account not submitted to the validator, by its name, to
 /wallet); "3 unread chats" (to /chat); "2 chat requests" (the invites to
-this pod and the join requests on its rooms, to /chat/requests); "4
-unread notifications" (to /notifications), each singular when it is
-one; then the tiles, one square per side-panel entry except Home itself
+this pod and the join requests on its rooms, to /chat/requests); "2
+proposals open for your vote" (the open DAO proposals this pod has
+votes in and has not voted on, to /dao; 2026-11-08, section 11); "A fund
+proposal is open for your vote" (a fund proposal is open and one of the
+pod's accounts with guardian votes neither proposed it nor voted on it,
+to /dao/guardians; 2026-11-08, section 11); "4 unread notifications" (to
+/notifications), each singular when it is one; then the tiles, one
+square per side-panel entry except Home itself
 and Log, with the entry's icon and label, Chat and Notifications
 carrying their unread counts at the top right, drawn from the same list
 as the side panel (navigation.service, 8.3). On open /list-anos-accounts
 (quiet) fills the session's accounts, a refusal in red, then the
 balances are read; every 5 seconds they are read again while an account
 is not on the ledger yet or any anos are held or pending, as the Wallet
-page does.
+page does. Beside the accounts, /list-dao-proposals { status: 'open',
+limit: 100 } (quiet) counts the proposals with yourWeight at least 1 and
+no vote of this pod for the open-votes line, and /list-fund-proposals {
+status: 'open' } (quiet) brings the open fund proposal for the fund line,
+which shows while its status is open and one of the pod's accounts whose
+balance entry has guardianVotes at least 1 (balances.service, 8.3, from
+the /get-account read Home already makes) is neither its proposer nor in
+its votes; a refusal shows no line, the lines are a convenience
+(2026-11-08, section 11).
 
 Wallet. Titled "Wallet" (the subtitle left on 2026-11-06, section 11).
 On top the balance card (balance-card.component over balances.service,
@@ -848,31 +944,50 @@ refused, "Some of this account's reads failed; what is held may be
 incomplete."; "Not submitted to the validator" for a creation that never
 reached the validator; "Waiting for the ledger…" while the creation has
 not landed (unknown account); another refusal in red; "Reading…" before
-the first read. The card's footer: the id in short form ("a1b2c3d4…e5f6",
+the first read. A lost account (2026-11-08, section 11: its keyBlob does
+not open under the key blob key, the keys went with an old passkey) shows
+the lock-off icon and "Lost with the old passkey" in place of the balance;
+nothing is read for it and it counts in no total and no poll. When
+/list-my-break-glass-moves (masterpod 14.4.1, read with the balances
+while an account is lost) lists a move for it, the move's state sits
+under the line: "Moving the money: waiting for 2 attestors", "Moving the
+money: 1 of 2 attestors signed", "Moving the money: being written" once
+the case is decided, "Moved to Spending account 2" once the new account's
+history lists the move, "The attestors dismissed the move". The card's
+footer: the id in short form ("a1b2c3d4…e5f6",
 the first 8 and the last 4 characters), a copy button (8.5) with the
 full id, and Resubmit on an unsubmitted account. The balances are read
 when the page opens, by the card's refresh button, by Refresh (which
 reloads the account list too) and every 5 seconds while an account is
 not on the ledger yet or any anos are held or pending; quiet in the log,
 as the polls are. Then "Open a new account": a type select (spending,
-guarded, vault, assisted) and Create anos account, which runs, as a
-progress list:
+guarded, vault, assisted) and Create anos account, which runs
+account-creation.service's createAccount (8.3; since 2026-11-08 the steps
+live there, so the recovery's finish opens accounts the same way, 12.3)
+and shows its steps as a progress list:
 1. pair one, pair two, the break-glass seed and its two keys; the
    wallet public keys from /api/sign/public-keys; accountId; the
    creation payload (the test wallet's buildCreateAccountTransaction,
    with the wallet keys from the server) signed by the six keys here;
 2. the break-glass seed deposited (section 6, breakglasskey);
 3. /api/sign: the two wallet signatures added;
-4. /create-anos-account with keyBlob and the signed creation;
+4. /create-anos-account with keyBlob (under the key blob key, section 7;
+   2026-11-08) and the signed creation;
 5. /api/anos/1/create-account with the signed creation; a 202, or a 400
    saying the account or its transaction already exists, counts as
    submitted;
-6. /mark-anos-account-submitted.
-A failure before step 4 shows Retry, which starts over with fresh keys. A
-failure at step 5 or 6 leaves the row unsubmitted; its card shows
-Resubmit, which re-posts the stored creation (step 5) and marks it (step
-6). After step 4 and after step 6 the list is read again, so the new
-card shows "Waiting for the ledger…" and the 5-second poll picks it up.
+6. /mark-anos-account-submitted;
+then the service waits for the account to be on the ledger, /get-account
+with the new pair one every 5 seconds for up to 90 seconds, the page busy
+meanwhile. A failure before step 4 shows Retry, which starts over with
+fresh keys. A failure at step 5 or 6 leaves the row unsubmitted; its card
+shows Resubmit, which re-posts the stored creation (step 5) and marks it
+(step 6) through the service's submitCreation. After step 4 and after
+step 6 the service reads the list and the balances again, so the new card
+shows "Waiting for the ledger…" until the wait sees it land; past 90
+seconds the page says "The account is not on the ledger yet after 90
+seconds. It may still land: refresh in a moment." and the 5-second poll
+picks it up.
 
 Account. The account id in the title with a copy button (8.5). Then, in
 this order: balance, type, the latest transaction id, created; Refresh,
@@ -883,10 +998,13 @@ trades from /list-escrows (section 5.4); Assisted transfer, on an
 assisted account, the held transfer from /get-assisted-transfer (section
 5.4); Locked transfer, on a guarded or vault account, the transfer
 waiting out its lock from /get-locked-transfer (section 5.4); a
-"Transaction history" button to the history page below; then the
-follow-ups and the fund proposal panels. The transaction list left this
-page for the history page on 2026-11-05 (section 11); /list-transactions
-is still read here, for the pending list. Under the balance, while this
+"Transaction history" button to the history page below. The two folded
+panels of the test wallet, the guardian vote on a proposal id pasted by
+hand and the fund proposal form, left this page on 2026-11-08 (section
+11) for the Guardians page under the DAO (/dao/guardians, below); the
+stake form on a spending account's Send stays. The transaction list left
+this page for the history page on 2026-11-05 (section 11);
+/list-transactions is still read here, for the pending list. Under the balance, while this
 account is the seller of an open escrow trade, one line: "5 anos of this
 are in an open escrow trade."; while an assisted transfer of this account
 is held, "5 anos of this are waiting in an assisted transfer."; while a
@@ -894,6 +1012,22 @@ guarded or vault transfer of this account waits out its lock, "5 anos of
 this are waiting out a lock." (2026-11-06, section 11). The validator
 moves a balance only when the trade or the transfer is written, so the
 balance stays whole while the anos are spoken for.
+
+A lost account (2026-11-08, section 11), whose keyBlob does not open under
+the key blob key, shows "Lost with the old passkey" with the lock-off icon
+and "The keys of this account were lost with the old passkey. Its money
+moves to a new account through the recovery." in place of the summary,
+then the move's state as the Wallet card shows it; Refresh and the
+Transaction history button stay (the history page itself shows the lost
+line, since its read needs pair one), and Send, Pending, the trades and
+the lock sections are left out. Every other page that
+opens a keyBlob treats one that does not open the same way: the escrow
+trade, assisted transfer and history pages show "Lost with the old
+passkey" where the read's refusal would show; the attestor's and the
+moderator's account pickers, the pinned listing's account lists and the
+Home to-do lines list the usable accounts only (balances.service,
+usableAccounts); Cases shows the id where the account's transactions
+would be known.
 
 Escrow trades (2026-11-05, section 11), after Pending: one row per
 open trade, "5 anos to <buyer>" when this
@@ -915,9 +1049,12 @@ transfer is waiting." when there is none; the read's refusal in red when
 it fails (a validator or doorman without the route), the rest of the
 page unharmed. The stage words, from the validator's stage (anossoftware
 spec 17.2): waiting, "Waiting for the validators"; attesting, "Waiting
-for attestors"; writing, "Attested, being written"; cancelling, "Being
-cancelled"; a word the wallet does not know, "Open". The row opens the
-transfer page. On any other account type nothing is read and nothing
+for attestors"; locked, "Locked until <unlocksAt>" (2026-11-08: a
+break-glass move out of a guarded or vault account with both attestations
+in, waiting out its lock; the wallet knows the word for completeness,
+since a lost account's page reads nothing); writing, "Attested, being
+written"; cancelling, "Being cancelled"; a word the wallet does not know,
+"Open". The row opens the transfer page. On any other account type nothing is read and nothing
 shows.
 
 Locked transfer (2026-11-06, section 11), after Escrow trades, on a
@@ -953,7 +1090,17 @@ minutes in words (minutes-words.ts: "7 days and 10 minutes" in
 production); while the numbers have not loaded, Send is off and the line
 reads "The lock settings have not loaded from the proxy. Refresh to try
 again."; assisted sends
-assistedAnosTransfer. previousTransactionId is /get-account's
+assistedAnosTransfer. The Stake for list shows the purposes this anoPod
+may stake for (2026-11-08, section 11): all six while the status carries
+no role (no status yet, or an older masterpod, 4.3); the four without
+moderator and attestor when role is null; those four and the role the
+pod holds otherwise; a pick that leaves the list goes back to daoVote.
+A moderator or attestor stake the validator refuses for the appointment
+reads "Only an appointed attestor can stake for attestor." or "The
+validator could not confirm this anoPod with the masterpod. Try again
+in a moment."; every other refusal shows as the validator says it. The
+fund proposal's Returns stake list keeps all six: a guardian returns
+any account's stake. previousTransactionId is /get-account's
 latestTransactionId, fetched right before building. The payload is
 signed by pair one (keyBlob opened for the signature and dropped),
 /api/sign adds the wallet pair, the validator gets it, the page
@@ -1367,6 +1514,317 @@ listing is not made any more; old marketplace rooms stay in Chat for the
 people in them, and Request to join stays for public rooms (Chat, New
 chat).
 
+DAO (2026-11-08, section 11; the plan is forclaude/dao-voting-plan-1.md,
+the masterpod's routes its spec's section 15): three screens, two of them
+step 4 and the third step 5. The wallet reads and writes the ledger
+through the masterpod alone; it never asks a validator for DAO stake. One
+staked anos of the daoVote purpose is one DAO vote; a pod's weight in a
+proposal is fixed by the masterpod's snapshot when the proposal is posted
+and again when it goes to a vote, so stake added later counts from the
+next proposal.
+
+DAO, at /dao: a header "DAO" with a Refresh icon button and, on a
+desktop, a New proposal button (a round + at the bottom right on a
+phone, as Browse); then the notice, an info icon and one paragraph in the
+plain muted style on a surface-container background with 12 px corners,
+never the error container: "DAO proposals come from people who staked
+anos for daoVote. One staked anos is one vote. Anyone with votes can post
+a proposal. It goes to a vote once 15 percent of all DAO votes support
+it, and then everyone votes for or against for 14 days. An accepted
+proposal records what the community decided. It moves no money and
+changes nothing by itself.", the two numbers from the `settings` the
+masterpod answers with every list (the minutes turned into days by
+Math.round(minutes / 1440)), shown once the first list answered; then,
+since 2026-11-08 (section 11; the Guardians plan,
+forclaude/wallet-guardians-plan-1.md), one outlined card the width of the
+page, for everyone: a shield icon, "Guardians" in bold with "The fund's
+proposals and the guardians' votes" under it and a chevron at the right,
+the whole card a link to /dao/guardians (the Guardians paragraphs below);
+it says nothing about the caller, since the Guardians page reads the
+caller's accounts itself; then three tabs, Open votes, Pending and
+Decided. A tab reads
+/list-dao-proposals for its status (open, pending, decided: accepted and
+rejected together) when it is first shown and on Refresh, 20 at a time,
+newest first, and Show more reads 20 more by offset while the last page
+came back full (the list has no more flag); Refresh forgets every tab and
+reads the one on screen again, the others when they are shown next. The
+Decided tab has a date range above its cards, as the history page: both
+days picked, or both cleared, read again, with from at the start of the
+first day and to at the start of the day after the last (the masterpod
+takes from inclusive and to exclusive, on decidedAt). The cards, one
+column on a phone and two on a desktop: the title in bold; "by somchai ·
+posted Nov 8, 2026" (the date without the time); then the state line.
+Pending: "25 of 180 votes in support" with a progress bar of the support
+over the support needed and "5 days left" (the whole days to
+pendingUntil, or the hours, rounded up, under a day). Open: "For 120 ·
+Against 40" and "closes Nov 22, 2026, 3:50:12 PM". Decided: Accepted or
+Rejected as a small label, green or red, the for and against, and
+"decided Nov 22, 2026, 3:50:12 PM". Under it, when the caller acted: "You
+supported this" with a green thumb_up on a pending card; "You voted for"
+or "You voted against" with the green thumb_up or the red thumb_down on
+an open or decided one (a support is not a vote, everyone votes fresh).
+The green is #2e7d32 and the red var(--mat-sys-error), Material's icons,
+never emojis. A card opens /dao/<id>. The tab's empty line when nothing
+came back: "No proposal is open for votes.", "No proposal is collecting
+support.", "No proposal has been decided yet."; a refused read in red
+under the tab ("/list-dao-proposals: HTTP 404: Not Found" against a
+masterpod without the routes), and the rest of the wallet works.
+
+New proposal, at /dao/new (step 4): a back arrow to /dao; Title (100
+characters at most, a counter "12/100" under it); Your proposal, a
+textarea of 10 rows (5,000 at most, its counter); under them the rule
+once the settings came, read quietly with /list-dao-proposals { status:
+'open', limit: 1 } when the page opens: "Your proposal needs support from
+15 percent of all DAO votes within 7 days to go to a vote. Posting it
+counts as your own support. You need at least 1 DAO vote(s) to post.";
+Post proposal, disabled until both fields have text and while busy. Post
+calls /create-dao-proposal with the trimmed fields; a 201 opens
+/dao/<proposalId> (the masterpod answers status pending, or open when the
+proposer's own weight alone reaches the support needed). The refusals in
+words: not enough DAO votes, "You need at least 1 DAO votes to post a
+proposal. Stake anos for daoVote from a spending account."; a pending
+proposal is already open, "You already have a pending proposal. Wait
+until it goes to a vote or expires."; validators unreachable, "The
+validators did not answer. Try again in a moment."; the rest
+"/create-dao-proposal: HTTP 400: invalid title" and the like.
+
+Proposal, at /dao/:proposalId (step 5, 2026-11-08, section 11), in the
+frame of the listing page: a back arrow to /dao and a Refresh icon
+button; /get-dao-proposal when the page opens, after each action and on
+Refresh, "Loading" until the first answer, "This proposal does not
+exist." on a 404, any other refusal in red ("/get-dao-proposal: HTTP
+404: Not Found" against a masterpod without the routes). Top to bottom:
+the status as a small bordered label ("Pending", "Open for votes",
+"Accepted" in green, "Rejected" in red, "Expired" muted); the title as
+the heading; the proposer's avatar (8.6, 40 px) with "by somchai ·
+posted Nov 8, 2026" (the date without the time); the text in a
+paragraph with white-space pre-wrap, shown as typed, line breaks kept
+and nothing rendered; the numbers: pending, and expired, "25 of 180
+votes in support" with the progress bar and "until Nov 15, 2026,
+12:00:00 PM"; open, "For 120 · Against 40" in large type and "closes
+Nov 22, 2026, 3:50:12 PM"; decided, "For 120 · Against 40" and "decided
+Nov 22, 2026, 3:50:12 PM" (the label at the top is the result); then
+"1200 DAO votes in this proposal's snapshot". Your part: "Your votes in
+this proposal: 12", or at 0 "You have no votes in this proposal's
+snapshot. Anos staked after it was posted count from the next
+proposal." Then the action, one per pod per stage, no undo, asked in
+place: pending, with votes and not yet supported, one big outlined
+button with the green thumb_up, "Support with 12 votes", which asks
+"Add your 12 votes in support of this proposal? It cannot be undone."
+with "Yes, support" and Back; Yes calls /support-dao-proposal, shows
+"Your support is recorded." in green and reads the proposal again (it
+may now be open). Open, with votes and not yet voted, two big outlined
+buttons side by side, the green thumb_up "For" and the red thumb_down
+"Against"; either asks "Vote for this proposal with 12 votes? It cannot
+be undone." with "Yes, vote for" and Back; Yes calls /vote-dao-proposal,
+shows "Your vote for is recorded." in green and reads again. After the
+caller acted: "You supported this" on a pending proposal, "You voted
+for" or "You voted against" on an open or decided one, with the icon
+and no button; without votes in the snapshot, no button. The refusals
+in words: already supported and already voted, "You already acted on
+this proposal."; no DAO votes in this proposal, the no-votes sentence;
+proposal not pending, proposal not open, proposal expired and voting
+closed, "This proposal is no longer taking votes." with the proposal
+read again; validators unreachable, "The validators did not answer. Try
+again in a moment."; the rest "/vote-dao-proposal: HTTP 400: invalid
+vote" and the like. Below, the public lists from /list-dao-votes, 50
+rows at a time, newest first, Show more by offset while a page came
+back full: once the proposal has opened, a heading "Votes" with the
+official-stage rows; then a heading "Supported by" with the
+pending-stage rows. A row: the username ("unknown pod" when the pod's
+row is gone) with a small "you" tag on the caller's own row (the row's
+anopodId against the session's), the time under it, and at the right
+the colored thumb icon with "12 votes". "No votes yet." under an empty
+heading once its list answered; a refused list in red under its heading.
+The Home line "2 proposals open for your vote" is in the Home paragraph
+above.
+
+Guardians (2026-11-08, section 11; the plan is
+forclaude/wallet-guardians-plan-1.md, the validator's reads anossoftware
+spec 25, the doorman's lines doormansoftware spec 7): where the fund's
+proposals and the guardians' votes are seen and acted on, three screens
+under the DAO page, two of them step 3 and the third step 4. The guts are
+the validator's as they were (the fundProposal transaction, the
+guardianVote follow-up, the tally in the leader round: one vote per
+GUARDIAN_VOTE_ANOS staked for guardian, the vote open for
+GUARDIAN_VOTE_MINUTES, passed at GUARDIAN_VOTE_PERCENT of the votes for);
+what is new is the reading side, two public reads built like
+/list-dao-stakes, /list-fund-proposals and /get-fund-proposal (5.4), and
+the two stake fields of /get-account. The data comes from the wallet's
+defaultValidator through its doorman and the proxy, never from the
+masterpod. Everyone signed in may look; an account with at least one
+guardian vote acts, and every guardian account of the pod acts on its own
+with its own weight, since the validators count guardian stake per
+account and never per pod (a pod with two staked spending accounts votes
+from each). Guardians and recipients are shown by account id in short
+form, "a1b2c3d4…e5f6", with a copy button, as the history and the Home
+lines show accounts: the validators know account ids only, and a username
+lookup by account id is a later step. Every number in the words
+(1,000 anos per vote, 70 percent, 60 minutes on the testnet and a week in
+production, the 1,000 anos least stake) comes from the `settings` the
+validator answers with every read, never from the wallet.
+
+Guardians, at /dao/guardians (step 3), in the frame of the DAO page: a
+header with a back arrow to /dao, "Guardians", a Refresh icon button and,
+on a desktop, a New proposal button (a round + at the bottom right on a
+phone); the notice, an info icon and one paragraph in the plain muted
+style on a surface-container background with 12 px corners, never the
+error container, once the first list answered: "Fund proposals come from
+guardians, people who staked anos for guardian. One vote per 1000 anos
+staked. A guardian proposes payments from the fund, and the guardians
+vote for or against for 1 hour. The proposal passes when at least 70
+percent of the votes are for, and the next round moves the money." (the
+time through the dictionary's `minutes`, so 10080 reads "7 days"); then
+"Your guardian accounts": when the page opens and on Refresh, /get-account
+for each of the pod's accounts, quietly, signed by pair one opened from
+the keyBlob and dropped (guardian-accounts.service, 8.3), "Reading…"
+meanwhile; the accounts whose guardianVotes is at least 1, as the short
+id with a copy button and "3 votes" ("1 vote" at one), the one with the
+most votes first; with none, "None of your accounts has guardian votes. To
+become a guardian, stake 1000 anos or more for guardian from a spending
+account, on its page in the Wallet." with the least stake from the
+settings and a Wallet button to /wallet (nothing under the heading while
+the settings are unknown: the refusal under the tab says why). New
+proposal is enabled with a guardian account and no proposal in the Open
+vote tab; a refused list leaves it enabled, since the validator refuses
+with words. Two tabs. Open vote reads /list-fund-proposals { status:
+'open' } when the page opens and on Refresh: one card at most (the fund
+holds one proposal), or "No fund proposal is open.". Decided reads {
+status: 'decided', limit: 20, offset } when it is first shown and on
+Refresh, newest first, Show more reads 20 more by offset while the last
+page came back full, and has a date range above its cards as the DAO's
+Decided tab (both days picked, or both cleared, read again; from at the
+start of the first day, to at the start of the day after the last, on
+the decision's moment); "No fund proposal has been decided yet." when
+nothing came back. Refresh forgets both tabs, reads the one on screen
+again and the accounts again. The cards, one column on a phone and two on
+a desktop: "Fund proposal" and the short id in bold; "proposed by
+a1b2c3d4…e5f6 · Nov 8, 2026" (the date without the time); "2 payouts ·
+1500 anos" ("1 payout" at one), the count and the sum the validator
+answers; then the state line: open, "For 5 · Against 2", a progress bar
+of for over for plus against, "needs 70 percent for · closes Nov 8, 2026,
+4:50:12 PM"; waiting, "Waiting for the validators"; closing, "Vote closed,
+waiting for the next round"; decided, the status as a small label,
+"Passed, the money moved" in green or "Failed" in red (a status the
+wallet does not know shows its own word, neither colour), "For 5 ·
+Against 2" and "decided Nov 8, 2026, 5:00:00 PM". Under it, "You proposed
+this" with the green thumb_up when the proposer is one of the caller's
+guardian accounts, or "You voted for" / "You voted against" with the
+green thumb_up or the red thumb_down when one of them is in the votes
+(the biggest account's vote when they differ). The green is #2e7d32 and
+the red var(--mat-sys-error), as on the DAO page. A card opens
+/dao/guardians/<id>. A refused read in red under the tab
+("/list-fund-proposals: HTTP 404: Not Found" against a validator or a
+doorman without the route), and the rest of the wallet works.
+
+New fund proposal, at /dao/guardians/new (step 3), in the frame of the
+DAO's New proposal page: a back arrow to /dao/guardians; "Proposing as", a
+select of the caller's guardian accounts read as the Guardians page reads
+them, each option the short id and "3 votes", the biggest first and
+selected (a proposal is one transaction signed by one account; with one
+guardian account the select has one option; without one, the
+become-a-guardian sentence and Post stays disabled); the payout rows, the
+form that left the account page, each in an outlined box: Recipient
+account id (64 hex characters, with the paste button Send has, which
+takes the run of 64 hex characters on the clipboard and says under the
+box when the browser refused or nothing there looks like an id), Amount
+(anos), Reason, Returns stake (no, or one of the six purposes) and a
+remove button, disabled on the last row; Add payout; the rule once the
+settings came, read quietly with /list-fund-proposals { status: 'open' }
+when the page opens, which also tells whether a proposal is open: "The
+guardians vote for 1 hour. The proposal passes when at least 70 percent
+of the votes are for; your own votes count as the first votes for. One
+fund proposal can be open at a time."; Post proposal, disabled while
+busy, without a guardian account, or while a proposal is open, "A fund
+proposal is already open. Wait until it is decided." shown as the reason
+(a refused quiet read shows in red instead, and Post stays enabled: the
+validator refuses with words). Post checks each row ("Payout 2: the
+recipient must be an account id of 64 hex characters", "Payout 2: the
+amount must be anos with up to six decimals"; the recipient lower-cased,
+the amount as millionths, the reason trimmed, stakeFor only when picked),
+opens pair one of the chosen account for the signature and drops it,
+builds the fundProposal (crypto.buildFundProposal: the fund as accountId,
+the chosen account as guardianId, no previousTransactionId), has /api/sign
+add the wallet pair and posts /fund-proposal; a 202 opens
+/dao/guardians/<transactionId>. The refusals in words: "a fund proposal is
+already open" (the validator's held check), the sentence above; "the
+proposer has no guardian vote", "This account has no guardian votes.";
+the rest "/fund-proposal: HTTP 400: payload.payouts[0].reason must be a
+string" and the like.
+
+Fund proposal, at /dao/guardians/:transactionId (step 4, 2026-11-08,
+section 11), in the frame of the DAO's Proposal page: a back arrow to
+/dao/guardians and a Refresh icon button; /get-fund-proposal when the
+page opens, after each action and on Refresh, "Loading" until the first
+answer, "This proposal does not exist." on the validator's 404 unknown
+proposal, any other refusal in red ("/get-fund-proposal: HTTP 404: Not
+Found" against a validator or a doorman without the route). Top to
+bottom: the status as a small bordered label, the five words of the
+Guardians page's cards, "Passed, the money moved" in green and "Failed"
+in red (a word the wallet does not know as it is, no colour); "Fund
+proposal a1b2c3d4…e5f6" as the heading with a copy button for the id;
+"proposed by a1b2c3d4…e5f6 · Nov 8, 2026" (the date without the time);
+the payouts, one row each in the validator's index order: "1500 anos to
+a1b2c3d4…e5f6" with a copy button for the recipient, the reason under
+it when there is one, and "returns guardian stake" (the purpose's wire
+word, as the notice says "for guardian") when the payout returns stake;
+then the total line, "2 payouts · 1500 anos" ("1 payout" at one); the
+numbers: "For 5 · Against 2", in large type while the vote is open, with
+the progress bar of for over for plus against and "needs 70 percent for
+· closes Nov 8, 2026, 4:50:12 PM" on an open proposal; the tally and the
+needs and closes line on a waiting one (the label at the top says it
+waits for the validators); the tally alone on a closing one; the tally
+and "decided Nov 8, 2026, 5:00:00 PM" on a decided one (the label at the
+top is the result). Your part (the plan's decision 8: every guardian
+account of the pod votes, one at a time): "Reading…" while the pod's
+guardian accounts are read (guardian-accounts.service, 8.3, as the
+Guardians page reads them); with none, the become-a-guardian sentence of
+the Guardians page with the least stake from the settings and no select;
+else "Voting as", a select of the guardian accounts, each option the
+short id, "3 votes" and its state, "You proposed this", "You voted for"
+/ "You voted against" or, while the vote is open, "can vote" (nothing
+for an account that neither proposed nor voted on a proposal that is
+not open); the first account that can still vote is selected when the
+page opens, the first in the list when none can (with one guardian
+account the select has one option). Under the select the selected
+account's state: "You proposed this" with the green thumb_up, "You voted
+for" / "You voted against" with the colored thumb, or, while the status
+is open and the account is neither the proposer nor in the votes, two
+big outlined buttons side by side, the green thumb_up "For" and the red
+thumb_down "Against", the DAO page's pair; either asks in place, "Vote
+for with 3 votes from a1b2c3d4…e5f6? It cannot be undone." with "Yes,
+vote for" and Back (a new pick in the select closes the question, which
+named the account). Yes opens pair one of the selected account from its
+keyBlob for the signature and drops it, builds the guardianVote
+follow-up (crypto.buildFollowUp: type guardianVote, the proposal's
+transactionId, the account as guardianId, the vote), has /api/sign add
+the wallet pair and posts /guardian-vote; a 202 shows "Your vote for is
+sent to the validators." in green (the thumb green, #2e7d32) and reads
+the proposal again, where the vote shows as waiting for approval until
+every validator accepted it, and the select moves to the next account
+that can still vote, so the next vote is one pick away (it stays when
+none can). The refusals in words, matched on the validator's own text
+(anossoftware src/fund/guardian-vote.js): "the vote on this proposal has
+closed", "The vote on this proposal has closed." with the proposal read
+again; "this guardian has already voted on this proposal", "This account
+already voted."; "the guardian has no guardian vote", "This account has
+no guardian votes."; "payload.guardianId is the proposer, whose vote for
+is already counted", "You proposed this"; the rest with the path,
+"/guardian-vote: HTTP 400: payload.vote must be …" and the like. Below,
+a heading "Votes": the first row the proposer, the short id with a copy
+button (tagged "you" when it is one of the pod's accounts), the time the
+proposal was made under it, and at the right the green thumb_up with
+"proposer · 3 votes for" (proposerWeight, the proposer's votes when the
+proposal was stored); then one row per vote in the validator's order
+(guardian id order): the short id with a copy button and the "you" tag
+on the pod's own, "approved" or "waiting for approval" and the time
+under it, and at the right the colored thumb with "3 votes"; "No votes
+yet." under the proposer alone. Refresh reads the proposal and the
+guardian accounts again and clears the two messages. The green is
+#2e7d32 and the red var(--mat-sys-error), as on the DAO pages. The Home
+line "A fund proposal is open for your vote" is in the Home paragraph
+above.
+
 Notifications: the list, newest first, mark read; the 5-second poll
 runs while a session is open and updates the status (vouched, counts),
 and the chat rooms with them once setup is complete. The chat kinds
@@ -1374,8 +1832,20 @@ link: chatInvite and joinRequest to /chat/requests; inviteAccepted,
 inviteDeclined and joinApproved to the room, /chat/:chatRoomId
 (2026-11-05, section 11).
 
-Seed: /list-vouch-requests with selfies, approve and decline, for a seed
-or super seed.
+Seed: the Vouch requests page, for a seed or super seed (2026-11-08,
+section 11). One small call, /list-vouch-requests, answers the open
+requests without pictures, so the seed sees every card at once; until
+that first answer the list's place shows a spinner and "Fetching…",
+never again after it. Each card shows the requester's avatar (8.6), the
+picture read through the profile cache (8.3) five at a time, the letter
+disc until it arrives. Approve and Decline disable only their own card's
+two buttons, so several can be approved back to back; on success, or on
+a 404 (the request was handled from another device), the card goes and
+nothing is fetched again; any other refusal stays on the card as its
+reason. A quiet 5-second poll (VOUCH_REQUESTS_POLL_MS) re-reads the list
+while the page is open, skipped while a read is in flight, and its
+answer never brings back a request handled on this page since it opened.
+Refresh is the manual retry after a page-level error.
 
 Log: the test apps' call log, newest 40, path, status and answer, polls
 excepted, with the keyholder and anos calls included.
@@ -1389,7 +1859,8 @@ excepted, with the keyholder and anos calls included.
                             time; sets the page's lang, the date adapter's locale and Material's Optional
                             (2026-11-06)
     session.service         signals: anopodId, username, firstName, lastName, the session keys, the PRF output
-                            while needed, the encryption key, the chat keys, the PLID and lookup id, the status
+                            while needed and the key blob key derived from it (2026-11-08), the encryption key,
+                            the chat keys, the PLID and lookup id, the status
                             from /check-anopod-status, the keyholder receiving keys, the wallet public keys, the
                             accounts (keyBlob ciphertext and creation, never open keys), the chat rooms (the
                             latest /list-chat-rooms answer), the seen positions with markSeen and the unread
@@ -1398,17 +1869,44 @@ excepted, with the keyholder and anos calls included.
                             routes and the four new ones added; the marketplace routes of 2026-11-06: getListing,
                             listingId on createChatRoom, mine and status any on listListings, no hpkeKey on
                             createListing, the fuller RoomListing and the listing on an invite; the four noted
-                            transaction routes and the two settings routes (2026-11-07)
+                            transaction routes and the two settings routes (2026-11-07); listMyBreakGlassMoves
+                            and fileBreakGlassMoves (2026-11-08), storeBreakGlassBlob gone; the six DAO routes of
+                            masterpod 15 (2026-11-08): createDaoProposal, supportDaoProposal, voteDaoProposal,
+                            listDaoProposals (with the quiet flag), getDaoProposal and listDaoVotes, with the
+                            types DaoStatus, DaoListStatus, DaoSettings, DaoListFilters, DaoProposalItem,
+                            DaoProposal and DaoVoteItem
     keyholder-api.service   the keyholder test app's, base path /api/keyholder/<n>
     anos-api.service        the anos test app's account-api.service.ts, base path /api/anos/<defaultValidator>,
                             plus the five signed reads (listEscrows added 2026-11-05, getAssistedTransfer and
-                            getLockedTransfer 2026-11-06; listTransactions takes from and to, 2026-11-06)
+                            getLockedTransfer 2026-11-06; listTransactions takes from and to, 2026-11-06);
+                            getAccountAs, the /get-account read with an envelope the caller signed, the
+                            break-glass pair's at the recovery's finish (2026-11-08); the two public fund
+                            proposal reads of anossoftware 25 (2026-11-08), listFundProposals(filters, quiet)
+                            and getFundProposal(transactionId, quiet), each a plain unsigned post with the
+                            object body and no envelope, the wallet's first unsigned posts to a validator, with
+                            the types FundProposalStatus, FundSettings, FundVoteItem, FundPayoutItem,
+                            FundProposalItem, FundProposal and FundListFilters; AccountAnswer carries the
+                            optional stakes and guardianVotes of /get-account (5.4)
+    guardian-accounts.service
+                            the pod's guardian accounts (2026-11-08): read(quiet), /get-account for each of the
+                            session's accounts at once, quietly, signed by pair one opened from the keyBlob and
+                            dropped, answering the accounts whose guardianVotes is at least 1, the biggest
+                            first (an account that is lost, not landed, refused or on an older validator is
+                            left out); pairOne(accountId), pair one of one of the session's accounts for one
+                            signature; what the Guardians page, New fund proposal and the proposal page share
     balances.service        what Home and the Wallet page share (2026-11-06): one entry per account (landed,
-                            balance, what is pending, in escrow, assisted or locked, held, available, partial)
+                            balance, what is pending, in escrow, assisted or locked, held, available, partial,
+                            and guardianVotes as /get-account answers them, 0 while not landed or on a validator
+                            without the field, which Home's fund proposal line reads, 2026-11-08)
                             read by refresh from /get-account, /list-transactions, /list-escrows and the
                             held-transfer read of the account's type, every account at once; the totals over
                             the session's accounts; needsPoll while an account is not on the ledger yet or
-                            any anos are held or pending
+                            any anos are held or pending; a lost account (2026-11-08: its keyBlob does not open
+                            under the session's key blob key) gets the lost entry and counts in no total and no
+                            poll, isLost and usableAccounts tell the pages and the pickers, markLost tries every
+                            keyBlob whenever the account list changes, and the lost accounts' break-glass moves
+                            (moves, moveOf, loadMoves over /list-my-break-glass-moves and the new account's
+                            history) are read with the balances
     notes.service           the noted transactions (2026-11-07): the last list read with its blobs opened,
                             byTransaction, add, update and remove, the preset kind and the starting currency
     settings.service        the wallet settings (2026-11-07): one encrypted object on the masterpod (4.7), read once
@@ -1416,7 +1914,7 @@ excepted, with the keyholder and anos calls included.
     navigation.service      the one navigation list (2026-11-06): NavItem (path, label, icon, badge) and items,
                             the side panel's entries by the status and the edition, Home first once setup is
                             complete, Chat and Notifications with their unread counts; the side panel and the
-                            Home tiles both draw it
+                            Home tiles both draw it; DAO after Marketplace and before Account (2026-11-08)
     chat.service            what the chat pages share (2026-11-05): room keys (roomKeyOf, wrapFor), decryptMessage,
                             piecesOf, a room's title, kind, icon and other person, the order by activity, shortWhen,
                             timeOf and dayLabel, requestedRooms, refreshRooms; listingWords, a listing in a few
@@ -1427,13 +1925,27 @@ excepted, with the keyholder and anos calls included.
                             waitingCount), stateOf, connect and connectAgain, and the country and currency this
                             device remembers (remembered, remember)
     profile-cache.service   one /get-anopod-profile per pod per tab, quiet, as a signal: undefined while it loads,
-                            null when there is no such pod (2026-11-05)
+                            null when there is no such pod (2026-11-05); at most PROFILE_READS_AT_ONCE (5) reads
+                            in flight, the other ids queued, so a page with many faces gets them a few at a time
+                            (2026-11-08)
     signing.service         /api/sign/public-keys and /api/sign
     crypto.service          the keyholder test app's crypto.service.ts plus the anos test app's (keys, the
                             builders, signing), plus section 7 and the public ledger id; wrapJson and
-                            unwrapJson (2026-11-07)
+                            unwrapJson (2026-11-07); deriveKekKeys, the key blob under it and KeyBlobLostError
+                            (2026-11-08); the break-glass transfer and the account envelope signed by the
+                            break-glass pair (buildBreakGlassTransferTransaction, signAccountEnvelopeAsBreakGlass,
+                            2026-11-08)
     passkey.service         the keyholder test app's, unchanged
     shares.service          the deposit rule of section 6, one function: deposit(secret, shareType)
+    account-creation.service
+                            opening an anos account (2026-11-08): createAccount(type, onStep) runs the six steps
+                            of 8.2 Wallet (the keys and the creation, the seed's deposit, the signing server,
+                            /create-anos-account, /create-account, /mark-anos-account-submitted), reads the list
+                            and the balances again after steps 4 and 6, then waits up to 90 seconds for
+                            /get-account to answer with the new pair one; resolves { accountId, pairOne };
+                            submitCreation runs steps 5 and 6 alone, for Resubmit; ALREADY_THERE, the validator's
+                            "already there" wording, the holding tables' included; used by the Wallet page and
+                            the recovery finish's Move your money (12.3)
     log.service             the activity log
 
 Keys are regenerated from blobs at each unlock; nothing secret touches
@@ -1450,7 +1962,12 @@ a canvas and encoded as JPEG (quality 0.92 normal, 0.95 high), preview,
 Retake. Below it always a file input, accept image/*, with capture set to
 the same facing so a phone offers that camera, as the fallback when the
 camera is refused or absent. The output is { contentType, bytes } for the
-caller to encrypt or send.
+caller to encrypt or send. Since 2026-11-08 (section 11) a chosen file
+whose longer side exceeds the quality's width (1280 normal, 1920 high) is
+scaled so that side is the width, the aspect kept, and encoded as JPEG at
+the quality's factor (0.92, 0.95), the size and quality a photo from the
+live camera has, before anything else is done with it; a smaller or
+undecodable file passes unchanged.
 
 ### 8.5 The copy button
 
@@ -1606,6 +2123,23 @@ both files at once: the Protect your passkey pane of setup, in `setup`
 (2026-11-07, section 11); the note form and the notes of the history
 page, in `notes` (2026-11-07, section 11); the Noted transactions page,
 in `notes`; the protect page and the Home line, in `common` and `home`.
+The DAO page, the New proposal page and the proposal page (2026-11-08,
+section 11) take their words from `dao` and `daoNew`, with `nav.dao`,
+like every page, and Home's "2 proposals open for your vote" its words
+from `home` (2026-11-08); the Thai is the build chat's, by the glossary
+("โหวต DAO" for DAO votes), for Thai readers to correct. The Guardians
+page and New fund proposal (2026-11-08, section 11) take their words from
+`guardians` and `guardianNew`, and the entry card on the DAO page from two
+entries in `dao`; the words of the two account panels left `account` with
+the panels; the five status words are one table, `guardians.statuses`,
+keyed by the validator's word; the Thai is the build chat's, by the
+glossary ("ผู้คุ้มครอง" guardian, "ข้อเสนอกองทุน" fund proposal), for Thai
+readers to correct. The Fund proposal page (2026-11-08, section 11)
+takes its words from `guardians` too, where step 3 had already put them,
+plus `guardians.payoutTo`, the payout row's "1500 anos to
+a1b2c3d4…e5f6"; Home's "A fund proposal is open for your vote" is
+`home.openFundVote`; the Thai is the build chat's, for Thai readers to
+correct.
 
 ## 9. Configuration, and running it on this machine
 
@@ -1647,7 +2181,8 @@ network/testnet.env numbers (2026-11-06, section 11).
 - Reads of the holding tables: the pending row has /list-transactions,
   the open escrows /list-escrows (2026-11-05), the assisted transfer
   /get-assisted-transfer and the locked transfer /get-locked-transfer
-  (2026-11-06); a guardian's fund proposal has no read.
+  (2026-11-06), and the fund proposals, open and decided, the two public
+  reads /list-fund-proposals and /get-fund-proposal (2026-11-08).
 - From the Home plan (forclaude/wallet-home-plan-1.md, 2026-11-06): a
   nickname for an account (would need a masterpod column); a QR code of
   an account id (would need a package); the Log as a tile on Home; a
@@ -1688,6 +2223,34 @@ network/testnet.env numbers (2026-11-06, section 11).
   beyond the Protect answer (the settings blob is ready for them); the
   Protect line for a pod with no recorded answer; the Protect pane on an
   iPhone or a computer.
+- From the break-glass plan (forclaude/break-glass-plan-1.md, 2026-11-08):
+  the owner's dispute path for a false recovery (a cached key blob, a
+  "Dispute a recovery" button, a warning) and a cancel page for either
+  key; forwarding, a closed flag or a repeat sweep for money that lands
+  in an old account after the move; a notification to the person or the
+  attestors about a move; a migration of old key blobs (the testnet is
+  reset with a fresh genesis instead); the break-glass blob's removal
+  from the masterpod.
+- From the DAO voting plan (forclaude/dao-voting-plan-1.md, 2026-11-08,
+  its section 8): a moderator hide for a proposal's text; votes signed by
+  pair one of a staked account instead of the pod's session keys;
+  notifications about proposals; editing or withdrawing a proposal;
+  comments on a proposal (the chat is there); a quorum; any weighting but
+  one staked anos one vote; a cursor on the lists (offset paging
+  instead); a vote list export; a logged-out public view of the
+  proposals; the stake withdrawal lock (the guardians work it by hand
+  from the vote rows' times).
+- From the Guardians plan (forclaude/wallet-guardians-plan-1.md,
+  2026-11-08, its section 7): usernames for guardians and recipients
+  (the validators know account ids only; a masterpod lookup by account
+  id is a later step); notifications about fund proposals; a poll
+  (Refresh, and a reread after each action); editing or withdrawing a
+  proposal (no validator rule exists for it); a stake withdrawal page of
+  its own (a payout with stakeFor is the way, and the form has it);
+  several open proposals (the validator holds one); merging the DAO and
+  the guardians into one page; an entry of their own in the side panel
+  or a Home tile (a card on the DAO page instead, since very few people
+  are guardians).
 - Several passkeys, push delivery, a custom theme, rate limits.
 
 ## 11. Build notes
@@ -3602,6 +4165,763 @@ Built in the planning chat from `forclaude/wallet-deposit-floor-plan-1.md`
   after about 15 seconds and the log to show that keyholder's two calls at
   status 0.
 
+### The key blob under the passkey's key, step 4 (2026-11-08)
+
+Built from `forclaude/break-glass-plan-1.md` (FINAL), section 4, one
+commit; steps 5 and 6 follow in this repo, and the three are deployed
+together after the testnet reset. Why: the key blob was under the
+encryption key, which the backup code also opens, so a backup-code
+recovery handed a person the original signing keys; from now on it is
+under a key from the passkey's PRF output alone, a lost passkey loses it,
+and the money moves to new accounts through the break-glass transfer
+(step 5). What the plan left open was decided as follows.
+
+- `crypto.service`: `INFO.kekKeys`, `deriveKekKeys(prfOutput)`;
+  `wrapKeyBlob`, `unwrapKeyBlob` and `pairOneFromKeyBlob` take the key
+  blob key; `wrapBreakGlassSeed` is gone. Added beyond the plan:
+  `KeyBlobLostError`, thrown by `unwrapKeyBlob` when the AES-GCM open
+  fails, so the pages tell a blob that does not open (a lost account) from
+  any other failure without reading error strings; the length check stays
+  a plain error.
+- `session.service`: `keyBlobKey` with `setKeyBlobKey`, `getKeyBlobKey`
+  and `hasKeyBlobKey`, cleared in `close()`. Set right after
+  `setPrfOutput` in `unlock.ts` and on the create page (null there when
+  the authenticator gave no PRF output at registration, as the PRF output
+  itself is). The setup page has no `setPrfOutput` of its own: it runs
+  `unlockWithPasskey` when the PRF output is not in RAM and gets the key
+  with it. The recovery service's PRF output is the recovery passkey's
+  and is not touched.
+- The key blob callers: the wallet page's create asks for the encryption
+  key as before and for the key blob key, and wraps under the latter; the
+  nine `pairOneFromKeyBlob` callers pass the key blob key and refuse with
+  `common.noKeyBlobKey` ("The key that opens your account keys is not in
+  RAM: unlock again.", one string where two forms of the old one were
+  used).
+- Lost accounts (`balances.service`): `AccountBalance.lost`; `readOne`
+  turns `KeyBlobLostError` into the lost entry (landed false, error null,
+  nothing read); the totals and `needsPoll` skip it; `isLost(accountId)`.
+  Beyond the plan: `usableAccounts`, the session's accounts that are not
+  lost, and `markLost()`, which tries every keyBlob without an entry under
+  the key blob key with no ledger read, run by an effect whenever the
+  session's account list changes and awaited by the attestor's and the
+  moderator's `loadAccounts` before they pick a default account, so a
+  picker neither shows nor picks a lost account even on a page that reads
+  no balance. The balance card says nothing about lost accounts (the plan
+  names no line); they are not counted.
+- The moves: `listMyBreakGlassMoves(quiet)` in `masterpod-api.service`
+  with `BreakGlassCaseItem`, `BreakGlassMove` and `BreakGlassEvent` as
+  masterpod 14.4.1 answers them. Where the plan put the loading on the
+  Wallet page, it lives in `balances.service` so the Account page shows
+  the same state: `refresh` reads the moves (`loadMoves`) when an account
+  is lost, so the page's open, Refresh, the balance card's button and the
+  polls keep the state current, and the Account page calls `loadMoves`
+  when it finds its account lost. One state per old account, the newest
+  case's. The stage: `dismissed` from the case status; `decided` reads
+  "being written" until the new account's history lists the move's
+  transaction id, read from the new account's first page of
+  `/list-transactions` (50 rows, newest first, signed by its pair one),
+  then "Moved to <the new account's name>"; an open or in-review case
+  reads "1 of 2 attestors signed" when `signOffs` is above zero, else
+  "waiting for 2 attestors". `wallet.moveState` takes the stage, the count
+  and the new account's name (the plan named the first two; the moved
+  line needs the name).
+- The Wallet card and the Account page as 8.2 now says; the lock-off icon
+  is Material Symbols' `no_encryption`. On the Account page the two panels
+  (follow-ups, fund proposal) are left out with Send, Pending, the trades
+  and the lock sections, since every one needs pair one; History stays,
+  and the history page of a lost account shows the lost line where the
+  read's refusal would show, as the escrow trade and assisted transfer
+  pages do. The attestor's three pickers and the moderator's (the plan
+  named the attestor's; the moderator's is the same list), and the pinned
+  listing's share menu, seller's From and named accounts, list the usable
+  accounts; the Home to-do "Finish creating" line skips a lost account
+  ("Open your first anos account" still waits for an empty list, lost or
+  not). Cases already showed the id for a keyBlob that did not open. The
+  notes pages have no account choice, so nothing changed there.
+- `history-words`: `breakGlassTransfer` reads "Recovered from an old
+  account" (+, icon `restore`) when received and "Moved to a new account"
+  (−, icon `key_off`) when sent; the details' kind is "break-glass move".
+- `recover-case.page`: the Break-glass keys step is gone with
+  `storeBreakGlass`, `BreakGlassResult`, `breakGlassText` and
+  `accountOfBreakGlassKeys` (the plan's 5.4 says the last is "kept from the
+  old step"; it was removed here so the build has no unused member, and
+  step 5 brings the logic back with its Move your money step); the stepper
+  runs Combine, Get back in, New backup code, Done; the recovered seeds
+  stay in `RecoveryService` unused; `storeBreakGlassBlob` left
+  `masterpod-api.service`, `breakGlassBlob` stays on `AnosAccountListItem`
+  (null from now on). The six dictionary entries of the removed step left
+  `en.ts` and `th.ts`.
+- Words: `wallet.lost`, `wallet.moveState`, `account.lostTitle` (the
+  card's line again), `account.lostText`, `common.noKeyBlobKey`, the two
+  history titles and the kind, in both languages; the Thai lines were
+  written here by the glossary and are to be checked by a Thai reader.
+- Spec: sections 7, 8.2, 8.3, 10, 12.3 and this note; README unchanged.
+- `npx ng build` clean (1.96 MB initial, no warnings). Not run in a browser
+  here: the user resets the
+  testnet, deploys the three wallet steps together and runs a recovery
+  through, expecting the old accounts' cards to read "Lost with the old
+  passkey" after Get back in and the move line once step 5 files the
+  moves.
+
+### The finish moves the money, step 5 (2026-11-08)
+
+Built from `forclaude/break-glass-plan-1.md` (FINAL), section 5, one
+commit, after step 4 above; step 6 (the attestor edition) follows, and
+the three are deployed together after the testnet reset. Why: since step
+4 a lost passkey kills the old accounts' keys, so the recovery's finish
+has to move the money itself: one new account per old account that holds
+anos and a `breakGlassTransfer` into it, signed by the recovered seed's
+break-glass pair, attested by two attestors. What the plan left open was
+decided as follows.
+
+- `crypto.service`: `TransferType` has `breakGlassTransfer`;
+  `TransferSignatures` allows the two break-glass keys;
+  `buildBreakGlassTransferTransaction(keys, accountId,
+  previousTransactionId, accountIdTo, amount, createdAt)` with the
+  private `signAsBreakGlass`, the break-glass pair's two signatures and
+  nothing else; `signAccountEnvelopeWith(signer, ...)`, private, behind
+  `signAccountEnvelope` (pair one) and
+  `signAccountEnvelopeAsBreakGlass(keys, ...)`.
+- `anos-api.service`: `getAccountAs(envelope, quiet)`, which `getAccount`
+  calls; `anosTransfer` unchanged. Beyond the plan's list: `AssistedStage`
+  gains `locked` and `HeldAssistedTransfer` gains `unlocksAt: string |
+  null`, what `/get-assisted-transfer` answers since the validator's step
+  1, so that `assistedStages.locked` has a date to show.
+- `account-creation.service` (new): `createAccount(accountType, onStep?)`
+  with the six steps of the Wallet page's `create()` as they were, step by
+  step, then the wait; `onStep(step, state)` reports `doing`, `done` and
+  `failed` per step index (0 to 5), so the Wallet page's list and its
+  `failedBeforeRegister` (a failure before step 4) follow it. The plan
+  said `submit` moves into `createAccount` and `resubmit` stays on the
+  page: `submit` became the public `submitCreation(creation, onStep?)`
+  (steps 5 and 6), which `createAccount` and the page's `resubmit` both
+  call, so the code exists once. The page's `load()` after steps 4 and 6
+  became the service's `reload()`: the session's account list, quiet,
+  then `balances.refresh(true)`, so a caller with no page (the finish)
+  still leaves the session and the balances current. The wait:
+  `/get-account` with the new pair one, quiet, every `ACCOUNT_POLL_MS` (5
+  seconds) for up to `LANDING_WAIT_MS` (90 seconds); any refusal means
+  not yet (an unknown account while the creation has not landed, or a
+  blip), and past the limit `wallet.notOnLedgerYet` ("The account is not
+  on the ledger yet after 90 seconds. It may still land: refresh in a
+  moment."), a sentence added beyond the plan's list because the wait
+  can end that way. The Wallet page now stays busy through the wait,
+  which it did not before (the card showed "Waiting for the ledger…" and
+  the poll picked it up; it still does). At the finish a timeout fails
+  the step after the new account was made, and Retry makes another one
+  of that type: the plan names no reuse of an empty new account, so the
+  one that landed late stays, empty. The key blob key is checked by the
+  service (`common.noKeyBlobKey`); the page keeps its two guards.
+- `recover-case.page`: the step "Move your money" after New backup code
+  and before Done, as the plan's 5.4 says (its 5.5 calls it "step 3" of
+  the finish list, the removed step's place; 5.4's order is the one
+  built, and 12.3 numbers it 4 and Done 5). `moveMoney` as 12.3 now says,
+  with these choices: every `/get-account` read happens before any
+  account is created or any move posted, so a refused read stops the run
+  before a side effect; `accountOfBreakGlassKeys` is back as it was,
+  typed over `AnosAccountItem`; an account's type goes to `createAccount`
+  as the masterpod lists it (its CHECK constrains it to the four); the
+  minutes ahead come from `config.load()` as the account page computes
+  them, and when the proxy sent no lock numbers the step fails with
+  `account.lockNotLoaded`; a read answering no latest transaction id
+  fails with `common.noLatest` (an account with a balance always has
+  one); the moves of a run go to `/file-break-glass-moves` in one call
+  (the masterpod takes 20 per call; a pod with more lost accounts than
+  that is not handled); the result keeps the seed count, and with no
+  recovered seed at all the step completes with `recoverCase.moveNoSeeds`
+  ("No break-glass seeds were recovered, so there is nothing to move.")
+  rather than refusing, since the stepper is linear and Done comes after;
+  the `moveRefused(account, reason)` line names the account by its short
+  id. `recovery.setCombined([], [])` after the wipe also drops the backup
+  code candidates and clears `hasCombined`, which nothing reads by then
+  (the rotation is done).
+- A gap the plan leaves, recorded for a later plan: a move posted to the
+  validator whose filing never reached the masterpod (a later account's
+  creation or move failed in the same run, or `/file-break-glass-moves`
+  was refused) is counted as filed on Retry through the validator's
+  "already held" refusal, as the plan says, but the masterpod has no row
+  for it, so the attestor edition never lists it and the anos stay held
+  until a cancel; that Retry also opens another new account of the type
+  first. Reading the held row with `/get-assisted-transfer` signed by the
+  break-glass pair and filing it would close the gap; the plan did not ask
+  for it, so it is not built.
+- `ALREADY_THERE` moved to `account-creation.service`, exported, and
+  reads `/already (exists|pending|locked|held in (assisted|escrow)_transfers|open|in the garlic chain)/`:
+  the creation's three wordings and the `account_id` conflict reasons of
+  the validator's five holding tables (pending, locked_transactions,
+  assisted_transfers, escrow_transfers and fund_proposals' "a fund
+  proposal is already open"). The creation check keeps its `400` test;
+  the move checks the wording alone.
+- `masterpod-api.service`: `fileBreakGlassMoves(caseId, moves)` with
+  `BreakGlassMoveToFile` (the three ids of a move), answering `{ caseId,
+  status, moves }`.
+- `assisted-stage.ts`: `assistedStageWords(stage, words, unlocksAt = '')`
+  reads `locked` as `assistedStages.locked(unlocksAt)`; the account page
+  and the assisted transfer page pass `lang.dateTime(held.unlocksAt)`
+  when the read answered one. The transfer page's `explain` keeps its
+  default sentence for `locked` (held, nothing offered): the wallet's own
+  held reads never meet the stage, since a lost account's page reads
+  nothing with pair one and the new account is the receiver. Spec 5.4 and
+  the Account paragraph of 8.2 name the stage and `unlocksAt`.
+- Words: `recoverCase.stepMove`, `moveText` (the plan's English),
+  `moveMoney` ("Move my money"), `moveResult(filed, empty, unmatched)`
+  ("2 moves filed, 1 account was empty, 0 seeds matched no account", with
+  the plurals), `moveNoSeeds`, `moveRefused(account, reason)`;
+  `assistedStages.locked(until)` ("Locked until <date>");
+  `wallet.notOnLedgerYet(seconds)`; in both languages, the Thai by the
+  glossary and to be checked by a Thai reader.
+- Spec: 5.4, 8.2 (Wallet, Account), 8.3, 12.3, 12.4, 12.6 and this note;
+  README unchanged.
+- `npx ng build` clean (1.96 MB initial, no warnings). Not run in a
+  browser here: the user resets the testnet, deploys the three wallet
+  steps together and runs a recovery through, expecting after New backup
+  code a Move your money step that opens one new account per old account
+  with anos and files the moves, the old cards reading "Moving the money:
+  waiting for 2 attestors" after it, and step 6's attestor edition to
+  sign them.
+
+### The vouch requests page (2026-11-08)
+
+Step 2 of `forclaude/wallet-vouch-requests-plan-1.md` (its section 2), one
+commit. Step 1, the masterpod's list without the selfie, is
+masterpodsoftware 846111b; either may be deployed first (the plan's
+decision 6).
+
+- `constants.ts`: `VOUCH_REQUESTS_POLL_MS` (5 000) under the polls and
+  `PROFILE_READS_AT_ONCE` (5) beside it.
+- `profile-cache.service`: `profile()` still creates the entry at once
+  (undefined while the read runs) but queues it instead of starting the
+  read; `pump()` starts reads from the front of the queue while fewer than
+  `PROFILE_READS_AT_ONCE` are in flight, and `load()` counts itself out in
+  a `finally` and pumps again, so a read that fails any way still frees
+  its place. Every page with avatars gets its faces five at a time from
+  now on; nothing else changed for them.
+- `seed.page.ts`: `requests`, `fetching`, `acting` (a set of
+  vouchIdNumbers), `cardErrors` (a map to the reason), `error` and
+  `listing` as signals, `handled` a plain set. `load(quiet)` sets the list
+  to the answer minus `handled` and clears the page error on success; a
+  quiet poll that fails changes nothing on screen; `fetching` and `listing`
+  clear in a `finally`. The poll is a `setInterval` of
+  `VOUCH_REQUESTS_POLL_MS` calling `load(true)` unless `listing`, cleared
+  with `DestroyRef`. `act(id, call)` disables one card's two buttons,
+  removes the card on ok or on status 404, prints any other refusal on the
+  card, and fetches nothing. `<app-avatar>` at 72 px replaces the `selfie`
+  branch and its style; an old masterpod's extra `selfie` field in the
+  list is unused.
+- One deviation from the plan: `listing` is a signal, not a plain boolean,
+  because Refresh's disabled state is bound to it in the template and the
+  app runs without a zone, so a plain field changing would not repaint it.
+- Words: `seed.fetching` ("Fetching…", Thai "กำลังดึงข้อมูล…", to be checked
+  by a Thai reader).
+- Spec: 8.2 (Seed), 8.3 (profile-cache.service) and this note.
+- `npx ng build` clean (2.03 MB initial, no warnings). Not run in a
+  browser here: the user runs it on the dev server and then on
+  wallet.anocloud.com with a seed that has several open requests,
+  expecting the spinner, then every card at once with the faces filling
+  in a few at a time; Approve on one card leaves the others live and the
+  card goes; a request from another pod appears within 5 seconds; the Log
+  page shows the first list read and the approve, not the polls.
+
+### The camera shrinks a picked photo (2026-11-08)
+
+Step 3 of `forclaude/wallet-vouch-requests-plan-1.md` (its section 3), one
+commit, independent of step 2. Why: a photo picked from the phone's camera
+app went out as it came, up to 10 MB, where the live camera makes about
+200 KB. The public selfie is stored plain on the masterpod and read back
+by every page that shows the face; the bucket images are encrypted by the
+wallet before they leave; the shrink happens before either, so the
+masterpod keeps storing exactly what it receives.
+
+- `camera.component.ts`: `fileChosen` calls a new `shrink(file)` before
+  `emit`. It decodes the file with `createImageBitmap(file,
+  { imageOrientation: 'from-image' })`, so a phone photo keeps the way it
+  was held; when the bitmap's longer side exceeds `SIZES[quality].width`
+  it draws the bitmap onto a canvas with that side at the width and the
+  other scaled with it (rounded to whole pixels), encodes
+  `toBlob('image/jpeg', SIZES[quality].jpeg)`, and the photo goes out as
+  that JPEG with type `image/jpeg`. A bitmap no larger than the limit, a
+  file `createImageBitmap` cannot decode, and a canvas whose `toBlob`
+  answers null all return null, and the file is emitted unchanged with its
+  own type, as before. The bitmap is closed in a `finally`. The preview
+  shows the emitted blob, so what the user sees is what is sent.
+  `takePhoto` is unchanged.
+- Spec: 8.4 and this note. No words, no constants, no proxy change.
+- `npx ng build` clean (2.03 MB initial, no warnings). Not run in a
+  browser here: the user picks a phone photo on the create page of the dev
+  server and reads the selfie's length on the Log page, expecting a few
+  hundred thousand characters, not millions, and the preview the right way
+  up.
+
+### The DAO, step 4 (2026-11-08)
+
+Step 4 of `forclaude/dao-voting-plan-1.md` (its section 4), one commit.
+Steps 1 to 3 are in the other repos: the validator's public
+/list-dao-stakes (anossoftware b8c8d32), the doorman's line
+(doormansoftware 637ccd6 and 5f84895) and the masterpod's tables, routes
+and clock (masterpodsoftware 68b8ba2, its spec's section 15). The wallet
+is deployed last, wallet1 then wallet2, together with step 5 (the plan's
+section 7). A wallet against a masterpod without the routes shows
+"/list-dao-proposals: HTTP 404: Not Found" in red on the DAO page and
+works everywhere else.
+
+- `app.routes.ts`: `dao` (DaoPage, "DAO") and `dao/new` (DaoNewPage, "New
+  proposal") after the marketplace routes, behind `sessionGuard`. The plan
+  lists a third line, `dao/:proposalId`, and marks it step 5: a route to a
+  page that does not exist yet cannot build, so the line goes in with its
+  page in step 5, after `dao/new`, where the static path keeps winning.
+  Until then a link to /dao/<id> (a card, a posted proposal) falls to the
+  catch-all and lands on the landing page, which sends a session on to
+  Home; the two steps are deployed together.
+- `navigation.service`: `{ path: '/dao', label: nav.dao, icon:
+  'how_to_vote' }` after Marketplace and before Account; the Home tiles
+  draw the same list.
+- `masterpod-api.service`: under "level setup: DAO (masterpod spec 15)" the
+  types `DaoStatus`, `DaoListStatus`, `DaoSettings`, `DaoProposalItem`,
+  `DaoProposal` and `DaoVoteItem`, and one the plan does not name,
+  `DaoListFilters`, the list's body (status, from, to, limit, offset); the
+  six methods, each `this.signed(path, body)`, `listDaoProposals(filters,
+  quiet = false)` with the quiet flag as the other reads have it,
+  `listDaoVotes(proposalId, stage, limit = 50, offset = 0)`.
+- `dao.page.ts` (new), as 4.4 says. Where the plan was silent: Refresh
+  forgets all three tabs and reads the one on screen again, the others
+  when they are shown next; the notice waits for the first list that
+  answers, since its numbers are the masterpod's `settings`, so a
+  masterpod without the routes shows the refusal and no notice; the time
+  left is the whole days to pendingUntil, or the hours rounded up under a
+  day, never below zero; the card's "posted" date is the date alone
+  (toLocaleDateString with dateStyle medium by the language's tag), while
+  "closes" and "decided" carry the time through lang.dateTime; a pending
+  card shows the caller's support, an open or decided card the caller's
+  vote (a support is not a vote, the plan's decision 8); a proposer whose
+  pod row is gone reads "unknown pod" (common.unknownPod); a thin
+  indeterminate bar runs under the notice while a read is out, as the
+  history page has one; the page size 20 is a constant of the page. The
+  green `for` (#2e7d32) and red `against` (var(--mat-sys-error)) classes
+  of the thumb icons are the page's own: the plan's 5.1 puts them in
+  `src/app/app.css`, but that file is the shell component's own stylesheet
+  (the `styleUrl` of app.ts), scoped to its template by Angular's view
+  encapsulation, so a class there does not reach a page; step 5 either
+  repeats the two lines in its page or puts them in `src/styles.css`, the
+  global file, and takes them out of this page.
+- `dao-new.page.ts` (new), as 4.5 says, in the frame of the new-listing
+  page; the counters are Material hints at the end of the fields;
+  `maxlength` is bound from two constants of the page; the back arrow's
+  label is common.back; `notEnough` carries the settings' proposeMinVotes,
+  or 1 when the quiet read did not answer; the refusals are matched on the
+  masterpod's reason text, as the attesting page matches its own.
+- Words: `nav.dao`; the `dao` section with every key of 4.2, the proposal
+  page's words of the plan's 5.1 included now since 4.2 lists them in the
+  section (step 5 adds `home.openVotes` only); the `daoNew` section. The
+  side words `for` and `against` reach the sentences as the wire words:
+  the English prints them, the Thai turns them into เห็นด้วย and
+  ไม่เห็นด้วย (a `sideWord` helper beside `KINDS` in th.ts). The Thai by
+  the glossary ("โหวต DAO" for DAO votes), to be checked by a Thai reader;
+  "Pending" is the glossary's รอดำเนินการ, "Open votes" กำลังโหวต.
+- Spec: 8.1, 8.2 (DAO), 8.3, 8.8, 10 and this note. README: nothing. No
+  constant in constants.ts, no proxy change, no new package.
+- `npx ng build` clean (2.05 MB initial, no warnings). Not run in a
+  browser here: the user opens /dao on the dev server against a masterpod
+  with step 3, expecting the notice with 15 and 14, the three tabs with
+  their empty lines, New proposal posting and landing on /dao/<id> (the
+  landing page until step 5), then the Pending tab's card with its bar and
+  "You supported this"; against an older masterpod, the red
+  "/list-dao-proposals: HTTP 404: Not Found" and no notice.
+
+### The DAO, step 5 (2026-11-08)
+
+Step 5 of `forclaude/dao-voting-plan-1.md` (its section 5), one commit,
+on top of step 4 (the note above): the proposal page, its route, the
+Home line. The wallet is deployed last, wallet1 then wallet2, steps 4
+and 5 together, after the validators, the doormen and the masterpod
+(the plan's section 7).
+
+- `dao-proposal.page.ts` (new), DaoProposalPage at /dao/:proposalId, as
+  5.1 says and 8.2 (DAO, Proposal) describes, in the frame of the
+  listing page: `proposalId` is an input the router binds from the
+  route, and an effect reads the proposal when it is set. Where the plan
+  was silent: the status label at the top is the result label of a
+  decided proposal, so Accepted or Rejected is not drawn twice; an
+  expired proposal shows the pending numbers under its Expired label
+  (the support over the support needed, the bar and "until" the deadline
+  it missed), since it has no for and against; the proposer's row is the
+  avatar and the by-line, which carries the username, so the name is
+  not printed twice; the by-line's date is the date alone through
+  dateOf, as the cards, the other times through lang.dateTime; the
+  your-votes line shows for every status; the action buttons are
+  outlined (mat-stroked-button), so the colored thumb stays visible on
+  them, with Yes filled and Back plain as the listing page's confirm;
+  one `asking` signal holds what is asked (support, for or against) and
+  one `confirm` method sends it; the green of "Your support is
+  recorded." and "Your vote for is recorded." is the thumb green
+  (#2e7d32), not the primary colour the other pages' `.ok` uses; an
+  action clears the two messages, Refresh clears them too, and after an
+  action the proposal and both lists are read again with the old ones
+  on screen meanwhile ("Loading" shows only before the first answer); a
+  refusal that means the stage is over (proposal not pending, proposal
+  not open, proposal expired, voting closed) shows "This proposal is no
+  longer taking votes." and reads the proposal again; the supporters
+  (stage pending) are read for every proposal and the votes (stage
+  official) once openedAt is set, each 50 at a time (PAGE, a constant of
+  the page) with Show more by offset while the last page came back full,
+  a refused list in red under its heading, "No votes yet." once a list
+  answered empty; a row is in the history page's shape, the username
+  with a small bordered "you" tag on the caller's own row and the time
+  under it, the colored thumb and the votes at the right; the body
+  paragraph has overflow-wrap: anywhere besides white-space: pre-wrap,
+  so a long unbroken string wraps in the column. The thumb classes `for`
+  (#2e7d32) and `against` (var(--mat-sys-error)) are repeated in this
+  page's styles: the plan's 5.1 puts them in `src/app/app.css`, which
+  step 4 found to be the shell's own scoped stylesheet, and two one-line
+  rules in each of the two pages are simpler than a global class in
+  `src/styles.css`; `dao.page.ts` is unchanged.
+- `app.routes.ts`: `dao/:proposalId` (DaoProposalPage, "Proposal") right
+  after `dao/new`, so the static path keeps winning; the import between
+  dao-new and dao. A card's link and a posted proposal's /dao/<id> now
+  open the page instead of falling to the catch-all.
+- `home.page.ts`: when Home opens, beside the accounts,
+  /list-dao-proposals { status: 'open', limit: 100 } (quiet) into the
+  signal `openVotes`, the count of items with yourWeight at least 1 and
+  yourVote null; the Things to do line "2 proposals open for your vote"
+  ("1 proposal open for your vote" at one), icon how_to_vote, to /dao,
+  after the chat requests line and before the notifications line, when
+  the count is above 0; a refusal leaves the count at 0 and shows
+  nothing, the line is a convenience. No new service use: the read is
+  masterpod-api.service's listDaoProposals, already there.
+- Words: `home.openVotes(n)` in both files, the only key added; every key
+  of the plan's 5.1 was already in `dao` since step 4 (checked against
+  5.1 one by one), and `daoNew.unreachable` serves the validators'
+  refusal here too. The Thai "${n} ข้อเสนอที่เปิดให้คุณโหวต", in the shape of
+  the other Home lines, to be checked by a Thai reader.
+- Spec: 8.1 (the route's words), 8.2 (Home's list and its open read; the
+  Proposal paragraph), 8.8 (the Home line's words) and this note. 8.3
+  unchanged: no service changed. README: nothing. No new package, no
+  proxy change, nothing under server/.
+- `npx ng build` clean (2.06 MB initial, no warnings). Not run in a
+  browser here: the user opens a posted proposal from a card or lands on
+  it after Post, expecting the Pending label, the title, the avatar and
+  the by-line, the text, the support over the support needed with the bar
+  and "until ...", the snapshot total, "Your votes in this proposal: n",
+  "You supported this" (the post counts as the proposer's support) and the
+  "Supported by" list with their own row tagged "you"; a second pod with
+  votes sees the Support button, the ask, "Your support is recorded." and,
+  once the support reaches needed, the Open for votes label with For and
+  Against and the "Votes" heading; Home shows "1 proposal open for your
+  vote" for a pod with votes that has not voted; a pod without votes sees
+  the no-votes sentence and no button; an old link to an expired proposal
+  shows the Expired label and its numbers; against an older masterpod,
+  "/get-dao-proposal: HTTP 404: Not Found" in red.
+
+### The Stake for list follows the appointment (2026-11-08)
+
+Step 3 of `forclaude/appointments-plan-1.md` (its section 3), one commit,
+after the masterpod's step 1 (masterpodsoftware 775d901:
+/check-anopod-status answers role) and the validators' step 2
+(anossoftware b62ac29: a moderator or attestor stake needs the pod's
+appointment). The wallet learns its pod's role from the status, offers
+moderator and attestor in the Stake for list only to a pod appointed for
+it, and shows the validator's two new refusals in words. Nothing deploys
+before the Test Net 2 relaunch; the wallet goes out after the masterpod
+and the validators, wallet1 then wallet2 (the plan's section 5); against
+an older masterpod the wallet shows all six purposes.
+
+- `session.service.ts`: `StatusAnswer` gains `role`, optional,
+  `'moderator' | 'attestor' | null`, since an older masterpod sends no
+  field; the empty status of the next-step rule leaves it out; the
+  computed `role` on the service is `this.status()?.role`: undefined
+  without a status or a field, null for a pod with no appointment.
+- `account.page.ts`: `stakePurposes` is a computed list: all six while
+  `role` is undefined, the four without moderator and attestor when it
+  is null, those four and the one the pod holds when it is a role; an
+  effect in the constructor moves a pick that left the list back to
+  daoVote. The pick's default stays attestor, as before: for a pod that
+  is not an attestor it moves to daoVote as soon as the status is known,
+  which the shell loads at unlock, before the page opens. Where the plan
+  was silent: the fund proposal's Returns stake list used the same
+  constant; it keeps all six through `allStakePurposes`, since a
+  guardian returns any account's stake, a revoked pod's among them (the
+  plan's decision 6). Send's refusal goes through `refusal(res)`: a
+  reason matching /not appointed as/ reads "Only an appointed attestor
+  can stake for attestor." (the picked purpose in both places), one
+  matching /could not confirm/ "The validator could not confirm this
+  anoPod with the masterpod. Try again in a moment.", every other as
+  before, the HTTP status and the validator's reason. The two reasons
+  are the validator's (anossoftware spec 24): "the sending account's
+  anoPod is not appointed as <stakeFor>" and "the masterpod could not
+  confirm the sending account's anoPod". They show only when the list
+  and the validators disagree: a status read before a revocation, or an
+  older masterpod behind new validators.
+- Words: `account.notAppointed(purpose)` and
+  `account.masterpodNotConfirmed` in both files, the only keys added.
+  The Thai: "มีเพียงผู้ยืนยันที่ได้รับแต่งตั้งเท่านั้นที่วางหลักประกันเพื่อผู้ยืนยันได้" (the
+  role word from a `ROLES` map in th.ts, the shape of `KINDS` and
+  `SIDES`, so the sentence reads ผู้ดูแล or ผู้ยืนยัน where the wire word is
+  moderator or attestor) and "ผู้ตรวจสอบไม่สามารถยืนยัน anoPod นี้กับ
+  masterpod ได้ ลองอีกครั้งในอีกสักครู่", to be checked by a Thai reader.
+- Spec: 4.3 (role on the answer), 8.2 (the Account paragraph: which
+  purposes show, the two refusals, the Returns stake list) and this
+  note. 8.3 unchanged: the status row covers the role; 12.2 and 13.2
+  unchanged: the guards did not change. README: nothing, it does not
+  state the answer or the list. No new package, no proxy change, no
+  route, nothing under server/.
+- `npx ng build` clean (2.07 MB initial total, no warnings). Not run in
+  a browser here: the user, on a spending account with the kind stake,
+  expects the Stake for list to show daoVote, guardian, validator and
+  masterPod for an ordinary pod, attestor added on an appointed attestor
+  pod and moderator on a moderator pod, all six against an older
+  masterpod; the Returns stake list of the fund proposal still shows all
+  six; a stake the validator refuses for the appointment shows its
+  sentence in red under Send, as every refusal shows.
+
+### The Guardians, step 3 (2026-11-08)
+
+Step 3 of `forclaude/wallet-guardians-plan-1.md` (its section 3), one
+commit, the wallet's first step. Steps 1 and 2 are in the other repos:
+the validator's public `/list-fund-proposals` and `/get-fund-proposal`
+and the two stake fields of `/get-account` (anossoftware aaacc2b, its
+spec's section 25: the plan said 24, that number was taken by the
+appointed stakes) and the doorman's two lines (doormansoftware 7b172ff,
+its spec's section 7). The wallet is deployed last, wallet1 then wallet2,
+together with step 4 (the plan's section 6), after the validators and
+their doormen: the wallet asks its `defaultValidator` only, so that one
+and its doorman first. A wallet against a validator or a doorman without
+the routes shows "/list-fund-proposals: HTTP 404: Not Found" in red under
+the tab of the Guardians page and works everywhere else.
+
+- `app.routes.ts`: `dao/guardians` (GuardiansPage, "Guardians") and
+  `dao/guardians/new` (GuardianNewPage, "New fund proposal") between
+  `dao/new` and `dao/:proposalId`, behind `sessionGuard`, with a comment
+  saying why they sit there (the router takes the first match, and
+  `dao/:proposalId` would otherwise swallow `dao/guardians`). The plan's
+  third line, `dao/guardians/:transactionId` to GuardianProposalPage, is
+  step 4's page: a route to a page that does not exist cannot build, so,
+  as the DAO's step 4 did with `dao/:proposalId`, the line goes in with
+  its page in step 4, after `dao/guardians/new`; a comment holds its
+  place. Until then a card's link and a posted proposal's
+  /dao/guardians/<id> fall to the catch-all and land on the landing page,
+  which sends a session on to Home; the two steps are deployed together.
+  `navigation.service` is unchanged (the plan's decision 1).
+- `anos-api.service`: `AccountAnswer` gains the optional `stakes` and
+  `guardianVotes`; under the comment "the public reads (anossoftware 25)"
+  the seven types of 3.3 and the two methods, each `this.post(path, body,
+  quiet)` with the plain body, no envelope: the wallet's first unsigned
+  posts to a validator. The doc comment names them.
+- `guardian-accounts.service` (new), a small root service the plan does
+  not name: the read of the pod's guardian accounts (3.5) is needed by the
+  Guardians page, by New fund proposal and by step 4's proposal page, so
+  it lives once, with the pair-one opener the two acting pages need
+  (`pairOne(accountId)`, the account page's `pairOne()` for a chosen
+  account); three copies of fifteen lines would have been the
+  alternative. `read()` asks /get-account for every account of the
+  session at once, quietly, and keeps the ones whose `guardianVotes` is
+  at least 1, the biggest first (Array.sort is stable, so ties keep the
+  list's order); an account whose keyBlob does not open, that is not on
+  the ledger yet, whose read is refused, or whose validator sends no
+  `guardianVotes` (one without section 25) is left out as a non-guardian,
+  and without the key blob key in RAM the list is empty. It reads the
+  session's account list from the masterpod first when it is empty, as
+  the account page's `pairOne()` does before it opens a keyBlob.
+- `dao.page.ts`: the entry card of 3.4 between the notice and the thin
+  progress bar that runs above the tabs, a link styled like the cards
+  (`.entry`), for everyone; the doc comment says so. Nothing else on the
+  page changed.
+- `guardians.page.ts` (new), as 3.5 says and 8.2 (Guardians) describes.
+  Where the plan was silent: the New proposal button and the round + are
+  `<button>`s with `routerLink`, not anchors, so `disabled` works (an
+  anchor cannot be disabled); New proposal is enabled with a guardian
+  account and no card in the Open vote tab, a refused list leaving it
+  enabled; the notice's and the rule's time comes from the dictionary's
+  `minutes` helper, so the testnet's 60 reads "1 hour" and production's
+  10080 "7 days" (the plan wrote "60 minutes"); "Reading…"
+  (common.reading) stands under "Your guardian accounts" while the
+  accounts are read, the become-a-guardian sentence with a Wallet button
+  (`account_balance_wallet`, the navigation's icon) when none came and the
+  settings are known, and nothing under the heading when the list was
+  refused too (the red line under the tab says why); the five status
+  words are one table `guardians.statuses` keyed by the validator's word,
+  as the languages plan has it for a server's words, so an unknown
+  status shows its own word and no colour (anossoftware 25.2); the
+  progress bar is for over for plus against, 0 before any vote, with
+  "needs 70 percent for" from the settings beside "closes"; a waiting or
+  closing card shows the status word and no tally, as the plan says; "You
+  proposed this" carries the green thumb_up, since the proposer's votes
+  are the first votes for; the "proposed by" date is the date alone
+  (dateOf), "closes" and "decided" carry the time through lang.dateTime,
+  as the DAO's cards do; the open list is asked with `{ status: 'open' }`
+  alone, since the validator reads nothing else for it, and Show more
+  exists on the Decided tab only; Refresh reads the accounts again too;
+  the page size 20 is a constant of the page. The `for` and `against`
+  colour lines are the page's own, as on the two DAO pages.
+- `guardian-new.page.ts` (new), as 3.6 says and 8.2 (New fund proposal)
+  describes. Where the plan was silent: each payout row is an outlined
+  box with the recipient on its own line, the amount and the reason on
+  the next and Returns stake with the remove button on the third, since
+  the account page's one-line row did not fit a phone; the paste
+  button's note (the browser refused, nothing looks like an id) is kept
+  on its row; the 64-hex-characters pattern of the account page's paste
+  is repeated here, two lines; the recipient is lower-cased and the
+  reason trimmed before posting; the quiet open read's refusal shows in
+  red, so a missing rule is explained, and Post stays enabled then; the
+  select's pick moves to the biggest account only when the pick is not in
+  the new list, so a Refresh elsewhere does not undo a choice; the
+  refusals are matched on the validator's words, "a fund proposal is
+  already open" (fund.queries.js, the held check) and "no guardian vote"
+  ("the proposer has no guardian vote", fund.service.js; the plan's "the
+  guardian has no guardian vote" is the guardian vote's wording, for step
+  4), the rest with the path.
+- `account.page.ts`: the accordion with its two panels left the template,
+  and with it `PayoutRow`, the signals `voteTransactionId`, `vote`,
+  `followUpOutcome`, `payouts` and `proposalOutcome`, the methods
+  `sendVote`, `followUp`, `addPayout`, `removePayout`, `updatePayout` and
+  `sendFundProposal`, the field `allStakePurposes`, `MatExpansionModule`,
+  the imports `FollowUp`, `Payout` and `Vote`, and the `.followups` style;
+  `PairOne` stays for `pairOne()`, `act` and `Outcome` for Send. The doc
+  comment's sentence about the two forms became "The guardian features
+  live on the Guardians page (2026-11-08)", and its two other mentions of
+  the panels (the order of the page, the lost account's list) went with
+  them. The stake form, `stakePurposes`, `spendingKind` and
+  `buildTransferToFund` are as they were.
+- Words: `dao.guardians` and `dao.guardiansLine`; the `guardians` section
+  with every key of 3.2, the proposal page's words of 4.1 included now
+  since 3.2 lists them in the section, as the DAO's step 4 did; the
+  `guardianNew` section. Leaving `account` in both files: `followUps`,
+  `vote`, `votes`, `fundProposal`, `returnsStake`, `no`, `addPayout`,
+  `payoutAmount`, `proposalAccepted` and `followUpAccepted`; `stakeFor`
+  and `stakePurposes` stay, and the New fund proposal page borrows
+  `account.recipientPlaceholder`, `pasteRecipient`, `amountPlaceholder`,
+  `clipboardRefused`, `clipboardNoId` and `stakePurposes`, the stake
+  form's words. The side words reach `youVoted`, `askVote`, `yesVote` and
+  `voted` as the wire words, the Thai through `sideWord`. The Thai by the
+  glossary ("ผู้คุ้มครอง" guardian, "ข้อเสนอกองทุน" fund proposal,
+  "การจ่ายออก" payout, "กำลังโหวต" for the Open vote tab as the DAO's Open
+  votes), to be checked by a Thai reader.
+- Spec: 8.1 (the three route lines and the order paragraph; the
+  `/wallet/:accountId` line lost its "follow-ups, fund proposal", which
+  the plan did not name), 8.2 (the DAO paragraph's card, the Guardians
+  paragraphs, the Account paragraph), 8.3, 8.8, 5.4, 10 and this note.
+  README: nothing. No new package, no constant, no proxy change, nothing
+  under server/.
+- `npx ng build` clean (2.07 MB initial, no warnings). Not run in a
+  browser here: the user opens /dao on the dev server against a validator
+  and a doorman with steps 1 and 2, expecting the Guardians card under
+  the DAO notice; on the Guardians page the notice with 1000, 70 and
+  "1 hour", the accounts with guardian stake under "Your guardian
+  accounts" (or the become-a-guardian sentence with 1000), the two tabs
+  with their empty lines; New proposal posting a payout from a guardian
+  account and landing on /dao/guardians/<id> (the landing page until step
+  4), then the Open vote card with "1 payout", the bar, "needs 70 percent
+  for", "closes …" and "You proposed this", and after the hour and the
+  next transaction of any kind the card under Decided as "Passed, the
+  money moved" or "Failed"; against an older validator or doorman, the red
+  "/list-fund-proposals: HTTP 404: Not Found" under the tab and no notice.
+  The account page shows no panel under the Transaction history button.
+
+### The Guardians, step 4 (2026-11-08)
+
+Step 4 of `forclaude/wallet-guardians-plan-1.md` (its section 4), one
+commit, on top of step 3 (the note above): the Fund proposal page, its
+route, the Home line. The wallet is deployed last, wallet1 then wallet2,
+steps 3 and 4 together, after the validators and their doormen (the
+plan's section 6). Step 5, the architecture records, is another chat.
+
+- `guardian-proposal.page.ts` (new), GuardianProposalPage at
+  /dao/guardians/:transactionId, as 4.1 says and 8.2 (Guardians, Fund
+  proposal) describes, in the frame of the DAO's Proposal page:
+  `transactionId` is an input the router binds from the route, and an
+  effect reads the proposal when it is set. Where the plan was silent:
+  the status label at the top carries the status word for every status,
+  so a decided proposal's result is not drawn twice and a waiting or
+  closing one does not repeat its word in the numbers (the DAO's Proposal
+  page does the same); the numbers block shows "For n · Against n" for
+  every status, large while open, the bar only while open, the needs and
+  closes line while the vote is ahead (open and waiting), "decided …"
+  once decidedAt is set, so a closing proposal shows its tally as it
+  stands; the payouts are rows in the shape of the vote rows, "1500 anos
+  to a1b2c3d4…e5f6" with the copy button, the reason and the
+  returns-stake line under it, one new word `guardians.payoutTo` (the
+  plan's "to"; the Thai "ไปยัง", the history's word for a recipient), and
+  the total line is the cards' `payouts(n, anos)`; `returnsStake` takes
+  the purpose's wire word, as the notice and the rule say "for guardian"
+  and 8.8 keeps wire words as they are; the "proposed by" date is the
+  date alone through dateOf, the other times through lang.dateTime, as
+  the cards; "not found" is the validator's 404 with "unknown proposal"
+  in its reason, while any other 404 (a doorman or a validator without
+  the route) shows in red with the path, as the Guardians page shows its
+  list's 404; the select's option says "can vote" only while the status
+  is open, and nothing for an account that neither proposed nor voted on
+  a proposal that is not open; the pick is made once the proposal and the
+  accounts are both known (the first account that can still vote, else
+  the first), stays while its account is listed (a Refresh does not undo
+  it), and after a vote moves to the next account that can still vote
+  and otherwise stays, so the person sees their vote; a new pick closes a
+  question asked for the previous account, since the question names it;
+  one `asking` signal holds the side and one `confirm` method sends it,
+  as on the DAO's page; the payload is typed GuardianVotePayload before
+  buildFollowUp, so the wire shape is the compiler's to check; the "you"
+  tag matches a row's account against the session's account list, not
+  the guardian list, so an account that voted and has since returned its
+  stake is still tagged; Refresh reads the proposal and the accounts
+  again, with the old ones on screen meanwhile ("Loading" shows only
+  before the first answer); the green of "Your vote for is sent to the
+  validators." is the thumb green; the `for` and `against` lines are the
+  page's own, as on the other pages. The proposer's row in the votes list
+  carries the short id with the copy button, the "you" tag and the time
+  the proposal was made, in the shape of the vote rows, with "proposer ·
+  3 votes for" at the right, so the proposer's id is copied where every
+  other id is.
+- `app.routes.ts`: `dao/guardians/:transactionId` (GuardianProposalPage,
+  "Fund proposal") in place of the comment after `dao/guardians/new`,
+  before `dao/:proposalId`; the import between guardian-new and
+  guardians. A card's link and a posted proposal's /dao/guardians/<id>
+  now open the page instead of falling to the catch-all.
+- `balances.service`: `AccountBalance` gains `guardianVotes`, the number
+  /get-account answers (anossoftware 25.1), 0 while not landed or on a
+  validator without the field; `readOne` sets it from the read Home
+  already makes. The plan's 4.2 wanted the Home line's guardian votes
+  "from the balance reads Home already makes" and step 3 left the choice
+  open (a field here, or a second /get-account per account through
+  guardian-accounts.service); the field is one line and no extra read
+  for every pod at every unlock, where very few are guardians.
+- `home.page.ts`: when Home opens, beside the accounts,
+  /list-fund-proposals { status: 'open' } (quiet, anos-api.service) into
+  the signal `openFund`, the one open proposal or null; `openFundVote` is
+  computed from it and the balance entries: the status is open and one
+  of the session's accounts has guardianVotes at least 1, is not the
+  proposer and is not in the votes; the Things to do line "A fund
+  proposal is open for your vote", icon shield, to /dao/guardians, after
+  the DAO line and before the notifications line; a refusal leaves the
+  signal null and shows nothing, the line is a convenience. The line
+  follows the balances as they come, since the computed reads them.
+- Words: `home.openFundVote` in both files, the plan's one key, and
+  `guardians.payoutTo(anos, shortId)`, the payout row's sentence the plan
+  wrote as the word "to"; every other key of 4.1 was already in
+  `guardians` since step 3 (checked against 4.1 one by one), and
+  `guardianNew.noVotes` serves the vote's no-guardian-vote refusal, as
+  the plan says. The Thai "มีข้อเสนอกองทุนที่เปิดให้คุณโหวต" in the shape of
+  the other Home lines and "${anos} anos ไปยัง ${shortId}" with the
+  history's word for a recipient, to be checked by a Thai reader.
+- Spec: 8.1 (the route's words), 8.2 (Home's list and its open read; the
+  Fund proposal paragraph in place of the step 4 placeholder), 8.3
+  (balances.service), 8.8 (the words) and this note. README: nothing. No
+  new package, no constant, no proxy change, nothing under server/.
+- `npx ng build` clean (2.09 MB initial, no warnings). Not run in a
+  browser here: the user opens a card on the Guardians page or lands on
+  the page after Post, expecting the Open for votes label, "Fund proposal
+  a1b2…" with the copy button, "proposed by …", the payout rows and "1
+  payout · 1500 anos", "For 3 · Against 0" in large type with the bar and
+  "needs 70 percent for · closes …", "Voting as" with the proposing
+  account and "You proposed this" under it, the "Votes" heading with the
+  proposer's row tagged "you" and "No votes yet."; a second pod with a
+  guardian account sees its account selected with "can vote", For and
+  Against, the ask, "Your vote for is sent to the validators." and its
+  row as "waiting for approval" until the other validators accepted it,
+  then "approved"; Home shows "A fund proposal is open for your vote" for
+  a pod with a guardian account that has not voted and nothing for the
+  proposer; a pod without a guardian account sees the become-a-guardian
+  sentence and no select; after the hour and the next transaction, the
+  label "Passed, the money moved" or "Failed" with "decided …"; against
+  an older validator or doorman, "/get-fund-proposal: HTTP 404: Not
+  Found" in red.
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`
@@ -3649,9 +4969,9 @@ the moderator edition; a pod that is not a moderator sees the masterpod's
 
 **Recover** (`/recover`). Two cards. "I'm locked out": "If you lost the
 device with your passkey, we can get you back in. You'll need your birth
-record, your username and an email where a moderator can reach you. A
-moderator will meet you on a video call and check your security buckets
-before anything is released." Button: Start, to `/recover/open`. "Continue
+record and an email where a moderator can reach you. A moderator will
+meet you on a video call and check your security buckets before anything
+is released." Button: Start, to `/recover/open`. "Continue
 a recovery": "Already opened a case on this device? Unlock it with the
 passkey you made then." Button: Continue, which runs `/challenge`
 (unlockCase), the passkey assertion with the PRF salt,
@@ -3665,19 +4985,34 @@ the authenticator's message shows.
    identity page has them (the same form, moved into a component the two
    pages share, 12.4), "We turn this into the same lookup id you made at
    setup, on this device; nothing you type is sent." Next computes
-   `lookupId` with `identityIdsOf` and drops the public ledger id.
-2. Who you are: username (lowercased; `/check-username` says taken, which
-   here means found; a free username means "no anoPod has that username")
-   and contact email. Next.
-3. Open my case: one button. `/challenge` (openCase, the username) gives
-   the challenge and the pod's id; the passkey registration with the PRF
-   extension and that id as user handle; the PRF output from the
-   registration or, when it returned none, one local assertion with a
-   random challenge; `KEK_prf`; the recovery hybrid pair and
-   `hybridKeyBlob`; the ephemeral keys; `/open-recovery-case`. On 201 the
+   `lookupId` with `identityIdsOf`, drops the public ledger id, then,
+   under the progress bar ("Finding your account…"), finds the account
+   (since 2026-11-08): `SharesService.findOwner` asks every keyholder
+   `/get-owner` at once (section 6), and the first `200` names the anoPod
+   id; `/challenge` (openCase, that id) answers the pod's username (this
+   challenge is never used: it is too short-lived to carry to step 3, and
+   the masterpod sweeps it with the expired ones). Found, the answers are
+   dropped and the stepper moves on. Not found, the page stays on step 1
+   with the answers in the form, so one field can be fixed and Next
+   pressed again: "No account was set up with this birth record. Check
+   each field against your birth certificate and try again." No keyholder
+   answered: "The keyholders could not be reached. Try again in a moment."
+   A masterpod refusal shows as `/challenge: <reason>`. Once found, with
+   the form empty, a line says the account was found and the answers
+   dropped, and that filling the form in again starts over.
+2. Your account: "We found your account: alice" and the contact email.
+   Next. Nobody types a username; there is no username path.
+3. Open my case: one button. `/challenge` (openCase, the anoPod id) gives
+   a fresh challenge and the username; the passkey registration with the
+   PRF extension, that id as user handle and the username as name and
+   display name; the PRF output from the registration or, when it
+   returned none, one local assertion with a random challenge; `KEK_prf`;
+   the recovery hybrid pair and `hybridKeyBlob`; the ephemeral keys;
+   `/open-recovery-case`, the payload without a username. On 201 the
    recovery session is open and the page goes to `/recover/case`. The
-   refusals shown: "a case is already open for this identity" (409), "no
-   anoPod has that username", the passkey messages as on Create.
+   refusals shown: "a case is already open for this identity" (409), a
+   masterpod refusal as `/challenge: <reason>` or `/open-recovery-case:
+   <reason>`, the passkey messages as on Create.
 
 **My recovery** (`/recover/case`). The case id (short, with Copy), the
 status in words ("Open: a moderator will contact you at <email> and meet
@@ -3705,22 +5040,53 @@ a second stepper on the same page:
    ordinary unlock (`/challenge` unlock, the assertion, `/unlock`), which
    opens the normal session in this tab with the same passkey: `blob1`,
    the chat keys, the identity blob, the status.
-3. Break-glass keys: `/list-anos-accounts`; for each recovered seed derive
-   the two break-glass public keys and find the account whose
-   `creation.payload.publicKeys` has them; `/store-break-glass-blob` with
-   the seed under the encryption key. Shows which accounts got theirs and
-   any seed that matched no account.
-4. New backup code: a new code shown once as on Setup, with Complete;
+3. New backup code: a new code shown once as on Setup, with Complete;
    `newBlob2`, the new backup code keys, the proof by the old keys,
    `/rotate-backup-code`; then the deposit as `backupcode` through
    `SharesService.deposit`, a new `keyId`. "Your old backup code is now
    worthless."
+4. Move your money (2026-11-08, `forclaude/break-glass-plan-1.md` step 5,
+   section 11; in place of the "Break-glass keys" step that stood third
+   from 2026-10-26, which matched each recovered seed to its account and
+   stored it there with `/store-break-glass-blob`, and left with step 4 of
+   that plan): "Your old accounts' keys are gone with the lost passkey.
+   For each account that holds anos the wallet opens a new account of the
+   same type and files a move signed by its break-glass key. Two attestors
+   check you and sign; a guarded or vault account's move also waits out
+   its lock." The button Move my money runs: (1) `/list-anos-accounts`
+   into the session; each recovered seed's two break-glass public keys
+   find the account whose `creation.payload.publicKeys` names them, and a
+   seed that matches none is unmatched; (2) an account whose move
+   `/list-my-break-glass-moves` already lists is filed and skipped; every
+   other matched account is read with `/get-account` signed by its
+   break-glass pair (the validators accept it since the user keys are
+   gone, anossoftware 22), a balance of 0 is empty and skipped, every
+   read before any write; (3) for each account left, a new account of the
+   same type through `account-creation.service` (8.3), waited for on the
+   ledger; (4) the `breakGlassTransfer` of the whole balance into it,
+   chained on the latest transaction id read, dated now plus the type's
+   minutes ahead (guarded and vault the lock plus the offset by the
+   proxy's numbers, else 0), signed by the break-glass pair alone and
+   posted to `/anos-transfer`, no signing server; a refusal saying the
+   account already has a held transaction counts as filed; (5)
+   `/file-break-glass-moves` with the case id and this run's moves, a
+   `409 move already filed` counting as filed; (6) the seeds wiped and
+   dropped from `RecoveryService`. The result: "2 moves filed, 1 account
+   was empty, 0 seeds matched no account", or "No break-glass seeds were
+   recovered, so there is nothing to move." The step is complete when the
+   run ended without an error, even with nothing to move; Retry runs it
+   again and skips what is filed. This is the one place in the wallet
+   that uses a break-glass key: no card, account page or Account entry
+   offers one. The old accounts' key blobs do not open under the new
+   passkey's key blob key (section 7), so the wallet shows them as lost,
+   with the move's progress (8.2).
 5. Done: `/complete-recovery-case`; "You're back in." Continue to
    `/wallet`.
 
 Each step keeps its result in RAM and can be retried; a refresh of the
-page loses the combined code, and the person starts the finish again from
-Combine after unlocking the recovery pod.
+page loses the combined code and the seeds, and the person starts the
+finish again from Combine after unlocking the recovery pod (Move your
+money then skips the moves already filed).
 
 **Moderation** (`/moderation`). The cases from `/list-recovery-cases`, a
 status filter (the four open statuses by default, plus completed and
@@ -3765,14 +5131,29 @@ button and every 15 s
                             answer, the combined backup code and seeds while the finish runs; sign(path, body)
                             builds the recovery envelope (caseId as the signer); everything in RAM
     masterpod-api.service   one method per new route (masterpod 12.4); challenge() takes the three new purposes,
-                            openCase with the username; listAnosAccounts items carry breakGlassBlob
+                            openCase with the anoPod id the keyholders named, and answers its username
+                            (2026-11-08); listAnosAccounts items carry breakGlassBlob;
+                            listMyBreakGlassMoves and fileBreakGlassMoves (masterpod 14.4.1, 2026-11-08)
+    anos-api.service        getAccountAs(envelope, quiet) (2026-11-08): /get-account with an envelope the caller
+                            signed, the break-glass pair's at the finish; getAccount calls it
+    account-creation.service
+                            the new accounts of Move your money, opened as the Wallet page opens one (8.3;
+                            2026-11-08)
     keyholder-api.service   getSecurityBucketOneKey(n, envelope), getSecurityBucketTwoKey(n, envelope): the
-                            keyholder's moderator routes, the account envelope as the body
+                            keyholder's moderator routes, the account envelope as the body; getOwner(n, lookupId,
+                            timeoutMs) (2026-11-08): the keyholder's /get-owner, level none, quiet in the log
+    shares.service          findOwner(lookupId) (2026-11-08): every keyholder asked /get-owner at once with the
+                            deposit's 15 second limit; { found: true, anopodId } on the first 200, else { found:
+                            false, answered }, answered the keyholders that said unknown lookup id (zero: none
+                            could be reached)
     crypto.service          generateHybridKeys(), wrapHybridPrivateKey / unwrapHybridPrivateKey (124-byte blob),
                             decryptFromHybrid (the mirror of encryptToHybrid: X25519 and ML-KEM-1024 decapsulation,
                             the same HKDF and aad), combineShares (shamir-secret-sharing combine), signSignOff
                             (pair one over the canonical sign-off), backupCodeProof (the backup code keys over a
-                            canonical payload); everything else reused as it is
+                            canonical payload); buildBreakGlassTransferTransaction and
+                            signAccountEnvelopeAsBreakGlass (2026-11-08): the break-glass move and the account
+                            envelope signed by the break-glass pair, signAccountEnvelopeWith behind both envelopes;
+                            everything else reused as it is
     config.service          edition in WalletConfig
     identity form           the nine-field form of the identity page becomes a component both the identity page
                             and the locked-out stepper use; the identity page's behaviour does not change
@@ -3797,7 +5178,12 @@ paragraph).
 ### 12.6 Out of scope, not built
 
 - Email or any message to the person; the app is the channel.
-- Moving anos with the recovered break-glass keys.
+- A cancel of a break-glass move by either key (`breakGlassCancel` by the
+  break-glass pair, `assistedTransferCancel` by the owner's own keys, both
+  accepted by the validators since 2026-11-08) and the owner's dispute
+  path (a cached key blob, a "Dispute a recovery" button, a warning): a
+  later plan. Moving anos with the recovered break-glass keys was built
+  2026-11-08 (12.3, Move your money; section 11).
 - A moderator's history, several moderators on a call, a reject rule.
 - Any change to the bankers' GUI; it takes the packet as it is.
 
@@ -4010,6 +5396,54 @@ Built from `~/Desktop/Z/forclaude/build-3-delivery-and-finish.md`;
   console errors. The stepper needs a case with three delivered shares
   and a passkey ceremony: the user's run-through (the plan's step 4).
 
+#### The lookup through the keyholders (2026-11-08)
+
+Built 2026-11-08 from
+`~/Desktop/Z-TestNet/forclaude/recovery-lookup-plan-1.md` (FINAL,
+2026-11-08), step 4 of five, after the keyholder's `/get-owner` (its spec
+section 15), the doorman's route line and the masterpod's `/challenge` by
+anoPod id (its spec 12.10). The username step of the locked-out stepper
+is gone: step 1 finds the account through the keyholders and the masterpod
+names it, step 2 shows it. Where the plan was silent the simplest thing
+was chosen and is recorded here.
+
+- `computing` was widened to cover the whole of step 1's Next (the lookup
+  id, the keyholders, the masterpod) rather than a second signal; the
+  progress bar shows "Finding your account…" under it throughout, scrypt
+  taking well under a second of it. A `lookupError` signal carries step
+  1's three refusals in red under the form, apart from step 3's `error`.
+- The lookup id is not kept on a miss: the page sets `lookupId`,
+  `anopodId` and `foundUsername` together, only once the keyholders named
+  the pod and the masterpod its username, and the step's `[completed]` is
+  `anopodId() !== null`. A miss leaves the form as it was (plan decision
+  9); `form.reset()` runs only on the found path and when the page is
+  destroyed.
+- `findOwner` tells "not found" from "did not answer" by the status and
+  the reason: `404` with `error` `unknown lookup id` is a keyholder that
+  said not found; the doorman's own `404 Not Found` (a doorman without
+  the route), a timeout (`status` 0) and a `502` count as no answer. With
+  every keyholder unreached the line reads "The keyholders could not be
+  reached"; with at least one "not found" and none found, the not-found
+  line, since a keyholder that holds no owners row for the id is the
+  truth whatever the others did.
+- `getOwner` is quiet in the activity log, as the plan says, so a lookup
+  does not write five lines, four of them 404s. The deposit's calls stay
+  logged as before.
+- Step 3's `username` is the fresh challenge's answer, falling back to
+  the one step 1 showed (`foundUsername`) should the answer lack it; the
+  payload no longer carries `username`, and `recovery.username` is set
+  from the same value. `recoverOpen.noAnopodId` stays for a `200` without
+  an id; `noAnopod`, `usernameHint`, `noSuchUsername` and `found` went
+  with the username field; `USERNAME_DEBOUNCE_MS` stays for the create
+  page.
+- The Thai words for the new and changed keys (`finding`, `foundAccount`,
+  `notFound`, `keyholdersUnreachable`, `computed`, `stepWho` and
+  `recover.lockedOutText`) are the build chat's, with "ผู้ถือกุญแจ" for the
+  keyholders as the deposit's words have it, to be checked by a Thai
+  reader.
+- Checked with `npx ng build` (clean). No server was started; the user's
+  run-through is section 8 of the Test Net 2 deploy list.
+
 ## 13. The attestor edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/attestor.md` records the
@@ -4050,24 +5484,27 @@ complete.
     /attesting                    the trades and the disputes waiting for attestors (attestor edition)
     /attesting/trade/:caseId      one trade case: the person, the trade, the buckets, the sign-off
     /attesting/dispute/:caseId    one dispute case: the parties, the escrow, the evidence, the verdicts
+    /attesting/recovery/:caseId   one recovery's break-glass moves: the person, the recovery case, the moves, the buckets, the sign-off (2026-11-08)
     /cases                        my cases (every edition)
     /cases/:caseId                one of my cases: share the lookup id, upload evidence, the timeline
 
-The three Attesting pages need a session and the attestor edition
+The four Attesting pages need a session and the attestor edition
 (`attestingGuard`, the shape of `moderationGuard`); a pod that is not an
 attestor sees the masterpod's `403 not an attestor` as "This anoPod is not
 an attestor". The two Cases pages need a session (`sessionGuard`).
 
 ### 13.3 The screens
 
-**Attesting** (`/attesting`). Two tabs. The page asks the attestor for the
-staked account once per session (13.4, `AttestingService`): the picker
+**Attesting** (`/attesting`). Three tabs (the third since 2026-11-08). The
+page asks the attestor for the staked account once per session (13.4, `AttestingService`): the picker
 the moderation case page has, filled from `/list-anos-accounts`, the first
 spending account picked; the choice signs every validator read, keyholder
 pull and sign-off until the tab closes.
 
-The Trades tab: `/list-assisted-transfers` from the default validator,
-each row the sender as a person (`/list-anos-account-profiles` once for
+The Trades tab: the `assistedAnosTransfer` rows of `/list-assisted-transfers`
+from the default validator (since 2026-11-08 the list carries the
+break-glass moves too, told apart by `type`; those belong to the Recoveries
+tab's case pages), each row the sender as a person (`/list-anos-account-profiles` once for
 the whole list: selfie, username, names; an unknown account shows its id
 and "not on this masterpod"), the amount in anos, when the trade was made,
 and the case state from `/list-attestor-cases` matched by transaction id:
@@ -4084,9 +5521,16 @@ page makes the case pair (`generateHybridKeys`), fetches
 `/list-attestors`, wraps the 96 secret bytes to every attestor's chat
 public key (`wrapCaseSecret`, the opener included), runs
 `/open-dispute-case` with the public halves and the wraps, keeps the pair
-in RAM (13.4) and goes to the case page. A status filter above both tabs
+in RAM (13.4) and goes to the case page. A status filter above the tabs
 (the two review statuses by default, plus decided and dismissed) and a
 Refresh; a quiet 15 s poll (`CASES_POLL_MS`).
+
+The Recoveries tab (2026-11-08, break-glass plan 1 step 6):
+`/list-break-glass-cases`, one row per recovery whose finish filed
+break-glass moves (masterpod 14): the person's username and names, the
+number of moves, "n of 2 signed", and the status in words linking to the
+recovery case page. No Open a case: the person's recovery finish files the
+case (12.3). The status filter applies to this tab too.
 
 **Trade case** (`/attesting/trade/:caseId`), from `/get-trade-case`,
 refreshed by a button and every 15 s. Top to bottom:
@@ -4154,6 +5598,44 @@ refreshed by a button and every 15 s. Top to bottom:
   refusal; the deciding attestor's page runs it at once.
 - Dismiss, as the trade case.
 
+**Recovery case** (`/attesting/recovery/:caseId`, 2026-11-08, break-glass
+plan 1 step 6), from `/get-break-glass-case`, refreshed by a button and
+every 15 s, the trade case's frame. Top to bottom:
+
+- The person: public selfie, username, names, the status in words.
+- The recovery: the recovery case's status in words and the moderators'
+  approvals, each "username · time".
+- The moves: per move the old account with its type, the new account with
+  Copy, the transaction id with Copy, and what the default validator lists
+  for it (`/list-assisted-transfers` matched by transaction id, read again
+  on every refresh and poll): the amount, when it was made and the
+  attestations in its slots, or "not listed on this validator (both
+  attestations in, written, or cancelled)".
+- The timeline: every event in words, as the trade case; the filing reads
+  "<username> filed n moves", a sign-off "<attestor> signed n attestations
+  with account …".
+- Schedule: as the trade case (`/schedule-break-glass-case`).
+- The lookup id: the recovery case's, with Copy; no sharing step.
+- Bucket one and two: the trade case's pull, pointed at
+  `/list-break-glass-case-security-records`, by the recovery case's lookup
+  id.
+- Attest: "Signed by n of 2" and who; Sign all attestations builds one
+  `attestation` follow-up per move (`attestorId` the staked account,
+  `accountId` the move's old account, `transactionId` the move's; the
+  wallet pair from `/api/sign`) and runs `/sign-off-break-glass-case` with
+  every move once.
+- When the answer says decided: Send to the validators posts the stored
+  attestations the default validator does not hold yet (two per move once
+  two attestors signed, from the `attestationSigned` events; the listed
+  move's `attestorIds` tell which it holds) to `/attestation` one after the
+  other, then `/mark-break-glass-case-sent` with the answers; "Sent" once
+  the validator holds every attestation for the moves it still lists, Retry
+  otherwise; the page of the attestor whose sign-off decided the case runs
+  it at once.
+- Dismiss: one of the five reasons, a note, Dismiss behind an inline
+  confirmation (`/dismiss-break-glass-case`); the moves stay held on the
+  validators until a cancel.
+
 The case pair, the opened evidence and the bucket keys live in RAM and are
 zeroed when the page is left; a refresh fetches and opens them again.
 
@@ -4194,12 +5676,18 @@ your copies stay."
 
     attesting.service       the attestor's staked account for the session (accountId, its keyBlob opened per
                             signature as the account page does), the trade and dispute lists from the validator
-                            with their profiles, the case pairs and opened content keys per case while a page is
-                            open; everything in RAM
+                            with their profiles (the trade list carries the break-glass moves too since
+                            2026-11-08; tradeOf finds a move), the case pairs and opened content keys per case
+                            while a page is open; everything in RAM
     masterpod-api.service   one method per route of masterpod 13.4 (eighteen) and their shapes; listAttestorCases
-                            sends {} when no filter is given
+                            sends {} when no filter is given; since 2026-11-08 the seven attestor routes of
+                            masterpod 14.4.2 (listBreakGlassCases, getBreakGlassCase,
+                            listBreakGlassCaseSecurityRecords, scheduleBreakGlassCase, signOffBreakGlassCase,
+                            markBreakGlassCaseSent, dismissBreakGlassCase) with BreakGlassCaseRow,
+                            BreakGlassCaseAnswer, BreakGlassAttestation and BREAK_GLASS_DISMISS_REASONS
     anos-api.service        listAssistedTransfers(pairOne, accountId), listDisputedEscrows(pairOne, accountId):
-                            the account envelope of section 5.3, as getAccount builds it
+                            the account envelope of section 5.3, as getAccount builds it; AssistedTransferItem
+                            carries type since 2026-11-08 (assistedAnosTransfer or breakGlassTransfer)
     crypto.service          additions only: wrapCaseSecret(secret, chatP256PublicHex, chatKemPublicHex) and
                             unwrapCaseSecret(bytes, chat), the room key wrap of section 7 over the 96 secret
                             bytes (1725 bytes); newContentKey(); everything else reused as it is (encrypt,
@@ -4229,6 +5717,9 @@ your copies stay."
 - Several validators asked at once; the lists come from the default
   validator, as every anos call does.
 - A moderator who is also an attestor.
+- Notifications to attestors when a recovery's moves are filed, and to the
+  person when the case moves (2026-11-08; masterpod 14.7): the attestor
+  edition lists the cases, the person's wallet reads them.
 
 ### 13.7 Build notes
 
@@ -4383,3 +5874,115 @@ and how it was decided:
   attestor pages themselves need an attestor session, the live keyholders
   and the validators' stake; the Cases pages a person's session with a
   case: the user's run-through (13.5).
+
+#### Build 4, the recoveries (2026-11-08)
+
+Built from `forclaude/break-glass-plan-1.md` (FINAL), section 6, the
+wallet's third and last step of the plan, after the step 4 and step 5 notes
+of section 11; the three are deployed together after the testnet reset.
+Why: since step 5 the recovery's finish files one `breakGlassTransfer` per
+lost account that holds anos, and two attestors have to sign each move like
+an assisted transfer; the masterpod keeps a break-glass case per recovery
+(its section 14), and this build gives the attestor edition the list and
+the page that signs. Changed: `attesting.page.ts`, `app.routes.ts`,
+`attesting.guard.ts` (a comment), `masterpod-api.service.ts`,
+`anos-api.service.ts`, `en.ts`, `th.ts`, this spec; new:
+`pages/attesting-recovery-case.page.ts`. What the plan left open and how it
+was decided:
+
+- The Recoveries tab asks `/list-break-glass-cases` for all four statuses
+  and applies the page's status filter itself, as the Trades and Disputes
+  tabs do, so a filter change needs no new read; the tab starts at the
+  plan's default statuses (`open`, `inReview`) because the filter does. A
+  row shows the names the list carries (no selfie: the list answers no
+  account id to look a profile up by; the case page has the selfie), the
+  moves count, "n of 2 signed" (`attesting.signedOfTwo`, a key beyond the
+  plan's three) and the status in words linking to the case page; no Open a
+  case, the person's finish files the case. The Trades tab keeps the rows
+  whose `type` is `assistedAnosTransfer`; a row without a `type` (a
+  validator on old code) is left out too, as the plan reads.
+- `AttestingService` is unchanged: its `trades` list now carries the
+  break-glass moves as the validator lists them, and `tradeOf` finds a move
+  by transaction id, which the recovery page uses; the profiles are fetched
+  for the moves' old accounts too, harmlessly.
+- The recovery page reads the validator's lists again (`loadLists`, quiet)
+  on every load, the poll included, when an account is picked, so the
+  moves' amounts and slots are current; a refusal shows under The moves in
+  words (`recoveryCase.listRefused`) while the previous read's rows stay.
+  The trade page reads the lists once; the recovery page needs them fresh
+  for the Send (two bullets down).
+- The stage of a move: `/list-assisted-transfers` carries no stage word
+  (anossoftware 13.2), so the page shows what the list has, the amount, when
+  the move was made and the attestations in its slots ("1 attestation on
+  the validators", as the Trades tab reads), or "not listed on this
+  validator (both attestations in, written, or cancelled)". A listed move
+  is waiting for attestors by the list's own rule, an empty slot.
+- The Send: `/mark-break-glass-case-sent` records `{ signer, status,
+  error? }` per posted attestation, the signer alone (masterpod 14.10:
+  "nothing names the move"), so the trade page's rule, post only what no
+  sent event accepted, cannot be applied by signer when a signer has two or
+  more attestations. The validator's list is the record instead: for a move
+  the validator still lists, the stored attestations whose `attestorId` is
+  not among the listed `attestorIds` are pending; a move it no longer lists
+  has nothing to post. "Sent" reads once nothing is pending; the Send
+  refuses while the lists were never read this session
+  (`recoveryCase.listNotLoaded`), so an unread list is never taken for
+  nothing pending. The stored attestations come from the
+  `attestationSigned` events' `attestations`, the whole follow-up objects,
+  each naming its move in `payload.transactionId` (masterpod 14.10). They
+  are posted in event order then move order; the results under the button
+  are tracked by position, since one signer appears once per move.
+- Sign all attestations: `/api/sign` is called once per move, in move
+  order, before the one `/sign-off-break-glass-case` call; the button is
+  disabled for a case without moves (never: a case is made by a filing).
+- The refusals in words: `400 attestations do not match the moves`
+  (`recoveryCase.movesMismatch`, "refresh and sign again": the moves changed
+  under the page), `400 sign-off does not match the case` (`mismatch`),
+  `400 attestations differ in attestorId` (`differ`, unreachable from this
+  page, which signs with one account), the rest as the trade page's (`409
+  already signed off`, `409 case closed`, `409 case not decided`, `403 not
+  your account`, `401 bad signature`). `/get-break-glass-case` 404 reads
+  `recoveryCase.notFound`.
+- The recovery block: the recovery case's status in `recoveryStatus` words
+  and the approvals as "username · time" joined by commas
+  (`noApprovals` when the list is empty, never in practice: a filing needs
+  two). The lookup id is the recovery case's, shown with Copy, `noLookupId`
+  when null; there is no sharing step, so the trade page's "waiting for the
+  lookup id" has no counterpart and Pull key is enabled as soon as the case
+  is loaded. The timeline: `opened` reads "<username> filed n moves" (the
+  person's own filing, the count from the details), `attestationSigned`
+  "<attestor> signed n attestations with account …"; the other kinds as the
+  trade page. The Schedule outcome says the time and the link are recorded
+  on the case: the person's wallet shows no scheduled event (step 4 built
+  the five move states, none for a schedule), so the attestor sends the
+  link another way; a gap for a later plan.
+- The dismiss reasons are a third constant, `BREAK_GLASS_DISMISS_REASONS`
+  (the trade case's six without `settled`), with `BreakGlassDismissReason`;
+  the words are the staff dismiss reasons already in the dictionary. The
+  outcome says the moves stay held until a cancel (masterpod 14.4.2).
+- `MasterpodApiService`: the seven methods under a new heading, with
+  `BreakGlassCaseRow`, `BreakGlassListedMove` (a move without `createdAt`,
+  as the list answers it), `BreakGlassApproval`, `BreakGlassCaseAnswer`
+  (`recoveryStatus` typed as the recovery's `CaseStatus`),
+  `BreakGlassAttestation`; `listBreakGlassCases` sends `{}` with no filter,
+  as `listAttestorCases` does. `AnosApiService`: `AssistedTransferItem.type`.
+  The routes' and the guard's comments count four Attesting pages; 13.2
+  lists the route.
+- Words: `attesting.recoveriesTab`, `noRecoveries`, `movesCount`,
+  `signedOfTwo`; the `recoveryCase` section (the titles, the move lines,
+  the sign-off and Send lines, the refusals, the two event lines); the page
+  reuses `tradeCase.lookupIdTitle`, `attest`, `signedSoFar`, `stillToSend`,
+  `attestationBy`, `allAccepted`, `alreadySigned`, `noStake` and the
+  `attesting` and `common` sentences where the English is the same. The
+  Thai lines were written here by the glossary of
+  `forclaude/wallet-languages-plan-1.md` 1.6 ("break-glass" as ฉุกเฉิน, as
+  the step 4 and 5 words have it) and are to be checked by a Thai reader.
+- Spec: 13.2, 13.3, 13.4, 13.6 and this note; README unchanged.
+- `npx ng build` clean. Not run in a browser here: the user resets the
+  testnet, deploys the three wallet steps together and runs a recovery
+  through, then signs its moves from two attestor pods, expecting the
+  Recoveries tab to list the case after the finish's Move your money step,
+  the case page to show the moves with their amounts from the validator,
+  the second sign-off to decide the case and post two attestations per
+  move, and the lost accounts' cards to read "being written" and then
+  "Moved to …".

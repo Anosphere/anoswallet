@@ -11,6 +11,7 @@ import { ACCOUNT_POLL_MS } from '../constants';
 import { escrowStageWords } from '../escrow-stage';
 import { formatPrice, totalOf } from '../prices';
 import { AnosApiService, EscrowItem } from '../services/anos-api.service';
+import { BalancesService } from '../services/balances.service';
 import { ChatService } from '../services/chat.service';
 import { CryptoService, PairOne } from '../services/crypto.service';
 import { LanguageService } from '../services/language.service';
@@ -98,13 +99,13 @@ interface Ended {
           @if (!closed() && !ended()?.released) {
             @if (side() === 'buyer') {
               <div class="buttons">
-                <button mat-flat-button type="button" [matMenuTriggerFor]="accountsMenu" [disabled]="busy() || session.accounts().length === 0">{{ t().pinned.shareAccount }}</button>
-                @if (session.accounts().length === 0) {
+                <button mat-flat-button type="button" [matMenuTriggerFor]="accountsMenu" [disabled]="busy() || balances.usableAccounts().length === 0">{{ t().pinned.shareAccount }}</button>
+                @if (balances.usableAccounts().length === 0) {
                   <span class="hint">{{ t().pinned.noAccounts }}</span>
                 }
               </div>
               <mat-menu #accountsMenu="matMenu">
-                @for (account of session.accounts(); track account.accountId) {
+                @for (account of balances.usableAccounts(); track account.accountId) {
                   <button mat-menu-item type="button" (click)="share(account.accountId)"><code>{{ shortId(account.accountId) }}</code> · {{ t().account.title(account.accountType) }}</button>
                 }
               </mat-menu>
@@ -194,6 +195,8 @@ export class PinnedListingComponent {
   readonly accountIds = input.required<FoundAccountId[]>();
 
   protected readonly session = inject(SessionService);
+  /** The account lists show the usable accounts only (wallet spec 8.2, 2026-11-08). */
+  protected readonly balances = inject(BalancesService);
   private readonly market = inject(MarketplaceService);
   private readonly chat = inject(ChatService);
   private readonly masterpod = inject(MasterpodApiService);
@@ -226,13 +229,14 @@ export class PinnedListingComponent {
     const me = this.session.anopodId();
     return unique(this.accountIds().filter((a) => a.senderAnopodId !== me).map((a) => a.accountId));
   });
-  /** This pod's accounts named in the chat: the ones /list-escrows is read on. */
+  /** This pod's usable accounts named in the chat: the ones /list-escrows is read on (a lost account, whose keyBlob does not open, is left out; 2026-11-08). */
   private readonly myNamedAccounts = computed(() => {
-    const mine = new Set(this.session.accounts().map((a) => a.accountId));
+    const mine = new Set(this.balances.usableAccounts().map((a) => a.accountId));
     return unique(this.accountIds().map((a) => a.accountId).filter((id) => mine.has(id)));
   });
   private readonly myNamedKey = computed(() => this.myNamedAccounts().join(','));
-  protected readonly spendingAccounts = computed(() => this.session.accounts().filter((a) => a.accountType === 'spending'));
+  /** The usable spending accounts, for the seller's From. */
+  protected readonly spendingAccounts = computed(() => this.balances.usableAccounts().filter((a) => a.accountType === 'spending'));
 
   protected readonly trade = signal<EscrowItem | null>(null);
   /** This pod's account in the trade shown, for the stage's side and the link. */
@@ -372,10 +376,10 @@ export class PinnedListingComponent {
       if (res.ok) this.session.accounts.set(res.body.accounts);
       item = this.session.accounts().find((a) => a.accountId === accountId);
     }
-    const encryptionKey = this.session.getEncryptionKey();
+    const keyBlobKey = this.session.getKeyBlobKey();
     if (!item) throw new Error(this.t().common.notMyAccount);
-    if (!encryptionKey) throw new Error(this.t().common.noKeyInRam);
-    return this.crypto.pairOneFromKeyBlob(this.crypto.fromHex(item.keyBlob), encryptionKey);
+    if (!keyBlobKey) throw new Error(this.t().common.noKeyBlobKey);
+    return this.crypto.pairOneFromKeyBlob(this.crypto.fromHex(item.keyBlob), keyBlobKey);
   }
 
   /**
@@ -418,7 +422,7 @@ export class PinnedListingComponent {
         this.ended.set({ released, amount: seen.amount });
       }
     } catch {
-      // No encryption key or no account in this tab: the card keeps what it shows.
+      // No key blob key or no account in this tab: the card keeps what it shows.
     } finally {
       this.polling = false;
     }

@@ -8,7 +8,7 @@ import { millionthsToAnos } from '../amounts';
 import { ACCOUNT_POLL_MS } from '../constants';
 import { escrowStageWords } from '../escrow-stage';
 import { AnosApiService, EscrowItem } from '../services/anos-api.service';
-import { CryptoService, EscrowSignatureType, PairOne } from '../services/crypto.service';
+import { CryptoService, EscrowSignatureType, KeyBlobLostError, PairOne } from '../services/crypto.service';
 import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
 import { MasterpodApiService } from '../services/masterpod-api.service';
@@ -273,10 +273,10 @@ export class EscrowTradePage {
       if (res.ok) this.session.accounts.set(res.body.accounts);
       item = this.session.accounts().find((a) => a.accountId === this.accountId());
     }
-    const encryptionKey = this.session.getEncryptionKey();
+    const keyBlobKey = this.session.getKeyBlobKey();
     if (!item) throw new Error(this.t().common.notMyAccount);
-    if (!encryptionKey) throw new Error(this.t().common.noKeyInRam);
-    return this.crypto.pairOneFromKeyBlob(this.crypto.fromHex(item.keyBlob), encryptionKey);
+    if (!keyBlobKey) throw new Error(this.t().common.noKeyBlobKey);
+    return this.crypto.pairOneFromKeyBlob(this.crypto.fromHex(item.keyBlob), keyBlobKey);
   }
 
   /** /list-escrows, the trade picked by its id; gone after being seen open, the closed view from /list-transactions. */
@@ -302,7 +302,8 @@ export class EscrowTradePage {
         this.trade.set(null);
       }
     } catch (err) {
-      this.readError.set(err instanceof Error ? err.message : String(err));
+      // A keyBlob that does not open is a lost account (wallet spec 8.2, 2026-11-08): the lost line where the refusal would show.
+      this.readError.set(err instanceof KeyBlobLostError ? this.t().wallet.lost : err instanceof Error ? err.message : String(err));
     } finally {
       this.loaded.set(true);
     }

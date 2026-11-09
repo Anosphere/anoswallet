@@ -33,6 +33,8 @@ export type ChallengePurpose = 'create' | 'unlock' | 'openCase' | 'unlockCase' |
 export interface ChallengeAnswer {
   challenge: string;
   anopodId?: string;
+  /** openCase only (2026-11-08): the username of the pod the anoPod id names, shown as the account found. */
+  username?: string;
   expiresAt: string;
 }
 
@@ -77,12 +79,45 @@ export interface RotateBackupCodeBody {
 
 /**
  * An anos account as /list-anos-accounts answers it since recovery build 3
- * (masterpod 12.4.5): the item with its breakGlassBlob, hex, or null until
- * a recovery's finish stored it. The item without it is session.service's
- * AnosAccountItem, which is what the session keeps.
+ * (masterpod 12.4.5): the item with its breakGlassBlob, hex, which the
+ * recovery's finish stored until 2026-11-08 and the wallet no longer writes
+ * (break-glass plan 1, step 4: the recovered seed signs the move and is
+ * wiped); null from now on, kept because the masterpod still answers it.
+ * The item without it is session.service's AnosAccountItem, which is what
+ * the session keeps.
  */
 export interface AnosAccountListItem extends AnosAccountItem {
   breakGlassBlob: string | null;
+}
+
+/** One move of a break-glass case (masterpod 14.4.1): the old account whose keys were lost, the new account of the same type, the breakGlassTransfer's id, and when the finish filed it. */
+export interface BreakGlassMove {
+  accountId: string;
+  accountIdTo: string;
+  transactionId: string;
+  accountType: string;
+  createdAt: string;
+}
+
+/** One move as the recovery's finish files it (masterpod 14.4.1, /file-break-glass-moves): the old account, the new account of the same type, the breakGlassTransfer's id. */
+export type BreakGlassMoveToFile = Pick<BreakGlassMove, 'accountId' | 'accountIdTo' | 'transactionId'>;
+
+/** One event of the person's subset on a break-glass case (masterpod 14.4.1): scheduled (at, meetLink), decided ({}), sent ({}) or dismissed (reason only). */
+export interface BreakGlassEvent {
+  kind: 'scheduled' | 'decided' | 'sent' | 'dismissed' | string;
+  details: Record<string, unknown>;
+  createdAt: string;
+}
+
+/** A break-glass case as /list-my-break-glass-moves answers it (masterpod 14.4.1): the recovery case's id, a trade case's statuses, the count of attestor pods that signed, the moves in account order and the person's events. */
+export interface BreakGlassCaseItem {
+  caseId: string;
+  status: AttestorCaseStatus;
+  signOffs: number;
+  moves: BreakGlassMove[];
+  events: BreakGlassEvent[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 /** The clear part of a note as /add-noted-transaction takes it (wallet spec 4.6): the ledger's facts and the encrypted private part, hex. */
@@ -284,6 +319,74 @@ export interface CreateAnosAccountBody {
   accountType: string;
   keyBlob: string;
   creation: { payload: object; signatures: Record<string, string | undefined> };
+}
+
+// --- level setup: DAO (masterpod spec 15) -------------------------------------
+
+/** A proposal's status (masterpod 15.5): pending collects support, open takes votes, then accepted or rejected; expired missed its support and is hidden from the lists, its link still answered. */
+export type DaoStatus = 'pending' | 'open' | 'accepted' | 'rejected' | 'expired';
+
+/** The three lists of /list-dao-proposals; decided is accepted and rejected together. */
+export type DaoListStatus = 'pending' | 'open' | 'decided';
+
+/** The masterpod's dials (masterpod 15.7), answered with every list so the wallet's words carry the numbers: the votes a pod needs to post, the percent of all DAO votes that opens a vote, the percent of the votes cast that passes, the two stages' lengths in minutes. */
+export interface DaoSettings {
+  proposeMinVotes: number;
+  proposalPercent: number;
+  passPercent: number;
+  pendingMinutes: number;
+  voteMinutes: number;
+}
+
+/** The body of /list-dao-proposals: the list; a range, ISO 8601, `from` at or after and `to` before, on createdAt for pending and open and on decidedAt for decided; limit 1 to 100 (20); offset 0 or more (0). */
+export interface DaoListFilters {
+  status: DaoListStatus;
+  from?: string;
+  to?: string;
+  limit?: number;
+  offset?: number;
+}
+
+/**
+ * One proposal as the lists answer it (masterpod 15.4). Weights, totals and
+ * sums are votes, whole staked anos, as numbers; the times are ISO 8601, or
+ * null until they happen (openedAt and voteClosesAt until the vote opens,
+ * decidedAt until it closes or the proposal expires). `for` and `against`
+ * are the live sums while open, the stored results once decided, 0 and 0 on
+ * expired. `yourWeight` is the caller's votes in the proposal's current
+ * snapshot, 0 meaning the pod can neither support nor vote on it.
+ */
+export interface DaoProposalItem {
+  proposalId: string;
+  title: string;
+  status: DaoStatus;
+  /** The username is null when the pod's row is gone. */
+  proposer: { anopodId: string; username: string | null };
+  createdAt: string;
+  pendingUntil: string;
+  openedAt: string | null;
+  voteClosesAt: string | null;
+  decidedAt: string | null;
+  snapshotTotal: number;
+  needed: number;
+  support: number;
+  for: number;
+  against: number;
+  yourWeight: number;
+  yourSupport: boolean;
+  yourVote: 'for' | 'against' | null;
+}
+
+/** What /get-dao-proposal answers: the item with the text. */
+export type DaoProposal = DaoProposalItem & { body: string };
+
+/** One row of /list-dao-votes: a support of the pending stage (every vote `for`) or a vote of the official stage; the wallet marks its own row by anopodId. */
+export interface DaoVoteItem {
+  anopodId: string;
+  username: string | null;
+  vote: 'for' | 'against';
+  weight: number;
+  createdAt: string;
 }
 
 // --- the moderator level (masterpod 12.4.4) ------------------------------------
@@ -497,6 +600,64 @@ export const ATTESTOR_DISMISS_REASONS = ['selfieMismatch', 'documentsMismatch', 
 
 export type AttestorDismissReason = (typeof ATTESTOR_DISMISS_REASONS)[number];
 
+// --- level attestor, the break-glass cases (masterpod 14.4.2, 2026-11-08) ----------
+
+/** One move as /list-break-glass-cases answers it: a BreakGlassMove without its createdAt. */
+export type BreakGlassListedMove = Omit<BreakGlassMove, 'createdAt'>;
+
+/** One row of /list-break-glass-cases (masterpod 14.4.2): a recovery case seen by the attestors, with the recovered pod's names (null when its row is gone), the count of distinct attestor pods that signed and the moves in account order. */
+export interface BreakGlassCaseRow {
+  caseId: string;
+  status: AttestorCaseStatus;
+  username: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  signOffs: number;
+  moves: BreakGlassListedMove[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One moderator approval of the recovery case, as /get-break-glass-case lists them: the approvalSigned recovery events in time order, the moderator's username (null when the pod's row is gone) and the time from the event's details. */
+export interface BreakGlassApproval {
+  username: string | null;
+  signedAt: string | null;
+}
+
+/**
+ * What /get-break-glass-case answers (masterpod 14.4.2): the case with the
+ * recovery case's lookup id, status and approvals, the recovered pod's
+ * profile with the public selfie, the moves in account order and every
+ * attestor event complete (the events' shape is CaseEvent; an
+ * attestationSigned event's details are { attestorId, attestations }, the
+ * whole follow-up objects in move order, which the Send step posts).
+ */
+export interface BreakGlassCaseAnswer {
+  case: {
+    caseId: string;
+    status: AttestorCaseStatus;
+    lookupId: string | null;
+    recoveryStatus: CaseStatus | null;
+    approvals: BreakGlassApproval[];
+    createdAt: string;
+    updatedAt: string;
+  };
+  profile: Profile | null;
+  moves: BreakGlassMove[];
+  events: CaseEvent[];
+}
+
+/** One entry of /sign-off-break-glass-case: a move's transaction id and the attestation follow-up on it, signed as the account page signs one. */
+export interface BreakGlassAttestation {
+  transactionId: string;
+  attestation: FollowUp<AttestationPayload>;
+}
+
+/** The preset reasons a break-glass case may be dismissed for (masterpod 14.4.2): the trade case's six without settled. */
+export const BREAK_GLASS_DISMISS_REASONS = ['selfieMismatch', 'documentsMismatch', 'noShow', 'withdrawn', 'other'] as const;
+
+export type BreakGlassDismissReason = (typeof BREAK_GLASS_DISMISS_REASONS)[number];
+
 // --- the person's side of a case (masterpod 13.4.5) ---------------------------------
 
 export interface MyTradeCase {
@@ -564,9 +725,10 @@ export interface ExistingEvidence {
  * All HTTP calls to the masterpod live here, one method per route (the
  * keyholder test app's api.service.ts, base path /api/masterpod, the two
  * changed routes and the four new ones added, then the recovery routes of
- * masterpod 12.4, the attesting routes of masterpod 13.4 and the wallet
- * memory routes of wallet spec 4.6 and 4.7 (2026-11-07)), so no page builds URLs
- * or envelopes. The session service holds the session and signs.
+ * masterpod 12.4, the attesting routes of masterpod 13.4, the wallet
+ * memory routes of wallet spec 4.6 and 4.7 (2026-11-07), the break-glass
+ * routes of masterpod 14.4 and the DAO routes of masterpod 15 (2026-11-08)),
+ * so no page builds URLs or envelopes. The session service holds the session and signs.
  */
 @Injectable({ providedIn: 'root' })
 export class MasterpodApiService {
@@ -576,9 +738,9 @@ export class MasterpodApiService {
 
   // --- level none ---------------------------------------------------------
 
-  /** A challenge for `purpose`; openCase takes the username of the pod being recovered. */
-  challenge(purpose: ChallengePurpose, username?: string): Promise<ApiResponse<ChallengeAnswer>> {
-    return this.post('/challenge', username === undefined ? { purpose } : { purpose, username });
+  /** A challenge for `purpose`; openCase takes the anoPod id the keyholders named for the lookup id and answers that pod's username (masterpod 12.4.2, 2026-11-08). */
+  challenge(purpose: ChallengePurpose, anopodId?: string): Promise<ApiResponse<ChallengeAnswer>> {
+    return this.post('/challenge', anopodId === undefined ? { purpose } : { purpose, anopodId });
   }
 
   checkUsername(username: string, quiet = false): Promise<ApiResponse<{ username: string; available: boolean }>> {
@@ -800,18 +962,22 @@ export class MasterpodApiService {
     return this.signed('/set-wallet-settings', { settingsBlob });
   }
 
-  // --- level setup: after a recovery (masterpod 12.4.5) -----------------------
+  // --- level setup: after a recovery (masterpod 12.4.5) and the break-glass moves (masterpod 14.4.1) ---
 
   /** The new backup code's blob2 and keys, with the proof by the current code (CryptoService.backupCodeProof over the RotationMessage). */
   rotateBackupCode(body: RotateBackupCodeBody): Promise<ApiResponse<{ anopodId: string; rotated: boolean }>> {
     return this.signed('/rotate-backup-code', body);
   }
 
-  /** An account's break-glass seed under the encryption key (CryptoService.wrapBreakGlassSeed), stored on the caller's account; a second call replaces it. */
-  storeBreakGlassBlob(accountId: string, breakGlassBlob: string): Promise<ApiResponse<{ accountId: string; stored: boolean }>> {
-    return this.signed('/store-break-glass-blob', { accountId, breakGlassBlob });
+  /** The caller's break-glass cases, newest first, each with its moves and the events the person may see (masterpod 14.4.1): what a lost account's card reads. /store-break-glass-blob is no longer called (2026-11-08). */
+  listMyBreakGlassMoves(quiet = false): Promise<ApiResponse<{ cases: BreakGlassCaseItem[] }>> {
+    return this.signed('/list-my-break-glass-moves', {}, quiet);
   }
 
+  /** The moves of one run of the recovery finish's Move your money step (masterpod 14.4.1): the recovery case's id and 1 to 20 moves; 201 { caseId, status, moves } with the count now on the case, 409 move already filed when a transaction id was filed before, 409 case not ready while the recovery case is neither delivering nor completed. A second call for the same case adds moves. */
+  fileBreakGlassMoves(caseId: string, moves: BreakGlassMoveToFile[]): Promise<ApiResponse<{ caseId: string; status: AttestorCaseStatus; moves: number }>> {
+    return this.signed('/file-break-glass-moves', { caseId, moves });
+  }
 
   // --- level moderator (masterpod 12.4.4) ------------------------------------
 
@@ -912,6 +1078,43 @@ export class MasterpodApiService {
     return this.signed('/dismiss-attestor-case', { caseId, reason, note });
   }
 
+  // --- level attestor, the break-glass cases (masterpod 14.4.2, 2026-11-08) ----------
+
+  /** The break-glass cases in `statuses` (open and inReview when omitted: {} is sent), newest first, each with its moves and the count of attestor pods that signed. */
+  listBreakGlassCases(statuses?: AttestorCaseStatus[], quiet = false): Promise<ApiResponse<{ cases: BreakGlassCaseRow[] }>> {
+    return this.signed('/list-break-glass-cases', statuses === undefined ? {} : { statuses }, quiet);
+  }
+
+  /** One case with the recovery case's lookup id and approvals, the person's profile, the moves and the events; 404 unknown case. */
+  getBreakGlassCase(caseId: string, quiet = false): Promise<ApiResponse<BreakGlassCaseAnswer>> {
+    return this.signed('/get-break-glass-case', { caseId }, quiet);
+  }
+
+  /** The recovered pod's rows of one bucket, ciphertext under the bucket keys the keyholders hand out by the recovery case's lookup id; the masterpod records the view. */
+  listBreakGlassCaseSecurityRecords(caseId: string, bucket: 1 | 2): Promise<ApiResponse<SecurityRecords>> {
+    return this.signed('/list-break-glass-case-security-records', { caseId, bucket });
+  }
+
+  /** As /schedule-attestor-case; the person's wallet reads the event from /list-my-break-glass-moves, no notification is sent. */
+  scheduleBreakGlassCase(caseId: string, at: string, meetLink: string): Promise<ApiResponse<{ caseId: string; status: AttestorCaseStatus }>> {
+    return this.signed('/schedule-break-glass-case', { caseId, at, meetLink });
+  }
+
+  /** One attestation per move of the case, every move exactly once, one attestorId on all, each verified by the masterpod against the signer's stored creation; two distinct pods decide the case. */
+  signOffBreakGlassCase(caseId: string, attestations: BreakGlassAttestation[]): Promise<ApiResponse<{ caseId: string; status: AttestorCaseStatus; signOffs: number }>> {
+    return this.signed('/sign-off-break-glass-case', { caseId, attestations });
+  }
+
+  /** The validators' answers to the posted attestations, up to two per move (1 to 40 results), a failed post included; a later retry writes another event. */
+  markBreakGlassCaseSent(caseId: string, validator: number, results: SentResult[]): Promise<ApiResponse<{ caseId: string; status: 'decided' }>> {
+    return this.signed('/mark-break-glass-case-sent', { caseId, validator, results });
+  }
+
+  /** Final, with the five reasons; nothing happens on the ledger: the held moves stay until a cancel. */
+  dismissBreakGlassCase(caseId: string, reason: BreakGlassDismissReason, note: string): Promise<ApiResponse<{ caseId: string; status: 'dismissed' }>> {
+    return this.signed('/dismiss-break-glass-case', { caseId, reason, note });
+  }
+
   // --- level setup: the person's side of a case (masterpod 13.4.5) --------------
 
   /** The cases where this pod is a party, newest first, trades and disputes apart. */
@@ -934,6 +1137,38 @@ export class MasterpodApiService {
     if (files.length > 0) body['files'] = files;
     if (existing.length > 0) body['existing'] = existing;
     return this.signed('/add-dispute-evidence', body);
+  }
+
+  // --- level setup: DAO (masterpod spec 15) ---------------------------------
+
+  /** A proposal, the title and the body trimmed; 201 { proposalId, status }, status open when the proposer's own weight alone reaches the support needed. Refusals: 400 invalid title / invalid body, 503 validators unreachable, 403 not enough DAO votes, 409 a pending proposal is already open. Up to 5 seconds per validator URL while validators are slow or down. */
+  createDaoProposal(title: string, body: string): Promise<ApiResponse<{ proposalId: string; status: DaoStatus }>> {
+    return this.signed('/create-dao-proposal', { title, body });
+  }
+
+  /** The caller's weight in support of a pending proposal; 200 { proposalId, status, support, needed }, status open when the support reached needed. Refusals: 404 unknown proposal, 409 proposal not pending / proposal expired / already supported, 403 no DAO votes in this proposal. */
+  supportDaoProposal(proposalId: string): Promise<ApiResponse<{ proposalId: string; status: DaoStatus; support: number; needed: number }>> {
+    return this.signed('/support-dao-proposal', { proposalId });
+  }
+
+  /** The caller's vote on an open proposal; 200 { proposalId, for, against, yourVote }, the sums after the write. Refusals: 404 unknown proposal, 409 proposal not open / voting closed / already voted, 403 no DAO votes in this proposal. */
+  voteDaoProposal(proposalId: string, vote: 'for' | 'against'): Promise<ApiResponse<{ proposalId: string; for: number; against: number; yourVote: 'for' | 'against' }>> {
+    return this.signed('/vote-dao-proposal', { proposalId, vote });
+  }
+
+  /** One list, newest first, expired proposals never; no more flag: the next page is offset += limit and a short page is the last. The settings ride with every answer. */
+  listDaoProposals(filters: DaoListFilters, quiet = false): Promise<ApiResponse<{ proposals: DaoProposalItem[]; settings: DaoSettings }>> {
+    return this.signed('/list-dao-proposals', filters, quiet);
+  }
+
+  /** One proposal with its text, an expired one too; 404 unknown proposal. */
+  getDaoProposal(proposalId: string): Promise<ApiResponse<{ proposal: DaoProposal }>> {
+    return this.signed('/get-dao-proposal', { proposalId });
+  }
+
+  /** The supports (`pending`) or the votes (`official`) of a proposal, newest first, limit 1 to 200; 404 unknown proposal. */
+  listDaoVotes(proposalId: string, stage: 'pending' | 'official', limit = 50, offset = 0): Promise<ApiResponse<{ votes: DaoVoteItem[] }>> {
+    return this.signed('/list-dao-votes', { proposalId, stage, limit, offset });
   }
 
   // --- plumbing -----------------------------------------------------------

@@ -3,7 +3,7 @@ import { ChatKeys, CryptoService, Envelope, HybridPublicKey, SessionKeys, Wallet
 import type { RoomsAnswer } from './masterpod-api.service';
 import { Bytes } from './passkey.service';
 
-/** What /check-anopod-status answers, the three counts included (wallet spec 4.3). */
+/** What /check-anopod-status answers, the three counts and, since 2026-11-08, the role included (wallet spec 4.3). */
 export interface StatusAnswer {
   anopodId: string;
   vouched: boolean;
@@ -14,6 +14,8 @@ export interface StatusAnswer {
   bucketOneImages: number;
   bucketTwoImages: number;
   bucketTwoInfos: number;
+  /** The pod's live appointment (masterpod spec 16): moderator, attestor or null when it holds none; an older masterpod sends no field. */
+  role?: 'moderator' | 'attestor' | null;
 }
 
 /** The two ids of docs/public-ledger-id.md, hex. */
@@ -22,7 +24,7 @@ export interface Identity {
   lookupId: string;
 }
 
-/** An anos account as the masterpod lists it: the keyBlob ciphertext and the creation, never open keys. */
+/** An anos account as the masterpod lists it: the keyBlob ciphertext (under the key blob key since 2026-11-08) and the creation, never open keys. */
 export interface AnosAccountItem {
   accountId: string;
   accountType: string;
@@ -61,6 +63,8 @@ export class SessionService {
   // --- secrets, never in a signal and never on the wire -------------------
   private sessionKeys: SessionKeys | null = null;
   private prfOutput: Bytes | null = null;
+  /** The key blob key (CryptoService.deriveKekKeys), what the account key blobs open under since 2026-11-08; set with the PRF output at every unlock and create. */
+  private keyBlobKey: Bytes | null = null;
   private encryptionKey: Bytes | null = null;
   private chatKeys: ChatKeys | null = null;
   private identity: Identity | null = null;
@@ -78,6 +82,7 @@ export class SessionService {
   readonly lastName = signal('');
   readonly status = signal<StatusAnswer | null>(null);
   readonly hasPrf = signal(false);
+  readonly hasKeyBlobKey = signal(false);
   readonly hasEncryptionKey = signal(false);
   readonly hasChatKeys = signal(false);
   readonly hasIdentity = signal(false);
@@ -106,6 +111,8 @@ export class SessionService {
   readonly vouched = computed(() => this.status()?.vouched ?? false);
   readonly setupComplete = computed(() => this.status()?.setupComplete ?? false);
   readonly isSeed = computed(() => (this.status()?.isSeed || this.status()?.isSuperSeed) ?? false);
+  /** The pod's appointed role from the status (wallet spec 4.3, 2026-11-08): moderator or attestor; null when it holds none; undefined while there is no status, or the masterpod sent no role. */
+  readonly role = computed(() => this.status()?.role);
 
   /**
    * Opens the session: the pod, its session keys, its profile. Everything
@@ -125,6 +132,7 @@ export class SessionService {
   close(): void {
     this.sessionKeys = null;
     this.prfOutput = null;
+    this.keyBlobKey = null;
     this.encryptionKey = null;
     this.chatKeys = null;
     this.identity = null;
@@ -136,6 +144,7 @@ export class SessionService {
     this.lastName.set('');
     this.status.set(null);
     this.hasPrf.set(false);
+    this.hasKeyBlobKey.set(false);
     this.hasEncryptionKey.set(false);
     this.hasChatKeys.set(false);
     this.hasIdentity.set(false);
@@ -168,6 +177,15 @@ export class SessionService {
 
   getPrfOutput(): Bytes | null {
     return this.prfOutput;
+  }
+
+  setKeyBlobKey(key: Bytes | null): void {
+    this.keyBlobKey = key;
+    this.hasKeyBlobKey.set(key !== null);
+  }
+
+  getKeyBlobKey(): Bytes | null {
+    return this.keyBlobKey;
   }
 
   setEncryptionKey(key: Bytes | null): void {
