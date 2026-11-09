@@ -2,7 +2,6 @@ import { Component, DestroyRef, computed, effect, inject, input, signal, untrack
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
-import { MatExpansionModule } from '@angular/material/expansion';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
@@ -23,14 +22,11 @@ import { ConfigService } from '../services/config.service';
 import {
   AccountType,
   CryptoService,
-  FollowUp,
   KeyBlobLostError,
   PairOne,
-  Payout,
   STAKE_PURPOSES,
   StakePurpose,
   TransferType,
-  Vote,
 } from '../services/crypto.service';
 import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
@@ -54,14 +50,6 @@ const SPENDING_KINDS = ['plain', 'escrow', 'stake'] as const;
 const ACCOUNT_ID_IN_TEXT = /(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])/i;
 type SpendingKind = (typeof SPENDING_KINDS)[number];
 
-/** One row of the fund proposal form; amounts in anos, purpose empty for a plain payout. */
-interface PayoutRow {
-  accountIdTo: string;
-  amount: string;
-  reason: string;
-  stakeFor: StakePurpose | '';
-}
-
 interface Outcome {
   ok: boolean;
   text: string;
@@ -75,7 +63,7 @@ interface Outcome {
  * Escrow trades; Assisted transfer, on an assisted account; a Transaction
  * history button to /wallet/:accountId/history (2026-11-05, section 11: the
  * transaction list moved there; /list-transactions is still read here for
- * the pending list); then the follow-ups and the fund proposal panels.
+ * the pending list).
  * Send: recipient account id (typed, or the 64 hex characters on the
  * clipboard by the paste button), amount in anos, and the kind the account
  * type allows; guarded and vault date the transfer lock + offset ahead by
@@ -102,17 +90,16 @@ interface Outcome {
  * with the others; the transfer waiting out its lock is one row with no
  * link, since nothing can be done with it, with the stage in words and
  * its unlock moment, and a line under the balance says what is waiting
- * out the lock. The guardian vote form and the fund proposal form are the
- * test wallet's. A lost account (2026-11-08: its keyBlob does not open under
+ * out the lock. The guardian features live on the Guardians page
+ * (2026-11-08). A lost account (2026-11-08: its keyBlob does not open under
  * the key blob key, the keys went with an old passkey) shows the lost title
  * and text and its break-glass move's state in place of the summary, keeps
  * Refresh and the Transaction history button, and leaves out everything
- * that needs pair one: Send, Pending, the trades, the lock sections and
- * the two panels.
+ * that needs pair one: Send, Pending, the trades and the lock sections.
  */
 @Component({
   selector: 'app-account-page',
-  imports: [FormsModule, RouterLink, MatCardModule, MatButtonModule, MatListModule, MatIconModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatProgressBarModule, MatExpansionModule, CopyButtonComponent],
+  imports: [FormsModule, RouterLink, MatCardModule, MatButtonModule, MatListModule, MatIconModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatProgressBarModule, CopyButtonComponent],
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
@@ -294,45 +281,6 @@ interface Outcome {
         }
 
         <p><a mat-stroked-button [routerLink]="['/wallet', accountId(), 'history']"><mat-icon>history</mat-icon> {{ t().common.transactionHistory }}</a></p>
-
-        @if (!lost()) {
-          <mat-accordion class="followups">
-            <mat-expansion-panel>
-              <mat-expansion-panel-header><mat-panel-title>{{ t().account.followUps }}</mat-panel-title></mat-expansion-panel-header>
-              <div class="form">
-                <mat-form-field appearance="outline" class="wide"><mat-label>Fund proposal transactionId</mat-label><input matInput [ngModel]="voteTransactionId()" (ngModelChange)="voteTransactionId.set($event)" /></mat-form-field>
-                <mat-form-field appearance="outline"><mat-label>{{ t().account.vote }}</mat-label>
-                  <mat-select [value]="vote()" (valueChange)="vote.set($event)"><mat-option value="for">{{ t().account.votes['for'] }}</mat-option><mat-option value="against">{{ t().account.votes['against'] }}</mat-option></mat-select>
-                </mat-form-field>
-                <button mat-stroked-button type="button" (click)="sendVote()" [disabled]="busy() || !voteTransactionId().trim()">Send guardianVote</button>
-              </div>
-              @if (followUpOutcome(); as o) { <p [class.error]="!o.ok" [class.ok]="o.ok">{{ o.text }}</p> }
-            </mat-expansion-panel>
-
-            <mat-expansion-panel>
-              <mat-expansion-panel-header><mat-panel-title>{{ t().account.fundProposal }}</mat-panel-title></mat-expansion-panel-header>
-              @for (row of payouts(); track $index) {
-                <div class="form">
-                  <mat-form-field appearance="outline" class="wide"><mat-label>Recipient accountId</mat-label><input matInput [ngModel]="row.accountIdTo" (ngModelChange)="updatePayout($index, 'accountIdTo', $event)" /></mat-form-field>
-                  <mat-form-field appearance="outline"><mat-label>{{ t().account.amountAnos }}</mat-label><input matInput [ngModel]="row.amount" (ngModelChange)="updatePayout($index, 'amount', $event)" /></mat-form-field>
-                  <mat-form-field appearance="outline"><mat-label>{{ t().common.reason }}</mat-label><input matInput [ngModel]="row.reason" (ngModelChange)="updatePayout($index, 'reason', $event)" /></mat-form-field>
-                  <mat-form-field appearance="outline"><mat-label>{{ t().account.returnsStake }}</mat-label>
-                    <mat-select [value]="row.stakeFor" (valueChange)="updatePayout($index, 'stakeFor', $event)">
-                      <mat-option value="">{{ t().account.no }}</mat-option>
-                      @for (purpose of allStakePurposes; track purpose) { <mat-option [value]="purpose">{{ t().account.stakePurposes[purpose] }}</mat-option> }
-                    </mat-select>
-                  </mat-form-field>
-                  <button mat-icon-button type="button" (click)="removePayout($index)" [disabled]="payouts().length === 1" [attr.aria-label]="t().common.remove"><mat-icon>close</mat-icon></button>
-                </div>
-              }
-              <div class="row">
-                <button mat-button type="button" (click)="addPayout()">{{ t().account.addPayout }}</button>
-                <button mat-flat-button type="button" (click)="sendFundProposal()" [disabled]="busy()">Send fundProposal</button>
-              </div>
-              @if (proposalOutcome(); as o) { <p [class.error]="!o.ok" [class.ok]="o.ok">{{ o.text }}</p> }
-            </mat-expansion-panel>
-          </mat-accordion>
-        }
       </mat-card-content>
     </mat-card>
   `,
@@ -349,7 +297,6 @@ interface Outcome {
     .send { align-items: flex-start; }
     .send > button { margin-top: 8px; }
     .wide { min-width: 360px; flex: 1; }
-    .followups { display: block; margin-top: 16px; }
     .muted { color: var(--mat-sys-on-surface-variant); }
     .error { color: var(--mat-sys-error); }
     .ok { color: var(--mat-sys-primary); }
@@ -373,8 +320,6 @@ export class AccountPage {
   protected readonly assistedStageWords = assistedStageWords;
   protected readonly lockedStageWords = lockedStageWords;
   protected readonly spendingKinds = SPENDING_KINDS;
-  /** The six purposes, for the fund proposal's Returns stake list: a guardian returns any account's stake. */
-  protected readonly allStakePurposes = STAKE_PURPOSES;
   /** The purposes this anoPod may stake for (wallet spec 8.2, 2026-11-08): all six while the status has no role (no status yet, or an older masterpod); the four without moderator and attestor when the pod holds no role; those four and the role it holds. */
   protected readonly stakePurposes = computed((): readonly StakePurpose[] => {
     const role = this.session.role();
@@ -402,13 +347,6 @@ export class AccountPage {
   protected readonly pasteNote = signal<string | null>(null);
   protected readonly amount = signal('1');
   protected readonly sendOutcome = signal<Outcome | null>(null);
-
-  protected readonly voteTransactionId = signal('');
-  protected readonly vote = signal<Vote>('for');
-  protected readonly followUpOutcome = signal<Outcome | null>(null);
-
-  protected readonly payouts = signal<PayoutRow[]>([{ accountIdTo: '', amount: '', reason: '', stakeFor: '' }]);
-  protected readonly proposalOutcome = signal<Outcome | null>(null);
 
   /** The transaction type Send makes, from the account type and the spending kind. */
   protected readonly transferType = computed((): string => {
@@ -599,50 +537,6 @@ export class AccountPage {
     if (/not appointed as/.test(reason)) return this.t().account.notAppointed(this.stakePurpose());
     if (/could not confirm/.test(reason)) return this.t().account.masterpodNotConfirmed;
     return reason;
-  }
-
-  protected sendVote(): Promise<void> {
-    return this.followUp((pairOne, own) => this.crypto.buildFollowUp(pairOne, { type: 'guardianVote', transactionId: this.voteTransactionId().trim(), guardianId: own, vote: this.vote() }), (f) => this.anos.guardianVote(f));
-  }
-
-  private followUp<T extends FollowUp>(build: (pairOne: PairOne, own: string) => T, post: (signed: T) => Promise<ApiResponse<Accepted>>): Promise<void> {
-    return this.act(this.followUpOutcome, async () => {
-      const pairOne = await this.pairOne();
-      const signed = await this.signing.sign(build(pairOne, this.accountId()));
-      const res = await post(signed);
-      if (!res.ok) throw new Error(reasonOf(res));
-      return this.t().account.followUpAccepted(signed.payload.type, res.body.transactionId);
-    });
-  }
-
-  protected addPayout(): void {
-    this.payouts.update((rows) => [...rows, { accountIdTo: '', amount: '', reason: '', stakeFor: '' }]);
-  }
-
-  protected removePayout(index: number): void {
-    this.payouts.update((rows) => rows.filter((_, i) => i !== index));
-  }
-
-  protected updatePayout(index: number, field: keyof PayoutRow, value: string): void {
-    this.payouts.update((rows) => rows.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
-  }
-
-  protected sendFundProposal(): Promise<void> {
-    return this.act(this.proposalOutcome, async () => {
-      const payouts: Payout[] = [];
-      for (const [i, row] of this.payouts().entries()) {
-        const amount = anosToMillionths(row.amount);
-        if (amount === null) throw new Error(this.t().account.payoutAmount(i + 1));
-        const payout: Payout = { accountIdTo: row.accountIdTo.trim(), amount: amount.toString(), reason: row.reason };
-        if (row.stakeFor !== '') payout.stakeFor = row.stakeFor;
-        payouts.push(payout);
-      }
-      const pairOne = await this.pairOne();
-      const tx = await this.signing.sign(this.crypto.buildFundProposal(pairOne, this.accountId(), payouts));
-      const res = await this.anos.fundProposal(tx);
-      if (!res.ok) throw new Error(reasonOf(res));
-      return this.t().account.proposalAccepted(res.body.transactionId);
-    });
   }
 
   private async act(outcome: ReturnType<typeof signal<Outcome | null>>, action: () => Promise<string>): Promise<void> {

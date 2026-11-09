@@ -396,6 +396,8 @@ with their comments pointed at this server, and require-account.js:
 
 src/reads/ (router, handlers, service, queries), wired in app.js. All
 five answer the signer's own account only; nothing about anyone else.
+Since 2026-11-08 two public reads sit beside them, /list-fund-proposals
+and /get-fund-proposal, the block at the end of this section.
 The third, /list-escrows, was added 2026-11-05 for the escrow trades
 (anossoftware spec section 16); the fourth, /get-assisted-transfer, on
 2026-11-06 for the assisted transfer (anossoftware spec section 17); the
@@ -406,8 +408,13 @@ fifth, /get-locked-transfer, and the date range on /list-transactions on
     POST /get-account (account)
     body { }
     answer: 200 { accountId, type, balance: millionths as a decimal string, latestTransactionId: hex | null,
-      createdAt: ISO 8601 }. latestTransactionId is the transaction_id of the garlic_chain link with the
+      createdAt: ISO 8601, stakes: { daoVote, moderator, attestor, guardian, validator, masterPod },
+      guardianVotes: number }. latestTransactionId is the transaction_id of the garlic_chain link with the
       highest position whose account_id is the signer: what the next transfer names as previousTransactionId.
+    stakes and guardianVotes (2026-11-08, anossoftware spec 25.1): the account's stake per purpose, millionths
+      as decimal strings, "0" each when the account has no stakes row, and floor(guardian / GUARDIAN_VOTE_ANOS)
+      as a number, the account's guardian votes. A validator without the fund proposal reads sends neither;
+      the wallet's AccountAnswer has both optional, and only the Guardians pages read them.
 
     POST /list-transactions (account)
     body { beforePosition?: integer, limit?: integer (default 50, at most 200), from?: ISO 8601, to?: ISO 8601 }
@@ -478,6 +485,45 @@ fifth, /get-locked-transfer, and the date range on /list-transactions on
 
 Refusals are 400 or 401 + { error }, logged "failed: <reason>" like
 every other route. The 1 MB JSON limit stays.
+
+The public reads (2026-11-08; anossoftware spec 25, the plan
+forclaude/wallet-guardians-plan-1.md): no envelope, no signature, the body
+a plain JSON object (400 bad request shape otherwise), built like
+/list-dao-stakes (anossoftware 23); the doorman passes them at 4 KB with
+the object check (doormansoftware spec 7), the fields are the validator's.
+Everything they answer is the fund's business: a written proposal's
+payouts are on the public chain, and the votes are the guardians' public
+act on the fund's money. A validator or a doorman without them answers
+404, which the wallet shows in red under the tab of the Guardians page
+while everything else works, so the validators and their doormen deploy
+first.
+
+    POST /list-fund-proposals (public)
+    body { status: 'open' | 'decided', limit?: integer (default 20, at most 200), offset?: integer, from?: ISO 8601, to?: ISO 8601 }
+    answer: 200 { settings, proposals: [ item ] }
+    settings: { anosPerVote, minimumStake, percent, minutes }, the validator's GUARDIAN_VOTE_ANOS and
+      STAKE_MIN_GUARDIAN_ANOS as millionths (decimal strings) and GUARDIAN_VOTE_PERCENT and GUARDIAN_VOTE_MINUTES
+      as numbers, with every answer, so the wallet's notice, its rule and its become-a-guardian sentence carry
+      the validator's own numbers.
+    item: { transactionId, guardianId (the proposer's account), createdAt, voteClosesAt, status, approved,
+      payoutCount, total: millionths as a decimal string, forWeight (the proposer's weight plus the approved
+      votes for), againstWeight (the approved votes against), passing, decidedAt: ISO 8601 | null,
+      votes: [ { guardianId, vote: for | against, weight, approved, votedAt } ] } (anossoftware 25.1).
+    status (anossoftware 25.2): waiting until every validator accepted the proposal (no vote is accepted on it
+      yet); open while voteClosesAt is ahead; closing once it has passed and the next ready list has not tallied
+      it yet; written for an archived proposal that passed and whose payouts the round wrote; failed for one that
+      did not. A word the wallet does not know is shown as it is, with no button.
+    open lists the fund_proposals rows, one at most (limit, offset, from and to are not read); decided lists the
+      archives rows of fund proposals, newest first by the decision, after offset rows, with the decision at or
+      after from and before to when given (to is the first moment after the range, as /list-transactions takes
+      them). 400 invalid status / invalid limit / invalid offset / invalid from / invalid to.
+
+    POST /get-fund-proposal (public)
+    body { transactionId: hex }
+    answer: 200 { settings, proposal }, the item plus proposerWeight (the proposer's votes when the proposal was
+      stored) and payouts: [ { index, accountIdTo, amount, reason, stakeFor: purpose | null } ] in index order,
+      the fields as the proposer sent them; the open row first, then the archives. 400 invalid transactionId
+      for anything but 64 hex characters; 404 unknown proposal.
 
 ## 6. The keyholders
 
@@ -592,7 +638,7 @@ as in the test apps; a new tab unlocks again.
     /security/bucket-two     forwards to /account/recovery/details
     /home                    home: the greeting, the balance card, things to do, the tiles
     /wallet                  the anos accounts and Create anos account
-    /wallet/:accountId       one account: balance, send, pending, escrow trades, follow-ups, fund proposal
+    /wallet/:accountId       one account: balance, send, pending, escrow trades, the held or locked transfer
     /wallet/:accountId/escrow/:transactionId   one escrow trade: the details, the buttons for your side, the closed view
     /wallet/:accountId/assisted/:transactionId   one assisted transfer: the details, the stage, the case, Cancel transfer, the closed view
     /wallet/:accountId/history   the transaction history: the rows in plain words by day, a date range, Show more
@@ -608,9 +654,19 @@ as in the test apps; a new tab unlocks again.
     /dao                     DAO: the notice, three tabs (Open votes, Pending, Decided), the cards, New proposal
     /dao/new                 a new proposal: the title, the text, Post
     /dao/:proposalId         one proposal: the status, the title and the text, the proposer, the numbers, your support or vote with a confirm in place, the votes and the supporters
+    /dao/guardians           Guardians: the notice, your guardian accounts, two tabs (Open vote, Decided), the cards, New proposal
+    /dao/guardians/new       a new fund proposal: the account that proposes, the payouts, Post
+    /dao/guardians/:transactionId   one proposal: the status, the payouts, the numbers, your vote with a confirm in place, the votes (the Guardians plan's step 4)
     /notifications           the list, mark read
     /seed                    the vouch request inbox (seeds only)
     /log                     the activity log, newest 40 calls, polls excepted (the test apps' Log)
+
+In app.routes.ts the three Guardians routes (2026-11-08, section 11; the
+plan is forclaude/wallet-guardians-plan-1.md) sit between dao/new and
+dao/:proposalId: the router takes the first route that matches, and
+dao/:proposalId would otherwise swallow dao/guardians. The Guardians have
+no entry of their own in the side panel or the Home tiles: the DAO page
+carries a card to them (8.2).
 
 A guard sends anyone without a session to /. Which pages the navigation
 shows follows the status: vouching until vouched; identity and setup
@@ -930,10 +986,13 @@ trades from /list-escrows (section 5.4); Assisted transfer, on an
 assisted account, the held transfer from /get-assisted-transfer (section
 5.4); Locked transfer, on a guarded or vault account, the transfer
 waiting out its lock from /get-locked-transfer (section 5.4); a
-"Transaction history" button to the history page below; then the
-follow-ups and the fund proposal panels. The transaction list left this
-page for the history page on 2026-11-05 (section 11); /list-transactions
-is still read here, for the pending list. Under the balance, while this
+"Transaction history" button to the history page below. The two folded
+panels of the test wallet, the guardian vote on a proposal id pasted by
+hand and the fund proposal form, left this page on 2026-11-08 (section
+11) for the Guardians page under the DAO (/dao/guardians, below); the
+stake form on a spending account's Send stays. The transaction list left
+this page for the history page on 2026-11-05 (section 11);
+/list-transactions is still read here, for the pending list. Under the balance, while this
 account is the seller of an open escrow trade, one line: "5 anos of this
 are in an open escrow trade."; while an assisted transfer of this account
 is held, "5 anos of this are waiting in an assisted transfer."; while a
@@ -948,8 +1007,8 @@ and "The keys of this account were lost with the old passkey. Its money
 moves to a new account through the recovery." in place of the summary,
 then the move's state as the Wallet card shows it; Refresh and the
 Transaction history button stay (the history page itself shows the lost
-line, since its read needs pair one), and Send, Pending, the trades, the
-lock sections and the two panels are left out. Every other page that
+line, since its read needs pair one), and Send, Pending, the trades and
+the lock sections are left out. Every other page that
 opens a keyBlob treats one that does not open the same way: the escrow
 trade, assisted transfer and history pages show "Lost with the old
 passkey" where the read's refusal would show; the attestor's and the
@@ -1463,8 +1522,15 @@ it, and then everyone votes for or against for 14 days. An accepted
 proposal records what the community decided. It moves no money and
 changes nothing by itself.", the two numbers from the `settings` the
 masterpod answers with every list (the minutes turned into days by
-Math.round(minutes / 1440)), shown once the first list answered; then
-three tabs, Open votes, Pending and Decided. A tab reads
+Math.round(minutes / 1440)), shown once the first list answered; then,
+since 2026-11-08 (section 11; the Guardians plan,
+forclaude/wallet-guardians-plan-1.md), one outlined card the width of the
+page, for everyone: a shield icon, "Guardians" in bold with "The fund's
+proposals and the guardians' votes" under it and a chevron at the right,
+the whole card a link to /dao/guardians (the Guardians paragraphs below);
+it says nothing about the caller, since the Guardians page reads the
+caller's accounts itself; then three tabs, Open votes, Pending and
+Decided. A tab reads
 /list-dao-proposals for its status (open, pending, decided: accepted and
 rejected together) when it is first shown and on Refresh, 20 at a time,
 newest first, and Show more reads 20 more by offset while the last page
@@ -1561,6 +1627,123 @@ heading once its list answered; a refused list in red under its heading.
 The Home line "2 proposals open for your vote" is in the Home paragraph
 above.
 
+Guardians (2026-11-08, section 11; the plan is
+forclaude/wallet-guardians-plan-1.md, the validator's reads anossoftware
+spec 25, the doorman's lines doormansoftware spec 7): where the fund's
+proposals and the guardians' votes are seen and acted on, three screens
+under the DAO page, two of them step 3 and the third step 4. The guts are
+the validator's as they were (the fundProposal transaction, the
+guardianVote follow-up, the tally in the leader round: one vote per
+GUARDIAN_VOTE_ANOS staked for guardian, the vote open for
+GUARDIAN_VOTE_MINUTES, passed at GUARDIAN_VOTE_PERCENT of the votes for);
+what is new is the reading side, two public reads built like
+/list-dao-stakes, /list-fund-proposals and /get-fund-proposal (5.4), and
+the two stake fields of /get-account. The data comes from the wallet's
+defaultValidator through its doorman and the proxy, never from the
+masterpod. Everyone signed in may look; an account with at least one
+guardian vote acts, and every guardian account of the pod acts on its own
+with its own weight, since the validators count guardian stake per
+account and never per pod (a pod with two staked spending accounts votes
+from each). Guardians and recipients are shown by account id in short
+form, "a1b2c3d4…e5f6", with a copy button, as the history and the Home
+lines show accounts: the validators know account ids only, and a username
+lookup by account id is a later step. Every number in the words
+(1,000 anos per vote, 70 percent, 60 minutes on the testnet and a week in
+production, the 1,000 anos least stake) comes from the `settings` the
+validator answers with every read, never from the wallet.
+
+Guardians, at /dao/guardians (step 3), in the frame of the DAO page: a
+header with a back arrow to /dao, "Guardians", a Refresh icon button and,
+on a desktop, a New proposal button (a round + at the bottom right on a
+phone); the notice, an info icon and one paragraph in the plain muted
+style on a surface-container background with 12 px corners, never the
+error container, once the first list answered: "Fund proposals come from
+guardians, people who staked anos for guardian. One vote per 1000 anos
+staked. A guardian proposes payments from the fund, and the guardians
+vote for or against for 1 hour. The proposal passes when at least 70
+percent of the votes are for, and the next round moves the money." (the
+time through the dictionary's `minutes`, so 10080 reads "7 days"); then
+"Your guardian accounts": when the page opens and on Refresh, /get-account
+for each of the pod's accounts, quietly, signed by pair one opened from
+the keyBlob and dropped (guardian-accounts.service, 8.3), "Reading…"
+meanwhile; the accounts whose guardianVotes is at least 1, as the short
+id with a copy button and "3 votes" ("1 vote" at one), the one with the
+most votes first; with none, "None of your accounts has guardian votes. To
+become a guardian, stake 1000 anos or more for guardian from a spending
+account, on its page in the Wallet." with the least stake from the
+settings and a Wallet button to /wallet (nothing under the heading while
+the settings are unknown: the refusal under the tab says why). New
+proposal is enabled with a guardian account and no proposal in the Open
+vote tab; a refused list leaves it enabled, since the validator refuses
+with words. Two tabs. Open vote reads /list-fund-proposals { status:
+'open' } when the page opens and on Refresh: one card at most (the fund
+holds one proposal), or "No fund proposal is open.". Decided reads {
+status: 'decided', limit: 20, offset } when it is first shown and on
+Refresh, newest first, Show more reads 20 more by offset while the last
+page came back full, and has a date range above its cards as the DAO's
+Decided tab (both days picked, or both cleared, read again; from at the
+start of the first day, to at the start of the day after the last, on
+the decision's moment); "No fund proposal has been decided yet." when
+nothing came back. Refresh forgets both tabs, reads the one on screen
+again and the accounts again. The cards, one column on a phone and two on
+a desktop: "Fund proposal" and the short id in bold; "proposed by
+a1b2c3d4…e5f6 · Nov 8, 2026" (the date without the time); "2 payouts ·
+1500 anos" ("1 payout" at one), the count and the sum the validator
+answers; then the state line: open, "For 5 · Against 2", a progress bar
+of for over for plus against, "needs 70 percent for · closes Nov 8, 2026,
+4:50:12 PM"; waiting, "Waiting for the validators"; closing, "Vote closed,
+waiting for the next round"; decided, the status as a small label,
+"Passed, the money moved" in green or "Failed" in red (a status the
+wallet does not know shows its own word, neither colour), "For 5 ·
+Against 2" and "decided Nov 8, 2026, 5:00:00 PM". Under it, "You proposed
+this" with the green thumb_up when the proposer is one of the caller's
+guardian accounts, or "You voted for" / "You voted against" with the
+green thumb_up or the red thumb_down when one of them is in the votes
+(the biggest account's vote when they differ). The green is #2e7d32 and
+the red var(--mat-sys-error), as on the DAO page. A card opens
+/dao/guardians/<id>. A refused read in red under the tab
+("/list-fund-proposals: HTTP 404: Not Found" against a validator or a
+doorman without the route), and the rest of the wallet works.
+
+New fund proposal, at /dao/guardians/new (step 3), in the frame of the
+DAO's New proposal page: a back arrow to /dao/guardians; "Proposing as", a
+select of the caller's guardian accounts read as the Guardians page reads
+them, each option the short id and "3 votes", the biggest first and
+selected (a proposal is one transaction signed by one account; with one
+guardian account the select has one option; without one, the
+become-a-guardian sentence and Post stays disabled); the payout rows, the
+form that left the account page, each in an outlined box: Recipient
+account id (64 hex characters, with the paste button Send has, which
+takes the run of 64 hex characters on the clipboard and says under the
+box when the browser refused or nothing there looks like an id), Amount
+(anos), Reason, Returns stake (no, or one of the six purposes) and a
+remove button, disabled on the last row; Add payout; the rule once the
+settings came, read quietly with /list-fund-proposals { status: 'open' }
+when the page opens, which also tells whether a proposal is open: "The
+guardians vote for 1 hour. The proposal passes when at least 70 percent
+of the votes are for; your own votes count as the first votes for. One
+fund proposal can be open at a time."; Post proposal, disabled while
+busy, without a guardian account, or while a proposal is open, "A fund
+proposal is already open. Wait until it is decided." shown as the reason
+(a refused quiet read shows in red instead, and Post stays enabled: the
+validator refuses with words). Post checks each row ("Payout 2: the
+recipient must be an account id of 64 hex characters", "Payout 2: the
+amount must be anos with up to six decimals"; the recipient lower-cased,
+the amount as millionths, the reason trimmed, stakeFor only when picked),
+opens pair one of the chosen account for the signature and drops it,
+builds the fundProposal (crypto.buildFundProposal: the fund as accountId,
+the chosen account as guardianId, no previousTransactionId), has /api/sign
+add the wallet pair and posts /fund-proposal; a 202 opens
+/dao/guardians/<transactionId>. The refusals in words: "a fund proposal is
+already open" (the validator's held check), the sentence above; "the
+proposer has no guardian vote", "This account has no guardian votes.";
+the rest "/fund-proposal: HTTP 400: payload.payouts[0].reason must be a
+string" and the like.
+
+Fund proposal, at /dao/guardians/:transactionId (step 4): the status, the
+payouts, the numbers, your vote with a confirm in place, the votes; its
+paragraph comes with the page.
+
 Notifications: the list, newest first, mark read; the 5-second poll
 runs while a session is open and updates the status (vouched, counts),
 and the chat rooms with them once setup is complete. The chat kinds
@@ -1616,7 +1799,20 @@ excepted, with the keyholder and anos calls included.
                             plus the five signed reads (listEscrows added 2026-11-05, getAssistedTransfer and
                             getLockedTransfer 2026-11-06; listTransactions takes from and to, 2026-11-06);
                             getAccountAs, the /get-account read with an envelope the caller signed, the
-                            break-glass pair's at the recovery's finish (2026-11-08)
+                            break-glass pair's at the recovery's finish (2026-11-08); the two public fund
+                            proposal reads of anossoftware 25 (2026-11-08), listFundProposals(filters, quiet)
+                            and getFundProposal(transactionId, quiet), each a plain unsigned post with the
+                            object body and no envelope, the wallet's first unsigned posts to a validator, with
+                            the types FundProposalStatus, FundSettings, FundVoteItem, FundPayoutItem,
+                            FundProposalItem, FundProposal and FundListFilters; AccountAnswer carries the
+                            optional stakes and guardianVotes of /get-account (5.4)
+    guardian-accounts.service
+                            the pod's guardian accounts (2026-11-08): read(quiet), /get-account for each of the
+                            session's accounts at once, quietly, signed by pair one opened from the keyBlob and
+                            dropped, answering the accounts whose guardianVotes is at least 1, the biggest
+                            first (an account that is lost, not landed, refused or on an older validator is
+                            left out); pairOne(accountId), pair one of one of the session's accounts for one
+                            signature; what the Guardians page, New fund proposal and the proposal page share
     balances.service        what Home and the Wallet page share (2026-11-06): one entry per account (landed,
                             balance, what is pending, in escrow, assisted or locked, held, available, partial)
                             read by refresh from /get-account, /list-transactions, /list-escrows and the
@@ -1848,7 +2044,14 @@ The DAO page, the New proposal page and the proposal page (2026-11-08,
 section 11) take their words from `dao` and `daoNew`, with `nav.dao`,
 like every page, and Home's "2 proposals open for your vote" its words
 from `home` (2026-11-08); the Thai is the build chat's, by the glossary
-("โหวต DAO" for DAO votes), for Thai readers to correct.
+("โหวต DAO" for DAO votes), for Thai readers to correct. The Guardians
+page and New fund proposal (2026-11-08, section 11) take their words from
+`guardians` and `guardianNew`, and the entry card on the DAO page from two
+entries in `dao`; the words of the two account panels left `account` with
+the panels; the five status words are one table, `guardians.statuses`,
+keyed by the validator's word; the Thai is the build chat's, by the
+glossary ("ผู้คุ้มครอง" guardian, "ข้อเสนอกองทุน" fund proposal), for Thai
+readers to correct.
 
 ## 9. Configuration, and running it on this machine
 
@@ -1890,7 +2093,8 @@ network/testnet.env numbers (2026-11-06, section 11).
 - Reads of the holding tables: the pending row has /list-transactions,
   the open escrows /list-escrows (2026-11-05), the assisted transfer
   /get-assisted-transfer and the locked transfer /get-locked-transfer
-  (2026-11-06); a guardian's fund proposal has no read.
+  (2026-11-06), and the fund proposals, open and decided, the two public
+  reads /list-fund-proposals and /get-fund-proposal (2026-11-08).
 - From the Home plan (forclaude/wallet-home-plan-1.md, 2026-11-06): a
   nickname for an account (would need a masterpod column); a QR code of
   an account id (would need a package); the Log as a tile on Home; a
@@ -1948,6 +2152,17 @@ network/testnet.env numbers (2026-11-06, section 11).
   instead); a vote list export; a logged-out public view of the
   proposals; the stake withdrawal lock (the guardians work it by hand
   from the vote rows' times).
+- From the Guardians plan (forclaude/wallet-guardians-plan-1.md,
+  2026-11-08, its section 7): usernames for guardians and recipients
+  (the validators know account ids only; a masterpod lookup by account
+  id is a later step); notifications about fund proposals; a poll
+  (Refresh, and a reread after each action); editing or withdrawing a
+  proposal (no validator rule exists for it); a stake withdrawal page of
+  its own (a payout with stakeFor is the way, and the form has it);
+  several open proposals (the validator holds one); merging the DAO and
+  the guardians into one page; an entry of their own in the side panel
+  or a Home tile (a card on the DAO page instead, since very few people
+  are guardians).
 - Several passkeys, push delivery, a custom theme, rate limits.
 
 ## 11. Build notes
@@ -4368,6 +4583,149 @@ an older masterpod the wallet shows all six purposes.
   masterpod; the Returns stake list of the fund proposal still shows all
   six; a stake the validator refuses for the appointment shows its
   sentence in red under Send, as every refusal shows.
+
+### The Guardians, step 3 (2026-11-08)
+
+Step 3 of `forclaude/wallet-guardians-plan-1.md` (its section 3), one
+commit, the wallet's first step. Steps 1 and 2 are in the other repos:
+the validator's public `/list-fund-proposals` and `/get-fund-proposal`
+and the two stake fields of `/get-account` (anossoftware aaacc2b, its
+spec's section 25: the plan said 24, that number was taken by the
+appointed stakes) and the doorman's two lines (doormansoftware 7b172ff,
+its spec's section 7). The wallet is deployed last, wallet1 then wallet2,
+together with step 4 (the plan's section 6), after the validators and
+their doormen: the wallet asks its `defaultValidator` only, so that one
+and its doorman first. A wallet against a validator or a doorman without
+the routes shows "/list-fund-proposals: HTTP 404: Not Found" in red under
+the tab of the Guardians page and works everywhere else.
+
+- `app.routes.ts`: `dao/guardians` (GuardiansPage, "Guardians") and
+  `dao/guardians/new` (GuardianNewPage, "New fund proposal") between
+  `dao/new` and `dao/:proposalId`, behind `sessionGuard`, with a comment
+  saying why they sit there (the router takes the first match, and
+  `dao/:proposalId` would otherwise swallow `dao/guardians`). The plan's
+  third line, `dao/guardians/:transactionId` to GuardianProposalPage, is
+  step 4's page: a route to a page that does not exist cannot build, so,
+  as the DAO's step 4 did with `dao/:proposalId`, the line goes in with
+  its page in step 4, after `dao/guardians/new`; a comment holds its
+  place. Until then a card's link and a posted proposal's
+  /dao/guardians/<id> fall to the catch-all and land on the landing page,
+  which sends a session on to Home; the two steps are deployed together.
+  `navigation.service` is unchanged (the plan's decision 1).
+- `anos-api.service`: `AccountAnswer` gains the optional `stakes` and
+  `guardianVotes`; under the comment "the public reads (anossoftware 25)"
+  the seven types of 3.3 and the two methods, each `this.post(path, body,
+  quiet)` with the plain body, no envelope: the wallet's first unsigned
+  posts to a validator. The doc comment names them.
+- `guardian-accounts.service` (new), a small root service the plan does
+  not name: the read of the pod's guardian accounts (3.5) is needed by the
+  Guardians page, by New fund proposal and by step 4's proposal page, so
+  it lives once, with the pair-one opener the two acting pages need
+  (`pairOne(accountId)`, the account page's `pairOne()` for a chosen
+  account); three copies of fifteen lines would have been the
+  alternative. `read()` asks /get-account for every account of the
+  session at once, quietly, and keeps the ones whose `guardianVotes` is
+  at least 1, the biggest first (Array.sort is stable, so ties keep the
+  list's order); an account whose keyBlob does not open, that is not on
+  the ledger yet, whose read is refused, or whose validator sends no
+  `guardianVotes` (one without section 25) is left out as a non-guardian,
+  and without the key blob key in RAM the list is empty. It reads the
+  session's account list from the masterpod first when it is empty, as
+  the account page's `pairOne()` does before it opens a keyBlob.
+- `dao.page.ts`: the entry card of 3.4 between the notice and the thin
+  progress bar that runs above the tabs, a link styled like the cards
+  (`.entry`), for everyone; the doc comment says so. Nothing else on the
+  page changed.
+- `guardians.page.ts` (new), as 3.5 says and 8.2 (Guardians) describes.
+  Where the plan was silent: the New proposal button and the round + are
+  `<button>`s with `routerLink`, not anchors, so `disabled` works (an
+  anchor cannot be disabled); New proposal is enabled with a guardian
+  account and no card in the Open vote tab, a refused list leaving it
+  enabled; the notice's and the rule's time comes from the dictionary's
+  `minutes` helper, so the testnet's 60 reads "1 hour" and production's
+  10080 "7 days" (the plan wrote "60 minutes"); "Reading…"
+  (common.reading) stands under "Your guardian accounts" while the
+  accounts are read, the become-a-guardian sentence with a Wallet button
+  (`account_balance_wallet`, the navigation's icon) when none came and the
+  settings are known, and nothing under the heading when the list was
+  refused too (the red line under the tab says why); the five status
+  words are one table `guardians.statuses` keyed by the validator's word,
+  as the languages plan has it for a server's words, so an unknown
+  status shows its own word and no colour (anossoftware 25.2); the
+  progress bar is for over for plus against, 0 before any vote, with
+  "needs 70 percent for" from the settings beside "closes"; a waiting or
+  closing card shows the status word and no tally, as the plan says; "You
+  proposed this" carries the green thumb_up, since the proposer's votes
+  are the first votes for; the "proposed by" date is the date alone
+  (dateOf), "closes" and "decided" carry the time through lang.dateTime,
+  as the DAO's cards do; the open list is asked with `{ status: 'open' }`
+  alone, since the validator reads nothing else for it, and Show more
+  exists on the Decided tab only; Refresh reads the accounts again too;
+  the page size 20 is a constant of the page. The `for` and `against`
+  colour lines are the page's own, as on the two DAO pages.
+- `guardian-new.page.ts` (new), as 3.6 says and 8.2 (New fund proposal)
+  describes. Where the plan was silent: each payout row is an outlined
+  box with the recipient on its own line, the amount and the reason on
+  the next and Returns stake with the remove button on the third, since
+  the account page's one-line row did not fit a phone; the paste
+  button's note (the browser refused, nothing looks like an id) is kept
+  on its row; the 64-hex-characters pattern of the account page's paste
+  is repeated here, two lines; the recipient is lower-cased and the
+  reason trimmed before posting; the quiet open read's refusal shows in
+  red, so a missing rule is explained, and Post stays enabled then; the
+  select's pick moves to the biggest account only when the pick is not in
+  the new list, so a Refresh elsewhere does not undo a choice; the
+  refusals are matched on the validator's words, "a fund proposal is
+  already open" (fund.queries.js, the held check) and "no guardian vote"
+  ("the proposer has no guardian vote", fund.service.js; the plan's "the
+  guardian has no guardian vote" is the guardian vote's wording, for step
+  4), the rest with the path.
+- `account.page.ts`: the accordion with its two panels left the template,
+  and with it `PayoutRow`, the signals `voteTransactionId`, `vote`,
+  `followUpOutcome`, `payouts` and `proposalOutcome`, the methods
+  `sendVote`, `followUp`, `addPayout`, `removePayout`, `updatePayout` and
+  `sendFundProposal`, the field `allStakePurposes`, `MatExpansionModule`,
+  the imports `FollowUp`, `Payout` and `Vote`, and the `.followups` style;
+  `PairOne` stays for `pairOne()`, `act` and `Outcome` for Send. The doc
+  comment's sentence about the two forms became "The guardian features
+  live on the Guardians page (2026-11-08)", and its two other mentions of
+  the panels (the order of the page, the lost account's list) went with
+  them. The stake form, `stakePurposes`, `spendingKind` and
+  `buildTransferToFund` are as they were.
+- Words: `dao.guardians` and `dao.guardiansLine`; the `guardians` section
+  with every key of 3.2, the proposal page's words of 4.1 included now
+  since 3.2 lists them in the section, as the DAO's step 4 did; the
+  `guardianNew` section. Leaving `account` in both files: `followUps`,
+  `vote`, `votes`, `fundProposal`, `returnsStake`, `no`, `addPayout`,
+  `payoutAmount`, `proposalAccepted` and `followUpAccepted`; `stakeFor`
+  and `stakePurposes` stay, and the New fund proposal page borrows
+  `account.recipientPlaceholder`, `pasteRecipient`, `amountPlaceholder`,
+  `clipboardRefused`, `clipboardNoId` and `stakePurposes`, the stake
+  form's words. The side words reach `youVoted`, `askVote`, `yesVote` and
+  `voted` as the wire words, the Thai through `sideWord`. The Thai by the
+  glossary ("ผู้คุ้มครอง" guardian, "ข้อเสนอกองทุน" fund proposal,
+  "การจ่ายออก" payout, "กำลังโหวต" for the Open vote tab as the DAO's Open
+  votes), to be checked by a Thai reader.
+- Spec: 8.1 (the three route lines and the order paragraph; the
+  `/wallet/:accountId` line lost its "follow-ups, fund proposal", which
+  the plan did not name), 8.2 (the DAO paragraph's card, the Guardians
+  paragraphs, the Account paragraph), 8.3, 8.8, 5.4, 10 and this note.
+  README: nothing. No new package, no constant, no proxy change, nothing
+  under server/.
+- `npx ng build` clean (2.07 MB initial, no warnings). Not run in a
+  browser here: the user opens /dao on the dev server against a validator
+  and a doorman with steps 1 and 2, expecting the Guardians card under
+  the DAO notice; on the Guardians page the notice with 1000, 70 and
+  "1 hour", the accounts with guardian stake under "Your guardian
+  accounts" (or the become-a-guardian sentence with 1000), the two tabs
+  with their empty lines; New proposal posting a payout from a guardian
+  account and landing on /dao/guardians/<id> (the landing page until step
+  4), then the Open vote card with "1 payout", the bar, "needs 70 percent
+  for", "closes …" and "You proposed this", and after the hour and the
+  next transaction of any kind the card under Decided as "Passed, the
+  money moved" or "Failed"; against an older validator or doorman, the red
+  "/list-fund-proposals: HTTP 404: Not Found" under the tab and no notice.
+  The account page shows no panel under the Transaction history button.
 
 ## 12. Recovery and the moderator edition
 

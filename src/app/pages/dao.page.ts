@@ -55,7 +55,12 @@ function emptyTabs(): Record<DaoListStatus, Tab> {
  * caller's own action with the colored thumb icon, the support on a
  * pending card, the vote on an open or decided one. A card opens
  * /dao/<id>. The tab's empty line when nothing came back; a refused read in
- * red.
+ * red. Under the notice and above the tabs, since 2026-11-08 (the Guardians
+ * plan, forclaude/wallet-guardians-plan-1.md, 3.4), one outlined card the
+ * width of the page, for everyone: a shield icon, "Guardians" in bold with
+ * "The fund's proposals and the guardians' votes" under it and a chevron at
+ * the right; the whole card opens /dao/guardians. It says nothing about the
+ * caller: the Guardians page reads the caller's accounts itself.
  */
 @Component({
   selector: 'app-dao-page',
@@ -74,6 +79,16 @@ function emptyTabs(): Record<DaoListStatus, Tab> {
         <p class="muted">{{ t().dao.notice(s.proposalPercent, days(s.voteMinutes)) }}</p>
       </div>
     }
+
+    <a class="entry" routerLink="/dao/guardians">
+      <mat-icon>shield</mat-icon>
+      <span class="texts">
+        <span class="title">{{ t().dao.guardians }}</span>
+        <span class="muted small">{{ t().dao.guardiansLine }}</span>
+      </span>
+      <mat-icon>chevron_right</mat-icon>
+    </a>
+
     @if (busy()) {
       <mat-progress-bar mode="indeterminate"></mat-progress-bar>
     }
@@ -149,6 +164,10 @@ function emptyTabs(): Record<DaoListStatus, Tab> {
     .notice { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; margin: 0 0 12px; border-radius: 12px; background: var(--mat-sys-surface-container); }
     .notice mat-icon { flex: none; color: var(--mat-sys-on-surface-variant); }
     .notice p { margin: 0; }
+    .entry { display: flex; align-items: center; gap: 12px; padding: 12px 16px; margin: 0 0 12px; border: 1px solid var(--mat-sys-outline-variant); border-radius: 12px; background: var(--mat-sys-surface); color: inherit; text-decoration: none; }
+    .entry:hover { background: var(--mat-sys-surface-container); }
+    .entry mat-icon { flex: none; color: var(--mat-sys-on-surface-variant); }
+    .entry .texts { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
     .dates { min-width: 280px; margin: 12px 0 4px; }
     .grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 12px; }
     .card { display: flex; flex-direction: column; gap: 6px; padding: 12px 16px; border: 1px solid var(--mat-sys-outline-variant); border-radius: 12px; background: var(--mat-sys-surface); color: inherit; text-decoration: none; }

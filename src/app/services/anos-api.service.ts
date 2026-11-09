@@ -13,18 +13,24 @@ import {
   FundProposalTransaction,
   GuardianVotePayload,
   PairOne,
+  StakePurpose,
   TransferToFundTransaction,
   Verdict,
+  Vote,
 } from './crypto.service';
 import { ApiResponse, LogService } from './log.service';
 
-/** What /get-account answers (wallet spec 5.4). */
+/** What /get-account answers (wallet spec 5.4); the two stake fields since 2026-11-08 (anossoftware 25.1), which an older validator leaves out. */
 export interface AccountAnswer {
   accountId: string;
   type: string;
   balance: string;
   latestTransactionId: string | null;
   createdAt: string;
+  /** The account's stake per purpose, millionths as decimal strings, "0" each when it has no stakes row. */
+  stakes?: Record<StakePurpose, string>;
+  /** The account's guardian votes, floor(guardian stake / anosPerVote), as a number. */
+  guardianVotes?: number;
 }
 
 export interface TransactionItem {
@@ -136,15 +142,85 @@ export interface HeldLockedTransfer {
   stage: LockedStage | string;
 }
 
+// --- the public reads (anossoftware 25) ------------------------------------------
+
+/** Where a fund proposal stands, as the validator names it (anossoftware 25.2): waiting until every validator accepted it; open while the vote runs; closing once the vote closed, until the next round tallies it; written when it passed and the round moved the money; failed when it did not. A word the wallet does not know is shown with no button. */
+export type FundProposalStatus = 'waiting' | 'open' | 'closing' | 'written' | 'failed';
+
+/** The validator's guardian dials, answered with every fund proposal read so the wallet's words carry its numbers: the anos per vote and the least stake that makes a guardian (millionths as decimal strings), the percent of the votes that passes a proposal, and the vote's length in minutes. */
+export interface FundSettings {
+  anosPerVote: string;
+  minimumStake: string;
+  percent: number;
+  minutes: number;
+}
+
+/** One guardian's vote on a fund proposal: the account, the side, its weight in votes, whether every validator accepted it, and when it was cast. */
+export interface FundVoteItem {
+  guardianId: string;
+  vote: Vote;
+  weight: number;
+  approved: boolean;
+  votedAt: string;
+}
+
+/** One payment of a fund proposal as the validator answers it, the fields as the proposer sent them, with its index; stakeFor marks a payout that returns stake. */
+export interface FundPayoutItem {
+  index: number;
+  accountIdTo: string;
+  amount: string;
+  reason: string;
+  stakeFor: StakePurpose | string | null;
+}
+
+/**
+ * One fund proposal as /list-fund-proposals answers it (anossoftware 25.1):
+ * the proposal's id, the proposer's account, when it was made and when its
+ * vote closes, the status, whether every validator accepted it, the payouts
+ * counted and summed (millionths as a decimal string), the tally (forWeight
+ * is the proposer's weight plus the approved votes for, againstWeight the
+ * approved votes against, passing the round's own rule as it stands), when
+ * it was decided (null while open) and the votes in guardian id order.
+ */
+export interface FundProposalItem {
+  transactionId: string;
+  guardianId: string;
+  createdAt: string;
+  voteClosesAt: string;
+  status: FundProposalStatus | string;
+  approved: boolean;
+  payoutCount: number;
+  total: string;
+  forWeight: number;
+  againstWeight: number;
+  passing: boolean;
+  decidedAt: string | null;
+  votes: FundVoteItem[];
+}
+
+/** What /get-fund-proposal answers: the item plus the proposer's votes when the proposal was stored and its payouts in index order. */
+export type FundProposal = FundProposalItem & { proposerWeight: number; payouts: FundPayoutItem[] };
+
+/** The body of /list-fund-proposals: open lists the one open proposal at most (the other fields are not read); decided lists the archives newest first, limit default 20 at most 200, after offset rows, with the decision at or after from and before to (ISO 8601; to is the first moment after the range). */
+export interface FundListFilters {
+  status: 'open' | 'decided';
+  limit?: number;
+  offset?: number;
+  from?: string;
+  to?: string;
+}
+
 /**
  * All HTTP calls to the validators (the anos test app's
  * account-api.service.ts, base path /api/anos/<defaultValidator>), plus the
  * five signed reads of the account level (/list-escrows: anossoftware 16,
  * /get-assisted-transfer: anossoftware 17, /get-locked-transfer and the
- * date range on /list-transactions: anossoftware 18) and the two attestor
- * reads (anossoftware 13, the account level plus attestor stake). One
- * method per endpoint; every one resolves to the status and the body,
- * never throws on an HTTP error.
+ * date range on /list-transactions: anossoftware 18), the two attestor
+ * reads (anossoftware 13, the account level plus attestor stake) and, since
+ * 2026-11-08, the two public fund proposal reads (anossoftware 25), the
+ * wallet's first unsigned posts to a validator. One method per endpoint;
+ * every one resolves to the status and the body, never throws on an HTTP
+ * error.
  */
 @Injectable({ providedIn: 'root' })
 export class AnosApiService {
@@ -234,6 +310,18 @@ export class AnosApiService {
   /** POST /list-disputed-escrows: the disputed escrows no verdict has decided, newest first. */
   listDisputedEscrows(pairOne: PairOne, accountId: string, quiet = false): Promise<ApiResponse<{ escrows: DisputedEscrowItem[] }>> {
     return this.post('/list-disputed-escrows', this.crypto.signAccountEnvelope(pairOne, accountId, '/list-disputed-escrows', {}), quiet);
+  }
+
+  // --- the public reads (anossoftware 25): no envelope, no signature, the plain body as the object ---
+
+  /** POST /list-fund-proposals: the open fund proposal (one at most) or the decided ones, with the validator's settings; a validator or a doorman without the route answers 404. */
+  listFundProposals(filters: FundListFilters, quiet = false): Promise<ApiResponse<{ settings: FundSettings; proposals: FundProposalItem[] }>> {
+    return this.post('/list-fund-proposals', filters, quiet);
+  }
+
+  /** POST /get-fund-proposal: one fund proposal with its payouts, open or archived, with the settings; 404 unknown proposal. */
+  getFundProposal(transactionId: string, quiet = false): Promise<ApiResponse<{ settings: FundSettings; proposal: FundProposal }>> {
+    return this.post('/get-fund-proposal', { transactionId }, quiet);
   }
 
   private async post<T>(path: string, body: unknown, quiet = false): Promise<ApiResponse<T>> {
