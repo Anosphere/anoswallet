@@ -3,7 +3,7 @@ import { ChatKeys, CryptoService, Envelope, HybridPublicKey, SessionKeys, Wallet
 import type { RoomsAnswer } from './masterpod-api.service';
 import { Bytes } from './passkey.service';
 
-/** What /check-anopod-status answers, the three counts included (wallet spec 4.3). */
+/** What /check-anopod-status answers, the three counts and, since 2026-11-08, the role included (wallet spec 4.3). */
 export interface StatusAnswer {
   anopodId: string;
   vouched: boolean;
@@ -14,6 +14,8 @@ export interface StatusAnswer {
   bucketOneImages: number;
   bucketTwoImages: number;
   bucketTwoInfos: number;
+  /** The pod's live appointment (masterpod spec 16): moderator, attestor or null when it holds none; an older masterpod sends no field. */
+  role?: 'moderator' | 'attestor' | null;
 }
 
 /** The two ids of docs/public-ledger-id.md, hex. */
@@ -109,6 +111,8 @@ export class SessionService {
   readonly vouched = computed(() => this.status()?.vouched ?? false);
   readonly setupComplete = computed(() => this.status()?.setupComplete ?? false);
   readonly isSeed = computed(() => (this.status()?.isSeed || this.status()?.isSuperSeed) ?? false);
+  /** The pod's appointed role from the status (wallet spec 4.3, 2026-11-08): moderator or attestor; null when it holds none; undefined while there is no status, or the masterpod sent no role. */
+  readonly role = computed(() => this.status()?.role);
 
   /**
    * Opens the session: the pod, its session keys, its profile. Everything

@@ -181,7 +181,7 @@ interface Outcome {
                   <mat-form-field appearance="outline">
                     <mat-label>{{ t().account.stakeFor }}</mat-label>
                     <mat-select [value]="stakePurpose()" (valueChange)="stakePurpose.set($event)">
-                      @for (purpose of stakePurposes; track purpose) { <mat-option [value]="purpose">{{ t().account.stakePurposes[purpose] }}</mat-option> }
+                      @for (purpose of stakePurposes(); track purpose) { <mat-option [value]="purpose">{{ t().account.stakePurposes[purpose] }}</mat-option> }
                     </mat-select>
                   </mat-form-field>
                 }
@@ -319,7 +319,7 @@ interface Outcome {
                   <mat-form-field appearance="outline"><mat-label>{{ t().account.returnsStake }}</mat-label>
                     <mat-select [value]="row.stakeFor" (valueChange)="updatePayout($index, 'stakeFor', $event)">
                       <mat-option value="">{{ t().account.no }}</mat-option>
-                      @for (purpose of stakePurposes; track purpose) { <mat-option [value]="purpose">{{ t().account.stakePurposes[purpose] }}</mat-option> }
+                      @for (purpose of allStakePurposes; track purpose) { <mat-option [value]="purpose">{{ t().account.stakePurposes[purpose] }}</mat-option> }
                     </mat-select>
                   </mat-form-field>
                   <button mat-icon-button type="button" (click)="removePayout($index)" [disabled]="payouts().length === 1" [attr.aria-label]="t().common.remove"><mat-icon>close</mat-icon></button>
@@ -373,7 +373,14 @@ export class AccountPage {
   protected readonly assistedStageWords = assistedStageWords;
   protected readonly lockedStageWords = lockedStageWords;
   protected readonly spendingKinds = SPENDING_KINDS;
-  protected readonly stakePurposes = STAKE_PURPOSES;
+  /** The six purposes, for the fund proposal's Returns stake list: a guardian returns any account's stake. */
+  protected readonly allStakePurposes = STAKE_PURPOSES;
+  /** The purposes this anoPod may stake for (wallet spec 8.2, 2026-11-08): all six while the status has no role (no status yet, or an older masterpod); the four without moderator and attestor when the pod holds no role; those four and the role it holds. */
+  protected readonly stakePurposes = computed((): readonly StakePurpose[] => {
+    const role = this.session.role();
+    if (role === undefined) return STAKE_PURPOSES;
+    return STAKE_PURPOSES.filter((purpose) => (purpose !== 'moderator' && purpose !== 'attestor') || purpose === role);
+  });
 
   protected readonly item = computed(() => this.session.accounts().find((a) => a.accountId === this.accountId()) ?? null);
   protected readonly account = signal<AccountAnswer | null>(null);
@@ -452,6 +459,11 @@ export class AccountPage {
         this.lost.set(false);
         void this.refresh();
       });
+    });
+    // the Stake for list follows the pod's role: a pick that left the list goes back to daoVote
+    effect(() => {
+      const purposes = this.stakePurposes();
+      if (!purposes.includes(untracked(() => this.stakePurpose()))) this.stakePurpose.set('daoVote');
     });
     const timer = setInterval(() => {
       if ((this.pending().length > 0 || this.escrows().length > 0 || this.assisted() !== null || this.locked() !== null) && !this.busy()) void this.refresh(true);
@@ -575,10 +587,18 @@ export class AccountPage {
         const tx = await this.signing.sign(this.crypto.buildAnosTransferTransaction(pairOne, this.accountId(), previous, this.accountIdTo().trim().toLowerCase(), amount, transactionType, createdAt));
         res = await this.anos.anosTransfer(tx);
       }
-      if (!res.ok) throw new Error(reasonOf(res));
+      if (!res.ok) throw new Error(this.refusal(res));
       return this.t().account.accepted(res.body.transactionId);
     });
     await this.refresh(true);
+  }
+
+  /** Send's refusal in words: the two appointment refusals of a moderator or attestor stake (validator spec 24, 2026-11-08), the rest as the validator says them. */
+  private refusal(res: ApiResponse<unknown>): string {
+    const reason = reasonOf(res);
+    if (/not appointed as/.test(reason)) return this.t().account.notAppointed(this.stakePurpose());
+    if (/could not confirm/.test(reason)) return this.t().account.masterpodNotConfirmed;
+    return reason;
   }
 
   protected sendVote(): Promise<void> {

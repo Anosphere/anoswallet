@@ -162,6 +162,12 @@ POST /check-anopod-status answers three more integers: bucketOneImages,
 bucketTwoImages, bucketTwoInfos, the caller's rows in each. The wallet's
 next-step rule reads them (section 8.1).
 
+Since 2026-11-08 the answer also carries role, after isSuperSeed:
+"moderator", "attestor" or null, the pod's live appointment (masterpod
+spec section 16, forclaude/appointments-plan-1.md). The account page's
+Stake for list reads it (8.2). An older masterpod sends no role field,
+and the wallet then shows all six purposes.
+
 ### 4.4 anos accounts
 
 A new table, one row per anos account a pod made, and a feature folder
@@ -1013,7 +1019,17 @@ minutes in words (minutes-words.ts: "7 days and 10 minutes" in
 production); while the numbers have not loaded, Send is off and the line
 reads "The lock settings have not loaded from the proxy. Refresh to try
 again."; assisted sends
-assistedAnosTransfer. previousTransactionId is /get-account's
+assistedAnosTransfer. The Stake for list shows the purposes this anoPod
+may stake for (2026-11-08, section 11): all six while the status carries
+no role (no status yet, or an older masterpod, 4.3); the four without
+moderator and attestor when role is null; those four and the role the
+pod holds otherwise; a pick that leaves the list goes back to daoVote.
+A moderator or attestor stake the validator refuses for the appointment
+reads "Only an appointed attestor can stake for attestor." or "The
+validator could not confirm this anoPod with the masterpod. Try again
+in a moment."; every other refusal shows as the validator says it. The
+fund proposal's Returns stake list keeps all six: a guardian returns
+any account's stake. previousTransactionId is /get-account's
 latestTransactionId, fetched right before building. The payload is
 signed by pair one (keyBlob opened for the signature and dropped),
 /api/sign adds the wallet pair, the validator gets it, the page
@@ -4291,6 +4307,67 @@ and 5 together, after the validators, the doormen and the masterpod
   the no-votes sentence and no button; an old link to an expired proposal
   shows the Expired label and its numbers; against an older masterpod,
   "/get-dao-proposal: HTTP 404: Not Found" in red.
+
+### The Stake for list follows the appointment (2026-11-08)
+
+Step 3 of `forclaude/appointments-plan-1.md` (its section 3), one commit,
+after the masterpod's step 1 (masterpodsoftware 775d901:
+/check-anopod-status answers role) and the validators' step 2
+(anossoftware b62ac29: a moderator or attestor stake needs the pod's
+appointment). The wallet learns its pod's role from the status, offers
+moderator and attestor in the Stake for list only to a pod appointed for
+it, and shows the validator's two new refusals in words. Nothing deploys
+before the Test Net 2 relaunch; the wallet goes out after the masterpod
+and the validators, wallet1 then wallet2 (the plan's section 5); against
+an older masterpod the wallet shows all six purposes.
+
+- `session.service.ts`: `StatusAnswer` gains `role`, optional,
+  `'moderator' | 'attestor' | null`, since an older masterpod sends no
+  field; the empty status of the next-step rule leaves it out; the
+  computed `role` on the service is `this.status()?.role`: undefined
+  without a status or a field, null for a pod with no appointment.
+- `account.page.ts`: `stakePurposes` is a computed list: all six while
+  `role` is undefined, the four without moderator and attestor when it
+  is null, those four and the one the pod holds when it is a role; an
+  effect in the constructor moves a pick that left the list back to
+  daoVote. The pick's default stays attestor, as before: for a pod that
+  is not an attestor it moves to daoVote as soon as the status is known,
+  which the shell loads at unlock, before the page opens. Where the plan
+  was silent: the fund proposal's Returns stake list used the same
+  constant; it keeps all six through `allStakePurposes`, since a
+  guardian returns any account's stake, a revoked pod's among them (the
+  plan's decision 6). Send's refusal goes through `refusal(res)`: a
+  reason matching /not appointed as/ reads "Only an appointed attestor
+  can stake for attestor." (the picked purpose in both places), one
+  matching /could not confirm/ "The validator could not confirm this
+  anoPod with the masterpod. Try again in a moment.", every other as
+  before, the HTTP status and the validator's reason. The two reasons
+  are the validator's (anossoftware spec 24): "the sending account's
+  anoPod is not appointed as <stakeFor>" and "the masterpod could not
+  confirm the sending account's anoPod". They show only when the list
+  and the validators disagree: a status read before a revocation, or an
+  older masterpod behind new validators.
+- Words: `account.notAppointed(purpose)` and
+  `account.masterpodNotConfirmed` in both files, the only keys added.
+  The Thai: "มีเพียงผู้ยืนยันที่ได้รับแต่งตั้งเท่านั้นที่วางหลักประกันเพื่อผู้ยืนยันได้" (the
+  role word from a `ROLES` map in th.ts, the shape of `KINDS` and
+  `SIDES`, so the sentence reads ผู้ดูแล or ผู้ยืนยัน where the wire word is
+  moderator or attestor) and "ผู้ตรวจสอบไม่สามารถยืนยัน anoPod นี้กับ
+  masterpod ได้ ลองอีกครั้งในอีกสักครู่", to be checked by a Thai reader.
+- Spec: 4.3 (role on the answer), 8.2 (the Account paragraph: which
+  purposes show, the two refusals, the Returns stake list) and this
+  note. 8.3 unchanged: the status row covers the role; 12.2 and 13.2
+  unchanged: the guards did not change. README: nothing, it does not
+  state the answer or the list. No new package, no proxy change, no
+  route, nothing under server/.
+- `npx ng build` clean (2.07 MB initial total, no warnings). Not run in
+  a browser here: the user, on a spending account with the kind stake,
+  expects the Stake for list to show daoVote, guardian, validator and
+  masterPod for an ordinary pod, attestor added on an appointed attestor
+  pod and moderator on a moderator pod, all six against an older
+  masterpod; the Returns stake list of the fund proposal still shows all
+  six; a stake the validator refuses for the appointment shows its
+  sentence in red under Send, as every refusal shows.
 
 ## 12. Recovery and the moderator edition
 

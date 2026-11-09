@@ -7,6 +7,10 @@ const KINDS: Record<string, string> = { spending: 'ใช้จ่าย', guard
 const SIDES: Record<string, string> = { for: 'เห็นด้วย', against: 'ไม่เห็นด้วย' };
 const sideWord = (side: string): string => SIDES[side] ?? side;
 
+/** The two appointed roles from the wire words `moderator` and `attestor`, for the refusal of a stake; a word the wallet does not know stays as it is. */
+const ROLES: Record<string, string> = { moderator: 'ผู้ดูแล', attestor: 'ผู้ยืนยัน' };
+const roleWord = (role: string): string => ROLES[role] ?? role;
+
 /**
  * The Thai words of the wallet (wallet spec 8.8): the same shape as en.ts,
  * section by section in the same order, written by the build chat from the
@@ -390,6 +394,8 @@ export const th: Words = {
     clipboardRefused: 'เบราว์เซอร์ไม่อนุญาตให้อ่านคลิปบอร์ด วางลงในช่องตามปกติ',
     clipboardNoId: 'ไม่มีสิ่งใดในคลิปบอร์ดที่ดูเหมือนรหัสบัญชี',
     accepted: (id: string) => `รับแล้ว: ${id}`,
+    notAppointed: (purpose: string) => `มีเพียง${roleWord(purpose)}ที่ได้รับแต่งตั้งเท่านั้นที่วางหลักประกันเพื่อ${roleWord(purpose)}ได้`,
+    masterpodNotConfirmed: 'ผู้ตรวจสอบไม่สามารถยืนยัน anoPod นี้กับ masterpod ได้ ลองอีกครั้งในอีกสักครู่',
     followUpAccepted: (type: string, id: string) => `${type} รับแล้วสำหรับ ${id}`,
     payoutAmount: (n: number) => `การจ่ายออกที่ ${n}: จำนวนต้องเป็น anos ทศนิยมไม่เกินหกตำแหน่ง`,
     proposalAccepted: (id: string) => `รับข้อเสนอกองทุนแล้ว: ${id}`,

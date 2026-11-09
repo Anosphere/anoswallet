@@ -385,6 +385,8 @@ export const en = {
     clipboardRefused: 'The browser did not allow reading the clipboard. Paste into the box the usual way.',
     clipboardNoId: 'Nothing on the clipboard looks like an account id.',
     accepted: (id: string) => `accepted: ${id}`,
+    notAppointed: (purpose: string) => `Only an appointed ${purpose} can stake for ${purpose}.`,
+    masterpodNotConfirmed: 'The validator could not confirm this anoPod with the masterpod. Try again in a moment.',
     followUpAccepted: (type: string, id: string) => `${type} accepted for ${id}`,
     payoutAmount: (n: number) => `Payout ${n}: the amount must be anos with up to six decimals`,
     proposalAccepted: (id: string) => `fund proposal accepted: ${id}`,
