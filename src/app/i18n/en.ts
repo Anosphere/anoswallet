@@ -246,6 +246,8 @@ export const en = {
     openTitle: 'Open a new account',
     typeOption: (type: string) => type,
     createAccount: 'Create anos account',
+    confirmCreateTitle: (type: string) => `Open a new ${type} account?`,
+    confirmCreateNote: 'The account is added to the ledger and stays there for good.',
     steps: [
       'Pair one, pair two, the break-glass seed and its keys; the creation signed by the six keys here',
       'Deposit the break-glass seed with the keyholders',
@@ -352,6 +354,9 @@ export const en = {
     pasteRecipient: 'Paste the recipient account id',
     amountAnos: 'Amount (anos)',
     amountPlaceholder: '1 or 0.5',
+    confirmSendTitle: (anos: string) => `Send ${anos} anos?`,
+    confirmStakeNote: 'A stake stays with the fund. It comes back only through a fund proposal that the guardians vote for.',
+    sending: 'Sending…',
     escrowOpen: 'An escrow trade is open. This account can send again when it closes.',
     assistedWaiting: 'An assisted transfer is waiting. This account can send again when it is written or cancelled.',
     lockWaiting: 'A transfer is waiting out its lock. This account can send again when it is written.',

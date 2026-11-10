@@ -35,6 +35,9 @@ export const KEYHOLDER_DEPOSIT_TIMEOUT_MS = 15_000;
 /** The username check while typing. */
 export const USERNAME_DEBOUNCE_MS = 400;
 
+/** The confirmation box's own button (Send, Create anos account) cannot be pressed for this long after the box opens, so the second click of a double click on the page's button never lands on it (wallet spec 8.9). */
+export const CONFIRM_ARM_MS = 500;
+
 /** The activity log keeps the newest calls, polls excepted. */
 export const LOG_MAX_ENTRIES = 40;
 

@@ -2,6 +2,7 @@ import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
+import { MatDialog } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatListModule } from '@angular/material/list';
@@ -11,6 +12,7 @@ import { RouterLink } from '@angular/router';
 import { accountNames } from '../account-names';
 import { millionthsToAnos } from '../amounts';
 import { BalanceCardComponent } from '../components/balance-card.component';
+import { askConfirm } from '../components/confirm-dialog.component';
 import { CopyButtonComponent } from '../components/copy-button.component';
 import { ACCOUNT_POLL_MS } from '../constants';
 import { AccountCreationService, CreationStepState } from '../services/account-creation.service';
@@ -40,7 +42,9 @@ interface Step {
  * Open a new account, the six-step progress list over
  * account-creation.service (since 2026-11-08 the steps run there, so the
  * recovery's finish opens accounts the same way; this page keeps the
- * stepper through the service's step callback). The balances are read
+ * stepper through the service's step callback). Create anos account, and
+ * Retry, first ask in the confirmation box (2026-11-10, wallet spec 8.9);
+ * Resubmit does not, since it makes no new account. The balances are read
  * when the page opens, by Refresh and every 5 seconds while an account is
  * not on the ledger yet or any anos are held or pending. A lost account
  * (its keyBlob does not open under the key blob key: the keys went with
@@ -120,7 +124,7 @@ interface Step {
               }
             </mat-select>
           </mat-form-field>
-          <button mat-flat-button type="button" (click)="create()" [disabled]="busy()">{{ failedBeforeRegister() ? t().common.retry : t().wallet.createAccount }}</button>
+          <button mat-flat-button type="button" (click)="askCreate()" [disabled]="busy()">{{ failedBeforeRegister() ? t().common.retry : t().wallet.createAccount }}</button>
           <button mat-button type="button" (click)="load()" [disabled]="busy()">{{ t().common.refresh }}</button>
         </div>
         @if (steps().length > 0) {
@@ -162,6 +166,7 @@ export class WalletPage {
   protected readonly balances = inject(BalancesService);
   private readonly masterpod = inject(MasterpodApiService);
   private readonly creation = inject(AccountCreationService);
+  private readonly dialog = inject(MatDialog);
   protected readonly lang = inject(LanguageService);
   protected readonly t = this.lang.words;
 
@@ -238,8 +243,9 @@ export class WalletPage {
     if (state === 'failed' && step < 3) this.failedBeforeRegister.set(true);
   };
 
-  /** The six steps of 8.2 Wallet and the wait for the ledger, in account-creation.service (2026-11-08). A failure before step 4 shows Retry (fresh keys); at 5 or 6 the row is unsubmitted and its card shows Resubmit. The key blob goes under the key blob key, so both keys of the session are asked for first. */
-  protected async create(): Promise<void> {
+  /** The button under "Open a new account", as Create anos account and as Retry (wallet spec 8.2, Wallet, and 8.9; 2026-11-10). The key blob goes under the key blob key, so both keys of the session are asked for first, and a missing one shows its sentence with no box. Then the confirmation box names the type from the select; Cancel makes nothing, and its Create anos account button starts the six steps with that type. Nothing happens while a box is already open. Resubmit does not come here: it makes no new account. */
+  protected async askCreate(): Promise<void> {
+    if (this.dialog.openDialogs.length > 0) return;
     if (!this.session.getEncryptionKey()) {
       this.error.set(this.t().common.noKeyInRamSentence);
       return;
@@ -248,12 +254,25 @@ export class WalletPage {
       this.error.set(this.t().common.noKeyBlobKey);
       return;
     }
+    const type = this.accountType();
+    const confirmed = await askConfirm(this.dialog, {
+      title: this.t().wallet.confirmCreateTitle(type),
+      lines: [],
+      notes: [this.t().wallet.confirmCreateNote],
+      confirmLabel: this.t().wallet.createAccount,
+    });
+    if (!confirmed) return;
+    await this.create(type);
+  }
+
+  /** The six steps of 8.2 Wallet and the wait for the ledger, in account-creation.service (2026-11-08), for the type the confirmation box showed. A failure before step 4 shows Retry (fresh keys); at 5 or 6 the row is unsubmitted and its card shows Resubmit. */
+  private async create(type: AccountType): Promise<void> {
     this.busy.set(true);
     this.error.set(null);
     this.failedBeforeRegister.set(false);
     this.steps.set(this.t().wallet.steps.map((label) => ({ label, state: 'todo' })));
     try {
-      await this.creation.createAccount(this.accountType(), this.onStep);
+      await this.creation.createAccount(type, this.onStep);
     } catch (err) {
       this.error.set(err instanceof DepositError ? this.t().wallet.retryFresh(err.message) : err instanceof Error ? err.message : String(err));
     } finally {

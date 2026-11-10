@@ -2,6 +2,7 @@ import { Component, DestroyRef, computed, effect, inject, input, signal, untrack
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
+import { MatDialog } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
@@ -12,6 +13,7 @@ import { RouterLink } from '@angular/router';
 import { accountNames } from '../account-names';
 import { anosToMillionths, millionthsToAnos } from '../amounts';
 import { assistedStageWords } from '../assisted-stage';
+import { askConfirm } from '../components/confirm-dialog.component';
 import { CopyButtonComponent } from '../components/copy-button.component';
 import { ACCOUNT_POLL_MS } from '../constants';
 import { escrowStageWords } from '../escrow-stage';
@@ -56,6 +58,17 @@ interface Outcome {
 }
 
 /**
+ * One send as the confirmation box showed it (wallet spec 8.2, Account, and
+ * 8.9): the transaction type, the amount in millionths, and either the
+ * recipient's account id, with no purpose, or, for a transferToFund, the
+ * stake's purpose, with no recipient. Taken from the form when the box
+ * opens; send() builds from it, since the form is empty by then.
+ */
+type SendOrder =
+  | { transactionType: string; amount: bigint; accountIdTo: string; stakePurpose: null }
+  | { transactionType: string; amount: bigint; accountIdTo: null; stakePurpose: StakePurpose };
+
+/**
  * One account (wallet spec 8.2, Account), in this order: the id in the
  * title with a copy button (8.5); balance, type, the latest transaction id,
  * created; Refresh, and a 5-second poll while something is pending, an
@@ -70,6 +83,15 @@ interface Outcome {
  * the numbers /api/config gives (the proxy's env, wallet spec 2;
  * 2026-11-06, section 11), and Send waits with a line while those have
  * not loaded.
+ * Send first asks in the confirmation box (2026-11-10, wallet spec 8.9,
+ * section 11): the amount in the title, the kind, this account, the
+ * recipient's full id or the stake's purpose, and for a stake the line
+ * about the fund. Cancel sends nothing and leaves the form as it was typed.
+ * Send in the box empties the form at once, and the form stays empty
+ * whatever the answer is, so the same send cannot go out twice; what is
+ * sent is what the box showed, and a progress bar with "Sending…" shows
+ * under the form meanwhile. The amount starts empty and Stake for at
+ * daoVote, so a fresh page and the form after a send are the same.
  * previousTransactionId is /get-account's latestTransactionId, fetched
  * right before building. The payload is signed by pair one (keyBlob opened
  * for the signature and dropped), /api/sign adds the wallet pair, the
@@ -185,8 +207,12 @@ interface Outcome {
                 <mat-label>{{ t().account.amountAnos }}</mat-label>
                 <input matInput [ngModel]="amount()" (ngModelChange)="amount.set($event)" [placeholder]="t().account.amountPlaceholder" />
               </mat-form-field>
-              <button mat-flat-button type="button" (click)="send()" [disabled]="busy() || pending().length > 0 || sellerEscrowOpen() || assisted() !== null || locked() !== null || minutesAhead() === null || !canSend()">{{ t().common.send }} {{ transferType() }}</button>
+              <button mat-flat-button type="button" (click)="askSend()" [disabled]="busy() || pending().length > 0 || sellerEscrowOpen() || assisted() !== null || locked() !== null || minutesAhead() === null || !canSend()">{{ t().common.send }} {{ transferType() }}</button>
             </div>
+            @if (busy()) {
+              <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+              <p class="muted">{{ t().account.sending }}</p>
+            }
             @if (sellerEscrowOpen()) {
               <p class="muted">{{ t().account.escrowOpen }}</p>
             }
@@ -313,6 +339,7 @@ export class AccountPage {
   private readonly crypto = inject(CryptoService);
   private readonly signing = inject(SigningService);
   private readonly config = inject(ConfigService);
+  private readonly dialog = inject(MatDialog);
   protected readonly lang = inject(LanguageService);
   protected readonly t = this.lang.words;
 
@@ -342,10 +369,12 @@ export class AccountPage {
   protected readonly busy = signal(false);
 
   protected readonly spendingKind = signal<SpendingKind>('plain');
-  protected readonly stakePurpose = signal<StakePurpose>('attestor');
+  /** Starts at daoVote, the purpose every anoPod may stake for (2026-11-10; it started at attestor, and the effect in the constructor moved it for a pod that is no attestor). resetForm() puts it back here, so a fresh page and the form after a send are the same. */
+  protected readonly stakePurpose = signal<StakePurpose>('daoVote');
   protected readonly accountIdTo = signal('');
   protected readonly pasteNote = signal<string | null>(null);
-  protected readonly amount = signal('1');
+  /** Starts empty (2026-11-10; it started at 1), as resetForm() leaves it: Send stays off until an amount is typed. */
+  protected readonly amount = signal('');
   protected readonly sendOutcome = signal<Outcome | null>(null);
 
   /** The transaction type Send makes, from the account type and the spending kind. */
@@ -502,39 +531,72 @@ export class AccountPage {
     this.pasteNote.set(null);
   }
 
-  /** Builds, signs (pair one here, the wallet pair at /api/sign) and posts what the account type allows. */
-  protected async send(): Promise<void> {
-    const item = this.item();
+  /** The form's Send button (wallet spec 8.2, Account, and 8.9; 2026-11-10): the order is taken from the form and shown in the confirmation box, and nothing is sent until Send is pressed there. Cancel leaves the form as it was typed. Send in the box empties the form first and then sends the order, so what goes out is what the box showed. Nothing happens while a box is already open. */
+  protected async askSend(): Promise<void> {
     const amount = anosToMillionths(this.amount());
-    if (!item || amount === null) return;
+    if (!this.item() || amount === null || this.dialog.openDialogs.length > 0) return;
+    const transactionType = this.transferType();
+    const order: SendOrder =
+      transactionType === 'transferToFund'
+        ? { transactionType, amount, accountIdTo: null, stakePurpose: this.stakePurpose() }
+        : { transactionType, amount, accountIdTo: this.accountIdTo().trim().toLowerCase(), stakePurpose: null };
+    const words = this.t();
+    const short = shortId(this.accountId());
+    const name = accountNames(this.session.accounts(), words.accountKinds).get(this.accountId());
+    const confirmed = await askConfirm(this.dialog, {
+      title: words.account.confirmSendTitle(millionthsToAnos(amount)),
+      lines: [
+        { label: words.common.kind, value: transactionType },
+        { label: words.common.from, value: name ? `${name} · ${short}` : short },
+        order.stakePurpose !== null
+          ? { label: words.account.stakeFor, value: words.account.stakePurposes[order.stakePurpose] }
+          : { label: words.common.to, value: order.accountIdTo, code: true },
+      ],
+      notes: order.stakePurpose !== null ? [words.account.confirmStakeNote] : [],
+      confirmLabel: words.common.send,
+    });
+    if (!confirmed) return;
+    this.resetForm();
+    await this.send(order);
+  }
+
+  /** The form as a fresh page has it: Kind plain, Stake for daoVote, the recipient and the amount empty, the paste hint gone. askSend() runs it when Send is pressed in the box, before the answer comes, and nothing fills the form again: it stays empty whether the send is accepted, refused or never answered. */
+  private resetForm(): void {
+    this.spendingKind.set('plain');
+    this.stakePurpose.set('daoVote');
+    this.accountIdTo.set('');
+    this.pasteNote.set(null);
+    this.amount.set('');
+  }
+
+  /** Builds, signs (pair one here, the wallet pair at /api/sign) and posts the order the confirmation box showed (2026-11-10). It never reads the form, which is empty by now: a transferToFund when the order has a purpose, else a transfer of the order's type to the order's recipient. minutesAhead() and the date of a guarded or vault transfer are worked out here, after the box, so the time spent reading the box does not use up the lock's offset. */
+  private async send(order: SendOrder): Promise<void> {
     await this.act(this.sendOutcome, async () => {
       const pairOne = await this.pairOne();
       const latest = await this.anos.getAccount(pairOne, this.accountId(), true);
       if (!latest.ok || !latest.body.latestTransactionId) throw new Error(this.t().common.noLatest);
       const previous = latest.body.latestTransactionId;
-      const type = item.accountType as AccountType;
       let res: ApiResponse<Accepted>;
-      if (type === 'spending' && this.spendingKind() === 'stake') {
-        const tx = await this.signing.sign(this.crypto.buildTransferToFund(pairOne, this.accountId(), previous, amount, this.stakePurpose()));
+      if (order.stakePurpose !== null) {
+        const tx = await this.signing.sign(this.crypto.buildTransferToFund(pairOne, this.accountId(), previous, order.amount, order.stakePurpose));
         res = await this.anos.transferToFund(tx);
       } else {
-        const transactionType = this.transferType() as TransferType;
         const ahead = this.minutesAhead();
         if (ahead === null) throw new Error(this.t().account.lockNotLoaded);
         const createdAt = new Date(Date.now() + ahead * 60_000);
-        const tx = await this.signing.sign(this.crypto.buildAnosTransferTransaction(pairOne, this.accountId(), previous, this.accountIdTo().trim().toLowerCase(), amount, transactionType, createdAt));
+        const tx = await this.signing.sign(this.crypto.buildAnosTransferTransaction(pairOne, this.accountId(), previous, order.accountIdTo, order.amount, order.transactionType as TransferType, createdAt));
         res = await this.anos.anosTransfer(tx);
       }
-      if (!res.ok) throw new Error(this.refusal(res));
+      if (!res.ok) throw new Error(this.refusal(res, order));
       return this.t().account.accepted(res.body.transactionId);
     });
     await this.refresh(true);
   }
 
-  /** Send's refusal in words: the two appointment refusals of a moderator or attestor stake (validator spec 24, 2026-11-08), the rest as the validator says them. */
-  private refusal(res: ApiResponse<unknown>): string {
+  /** Send's refusal in words: the two appointment refusals of a moderator or attestor stake (validator spec 24, 2026-11-08), the rest as the validator says them. The purpose comes from the order, since the form is empty by then (2026-11-10). */
+  private refusal(res: ApiResponse<unknown>, order: SendOrder): string {
     const reason = reasonOf(res);
-    if (/not appointed as/.test(reason)) return this.t().account.notAppointed(this.stakePurpose());
+    if (order.stakePurpose !== null && /not appointed as/.test(reason)) return this.t().account.notAppointed(order.stakePurpose);
     if (/could not confirm/.test(reason)) return this.t().account.masterpodNotConfirmed;
     return reason;
   }

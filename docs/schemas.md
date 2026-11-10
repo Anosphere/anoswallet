@@ -967,9 +967,18 @@ when the page opens, by the card's refresh button, by Refresh (which
 reloads the account list too) and every 5 seconds while an account is
 not on the ledger yet or any anos are held or pending; quiet in the log,
 as the polls are. Then "Open a new account": a type select (spending,
-guarded, vault, assisted) and Create anos account, which runs
+guarded, vault, assisted) and Create anos account, which first asks in
+the confirmation box (8.9; 2026-11-10, section 11): the title "Open a new
+spending account?", with the type from the select, the line "The account
+is added to the ledger and stays there for good.", and the buttons Cancel
+and Create anos account. Cancel makes nothing. Retry asks the same way,
+since it is the same button; Resubmit does not ask, since it makes no new
+account. While the encryption key or the key blob key is not in RAM the
+button shows that key's sentence and no box. Create anos account in the
+box runs
 account-creation.service's createAccount (8.3; since 2026-11-08 the steps
 live there, so the recovery's finish opens accounts the same way, 12.3)
+with the type the box showed, the select keeping its value,
 and shows its steps as a progress list:
 1. pair one, pair two, the break-glass seed and its two keys; the
    wallet public keys from /api/sign/public-keys; accountId; the
@@ -1101,13 +1110,36 @@ may stake for (2026-11-08, section 11): all six while the status carries
 no role (no status yet, or an older masterpod, 4.3); the four without
 moderator and attestor when role is null; those four and the role the
 pod holds otherwise; a pick that leaves the list goes back to daoVote.
+Stake for starts at daoVote and the amount box starts empty (2026-11-10,
+section 11; they started at attestor and at 1), so the form on a fresh
+page and the form after a send are the same.
 A moderator or attestor stake the validator refuses for the appointment
 reads "Only an appointed attestor can stake for attestor." or "The
 validator could not confirm this anoPod with the masterpod. Try again
 in a moment."; every other refusal shows as the validator says it. The
 fund proposal's Returns stake list keeps all six: a guardian returns
-any account's stake. previousTransactionId is /get-account's
-latestTransactionId, fetched right before building. The payload is
+any account's stake. Send first asks in the confirmation box (8.9;
+2026-11-10, section 11), for every kind of send. The box shows what the
+form held when the box opened: the title "Send 100 anos?"; Kind, the
+transaction type as the button names it ("transferToFund"); From, the
+account's name and short id ("Spending account 1 · a1b2c3d4…e5f6"); To,
+the recipient's full account id, or for a stake Stake for, the purpose;
+for a stake one more line, "A stake stays with the fund. It comes back
+only through a fund proposal that the guardians vote for."; the buttons
+Cancel and Send. Cancel sends nothing and leaves the form as it was
+typed. Send in the box empties the form at once, before the answer
+comes: Kind back to plain, Stake for back to daoVote, the recipient and
+the amount empty, the paste hint gone. The form stays empty whatever the
+answer is, accepted, refused or no answer at all, so the same send cannot
+go out a second time after an answer that got lost on the way, and the
+page's Send button stays off until a new amount is typed. What is sent
+is what the box showed, not what the form holds. While the send is on
+its way the page shows a progress bar and "Sending…" under the form;
+then the outcome line as before, "accepted: <id>" or the refusal.
+previousTransactionId is /get-account's
+latestTransactionId, fetched right before building, after the box, and
+the date of a guarded or vault transfer is worked out there too, so the
+time spent reading the box does not use up the lock's offset. The payload is
 signed by pair one (keyBlob opened for the signature and dropped),
 /api/sign adds the wallet pair, the validator gets it, the page
 refreshes. Send is disabled while the account has a pending transaction,
@@ -2226,6 +2258,40 @@ plus `guardians.payoutTo`, the payout row's "1500 anos to
 a1b2c3d4…e5f6"; Home's "A fund proposal is open for your vote" is
 `home.openFundVote`; the Thai is the build chat's, for Thai readers to
 correct.
+
+### 8.9 The confirmation box
+
+One small component, src/app/components/confirm-dialog.component.ts
+(`ConfirmDialogComponent`, `app-confirm-dialog`), and one function in the
+same file, `askConfirm(dialog, data)` (2026-11-10, section 11; the plan
+is forclaude/wallet-confirm-box-plan-1.md): the wallet's one pop-up box,
+a Material dialog (`@angular/material/dialog`) in the middle of the
+screen, for what nobody should start by accident. A page injects
+`MatDialog` and calls `askConfirm`, which opens the component and
+resolves true only when the box closed by its second button.
+
+What it is given, `ConfirmData`: `title`; `lines`, each a `ConfirmLine`
+`{ label, value, code? }`, drawn as a two-column grid, the label in the
+on-surface-variant colour and the value beside it, breaking anywhere so
+a 64-character id wraps on a phone, in the id font when `code` is true;
+`notes`, each a paragraph under the lines; and `confirmLabel`, the words
+on the second button. The two buttons, at the right: Cancel
+(`common.cancel`), which closes with false, and the caller's button,
+which closes with true.
+
+The box closes only by those two buttons. A click outside it and the
+Escape key do nothing (`disableClose`), so the second click of a double
+click on the page's button cannot close the box or answer it. The second
+button cannot be pressed for the first half second after the box opens
+(`CONFIRM_ARM_MS`, 500, in constants.ts), so that second click can never
+land on it. Nothing in the box has the focus when it opens (`autoFocus:
+'dialog'`: the focus goes to the box itself), so the Enter key answers
+nothing. The box is 480 px wide, or the screen's width less 32 px where
+that is narrower.
+
+Two places use it (8.2): the Send form of the account page, before every
+kind of send, and "Open a new account" on the Wallet page, before Create
+anos account and Retry. Each does nothing while a box is already open.
 
 ## 9. Configuration, and running it on this machine
 
@@ -5250,6 +5316,133 @@ bankers' GUI. A recovery by typing a written-down code was never built
   and the finish need a passkey, the keyholders and a live recovery case;
   the user's run-through is a new anoPod through Setup, and a recovery to
   its third step.
+
+### A confirmation box before a send and before a new account (2026-11-10)
+
+Built from `forclaude/wallet-confirm-box-plan-1.md` (FINAL), one step, one
+commit. Found while testing Test Net phase 2: on an account's page a
+stake of 100 anos for daoVote went out again with every further click on
+Send, each click a new stake. The Send form asked nothing, kept the
+amount and the recipient after a send, and its button was live again as
+soon as the pending transaction was approved; and "Create anos account"
+on the Wallet page started its six steps on one click. The user's
+decisions: a confirmation box before every send from the Send form, the
+form starting over after it, and the same box before a new anos account.
+Wallet only: no validator, doorman, masterpod or proxy change, no theme
+change, no new package (the box is `@angular/material/dialog`, part of
+the Material already installed).
+
+- `src/app/components/confirm-dialog.component.ts` (new): `ConfirmLine`,
+  `ConfirmData`, `ConfirmDialogComponent` (`app-confirm-dialog`) and
+  `askConfirm(dialog, data)`, as 8.9 says. The second button is off until
+  the signal `armed` turns true; a timer sets it `CONFIRM_ARM_MS` after
+  the box was made and is cleared when the box is destroyed. `askConfirm`
+  opens the component with `{ data, disableClose: true, autoFocus:
+  'dialog', width: '480px', maxWidth: 'calc(100vw - 32px)' }` and
+  resolves true only when the box closed with true.
+- `src/app/constants.ts`: `CONFIRM_ARM_MS = 500`.
+- `src/app/pages/account.page.ts`: `MatDialog` is injected. The Send
+  button calls `askSend()` in place of `send()`; its `[disabled]` rule is
+  as it was. `askSend()` does nothing with no `item()`, with an amount
+  that `anosToMillionths` refuses, or with a box already open. Else it
+  takes a `SendOrder` from the form (`transferType()`, the amount in
+  millionths, and `stakePurpose()` for a transferToFund or `accountIdTo()`
+  trimmed and lower-cased for every other type) and shows it with
+  `askConfirm`: the title `account.confirmSendTitle(anos)`, the lines
+  `common.kind`, `common.from` and either `account.stakeFor` or
+  `common.to` (the full id, `code` true), the note
+  `account.confirmStakeNote` for a stake, the button `common.send`. On
+  Cancel nothing else happens; on Send, `resetForm()` and then
+  `send(order)`. `resetForm()`: `spendingKind` to plain, `stakePurpose`
+  to daoVote, `accountIdTo` to empty, `pasteNote` to null, `amount` to
+  empty. `send(order)` is the old `send()`, private now: it builds from
+  the order and never reads the form, a transferToFund when the order has
+  a purpose, else `buildAnosTransferTransaction` with the order's
+  recipient, amount and type; `minutesAhead()` and `createdAt` are worked
+  out there, after the box, as before. `refusal(res, order)` takes the
+  purpose of "Only an appointed … can stake for …" from the order.
+  `act()`, the outcome line and the `refresh(true)` afterwards did not
+  change. `stakePurpose` starts at daoVote (it was attestor, which the
+  effect moved for most pods) and `amount` empty (it was 1). The
+  template: right under the form, before the lines about an open trade
+  and the outcome line, an indeterminate `mat-progress-bar` and the muted
+  line `account.sending` while `busy()`.
+- `src/app/pages/wallet.page.ts`: `MatDialog` is injected. The button
+  under "Open a new account" calls `askCreate()` in place of `create()`,
+  as Create anos account and as Retry. `askCreate()` does nothing while a
+  box is open; then come the two key checks `create()` had, with their
+  sentences and no box; then `askConfirm` with the title
+  `wallet.confirmCreateTitle(type)`, no lines, the note
+  `wallet.confirmCreateNote` and the button `wallet.createAccount`; on
+  that button, `create(type)`. `create(type)` is private, takes the type
+  the box showed and starts at `busy.set(true)`. Resubmit, the cards, the
+  type select and the polling did not change.
+- Words, English and Thai (the Thai as the plan gives it, to be checked
+  by a Thai reader): `account.confirmSendTitle(anos)`,
+  `account.confirmStakeNote`, `account.sending`,
+  `wallet.confirmCreateTitle(type)` and `wallet.confirmCreateNote`. The
+  box reuses `common.cancel`, `common.send`, `common.kind`, `common.from`,
+  `common.to`, `account.stakeFor`, `account.stakePurposes` and
+  `wallet.createAccount`. Every other key is as it was.
+- Unchanged, by the user's decision: the places that ask their question
+  in the page (Start and "Close the listing" on the pinned listing card,
+  the escrow trade page, the cancel of an assisted transfer, the DAO and
+  the guardian votes) and three buttons that ask nothing (posting a DAO
+  proposal, posting a fund proposal, where no money moves, and "Move your
+  money" of a recovery, which moves everything to the person's own new
+  accounts). Also unchanged: `src/app/services/`
+  (`account-creation.service.ts` too), the history page, the recovery
+  pages, the moderator and attestor pages, `src/material-theme.scss`,
+  `server/`.
+- Readings where the plan left a detail open. "A box already open" is
+  read from `MatDialog.openDialogs`, the box being the wallet's only
+  dialog; the pages keep no flag of their own. `SendOrder` is a union of
+  two shapes with the fields `transactionType`, `amount`, `accountIdTo`
+  and `stakePurpose`: a recipient with a null purpose, or a purpose with
+  a null recipient. `send(order)` has no guard of its own for `item()`
+  and the amount: `askSend()` holds them, the order carries the amount,
+  and `pairOne()` still refuses an account that is not the pod's.
+  `refusal()` gives the appointment sentence only for an order with a
+  purpose; the validators send that refusal for a stake only. The two
+  buttons close the box through Material's `mat-dialog-close`, with false
+  and true. In the box the value is in the on-surface colour (Material
+  draws a dialog's text in the on-surface-variant colour, the label's);
+  the notes keep that Material colour, and a note stands 12 px under the
+  lines or the note before it; the grid's gaps are the account summary's,
+  4 and 16 px; an id is a `<code>`, 12 px by the global style; a box
+  without lines draws no grid. `CONFIRM_ARM_MS` stands after
+  `USERNAME_DEBOUNCE_MS`. The three new `account` keys stand after
+  `amountPlaceholder`, in the order the page uses them, and the two new
+  `wallet` keys after `createAccount`. The class comment of the Wallet
+  page gained a sentence too; the plan names the account page's comments
+  only.
+- Left as it is: every value in the box breaks anywhere (`word-break:
+  break-all`, as the plan asks, for the 64-character id), not the id
+  alone. Worked out from the widths, not seen on a screen: on a phone
+  under about 400 px wide the From line of a stake ("Spending account 1
+  · a1b2c3d4…e5f6") is a few characters too long for its column, and it
+  then breaks inside the short id, not at a space.
+- Spec: 8.2 (Wallet, the "Open a new account" sentence; Account, the Send
+  paragraph, in two places), the new 8.9 and this note. README: the
+  layout gained the line of `components/confirm-dialog.component.ts`.
+- `npx ng build` clean (2.12 MB initial, no warnings), in the web_app
+  folder, where another chat's change of the same day (the note above)
+  was in the working folder too, and in a scratch copy of ae39348 with
+  this change alone (2.12 MB initial, no warnings). Not run in a browser
+  here: the user deploys and runs it on the test net. A stake of 100 for
+  daoVote from a spending account: the box reads "Send 100 anos?", Kind
+  transferToFund, From the account, Stake for daoVote and the line about
+  the fund; Cancel sends nothing and the form is as it was typed. The
+  same again and Send in the box: the form empties at once, "Sending…"
+  shows, then "accepted: …" and the stake under Pending, and the page's
+  Send button stays off until a new amount is typed. A double click on
+  the page's Send button: one box, and nothing is sent until the box's
+  own Send is pressed. A plain send to another account: the box shows the
+  full recipient id, and on a phone the id wraps inside the box. A send
+  the validators refuse (an amount over the balance): the refusal shows
+  under the form and the form is empty. On the Wallet page, Create anos
+  account: the box "Open a new spending account?"; Cancel makes nothing;
+  "Create anos account" in the box runs the six steps as before.
 
 ## 12. Recovery and the moderator edition
 

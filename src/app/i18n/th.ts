@@ -257,6 +257,8 @@ export const th: Words = {
     openTitle: 'เปิดบัญชีใหม่',
     typeOption: (type: string) => KINDS[type] ?? type,
     createAccount: 'สร้างบัญชี anos',
+    confirmCreateTitle: (type: string) => `เปิดบัญชี${KINDS[type] ?? type}ใหม่หรือไม่`,
+    confirmCreateNote: 'บัญชีจะถูกเพิ่มลงในบัญชีแยกประเภทและอยู่ที่นั่นตลอดไป',
     steps: [
       'คู่กุญแจที่หนึ่ง คู่กุญแจที่สอง seed ฉุกเฉินและกุญแจของมัน รายการสร้างบัญชีลงนามด้วยกุญแจทั้งหกที่นี่',
       'ฝาก seed ฉุกเฉินไว้กับผู้ถือกุญแจ',
@@ -361,6 +363,9 @@ export const th: Words = {
     pasteRecipient: 'วางรหัสบัญชีผู้รับ',
     amountAnos: 'จำนวน (anos)',
     amountPlaceholder: '1 หรือ 0.5',
+    confirmSendTitle: (anos: string) => `ส่ง ${anos} anos หรือไม่`,
+    confirmStakeNote: 'หลักประกันจะอยู่กับกองทุน และจะกลับคืนมาได้ผ่านข้อเสนอกองทุนที่ผู้คุ้มครองโหวตเห็นด้วยเท่านั้น',
+    sending: 'กำลังส่ง…',
     escrowOpen: 'มีการซื้อขายแบบเอสโครว์เปิดอยู่ บัญชีนี้จะส่งได้อีกครั้งเมื่อปิดแล้ว',
     assistedWaiting: 'มีการโอนแบบมีผู้ยืนยันกำลังรอ บัญชีนี้จะส่งได้อีกครั้งเมื่อเขียนแล้วหรือยกเลิกแล้ว',
     lockWaiting: 'มีการโอนกำลังรอตัวล็อกเวลา บัญชีนี้จะส่งได้อีกครั้งเมื่อเขียนแล้ว',
