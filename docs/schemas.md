@@ -609,7 +609,10 @@ flows/how_a_wallet_builds_a_transaction.md). New or changed:
                         the pod envelope with accountId as the signer field, signed by pair one (P-256 r||s over
                         the SHA-256 of the canonical bytes, ML-DSA-87 over the bytes), nonce 16 random bytes.
     the bucket keyId    sent with the add as well as in the deposits.
-    the backup code     shown once as base32 in groups of four, with a Complete button; never typed back.
+    the backup code     never shown (2026-11-10, section 11): made at Setup, wrapped as blob2 and deposited with the
+                        keyholders as backupcode, all without the person seeing it or writing it down; it is the
+                        secret the long recovery rebuilds from the bankers' shares. Until 2026-11-10 it was shown
+                        once as base32 in groups of four, with a Complete button.
     the wallet pair of the test wallet
                         wallet-keys.ts is not carried over.
     noteBlob (2026-11-07)
@@ -770,13 +773,16 @@ Identity, three panes
    lookup id (scrypt takes well under a second), drops the answers, and
    goes to /setup.
 
-Setup. A Start button. In order, shown as a progress list: generate the
-encryption key, the backup code, the backup code keys, the chat pair,
-blob1, blob2, chatPrivateKeyBlob, identityBlob (if the PRF output is not
-in RAM, an unlock first); show the backup code in groups of four with "I
-have written it down, complete"; on Complete: deposit the backup code
-(section 6, backupcode), then /complete-setup with the eight fields; on
-200 drop the code and go on by the next-step rule. On an Android phone
+Setup. A Start button. In order: generate the encryption key, the backup
+code, the backup code keys, the chat pair, blob1, blob2,
+chatPrivateKeyBlob, identityBlob (if the PRF output is not in RAM, an
+unlock first). Five of the eight show as a progress list; the backup
+code, its keys and blob2 have no line (2026-11-10, section 11). Then,
+with no stop in between: deposit the backup code (section 6,
+backupcode), then /complete-setup with the eight fields; on 200 drop the
+code and go on by the next-step rule. The backup code is never shown:
+until 2026-11-10 the page showed it once in groups of four with "I have
+written it down, complete" and waited for that button. On an Android phone
 (the browser's user agent string says Android; 2026-11-07, section 11)
 the page does not leave yet: once /complete-setup has answered, the card
 shows "Protect your passkey" in place of the progress list: "Strongly
@@ -5189,6 +5195,62 @@ Wallet only.
   buttons start 8 px under it and nothing overlaps. Not seen on a phone
   or on the test net: the user checks it there.
 
+### The backup code leaves the screens (2026-11-10)
+
+The user's decision of 2026-11-10, one step, no plan of its own: nobody
+writes a backup code down, and being asked to makes the wallet look hard
+before a person has started, so the wallet shows no backup code any more,
+anywhere. The backup code itself stays, unseen: it is the secret the
+keyholders hold in shares, the long recovery (12.3) rebuilds it to open
+blob2 and to prove itself to the masterpod, and a recovery replaces it.
+Nothing changes on the masterpod, the keyholders, the validators or the
+bankers' GUI. A recovery by typing a written-down code was never built
+(the only description was the old draft `~/Desktop/masterpod_auth_flow.txt`
+4.6) and is dropped with this. Wallet only.
+
+- `src/app/pages/setup.page.ts`: the pane with the code and the "I have
+  written it down, complete" button is gone, with the phase `code`, the
+  `backupCodeText` signal and the `.code` style. `start()` ends by calling
+  `complete()` itself where it set the phase `code`, so Start runs the
+  list, the deposit and `/complete-setup` in one go; `complete()` is as it
+  was, and a failure shows Retry as before. The backup code, its keys and
+  blob2 are made without the `run` wrapper, so the list has five lines
+  where it had eight.
+- `src/app/pages/recover-case.page.ts`: the third step of the finish reads
+  "New key for the bankers" and has one button, "Make the new key".
+  `completeRotation` runs `makeNewCode` first when no new code is held
+  (`makeNewCode` is private now and throws on a missing encryption key
+  where it set the error itself), then rotates and deposits as before;
+  the button reads "Retry the deposit" when only the deposit failed, as
+  before. The `newCodeText` signal and the `.code` style are gone.
+- `src/app/services/crypto.service.ts`: `backupCodeText`, `toBase32` and
+  `BASE32_ALPHABET` are gone; nothing turns a code into text any more.
+- `src/app/i18n/en.ts`, `th.ts`: gone are `setup.codeTitle`,
+  `setup.codeHint`, `recoverCase.newCodeTitle`, `recoverCase.newCodeHint`,
+  `common.writtenDown` and three lines of `setup.steps`; `setup.subtitle`
+  and `setup.retryFresh` lost their mention. In `recoverCase` the words
+  "backup code" became "the key the bankers keep", "the rebuilt key" or
+  "the key": `finishText`, `combineText`, `backInText`, `stepNewCode`,
+  `newCodeText`, `oldCodeWorthless`, `makeNewCode`, `statusDelivering`,
+  `noCodeRebuilt`, `codeNoOpen`, `codeNotAccepted`, `makeCodeFirst`,
+  `noCurrentCode`, `retryDeposits`, `codesRecovered`. The key names keep
+  "Code". The Thai lines were changed the same way and are not checked by
+  a Thai reader.
+- Kept as they are: the names in the code (`newBackupCode`,
+  `backupCodeKeys`, `backupCodeProof`, `deriveKekBackup`, the share type
+  `backupcode`, `recoverWithBackupCode`, `rotateBackupCode`), since the
+  masterpod's routes and columns and the keyholders' share type carry
+  them; `makeCodeFirst` and its guard, which no button reaches now.
+- Spec: 7 (the backup code row), 8.2 (Setup), 12.3 (My recovery and step 3
+  of the finish), this note. The build notes above and 12.7 stand as the
+  record of what was built then.
+- `npx ng build` clean (2.09 MB initial, no warnings), in a scratch copy
+  of ae39348 with this change alone, because another chat's unfinished
+  confirmation box was in the working folder. Not run in a browser: Setup
+  and the finish need a passkey, the keyholders and a live recovery case;
+  the user's run-through is a new anoPod through Setup, and a recovery to
+  its third step.
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`
@@ -5284,7 +5346,7 @@ the authenticator's message shows.
 **My recovery** (`/recover/case`). The case id (short, with Copy), the
 status in words ("Open: a moderator will contact you at <email> and meet
 you on a video call", "In review", "Approved: the bankers are sending your
-keys", "Delivering: n of 3 backup code shares received", "Completed",
+keys", "Delivering: n of 3 key shares received", "Completed",
 "Dismissed: <reason in words>"), the timeline from the events the person
 may see (scheduled with the meeting link as a link, approved, dismissed,
 recovered, completed), a Refresh button (`/get-recovery-pod`; also polled
@@ -5292,12 +5354,14 @@ every 15 s while the page is open). "Keep this device: you unlock this case
 with the passkey you just made."
 
 When three shares of one backup code `keyId` are in, the finish appears as
-a second stepper on the same page:
+a second stepper on the same page. The person never sees a backup code,
+here or on Setup (2026-11-10, section 11): on these screens it is "the
+key the bankers keep", "the rebuilt key" or "the key".
 
 1. Combine: opens every share with the recovery hybrid private key, groups
    by `keyId`, combines each group of three; the backup code and the
-   break-glass seeds are in RAM. Shows "backup code recovered" and "n
-   break-glass seeds recovered".
+   break-glass seeds are in RAM. Shows "key rebuilt" and "n break-glass
+   seeds recovered".
 2. Get back in: `KEK_backup` and the backup code keys from the code;
    `blob2` from the last `/get-recovery-pod` answer (masterpod 12.4.3 hands
    it over once the case is approved) opened with `KEK_backup` gives the
@@ -5307,10 +5371,13 @@ a second stepper on the same page:
    ordinary unlock (`/challenge` unlock, the assertion, `/unlock`), which
    opens the normal session in this tab with the same passkey: `blob1`,
    the chat keys, the identity blob, the status.
-3. New backup code: a new code shown once as on Setup, with Complete;
-   `newBlob2`, the new backup code keys, the proof by the old keys,
-   `/rotate-backup-code`; then the deposit as `backupcode` through
-   `SharesService.deposit`, a new `keyId`. "Your old backup code is now
+3. New key for the bankers (until 2026-11-10 "New backup code", which
+   showed the new code once as on Setup and waited for "I have written it
+   down, complete"): one button, "Make the new key", makes a new code
+   without showing it; `newBlob2`, the new backup code keys, the proof by
+   the old keys, `/rotate-backup-code`; then the deposit as `backupcode`
+   through `SharesService.deposit`, a new `keyId`; the button reads "Retry
+   the deposit" when only the deposit failed. "The old key is now
    worthless."
 4. Move your money (2026-11-08, `forclaude/break-glass-plan-1.md` step 5,
    section 11; in place of the "Break-glass keys" step that stood third
