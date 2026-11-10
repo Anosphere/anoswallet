@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
@@ -25,11 +25,13 @@ interface Step {
 
 /**
  * The setup page (wallet spec 8.2): Start runs the progress list (an unlock
- * first when the PRF output is not in RAM); the backup code is shown once in
- * groups of four with "I have written it down, complete"; Complete deposits
- * the backup code with the keyholders (section 6, backupcode), then
+ * first when the PRF output is not in RAM) and goes straight on: it deposits
+ * the backup code with the keyholders (section 6, backupcode), then posts
  * /complete-setup with the eight fields; on 200 the code is dropped and the
- * next-step rule runs. On an Android phone (the user agent string says
+ * next-step rule runs. The backup code is never shown and has no line in
+ * the list (2026-11-10, section 11): it is the secret the keyholders hold
+ * in shares for a recovery, and the person neither sees it nor writes it
+ * down. On an Android phone (the user agent string says
  * Android) the page then shows the Protect your passkey pane instead of
  * leaving: Google's Advanced Protection strongly recommended for the Google
  * account that keeps the passkey, a link to Google's page, two choices, I
@@ -86,12 +88,6 @@ interface Step {
           @if (error(); as text) {
             <p class="error">{{ text }}</p>
           }
-          @if (phase() === 'code' && backupCodeText(); as code) {
-            <h3>{{ t().setup.codeTitle }}</h3>
-            <p>{{ t().setup.codeHint }}</p>
-            <p class="code">{{ code }}</p>
-            <button mat-flat-button type="button" (click)="complete()" [disabled]="busy()">{{ t().common.writtenDown }}</button>
-          }
           @if (phase() === 'failed') {
             <button mat-flat-button type="button" (click)="start()" [disabled]="busy()">{{ t().common.retry }}</button>
           }
@@ -100,7 +96,6 @@ interface Step {
     </mat-card>
   `,
   styles: `
-    .code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 18px; letter-spacing: 1px; line-height: 1.6; max-width: 560px; word-break: break-word; padding: 12px; border-radius: 8px; background: var(--mat-sys-surface-container); }
     .error { color: var(--mat-sys-error); }
     .choices { display: flex; flex-direction: column; gap: 4px; margin: 8px 0 16px; }
   `,
@@ -116,11 +111,10 @@ export class SetupPage {
   protected readonly lang = inject(LanguageService);
   protected readonly t = this.lang.words;
 
-  protected readonly phase = signal<'idle' | 'running' | 'code' | 'failed' | 'done'>('idle');
+  protected readonly phase = signal<'idle' | 'running' | 'failed' | 'done'>('idle');
   protected readonly steps = signal<Step[]>(this.t().setup.steps.map((label) => ({ label, state: 'todo' })));
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
-  protected readonly backupCodeText = computed(() => (this.backupCode ? this.crypto.backupCodeText(this.backupCode) : null));
   /** An Android phone, where the passkey is usually kept by Google: the Protect your passkey pane shows once setup is complete (wallet spec 8.2). */
   protected readonly android = /Android/.test(navigator.userAgent);
   protected readonly advancedProtectionUrl = ADVANCED_PROTECTION_URL;
@@ -143,7 +137,7 @@ export class SetupPage {
     this.steps.update((steps) => steps.map((step, i) => (i === index ? { ...step, state } : step)));
   }
 
-  /** Everything up to the backup code shown: fresh every time Start or Retry is pressed. */
+  /** The keys and the blobs, fresh every time Start or Retry is pressed, then straight on to the deposit and /complete-setup (complete). The backup code, its keys and blob2 are made without a line in the list. */
   protected async start(): Promise<void> {
     this.busy.set(true);
     this.error.set(null);
@@ -167,13 +161,13 @@ export class SetupPage {
         return value;
       };
       const encryptionKey = await run(() => this.crypto.newEncryptionKey());
-      const code = await run(() => this.crypto.newBackupCode());
-      const backupKeys = await run(() => this.crypto.backupCodeKeys(code));
+      const code = this.crypto.newBackupCode();
+      const backupKeys = await this.crypto.backupCodeKeys(code);
       const chat = await run(() => this.crypto.generateChatKeys());
       const kekPrf = await this.crypto.deriveKekPrf(prf);
       const blob1 = await run(() => this.crypto.encrypt(kekPrf, encryptionKey));
       const kekBackup = await this.crypto.deriveKekBackup(code);
-      const blob2 = await run(() => this.crypto.encrypt(kekBackup, encryptionKey));
+      const blob2 = await this.crypto.encrypt(kekBackup, encryptionKey);
       const chatPrivateKeyBlob = await run(() => this.crypto.wrapChatPrivateKey(chat, encryptionKey));
       const identityBlob = await run(() => this.crypto.wrapIdentity(identity.publicLedgerId, identity.lookupId, encryptionKey));
 
@@ -190,7 +184,7 @@ export class SetupPage {
         chatPrivateKeyBlob: this.crypto.toHex(chatPrivateKeyBlob),
         identityBlob: this.crypto.toHex(identityBlob),
       };
-      this.phase.set('code');
+      await this.complete();
     } catch (err) {
       this.error.set(err instanceof Error ? err.message : String(err));
       this.phase.set('failed');

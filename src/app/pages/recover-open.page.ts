@@ -72,7 +72,7 @@ function isContactEmail(value: string): boolean {
           <mat-step [completed]="whoDone()" [label]="t().recoverOpen.stepWho">
             <p>{{ t().recoverOpen.foundAccount(foundUsername()) }}</p>
             <div class="fields">
-              <mat-form-field appearance="outline">
+              <mat-form-field appearance="outline" subscriptSizing="dynamic">
                 <mat-label>{{ t().recoverOpen.contactEmail }}</mat-label>
                 <input matInput type="email" [ngModel]="email()" (ngModelChange)="email.set($event)" autocomplete="email" />
                 <mat-hint>{{ t().recoverOpen.emailHint }}</mat-hint>
@@ -102,8 +102,8 @@ function isContactEmail(value: string): boolean {
     </mat-card>
   `,
   styles: `
-    .fields { display: flex; flex-wrap: wrap; gap: 8px; }
-    mat-form-field { min-width: 280px; }
+    .fields { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+    mat-form-field { width: 280px; max-width: 100%; }
     .muted { color: var(--mat-sys-on-surface-variant); }
     .error { color: var(--mat-sys-error); }
     button + button { margin-left: 8px; }

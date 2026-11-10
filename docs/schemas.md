@@ -163,10 +163,14 @@ bucketTwoImages, bucketTwoInfos, the caller's rows in each. The wallet's
 next-step rule reads them (section 8.1).
 
 Since 2026-11-08 the answer also carries role, after isSuperSeed:
-"moderator", "attestor" or null, the pod's live appointment (masterpod
-spec section 16, forclaude/appointments-plan-1.md). The account page's
-Stake for list reads it (8.2). An older masterpod sends no role field,
-and the wallet then shows all six purposes.
+"moderator", "attestor", "validator", "masterPod" or null, the pod's live
+appointment (masterpod spec section 16, forclaude/appointments-plan-1.md).
+The names "validator" and "masterPod" came on 2026-11-10 (masterpod spec
+16.7, forclaude/validator-masterpod-stake-plan-1.md): a pod appointed
+for one of them may stake for it, and the appointment opens nothing
+else. The account page's Stake for list reads the role (8.2). An older
+masterpod sends no role field, and the wallet then shows daoVote and
+guardian only (since 2026-11-10; until then it showed all six purposes).
 
 ### 4.4 anos accounts
 
@@ -216,6 +220,12 @@ signatures; the validators do.
 
 Level setup implies vouched and setup complete, which is "they are
 vouched" of the flow, and the encryption key the keyBlob is under exists.
+
+Since 2026-11-10 the masterpod lets a pod make at most 20 new anos
+accounts in the last 30 days: /create-anos-account counts the pod's rows
+as its last check, after the 409, and at the limit answers 403 account
+limit reached (masterpod spec section 17); the wallet says it in one
+sentence and shows no counter (8.2, Wallet).
 
 ### 4.5 Applying it
 
@@ -609,7 +619,10 @@ flows/how_a_wallet_builds_a_transaction.md). New or changed:
                         the pod envelope with accountId as the signer field, signed by pair one (P-256 r||s over
                         the SHA-256 of the canonical bytes, ML-DSA-87 over the bytes), nonce 16 random bytes.
     the bucket keyId    sent with the add as well as in the deposits.
-    the backup code     shown once as base32 in groups of four, with a Complete button; never typed back.
+    the backup code     never shown (2026-11-10, section 11): made at Setup, wrapped as blob2 and deposited with the
+                        keyholders as backupcode, all without the person seeing it or writing it down; it is the
+                        secret the long recovery rebuilds from the bankers' shares. Until 2026-11-10 it was shown
+                        once as base32 in groups of four, with a Complete button.
     the wallet pair of the test wallet
                         wallet-keys.ts is not carried over.
     noteBlob (2026-11-07)
@@ -770,13 +783,16 @@ Identity, three panes
    lookup id (scrypt takes well under a second), drops the answers, and
    goes to /setup.
 
-Setup. A Start button. In order, shown as a progress list: generate the
-encryption key, the backup code, the backup code keys, the chat pair,
-blob1, blob2, chatPrivateKeyBlob, identityBlob (if the PRF output is not
-in RAM, an unlock first); show the backup code in groups of four with "I
-have written it down, complete"; on Complete: deposit the backup code
-(section 6, backupcode), then /complete-setup with the eight fields; on
-200 drop the code and go on by the next-step rule. On an Android phone
+Setup. A Start button. In order: generate the encryption key, the backup
+code, the backup code keys, the chat pair, blob1, blob2,
+chatPrivateKeyBlob, identityBlob (if the PRF output is not in RAM, an
+unlock first). Five of the eight show as a progress list; the backup
+code, its keys and blob2 have no line (2026-11-10, section 11). Then,
+with no stop in between: deposit the backup code (section 6,
+backupcode), then /complete-setup with the eight fields; on 200 drop the
+code and go on by the next-step rule. The backup code is never shown:
+until 2026-11-10 the page showed it once in groups of four with "I have
+written it down, complete" and waited for that button. On an Android phone
 (the browser's user agent string says Android; 2026-11-07, section 11)
 the page does not leave yet: once /complete-setup has answered, the card
 shows "Protect your passkey" in place of the progress list: "Strongly
@@ -961,9 +977,18 @@ when the page opens, by the card's refresh button, by Refresh (which
 reloads the account list too) and every 5 seconds while an account is
 not on the ledger yet or any anos are held or pending; quiet in the log,
 as the polls are. Then "Open a new account": a type select (spending,
-guarded, vault, assisted) and Create anos account, which runs
+guarded, vault, assisted) and Create anos account, which first asks in
+the confirmation box (8.9; 2026-11-10, section 11): the title "Open a new
+spending account?", with the type from the select, the line "The account
+is added to the ledger and stays there for good.", and the buttons Cancel
+and Create anos account. Cancel makes nothing. Retry asks the same way,
+since it is the same button; Resubmit does not ask, since it makes no new
+account. While the encryption key or the key blob key is not in RAM the
+button shows that key's sentence and no box. Create anos account in the
+box runs
 account-creation.service's createAccount (8.3; since 2026-11-08 the steps
 live there, so the recovery's finish opens accounts the same way, 12.3)
+with the type the box showed, the select keeping its value,
 and shows its steps as a progress list:
 1. pair one, pair two, the break-glass seed and its two keys; the
    wallet public keys from /api/sign/public-keys; accountId; the
@@ -972,7 +997,10 @@ and shows its steps as a progress list:
 2. the break-glass seed deposited (section 6, breakglasskey);
 3. /api/sign: the two wallet signatures added;
 4. /create-anos-account with keyBlob (under the key blob key, section 7;
-   2026-11-08) and the signed creation;
+   2026-11-08) and the signed creation; when the masterpod answers 403
+   account limit reached (4.4; 2026-11-10) the error under the steps is
+   "This anoPod has reached the limit for new anos accounts. Try again
+   later." in place of the route and its reason;
 5. /api/anos/1/create-account with the signed creation; a 202, or a 400
    saying the account or its transaction already exists, counts as
    submitted;
@@ -1091,17 +1119,46 @@ production); while the numbers have not loaded, Send is off and the line
 reads "The lock settings have not loaded from the proxy. Refresh to try
 again."; assisted sends
 assistedAnosTransfer. The Stake for list shows the purposes this anoPod
-may stake for (2026-11-08, section 11): all six while the status carries
-no role (no status yet, or an older masterpod, 4.3); the four without
-moderator and attestor when role is null; those four and the role the
-pod holds otherwise; a pick that leaves the list goes back to daoVote.
-A moderator or attestor stake the validator refuses for the appointment
-reads "Only an appointed attestor can stake for attestor." or "The
+may stake for (2026-11-10, section 11): daoVote and guardian for
+everyone, and the role the pod holds, if it holds one: moderator,
+attestor, validator or masterPod (4.3). While the status carries no
+role (no status yet, an older masterpod, or role null) the list is
+daoVote and guardian. From 2026-11-08 until then the list followed the
+role for moderator and attestor only: validator and masterPod showed to
+everyone, and all six showed while the status carried no role. A pick
+that leaves the list goes back to daoVote.
+Stake for starts at daoVote and the amount box starts empty (2026-11-10,
+section 11; they started at attestor and at 1), so the form on a fresh
+page and the form after a send are the same.
+A stake for moderator, attestor, validator or masterPod that the
+validator refuses for the appointment reads "Only an appointed attestor
+can stake for attestor.", with the stake's purpose in both places, or "The
 validator could not confirm this anoPod with the masterpod. Try again
 in a moment."; every other refusal shows as the validator says it. The
 fund proposal's Returns stake list keeps all six: a guardian returns
-any account's stake. previousTransactionId is /get-account's
-latestTransactionId, fetched right before building. The payload is
+any account's stake. Send first asks in the confirmation box (8.9;
+2026-11-10, section 11), for every kind of send. The box shows what the
+form held when the box opened: the title "Send 100 anos?"; Kind, the
+transaction type as the button names it ("transferToFund"); From, the
+account's name and short id ("Spending account 1 · a1b2c3d4…e5f6", the
+short id kept whole where the line wraps); To,
+the recipient's full account id, or for a stake Stake for, the purpose;
+for a stake one more line, "A stake stays with the fund. It comes back
+only through a fund proposal that the guardians vote for."; the buttons
+Cancel and Send. Cancel sends nothing and leaves the form as it was
+typed. Send in the box empties the form at once, before the answer
+comes: Kind back to plain, Stake for back to daoVote, the recipient and
+the amount empty, the paste hint gone. The form stays empty whatever the
+answer is, accepted, refused or no answer at all, so the same send cannot
+go out a second time after an answer that got lost on the way, and the
+page's Send button stays off until a new amount is typed. What is sent
+is what the box showed, not what the form holds. While the send is on
+its way the page shows a progress bar and "Sending…" under the form;
+then the outcome line as before, "accepted: <id>" or the refusal.
+previousTransactionId is /get-account's
+latestTransactionId, fetched right before building, after the box, and
+the date of a guarded or vault transfer is worked out there too, so the
+time spent reading the box does not use up the lock's offset. The payload is
 signed by pair one (keyBlob opened for the signature and dropped),
 /api/sign adds the wallet pair, the validator gets it, the page
 refreshes. Send is disabled while the account has a pending transaction,
@@ -1381,26 +1438,102 @@ Only the buyer can cancel; either side can dispute.", Yes or Back), and
 Yes builds the escrowTransfer as the account page's Send does (pair one
 from the account's keyBlob and the encryption key, /get-account for the
 latest transaction id, buildAnosTransferTransaction with type
-escrowTransfer, /api/sign, /anos-transfer), posts "Escrow trade started:
-100 anos from <my account id> to <their account id>. Transaction <id>."
-and shows the stage; a refusal shows the validator's reason as the
-account page shows it. The stage: every 5 seconds while the conversation
-is open, /list-escrows on each of this pod's accounts named in the chat
-(an id in the messages that is one of session.accounts, pair one from its
-keyBlob); the newest trade whose other side is an account named in the
-chat shows as "Escrow trade: 100 anos · Waiting for the seller to release
-the anos" (escrow-stage.ts, by this pod's side) with "See the trade" to
+escrowTransfer, /api/sign, /anos-transfer). What follows the answer
+(rewritten 2026-11-10, section 11, from
+forclaude/wallet-trade-message-plan-1.md): an answer with a 4xx status is
+a refusal and shows the validator's reason as the account page shows it,
+with plain words when the account already has something waiting on the
+validators ("This account already has an escrow trade or a transfer
+waiting on the validators. Finish that first, or use another account.").
+After any other answer the card checks the chat's trade once more
+(below), and that check posts the message "Escrow trade started: 100 anos
+from <my account id> to <their account id>. Transaction <id>."; Yes does
+not post it. The validator stores a trade before it answers, so an answer
+lost on the way (no network, the proxy's 502, the doorman's 502 or 504)
+may hide a trade that started: found open, it has started and no error
+shows; otherwise the card says "The validators did not answer. If the
+trade started, it will show here in a moment. If it does not, try again."
+and the form stays for another try. A trade the check finds, open or
+released, closes the form, so its question does not come back by itself
+once that trade is cancelled.
+
+The chat's trade (rewritten 2026-11-10, section 11, from
+forclaude/wallet-finished-trade-plan-1.md): the card reads it from the
+validators when the conversation opens, every 5 seconds while it is open,
+and once more when the seller says Yes to Start. Until the first check
+ends the card says "Checking for a trade…" where Share and Start go. The
+chat's account ids: the page holds the room's newest 50 messages only, so
+the card reads every message of the room itself, once (/list-messages
+from the first position, 200 at a time, CARD_MESSAGES_PAGE, decrypted
+with the room key), and adds the ids the page feeds it, which carry what
+arrived since; the form's To list and the "Ask them to share an account
+first" hint follow all of them. The accounts it reads: this pod's usable
+spending accounts when it is the seller, and this pod's usable accounts
+named in the chat (an id in the messages that is one of
+session.accounts), pair one from each keyBlob; with no account id in the
+chat nothing is read. A trade is the chat's when it is between one of
+those accounts and an account named in the chat, whoever posted the id.
+First /list-escrows on each account: the newest open trade of the chat
+shows as "Escrow trade: 100 anos · Waiting for the seller to release the
+anos" (escrow-stage.ts, by this pod's side) with "See the trade" to
 /wallet/<my account>/escrow/<transactionId>; Release, Cancel and Dispute
-stay on that page. A trade seen open here and then gone from the list is
-closed: its id on the first page of /list-transactions of my account
-means "Released: 100 anos went to the buyer.", otherwise "Cancelled: the
-seller kept the anos." (the trade page's rule); after a release the owner
-of an open listing gets "Close the listing", which asks once and calls
-/close-listing, and the card reads Closed once the room list is
-refreshed. Share and Start show until a trade has started, and again
-after a cancelled one; a closed listing's card shows only the stage of a
-trade when there is one. A room whose listing the masterpod does not give
-shows no card.
+stay on that page. With none open, /list-transactions on each account
+with `from` the room's createdAt, 200 rows at a time
+(CARD_TRANSACTIONS_PAGE), paging back with beforePosition while a page
+comes back full: an escrowTransfer of the chat is its released trade, the
+newest when there are several. The open list is read first because the
+validators write the link before the trade leaves /list-escrows
+(anossoftware src/accounts/accounts.service.js, writeApproved), so a
+released trade is never missing from both reads. A released trade ends
+the chat's trading: both sides read "Released: 100 anos went to the
+buyer." and "This trade is finished. To trade again, start a new chat.",
+Share and Start do not come back in this chat, on this visit or a later
+one, and the owner of an open listing gets "Close the listing", which
+asks once and calls /close-listing; the card reads Closed once the room
+list is refreshed. A new trade between the same two people needs a new
+chat, and so another listing, since the masterpod allows one chat per
+person per listing. A trade seen open here and then gone with nothing
+released reads "Cancelled: the seller kept the anos.", from the card's
+memory of this visit, and Share and Start come back. A read that fails,
+on the validators or the masterpod, is never taken as "no trade": the
+card keeps the trade or the Released lines it shows, and where Share and
+Start go it says "Could not check for a trade. Trying again." until a
+check has read everything. The Yes of Start runs one fresh check before
+anything is built or signed: when it cannot be read, nothing is sent and
+the card says "Could not check for an earlier trade, so nothing was sent.
+Try again."; when it finds a trade open or released, nothing is sent and
+the card says "Nothing was sent. This chat already has an escrow trade."
+and shows that trade. Three limits: the buyer's card can match a trade
+only when the seller's account id is in the chat, which the chat's
+message about the trade (the next paragraph) puts there the first time
+the seller has the chat open after the trade started; two chats at once
+between the same two people on the same accounts both read Released after
+one release; a seller who recovered the account after a lost passkey
+cannot read the old account, so a release sent from it is not seen. Share
+and Start show until a trade has started, and again after a cancelled
+one; a closed listing's card shows only the stage of a trade when there
+is one. A room whose listing the masterpod does not give shows no card.
+
+The chat's message about its trade (2026-11-10, section 11, from
+forclaude/wallet-trade-message-plan-1.md): whenever the check finds the
+chat's trade, open or released, the account it was read on sent it, and
+no message in the chat carries its transaction id (64 hex characters, so
+it is among the ids named in the chat), the card posts the message
+itself, in the seller's name, encrypted with the room key like any other:
+"Escrow trade started: 100 anos from <my account id> to <their account
+id>. Transaction <id>." for an open trade, "Escrow trade released: 100
+anos from <my account id> to <their account id>. Transaction <id>." for
+one already released. This is the only place the message is posted. So a
+lost answer to the transfer, a /send-message that failed, a tab closed in
+between and a trade started from the account page's Send (escrow kind) to
+an account named in the chat all end with the chat told, the next time
+the seller has the chat open; the message puts the seller's account id
+into the chat, and the buyer's card then finds the trade. The card keeps
+the transaction ids it posted about, per room (`told`), so a check that
+runs before the thread shows the message does not post it again; a post
+that fails is tried again by the next check; two devices of the seller in
+the same chat at the same moment can post it twice. The buyer's card
+never posts about a trade.
 
 Requests, at /chat/requests: the invites to this pod (the inviter's
 username, then `invited you to "<the public room's name>"`, `invited you
@@ -1943,6 +2076,8 @@ excepted, with the keyholder and anos calls included.
                             /create-anos-account, /create-account, /mark-anos-account-submitted), reads the list
                             and the balances again after steps 4 and 6, then waits up to 90 seconds for
                             /get-account to answer with the new pair one; resolves { accountId, pairOne };
+                            at step 4 the masterpod's 403 account limit reached (4.4) is thrown as the sentence
+                            wallet.accountLimit, every other refusal as the route and its reason (2026-11-10);
                             submitCreation runs steps 5 and 6 alone, for Resubmit; ALREADY_THERE, the validator's
                             "already there" wording, the holding tables' included; used by the Wallet page and
                             the recovery finish's Move your money (12.3)
@@ -2034,8 +2169,12 @@ src/app/components/:
   decrypted messages (the 64-hex pieces of `piecesOf`), each with its
   sender and position, newest first; the page changes only to draw the
   card and feed it. The card posts its own messages (Share an account,
-  Escrow trade started) encrypted with the room key, and the thread's poll
-  shows them. It exports `FoundAccountId`.
+  Escrow trade started and, since 2026-11-10, Escrow trade released, the
+  last two from its check) encrypted with the room key, and the thread's
+  poll shows them. It exports `FoundAccountId`. Since 2026-11-10 the card
+  also reads the room's messages itself for their account ids (8.2,
+  Chat): the page's computed holds the ids of the newest 50 messages and
+  of what arrived since, which is not the whole chat.
 
 ### 8.8 The languages
 
@@ -2140,6 +2279,44 @@ plus `guardians.payoutTo`, the payout row's "1500 anos to
 a1b2c3d4…e5f6"; Home's "A fund proposal is open for your vote" is
 `home.openFundVote`; the Thai is the build chat's, for Thai readers to
 correct.
+
+### 8.9 The confirmation box
+
+One small component, src/app/components/confirm-dialog.component.ts
+(`ConfirmDialogComponent`, `app-confirm-dialog`), and one function in the
+same file, `askConfirm(dialog, data)` (2026-11-10, section 11; the plan
+is forclaude/wallet-confirm-box-plan-1.md): the wallet's one pop-up box,
+a Material dialog (`@angular/material/dialog`) in the middle of the
+screen, for what nobody should start by accident. A page injects
+`MatDialog` and calls `askConfirm`, which opens the component and
+resolves true only when the box closed by its second button.
+
+What it is given, `ConfirmData`: `title`; `lines`, each a `ConfirmLine`
+`{ label, value, code? }`, drawn as a two-column grid, the label in the
+on-surface-variant colour and the value beside it, in the id font when
+`code` is true; `notes`, each a paragraph under the lines; and
+`confirmLabel`, the words on the second button. A value too long for its
+column wraps at a space, and is cut inside a word only when the word
+alone is too long (`overflow-wrap: anywhere`); a value in the id font is
+cut anywhere, by the global rule for `code`, so a 64-character id wraps
+on a phone (2026-11-10, section 11: at first every value was cut
+anywhere). The two buttons, at the right: Cancel
+(`common.cancel`), which closes with false, and the caller's button,
+which closes with true.
+
+The box closes only by those two buttons. A click outside it and the
+Escape key do nothing (`disableClose`), so the second click of a double
+click on the page's button cannot close the box or answer it. The second
+button cannot be pressed for the first half second after the box opens
+(`CONFIRM_ARM_MS`, 500, in constants.ts), so that second click can never
+land on it. Nothing in the box has the focus when it opens (`autoFocus:
+'dialog'`: the focus goes to the box itself), so the Enter key answers
+nothing. The box is 480 px wide, or the screen's width less 32 px where
+that is narrower.
+
+Two places use it (8.2): the Send form of the account page, before every
+kind of send, and "Open a new account" on the Wallet page, before Create
+anos account and Retry. Each does nothing while a box is already open.
 
 ## 9. Configuration, and running it on this machine
 
@@ -4922,6 +5099,522 @@ plan's section 6). Step 5, the architecture records, is another chat.
   an older validator or doorman, "/get-fund-proposal: HTTP 404: Not
   Found" in red.
 
+### The pinned card reads a finished trade (2026-11-10)
+
+Built in the planning chat from
+`forclaude/wallet-finished-trade-plan-1.md` (FINAL), one commit. Bug 3 of
+`test_net_phase_2/bugs-and-new-features.md`: in a marketplace chat, after
+an escrow trade was complete, "Start the escrow trade" came back, so
+someone could send the anos a second time. Why: the card knew a finished
+trade only from its own memory (`seen`, `ended`); the card is rebuilt
+whenever the person leaves the chat, and the release happens on the trade
+page, so on the way back nothing was known. A /list-escrows read that
+failed was also taken as "the trade is gone". And the card read only this
+pod's accounts named in the chat, so the seller's card never saw a trade
+whose "Escrow trade started" message was not posted (bug 1 of the same
+list). Wallet only: no validator, doorman, masterpod or proxy change.
+
+- `src/app/components/pinned-listing.component.ts`: `SeenTrade`, `Ended`,
+  `ended`, `endedText()`, `polling` and `myNamedKey` are gone. `older`
+  (the account ids the card read from the room itself, null until that
+  read is whole) and `ids` (those and the page's `accountIds`, newest
+  first) feed `theirAccountIds` and `myNamedAccounts`. `watched` is the
+  seller's usable spending accounts plus `myNamedAccounts`, and
+  `watchedKey` (the room's id and `watched`) drives the effect that
+  `myNamedKey` drove. `released` (`{ amount }`, kept for the room once
+  set), `cancelled` and `read` (null, true, false) replace `ended`.
+  `poll()` queues one `check()` behind the checks before it (`last`,
+  `waiting`) and resolves to `open`, `released`, `none` or `unread`; the
+  timer calls it only when none is waiting. `check()`: the pod's accounts
+  when the tab has none (once, `accountsAsked`), `readIds()` once per
+  room, /list-escrows on each watched account, then, with none open and
+  none released yet, `releasedLink()` on each. A refusal, or anything
+  thrown, is `unread`: `read` becomes false and nothing else changes. A
+  check that ends after the card was given another room changes nothing.
+  `start()` runs `poll()` first and throws `pinned.notSentUnread` or
+  `pinned.notSentAlready` before anything is built. The template: the
+  Released branch with the `finished` line and the Close the listing
+  block; `checking` and `cannotCheck` where Share and Start go.
+- `src/app/constants.ts`: `CARD_MESSAGES_PAGE` and
+  `CARD_TRANSACTIONS_PAGE`, 200 each, after `HISTORY_PAGE`.
+- Words: `pinned.checking`, `cannotCheck`, `finished`, `notSentUnread`
+  and `notSentAlready`, English and Thai (the Thai written here, to be
+  checked by a Thai reader). `pinned.closedUnknown` left both files: a
+  transactions read that fails now keeps the card as it is, so nothing
+  says "Closed" any more.
+- Unchanged: `chat-room.page.ts` (it draws the card and feeds it as
+  before), the services, the trade page, the account page, `server/`.
+- The reading of "The marketplace, step 3" that Share and Start stay away
+  after a release now holds across visits. A second trade in the same
+  chat after a release is not possible, by the user's decision: "The
+  danger is more real than the convenience. A vulnerable person might
+  send the trade several times."
+- Readings where the plan left a detail open: the place of the five new
+  keys inside `pinned` (`checking` and `cannotCheck` where
+  `closedUnknown` was, `finished` after `released`, the two `notSent`
+  lines after `pickAccounts`); the template's Released branch is an
+  `@else if (released(); as done)`.
+- Spec: 8.2 Chat (the chat's trade), 8.7 and this note.
+- `npx ng build` clean (2.09 MB initial, no warnings). Not run in a
+  browser here: the user deploys and runs it on the test net. The chat of
+  bug 3, where the trade was released: "Released: … anos went to the
+  buyer." and "This trade is finished. To trade again, start a new chat.",
+  no "Start the escrow trade", and "Close the listing" for the listing's
+  owner. The chat of bug 1: the seller's card shows the trade if it is
+  still open, or Released. A new listing and a new chat between the same
+  two people: Start works, and after the release on the trade page the
+  chat reads Released on both phones. A trade the buyer cancels while the
+  chat is open: "Cancelled: the seller kept the anos." and Start is back.
+  The network off for a moment: "Could not check for a trade. Trying
+  again." and no button, until it is back.
+
+### The pinned card tells the chat of its trade (2026-11-10)
+
+Built in the same chat from `forclaude/wallet-trade-message-plan-1.md`
+(FINAL), one commit, on top of 692c5ac (the note above). The finish for
+bug 1 of `test_net_phase_2/bugs-and-new-features.md`: "Start the escrow
+trade" said "could not reach the wallet proxy (network error)", the trade
+went through on the validators, and the chat was never told. Why: the
+validator stores a trade and answers only after the approval round;
+`start()` posted "Escrow trade started" only after a 202, so an answer
+lost on the way left the chat without the message, the seller's account
+id out of the chat, and the buyer's card blind. Wallet only.
+
+- `src/app/components/pinned-listing.component.ts`: `tell(room, named,
+  transactionId, text)` posts the chat's message about a trade when
+  neither `named` nor `told` (a plain Set, cleared by `reset()`) has its
+  transaction id: the room key, /send-message into the room the check
+  started with, the id into `told` on a 2xx answer while the card is
+  still on that room; no key, a refusal or a throw changes nothing.
+  `check()` calls it after its signals are set: for an open trade whose
+  `accountId` is the watched account, with `pinned.startedMessage`; for a
+  released trade with `mine` true, with `pinned.releasedMessage`.
+  `ReleasedTrade` gained `transactionId`, `from`, `to` and `mine` (the
+  account the link was read on is its `accountId`), so a released
+  message that failed is tried again on every later check. `start()`: a
+  failed answer with a status from 400 to 499 throws `refusal(res)`
+  (`pinned.alreadyHeld` for "for this accountId is already pending",
+  "held" or "locked", else `pinned.refused`); after any other answer one
+  `poll()`; a failed answer with no trade found open throws
+  `pinned.noAnswer` and leaves the form as it is; otherwise `starting`
+  and `confirmStart` become false. `start()` no longer posts the message.
+- Words: `pinned.releasedMessage(anos, from, to, transactionId)`,
+  `noAnswer` and `alreadyHeld`, English and Thai (the Thai written here,
+  to be checked by a Thai reader).
+- Unchanged: `chat-room.page.ts`, the services, `constants.ts`, the trade
+  page, the account page, `server/`. The buyer's side of the card has no
+  new code: once the message is in the chat, the rule of the note above
+  finds the trade from the buyer's side.
+- Added on the user's word after the first build, in the same commit: a
+  check that finds a trade, open or released, sets `starting` and
+  `confirmStart` false. After "The validators did not answer" the Yes
+  question stayed open behind the trade the card then found, and came
+  back by itself when that trade was cancelled.
+- Left as it is: two devices of the seller in the same chat at the same
+  moment can post the message twice; the buyer's card stays blind until
+  the seller has had the chat open once after the trade started.
+- Spec: 8.2 Chat (what follows the answer; the limits; the new paragraph
+  on the chat's message), 8.7 and this note.
+- `npx ng build` clean (2.10 MB initial, no warnings). Not run in a
+  browser here: the user deploys and runs it on the test net. The chat of
+  bug 1, opened by the seller: "Escrow trade released: …" appears once,
+  and the buyer's card there then reads Released and no longer offers
+  "Share an account". A new trade the normal way: "Escrow trade started:
+  …" appears once, as before. A new trade with the network cut right
+  after Yes: no "refused" words, and with the network back the card shows
+  the trade and the started message appears. Start from an account that
+  has an open trade with someone else: "This account already has an
+  escrow trade or a transfer waiting on the validators. …".
+
+### The locked-out page's small text stays off the buttons (2026-11-10)
+
+Bug 2 of `test_net_phase_2/bugs-and-new-features.md`, one commit, no plan
+of its own: on the "I'm locked out" page (12.3, `/recover/open`) the small
+text under the Contact email box ran into the Back and Next buttons. Why:
+Angular Material keeps room for one line under a field (20 px) and draws
+a second line over whatever follows. The box is 280 px wide on every
+screen and its hint gets 236 px of that, where the English sentence takes
+two lines, so the second one lay across the buttons. Wallet only.
+
+- `src/app/pages/recover-open.page.ts`: the Contact email field has
+  `subscriptSizing="dynamic"`, so the hint takes the room it needs and
+  pushes the buttons down. `.fields` has `margin-bottom: 8px`: the dynamic
+  setting also drops the room Material kept under the box, and the hint
+  would touch the Next button. `mat-form-field` has `width: 280px` beside
+  its `min-width: 280px`: a hint that takes room also widens a box with
+  no width of its own (to 381 px on a wide screen), so the box keeps the
+  width it had on every screen.
+- Unchanged: the words (`recoverOpen.emailHint`, English and Thai), the
+  flow, every other page.
+- Left as it is: on a screen narrower than about 406 px the box is wider
+  than the room its step has, and the stepper cuts the box's right edge
+  off (16 px at 390 px wide, 31 px at 375). It was so before this change.
+- Spec: this note only.
+- `npx ng build` clean (2.10 MB initial, no warnings). Seen here in a
+  development build served from a scratch folder, with step 2 opened
+  through the browser's debug tools, so no keyholder and no masterpod was
+  asked: at 360, 375, 390, 430 and 1024 px wide the English hint takes two
+  lines and the Thai hint one, the buttons start 8 px under it, and
+  nothing overlaps. Not seen on a phone or on the test net: the user
+  checks it there.
+
+### The locked-out page's email box fits its step (2026-11-10)
+
+Bug 5 of `test_net_phase_2/bugs-and-new-features.md`, one commit, no plan
+of its own, on top of ec0d770 (the note above, which left this as it
+was): on a narrow phone the Contact email box of `/recover/open` was
+wider than the room its step has, and the stepper cut its right edge off.
+Why: the box had `min-width: 280px`, and a step has the screen's width
+less 150 px, which is under 280 px on every screen narrower than 430 px.
+Wallet only.
+
+- `src/app/pages/recover-open.page.ts`: `mat-form-field` has
+  `width: 280px; max-width: 100%;` where it had `min-width: 280px;
+  width: 280px;`. The box is 280 px wide where its step has the room and
+  as wide as the step where it has not: 210 px on a 360 px screen, 225 on
+  375, 240 on 390, 262 on 412, 280 from 430 up. The hint wraps to the box
+  and still pushes the buttons down.
+- Unchanged: the words, the flow, every other page.
+- Left as it is: the boxes of step 1 come from
+  `identity-form.component.ts` (240 px at the least); they are whole from
+  375 px up and lose 6 px on the right on a 360 px screen.
+- Spec: this note only.
+- `npx ng build` clean (2.10 MB initial, no warnings). Seen here the way
+  of the note above, in a development build served from a scratch folder:
+  at 360, 375, 390, 412, 430 and 1024 px wide, English and Thai, the box
+  is whole, its label is not cut, the hint takes one to three lines, the
+  buttons start 8 px under it and nothing overlaps. Not seen on a phone
+  or on the test net: the user checks it there.
+
+### The backup code leaves the screens (2026-11-10)
+
+The user's decision of 2026-11-10, one step, no plan of its own: nobody
+writes a backup code down, and being asked to makes the wallet look hard
+before a person has started, so the wallet shows no backup code any more,
+anywhere. The backup code itself stays, unseen: it is the secret the
+keyholders hold in shares, the long recovery (12.3) rebuilds it to open
+blob2 and to prove itself to the masterpod, and a recovery replaces it.
+Nothing changes on the masterpod, the keyholders, the validators or the
+bankers' GUI. A recovery by typing a written-down code was never built
+(the only description was the old draft `~/Desktop/masterpod_auth_flow.txt`
+4.6) and is dropped with this. Wallet only.
+
+- `src/app/pages/setup.page.ts`: the pane with the code and the "I have
+  written it down, complete" button is gone, with the phase `code`, the
+  `backupCodeText` signal and the `.code` style. `start()` ends by calling
+  `complete()` itself where it set the phase `code`, so Start runs the
+  list, the deposit and `/complete-setup` in one go; `complete()` is as it
+  was, and a failure shows Retry as before. The backup code, its keys and
+  blob2 are made without the `run` wrapper, so the list has five lines
+  where it had eight.
+- `src/app/pages/recover-case.page.ts`: the third step of the finish reads
+  "New key for the bankers" and has one button, "Make the new key".
+  `completeRotation` runs `makeNewCode` first when no new code is held
+  (`makeNewCode` is private now and throws on a missing encryption key
+  where it set the error itself), then rotates and deposits as before;
+  the button reads "Retry the deposit" when only the deposit failed, as
+  before. The `newCodeText` signal and the `.code` style are gone.
+- `src/app/services/crypto.service.ts`: `backupCodeText`, `toBase32` and
+  `BASE32_ALPHABET` are gone; nothing turns a code into text any more.
+- `src/app/i18n/en.ts`, `th.ts`: gone are `setup.codeTitle`,
+  `setup.codeHint`, `recoverCase.newCodeTitle`, `recoverCase.newCodeHint`,
+  `common.writtenDown` and three lines of `setup.steps`; `setup.subtitle`
+  and `setup.retryFresh` lost their mention. In `recoverCase` the words
+  "backup code" became "the key the bankers keep", "the rebuilt key" or
+  "the key": `finishText`, `combineText`, `backInText`, `stepNewCode`,
+  `newCodeText`, `oldCodeWorthless`, `makeNewCode`, `statusDelivering`,
+  `noCodeRebuilt`, `codeNoOpen`, `codeNotAccepted`, `makeCodeFirst`,
+  `noCurrentCode`, `retryDeposits`, `codesRecovered`. The key names keep
+  "Code". The Thai lines were changed the same way and are not checked by
+  a Thai reader.
+- Kept as they are: the names in the code (`newBackupCode`,
+  `backupCodeKeys`, `backupCodeProof`, `deriveKekBackup`, the share type
+  `backupcode`, `recoverWithBackupCode`, `rotateBackupCode`), since the
+  masterpod's routes and columns and the keyholders' share type carry
+  them; `makeCodeFirst` and its guard, which no button reaches now.
+- Spec: 7 (the backup code row), 8.2 (Setup), 12.3 (My recovery and step 3
+  of the finish), this note. The build notes above and 12.7 stand as the
+  record of what was built then.
+- `npx ng build` clean (2.09 MB initial, no warnings), in a scratch copy
+  of ae39348 with this change alone, because another chat's unfinished
+  confirmation box was in the working folder. Not run in a browser: Setup
+  and the finish need a passkey, the keyholders and a live recovery case;
+  the user's run-through is a new anoPod through Setup, and a recovery to
+  its third step.
+
+### A confirmation box before a send and before a new account (2026-11-10)
+
+Built from `forclaude/wallet-confirm-box-plan-1.md` (FINAL), one step, one
+commit. Found while testing Test Net phase 2: on an account's page a
+stake of 100 anos for daoVote went out again with every further click on
+Send, each click a new stake. The Send form asked nothing, kept the
+amount and the recipient after a send, and its button was live again as
+soon as the pending transaction was approved; and "Create anos account"
+on the Wallet page started its six steps on one click. The user's
+decisions: a confirmation box before every send from the Send form, the
+form starting over after it, and the same box before a new anos account.
+Wallet only: no validator, doorman, masterpod or proxy change, no theme
+change, no new package (the box is `@angular/material/dialog`, part of
+the Material already installed).
+
+- `src/app/components/confirm-dialog.component.ts` (new): `ConfirmLine`,
+  `ConfirmData`, `ConfirmDialogComponent` (`app-confirm-dialog`) and
+  `askConfirm(dialog, data)`, as 8.9 says. The second button is off until
+  the signal `armed` turns true; a timer sets it `CONFIRM_ARM_MS` after
+  the box was made and is cleared when the box is destroyed. `askConfirm`
+  opens the component with `{ data, disableClose: true, autoFocus:
+  'dialog', width: '480px', maxWidth: 'calc(100vw - 32px)' }` and
+  resolves true only when the box closed with true.
+- `src/app/constants.ts`: `CONFIRM_ARM_MS = 500`.
+- `src/app/pages/account.page.ts`: `MatDialog` is injected. The Send
+  button calls `askSend()` in place of `send()`; its `[disabled]` rule is
+  as it was. `askSend()` does nothing with no `item()`, with an amount
+  that `anosToMillionths` refuses, or with a box already open. Else it
+  takes a `SendOrder` from the form (`transferType()`, the amount in
+  millionths, and `stakePurpose()` for a transferToFund or `accountIdTo()`
+  trimmed and lower-cased for every other type) and shows it with
+  `askConfirm`: the title `account.confirmSendTitle(anos)`, the lines
+  `common.kind`, `common.from` and either `account.stakeFor` or
+  `common.to` (the full id, `code` true), the note
+  `account.confirmStakeNote` for a stake, the button `common.send`. On
+  Cancel nothing else happens; on Send, `resetForm()` and then
+  `send(order)`. `resetForm()`: `spendingKind` to plain, `stakePurpose`
+  to daoVote, `accountIdTo` to empty, `pasteNote` to null, `amount` to
+  empty. `send(order)` is the old `send()`, private now: it builds from
+  the order and never reads the form, a transferToFund when the order has
+  a purpose, else `buildAnosTransferTransaction` with the order's
+  recipient, amount and type; `minutesAhead()` and `createdAt` are worked
+  out there, after the box, as before. `refusal(res, order)` takes the
+  purpose of "Only an appointed … can stake for …" from the order.
+  `act()`, the outcome line and the `refresh(true)` afterwards did not
+  change. `stakePurpose` starts at daoVote (it was attestor, which the
+  effect moved for most pods) and `amount` empty (it was 1). The
+  template: right under the form, before the lines about an open trade
+  and the outcome line, an indeterminate `mat-progress-bar` and the muted
+  line `account.sending` while `busy()`.
+- `src/app/pages/wallet.page.ts`: `MatDialog` is injected. The button
+  under "Open a new account" calls `askCreate()` in place of `create()`,
+  as Create anos account and as Retry. `askCreate()` does nothing while a
+  box is open; then come the two key checks `create()` had, with their
+  sentences and no box; then `askConfirm` with the title
+  `wallet.confirmCreateTitle(type)`, no lines, the note
+  `wallet.confirmCreateNote` and the button `wallet.createAccount`; on
+  that button, `create(type)`. `create(type)` is private, takes the type
+  the box showed and starts at `busy.set(true)`. Resubmit, the cards, the
+  type select and the polling did not change.
+- Words, English and Thai (the Thai as the plan gives it, to be checked
+  by a Thai reader): `account.confirmSendTitle(anos)`,
+  `account.confirmStakeNote`, `account.sending`,
+  `wallet.confirmCreateTitle(type)` and `wallet.confirmCreateNote`. The
+  box reuses `common.cancel`, `common.send`, `common.kind`, `common.from`,
+  `common.to`, `account.stakeFor`, `account.stakePurposes` and
+  `wallet.createAccount`. Every other key is as it was.
+- Unchanged, by the user's decision: the places that ask their question
+  in the page (Start and "Close the listing" on the pinned listing card,
+  the escrow trade page, the cancel of an assisted transfer, the DAO and
+  the guardian votes) and three buttons that ask nothing (posting a DAO
+  proposal, posting a fund proposal, where no money moves, and "Move your
+  money" of a recovery, which moves everything to the person's own new
+  accounts). Also unchanged: `src/app/services/`
+  (`account-creation.service.ts` too), the history page, the recovery
+  pages, the moderator and attestor pages, `src/material-theme.scss`,
+  `server/`.
+- Readings where the plan left a detail open. "A box already open" is
+  read from `MatDialog.openDialogs`, the box being the wallet's only
+  dialog; the pages keep no flag of their own. `SendOrder` is a union of
+  two shapes with the fields `transactionType`, `amount`, `accountIdTo`
+  and `stakePurpose`: a recipient with a null purpose, or a purpose with
+  a null recipient. `send(order)` has no guard of its own for `item()`
+  and the amount: `askSend()` holds them, the order carries the amount,
+  and `pairOne()` still refuses an account that is not the pod's.
+  `refusal()` gives the appointment sentence only for an order with a
+  purpose; the validators send that refusal for a stake only. The two
+  buttons close the box through Material's `mat-dialog-close`, with false
+  and true. In the box the value is in the on-surface colour (Material
+  draws a dialog's text in the on-surface-variant colour, the label's);
+  the notes keep that Material colour, and a note stands 12 px under the
+  lines or the note before it; the grid's gaps are the account summary's,
+  4 and 16 px; an id is a `<code>`, 12 px by the global style; a box
+  without lines draws no grid. `CONFIRM_ARM_MS` stands after
+  `USERNAME_DEBOUNCE_MS`. The three new `account` keys stand after
+  `amountPlaceholder`, in the order the page uses them, and the two new
+  `wallet` keys after `createAccount`. The class comment of the Wallet
+  page gained a sentence too; the plan names the account page's comments
+  only.
+- Changed on the user's word after the commit (86a088e), in a commit of
+  its own, away from the plan's wording. The plan gave every value
+  `word-break: break-all`, for the 64-character id, and that cut the
+  From line anywhere too: on a phone under about 400 px wide the From
+  line of a stake ("Spending account 1 · a1b2c3d4…e5f6") is a few
+  characters too long for its column, and it broke inside the short id
+  ("…e5f" and "6" at 390 px). Now `.value` has `overflow-wrap: anywhere`
+  in its place: a value wraps at a space and is cut inside a word only
+  when the word alone is too long, and an id is still cut anywhere, by
+  the global rule for `code`. That alone still let a row end after the
+  ellipsis ("a1b2c3d4…" and "e5f6"), so `askSend()` puts a word joiner
+  (U+2060, `WORD_JOINER` in `account.page.ts`) after the ellipsis of the
+  short id in the From line, and the line wraps at the space before the
+  short id. Seen in Chrome run without a window, on a test page outside
+  the repo with the box's rules and Roboto, at 360, 375, 390, 393, 412
+  and 430 px, for a stake and a plain send, with and without a number in
+  the account's name: the From line is one row, or "Spending account 1
+  ·" and "a1b2c3d4…e5f6"; the 64-character id takes two or three rows;
+  nothing runs out of the box. Not seen in Safari or on a phone.
+  `npx ng build` clean (2.12 MB initial, no warnings). The plan file
+  still reads `word-break: break-all`.
+- Spec: 8.2 (Wallet, the "Open a new account" sentence; Account, the Send
+  paragraph, in two places), the new 8.9 and this note. README: the
+  layout gained the line of `components/confirm-dialog.component.ts`.
+- `npx ng build` clean (2.12 MB initial, no warnings), in the web_app
+  folder, where another chat's change of the same day (the note above)
+  was in the working folder too, and in a scratch copy of ae39348 with
+  this change alone (2.12 MB initial, no warnings). Not run in a browser
+  here: the user deploys and runs it on the test net. A stake of 100 for
+  daoVote from a spending account: the box reads "Send 100 anos?", Kind
+  transferToFund, From the account, Stake for daoVote and the line about
+  the fund; Cancel sends nothing and the form is as it was typed. The
+  same again and Send in the box: the form empties at once, "Sending…"
+  shows, then "accepted: …" and the stake under Pending, and the page's
+  Send button stays off until a new amount is typed. A double click on
+  the page's Send button: one box, and nothing is sent until the box's
+  own Send is pressed. A plain send to another account: the box shows the
+  full recipient id, and on a phone the id wraps inside the box. A send
+  the validators refuse (an amount over the balance): the refusal shows
+  under the form and the form is empty. On the Wallet page, Create anos
+  account: the box "Open a new spending account?"; Cancel makes nothing;
+  "Create anos account" in the box runs the six steps as before.
+
+### The masterpod's account limit in plain words (2026-11-10)
+
+Built from `forclaude/account-limit-plan-1.md` (FINAL), step 2 of its
+three, one commit. Since its step 1 (masterpodsoftware 9310f46, masterpod
+spec section 17) the masterpod lets a pod make at most 20 new anos
+accounts in the last 30 days and answers `403 account limit reached` on
+`/create-anos-account` at the limit. The user's decision: the wallet
+shows no counter and no "3 of 20"; a person only hears of the limit when
+it refuses them, in one sentence that names no number, so it stays true
+when the masterpod's two constants change. Wallet only: no route, no
+proxy change, no new package, no page changed.
+
+- `src/app/services/account-creation.service.ts`, step 4 of
+  `createAccount`: a refusal of `/create-anos-account` that reads
+  `account limit reached` is thrown as `wallet.accountLimit`; every other
+  refusal as before (`/create-anos-account: <reason>`). The step is
+  marked failed either way. The Wallet page shows the sentence under its
+  steps and the recovery's "Move your money" (12.3) in its error line,
+  both from the error's message, as they show every other failure of the
+  service.
+- Words, English and Thai (the Thai as the plan gives it, to be checked
+  by a Thai reader): `wallet.accountLimit`, "This anoPod has reached the
+  limit for new anos accounts. Try again later." Every other key is as it
+  was.
+- Accepted by the plan, because no real person reaches the limit. The
+  wallet learns of the limit at step 4, after the break-glass seed went
+  to the keyholders at step 2; that seed stays with the keyholders,
+  unused. A recovery that needs more new accounts than the limit leaves
+  stops at the limit with the same sentence; Retry works once the 30 days
+  free up.
+- Unchanged: `src/app/pages/` (the Wallet page and the recovery pages
+  too), `submitCreation`, every other service, `server/`. 12.3 reads as
+  it did.
+- Readings where the plan left a detail open. The refusal is matched by
+  its status and its words together, `registered.status === 403 &&
+  /account limit reached/.test(reasonOf(registered))`, the way the wallet
+  matches every other single refusal (`not a moderator`, `move already
+  filed`). The sentence comes from `LanguageService.words()`, as the
+  service's two other sentences do, so it is in the language the wallet
+  shows. `accountLimit` stands last under `wallet`, after
+  `notOnLedgerYet`, beside the service's other sentence. The comment of
+  step 4 in the service gained a sentence; the class comment did not
+  change. On the Wallet page the button keeps reading Create anos account
+  at the limit, not Retry: Retry is for a failure before step 4, and the
+  page did not change.
+- Spec: 4.4 (a dated sentence), 8.2 (Wallet, step 4 of the progress
+  list), 8.3 (the line of `account-creation.service`) and this note.
+- `npx ng build` clean (2.12 MB initial, no warnings), in the web_app
+  folder with this change alone in it. Both sentences are in the built
+  bundle and equal the plan's table letter for letter; the build writes
+  Thai as escapes, so the Thai was decoded first. Not run in a browser
+  here, and no masterpod was at the limit: seeing the sentence takes 21
+  accounts from one pod, and that run-through is the user's (the plan's
+  section 4).
+
+### Validator and masterPod follow the appointment too (2026-11-10)
+
+Built from `forclaude/validator-masterpod-stake-plan-1.md` (FINAL), step 3
+of its four, one commit, after the masterpod's step 1 (masterpodsoftware
+4472d39: validator and masterPod are two more roles on its appointments
+list, masterpod spec 16.7) and the validators' step 2 (anossoftware
+d0cd95d: a validator or masterPod stake needs the pod's appointment,
+validator spec 26). Why: the Stake for list offered validator and
+masterPod to everyone. The user, 2026-11-10: "Send stake should only be to
+dao vote or guardian. Right now it also include validator and masterpod.
+We'll actually need to build a list for those, like we did with moderator
+and attestor. Unless the user is on that list, then those option should
+not show." It grows the note of 2026-11-08 above, "The Stake for list
+follows the appointment". Wallet only: no route, no proxy change, no new
+package.
+
+- `session.service.ts`: `StatusAnswer.role` is `'moderator' | 'attestor'
+  | 'validator' | 'masterPod' | null`, still optional; its comment and
+  the comment of the computed `role` name the four. The computed itself
+  did not change.
+- `account.page.ts`: `stakePurposes` is daoVote, guardian and the role
+  the pod holds, if any: `STAKE_PURPOSES.filter((purpose) => purpose ===
+  'daoVote' || purpose === 'guardian' || purpose === role)`. With no
+  role, null or not loaded, that is the two. Until this note the list
+  was all six while the role was not loaded, and validator and masterPod
+  showed to every pod. The list keeps the order of `STAKE_PURPOSES`: a
+  moderator pod sees daoVote, moderator, guardian, and a validator pod
+  daoVote, guardian, validator. The effect that sends a pick back to
+  daoVote when it leaves the list is as it was.
+- `th.ts`: the `ROLES` map behind `notAppointed` gains `validator:
+  'ผู้ตรวจสอบ'` and `masterPod: 'masterPod'`, the words the Stake for list
+  already uses, and its comment says four roles. So the refusal of a
+  validator stake reads
+  "มีเพียงผู้ตรวจสอบที่ได้รับแต่งตั้งเท่านั้นที่วางหลักประกันเพื่อผู้ตรวจสอบได้",
+  to be checked by a Thai reader like the rest. `en.ts` did not change:
+  "Only an appointed validator can stake for validator." comes from the
+  sentence that is there.
+- Unchanged: `guardian-new.page.ts`, whose Returns stake list keeps all
+  six purposes, since a guardian must be able to return any stake;
+  `refusal` on the account page, which already takes the purpose from
+  the order; every other page and service; `server/`.
+- What each pairing does (the plan's section 5). This wallet against a
+  masterpod from before its step 1 never offers validator or masterPod.
+  A wallet from before this note against the new masterpod shows an
+  appointed validator pod the four purposes it showed before. The
+  validators take their step at their next pull; until then a validator
+  or masterPod stake that somebody posts by hand is still accepted, and
+  the wallet no longer offers it. After `npm run appoint` on the
+  masterpod the pod sees its new purpose once the wallet has read its
+  status again.
+- Readings where the plan left a detail open. The computed keeps its
+  `const role = this.session.role()` line and loses only the early
+  return for an undefined role. The comment of `stakePurposes` is dated
+  2026-11-10 in place of 2026-11-08. In 4.3 the dated sentence also says
+  that the appointment opens nothing else. In 8.2 the old rule is kept
+  in one sentence with its two dates, and the sentence on the refusal
+  now names the four purposes. One comment the plan does not name still
+  says two purposes and was left: the comment of `refusal` in
+  `account.page.ts` ("the two appointment refusals of a moderator or
+  attestor stake").
+- Spec: 4.3 (the four names, a dated sentence, the last sentence), 8.2
+  (Account: the Stake for sentences) and this note. The note of
+  2026-11-08 is as it was written.
+- `npx ng build` clean (2.12 MB initial, no warnings), in the web_app
+  folder with this change alone in it. The built bundle holds the
+  `ROLES` map with its four words, each equal to the Stake for list's
+  word (the build writes Thai as escapes, so they were decoded first),
+  and the new filter in place of the old one. The filter's expression,
+  run in a script outside the repo on the six purposes as the bundle
+  spells them, gives daoVote and guardian for no role and for null, and
+  those two with the role for each of the four roles. Not run in a
+  browser here: the run-through is the user's (the plan's section 5). A
+  pod with no role sees daoVote and guardian only; after `npm run
+  appoint … validator` it also sees validator; an appointed moderator or
+  attestor sees what it saw before, without validator and masterPod.
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`
@@ -5017,7 +5710,7 @@ the authenticator's message shows.
 **My recovery** (`/recover/case`). The case id (short, with Copy), the
 status in words ("Open: a moderator will contact you at <email> and meet
 you on a video call", "In review", "Approved: the bankers are sending your
-keys", "Delivering: n of 3 backup code shares received", "Completed",
+keys", "Delivering: n of 3 key shares received", "Completed",
 "Dismissed: <reason in words>"), the timeline from the events the person
 may see (scheduled with the meeting link as a link, approved, dismissed,
 recovered, completed), a Refresh button (`/get-recovery-pod`; also polled
@@ -5025,12 +5718,14 @@ every 15 s while the page is open). "Keep this device: you unlock this case
 with the passkey you just made."
 
 When three shares of one backup code `keyId` are in, the finish appears as
-a second stepper on the same page:
+a second stepper on the same page. The person never sees a backup code,
+here or on Setup (2026-11-10, section 11): on these screens it is "the
+key the bankers keep", "the rebuilt key" or "the key".
 
 1. Combine: opens every share with the recovery hybrid private key, groups
    by `keyId`, combines each group of three; the backup code and the
-   break-glass seeds are in RAM. Shows "backup code recovered" and "n
-   break-glass seeds recovered".
+   break-glass seeds are in RAM. Shows "key rebuilt" and "n break-glass
+   seeds recovered".
 2. Get back in: `KEK_backup` and the backup code keys from the code;
    `blob2` from the last `/get-recovery-pod` answer (masterpod 12.4.3 hands
    it over once the case is approved) opened with `KEK_backup` gives the
@@ -5040,10 +5735,13 @@ a second stepper on the same page:
    ordinary unlock (`/challenge` unlock, the assertion, `/unlock`), which
    opens the normal session in this tab with the same passkey: `blob1`,
    the chat keys, the identity blob, the status.
-3. New backup code: a new code shown once as on Setup, with Complete;
-   `newBlob2`, the new backup code keys, the proof by the old keys,
-   `/rotate-backup-code`; then the deposit as `backupcode` through
-   `SharesService.deposit`, a new `keyId`. "Your old backup code is now
+3. New key for the bankers (until 2026-11-10 "New backup code", which
+   showed the new code once as on Setup and waited for "I have written it
+   down, complete"): one button, "Make the new key", makes a new code
+   without showing it; `newBlob2`, the new backup code keys, the proof by
+   the old keys, `/rotate-backup-code`; then the deposit as `backupcode`
+   through `SharesService.deposit`, a new `keyId`; the button reads "Retry
+   the deposit" when only the deposit failed. "The old key is now
    worthless."
 4. Move your money (2026-11-08, `forclaude/break-glass-plan-1.md` step 5,
    section 11; in place of the "Break-glass keys" step that stood third

@@ -333,9 +333,6 @@ const HPKE_KEY_BYTES = P256_PUBLIC_BYTES + KEM_CIPHERTEXT_BYTES + WRAPPED_KEY_BY
 const CASE_SECRET_BYTES = 96;
 const CASE_WRAP_BYTES = P256_PUBLIC_BYTES + KEM_CIPHERTEXT_BYTES + IV_BYTES + CASE_SECRET_BYTES + TAG_BYTES;
 
-/** RFC 4648 base32, no padding: 32 bytes are 52 characters. */
-const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-
 /**
  * Everything the wallet computes lives here, so no page touches noble,
  * WebCrypto, canonicalize or shamir directly: the masterpod derivations
@@ -495,15 +492,9 @@ export class CryptoService {
     return this.randomBytes(32);
   }
 
-  /** The backup code, 32 random bytes, born at setup and shown once. */
+  /** The backup code, 32 random bytes, born at setup and never shown (2026-11-10): the keyholders hold it in shares for a recovery, where it opens blob2. */
   newBackupCode(): Bytes {
     return this.randomBytes(32);
-  }
-
-  /** The backup code as 52 base32 characters in groups of 4, for the user to write down. */
-  backupCodeText(code: Uint8Array): string {
-    const base32 = toBase32(code);
-    return base32.match(/.{1,4}/g)?.join(' ') ?? base32;
   }
 
   /** KEK_prf = HKDF(prf output, 'masterpod/kek-prf/v1', 32). */
@@ -1060,21 +1051,4 @@ export class CryptoService {
   newContentKey(): Bytes {
     return this.randomBytes(32);
   }
-}
-
-/** RFC 4648 base32 without padding. */
-function toBase32(bytes: Uint8Array): string {
-  let bits = 0;
-  let value = 0;
-  let out = '';
-  for (const byte of bytes) {
-    value = ((value << 8) | byte) & 0x1fff;
-    bits += 8;
-    while (bits >= 5) {
-      out += BASE32_ALPHABET[(value >>> (bits - 5)) & 31];
-      bits -= 5;
-    }
-  }
-  if (bits > 0) out += BASE32_ALPHABET[(value << (5 - bits)) & 31];
-  return out;
 }

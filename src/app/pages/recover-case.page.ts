@@ -61,10 +61,14 @@ const FINISH_STATUSES = ['approved', 'delivering'];
  * status in words, the timeline from the events the person may see, a
  * Refresh button, and a 15-second poll of /get-recovery-pod while the page
  * is open. When three shares of one backup code keyId are in, the finish
- * appears as a second stepper (Combine, Get back in, New backup code, Move
- * your money, Done), each step retryable, the ordinary unlock reused from
- * unlock.ts and the deposit from SharesService; the combined code and seeds
- * live in RecoveryService while it runs and die with the tab. Move your
+ * appears as a second stepper (Combine, Get back in, New key for the
+ * bankers, Move your money, Done), each step retryable, the ordinary unlock
+ * reused from unlock.ts and the deposit from SharesService; the combined
+ * code and seeds live in RecoveryService while it runs and die with the
+ * tab. The backup code is the secret the keyholders hold in shares, and the
+ * person never sees one (2026-11-10, wallet spec 11): the screens call it
+ * the key the bankers keep, and the third step makes the new one, rotates
+ * and deposits it without showing it. Move your
  * money (2026-11-08, break-glass plan 1, step 5, in place of the Break-glass
  * keys step that stored the seeds): the old accounts' keys died with the
  * lost passkey, so for each account that holds anos a new account of the
@@ -142,17 +146,12 @@ const FINISH_STATUSES = ['approved', 'delivering'];
 
             <mat-step [completed]="deposited()" [editable]="false" [label]="t().recoverCase.stepNewCode">
               <p>{{ t().recoverCase.newCodeText }}</p>
-              @if (newCodeText(); as code) {
-                <h4>{{ t().recoverCase.newCodeTitle }}</h4>
-                <p>{{ t().recoverCase.newCodeHint }}</p>
-                <p class="code">{{ code }}</p>
-                <button mat-flat-button type="button" (click)="completeRotation(finish)" [disabled]="finishBusy()">
-                  {{ rotated() ? t().recoverCase.retryDeposit : t().common.writtenDown }}
-                </button>
-              } @else if (deposited()) {
+              @if (deposited()) {
                 <p class="result">{{ t().recoverCase.oldCodeWorthless }}</p>
               } @else {
-                <button mat-flat-button type="button" (click)="makeNewCode()" [disabled]="finishBusy()">{{ t().recoverCase.makeNewCode }}</button>
+                <button mat-flat-button type="button" (click)="completeRotation(finish)" [disabled]="finishBusy()">
+                  {{ rotated() ? t().recoverCase.retryDeposit : t().recoverCase.makeNewCode }}
+                </button>
               }
             </mat-step>
 
@@ -188,7 +187,6 @@ const FINISH_STATUSES = ['approved', 'delivering'];
     .muted { color: var(--mat-sys-on-surface-variant); }
     .error { color: var(--mat-sys-error); }
     .result { color: var(--mat-sys-primary); }
-    .code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 18px; letter-spacing: 1px; line-height: 1.6; max-width: 560px; word-break: break-word; padding: 12px; border-radius: 8px; background: var(--mat-sys-surface-container); }
     .actions { padding: 16px; gap: 8px; }
     a { margin-left: 8px; }
   `,
@@ -219,7 +217,6 @@ export class RecoverCasePage {
   private readonly finishActive = signal(false);
   protected readonly combined = signal<Combined | null>(null);
   protected readonly backIn = signal(false);
-  protected readonly newCodeText = signal<string | null>(null);
   /** The rotation landed on the masterpod; only the deposit is left (a retry deposits the same new code again). */
   protected readonly rotated = signal(false);
   protected readonly deposited = signal(false);
@@ -452,30 +449,27 @@ export class RecoverCasePage {
     this.recoveredCode = code;
   }
 
-  /** Step 3, first half: a fresh backup code, its blob2 and keys, shown once as on Setup. */
-  protected async makeNewCode(): Promise<void> {
-    this.finishError.set(null);
+  /** Step 3, first half: a fresh backup code, its blob2 and keys, kept in this page's fields and never shown. Run by completeRotation when none is held yet; a missing encryption key throws, as a step's failure does. */
+  private async makeNewCode(): Promise<void> {
     const encryptionKey = this.session.getEncryptionKey();
-    if (!encryptionKey) {
-      this.finishError.set(this.t().recoverCase.noKeyInTab);
-      return;
-    }
+    if (!encryptionKey) throw new Error(this.t().recoverCase.noKeyInTab);
     const code = this.crypto.newBackupCode();
     this.newCode = code;
     this.newBlob2 = await this.crypto.encrypt(await this.crypto.deriveKekBackup(code), encryptionKey);
     this.newKeys = await this.crypto.backupCodeKeys(code);
     this.rotated.set(false);
-    this.newCodeText.set(this.crypto.backupCodeText(code));
   }
 
   /**
-   * Step 3, Complete: /rotate-backup-code with the new blob2 and keys and the
+   * Step 3, the one button: the new code made when none is held yet
+   * (makeNewCode), /rotate-backup-code with the new blob2 and keys and the
    * proof by the old code (once), then the deposit of the new code as
    * backupcode under a fresh keyId through SharesService. A failed deposit
    * leaves the rotation standing: Retry deposits the same new code again.
    */
   protected async completeRotation(stepper: MatStepper): Promise<void> {
     await this.runStep(async () => {
+      if (!this.newCode) await this.makeNewCode();
       const code = this.newCode;
       const blob2 = this.newBlob2;
       const keys = this.newKeys;
@@ -506,7 +500,6 @@ export class RecoverCasePage {
       this.newCode = null;
       this.newBlob2 = null;
       this.newKeys = null;
-      this.newCodeText.set(null);
     }, stepper);
   }
 
