@@ -217,6 +217,12 @@ signatures; the validators do.
 Level setup implies vouched and setup complete, which is "they are
 vouched" of the flow, and the encryption key the keyBlob is under exists.
 
+Since 2026-11-10 the masterpod lets a pod make at most 20 new anos
+accounts in the last 30 days: /create-anos-account counts the pod's rows
+as its last check, after the 409, and at the limit answers 403 account
+limit reached (masterpod spec section 17); the wallet says it in one
+sentence and shows no counter (8.2, Wallet).
+
 ### 4.5 Applying it
 
 db/schema.sql changes; locally `npm run db:reset` (the table changes
@@ -987,7 +993,10 @@ and shows its steps as a progress list:
 2. the break-glass seed deposited (section 6, breakglasskey);
 3. /api/sign: the two wallet signatures added;
 4. /create-anos-account with keyBlob (under the key blob key, section 7;
-   2026-11-08) and the signed creation;
+   2026-11-08) and the signed creation; when the masterpod answers 403
+   account limit reached (4.4; 2026-11-10) the error under the steps is
+   "This anoPod has reached the limit for new anos accounts. Try again
+   later." in place of the route and its reason;
 5. /api/anos/1/create-account with the signed creation; a 202, or a 400
    saying the account or its transaction already exists, counts as
    submitted;
@@ -2058,6 +2067,8 @@ excepted, with the keyholder and anos calls included.
                             /create-anos-account, /create-account, /mark-anos-account-submitted), reads the list
                             and the balances again after steps 4 and 6, then waits up to 90 seconds for
                             /get-account to answer with the new pair one; resolves { accountId, pairOne };
+                            at step 4 the masterpod's 403 account limit reached (4.4) is thrown as the sentence
+                            wallet.accountLimit, every other refusal as the route and its reason (2026-11-10);
                             submitCreation runs steps 5 and 6 alone, for Resubmit; ALREADY_THERE, the validator's
                             "already there" wording, the holding tables' included; used by the Wallet page and
                             the recovery finish's Move your money (12.3)
@@ -5463,6 +5474,61 @@ the Material already installed).
   under the form and the form is empty. On the Wallet page, Create anos
   account: the box "Open a new spending account?"; Cancel makes nothing;
   "Create anos account" in the box runs the six steps as before.
+
+### The masterpod's account limit in plain words (2026-11-10)
+
+Built from `forclaude/account-limit-plan-1.md` (FINAL), step 2 of its
+three, one commit. Since its step 1 (masterpodsoftware 9310f46, masterpod
+spec section 17) the masterpod lets a pod make at most 20 new anos
+accounts in the last 30 days and answers `403 account limit reached` on
+`/create-anos-account` at the limit. The user's decision: the wallet
+shows no counter and no "3 of 20"; a person only hears of the limit when
+it refuses them, in one sentence that names no number, so it stays true
+when the masterpod's two constants change. Wallet only: no route, no
+proxy change, no new package, no page changed.
+
+- `src/app/services/account-creation.service.ts`, step 4 of
+  `createAccount`: a refusal of `/create-anos-account` that reads
+  `account limit reached` is thrown as `wallet.accountLimit`; every other
+  refusal as before (`/create-anos-account: <reason>`). The step is
+  marked failed either way. The Wallet page shows the sentence under its
+  steps and the recovery's "Move your money" (12.3) in its error line,
+  both from the error's message, as they show every other failure of the
+  service.
+- Words, English and Thai (the Thai as the plan gives it, to be checked
+  by a Thai reader): `wallet.accountLimit`, "This anoPod has reached the
+  limit for new anos accounts. Try again later." Every other key is as it
+  was.
+- Accepted by the plan, because no real person reaches the limit. The
+  wallet learns of the limit at step 4, after the break-glass seed went
+  to the keyholders at step 2; that seed stays with the keyholders,
+  unused. A recovery that needs more new accounts than the limit leaves
+  stops at the limit with the same sentence; Retry works once the 30 days
+  free up.
+- Unchanged: `src/app/pages/` (the Wallet page and the recovery pages
+  too), `submitCreation`, every other service, `server/`. 12.3 reads as
+  it did.
+- Readings where the plan left a detail open. The refusal is matched by
+  its status and its words together, `registered.status === 403 &&
+  /account limit reached/.test(reasonOf(registered))`, the way the wallet
+  matches every other single refusal (`not a moderator`, `move already
+  filed`). The sentence comes from `LanguageService.words()`, as the
+  service's two other sentences do, so it is in the language the wallet
+  shows. `accountLimit` stands last under `wallet`, after
+  `notOnLedgerYet`, beside the service's other sentence. The comment of
+  step 4 in the service gained a sentence; the class comment did not
+  change. On the Wallet page the button keeps reading Create anos account
+  at the limit, not Retry: Retry is for a failure before step 4, and the
+  page did not change.
+- Spec: 4.4 (a dated sentence), 8.2 (Wallet, step 4 of the progress
+  list), 8.3 (the line of `account-creation.service`) and this note.
+- `npx ng build` clean (2.12 MB initial, no warnings), in the web_app
+  folder with this change alone in it. Both sentences are in the built
+  bundle and equal the plan's table letter for letter; the build writes
+  Thai as escapes, so the Thai was decoded first. Not run in a browser
+  here, and no masterpod was at the limit: seeing the sentence takes 21
+  accounts from one pod, and that run-through is the user's (the plan's
+  section 4).
 
 ## 12. Recovery and the moderator edition
 

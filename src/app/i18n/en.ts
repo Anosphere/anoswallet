@@ -263,6 +263,7 @@ export const en = {
     pending: (anos: string) => `${anos} pending`,
     retryFresh: (message: string) => `${message}. Retry starts over with fresh keys.`,
     notOnLedgerYet: (seconds: number) => `The account is not on the ledger yet after ${seconds} seconds. It may still land: refresh in a moment.`,
+    accountLimit: 'This anoPod has reached the limit for new anos accounts. Try again later.',
   },
   accountHome: {
     intro: 'These are what a moderator would use to give your account back if you were ever locked out. The more you add, the easier it will be to recover your account.',

@@ -96,11 +96,14 @@ export class AccountCreationService {
       const creation = await this.signing.sign(unsigned);
       onStep(2, 'done');
 
-      // 4. The masterpod row.
+      // 4. The masterpod row. Its limit on new accounts (403 account limit reached, wallet spec 4.4) is said in the one sentence wallet.accountLimit.
       step = 3;
       onStep(3, 'doing');
       const registered = await this.masterpod.createAnosAccount({ accountId: creation.payload.accountId, accountType, keyBlob, creation });
-      if (!registered.ok) throw new Error(`/create-anos-account: ${reasonOf(registered)}`);
+      if (!registered.ok) {
+        const atLimit = registered.status === 403 && /account limit reached/.test(reasonOf(registered));
+        throw new Error(atLimit ? this.lang.words().wallet.accountLimit : `/create-anos-account: ${reasonOf(registered)}`);
+      }
       onStep(3, 'done');
       await this.reload();
 
