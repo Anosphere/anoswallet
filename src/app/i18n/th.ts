@@ -7,8 +7,8 @@ const KINDS: Record<string, string> = { spending: 'ใช้จ่าย', guard
 const SIDES: Record<string, string> = { for: 'เห็นด้วย', against: 'ไม่เห็นด้วย' };
 const sideWord = (side: string): string => SIDES[side] ?? side;
 
-/** The two appointed roles from the wire words `moderator` and `attestor`, for the refusal of a stake; a word the wallet does not know stays as it is. */
-const ROLES: Record<string, string> = { moderator: 'ผู้ดูแล', attestor: 'ผู้ยืนยัน' };
+/** The four appointed roles from the wire words `moderator`, `attestor`, `validator` and `masterPod`, for the refusal of a stake, in the words the Stake for list uses; a word the wallet does not know stays as it is. */
+const ROLES: Record<string, string> = { moderator: 'ผู้ดูแล', attestor: 'ผู้ยืนยัน', validator: 'ผู้ตรวจสอบ', masterPod: 'masterPod' };
 const roleWord = (role: string): string => ROLES[role] ?? role;
 
 /**

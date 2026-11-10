@@ -350,11 +350,10 @@ export class AccountPage {
   protected readonly assistedStageWords = assistedStageWords;
   protected readonly lockedStageWords = lockedStageWords;
   protected readonly spendingKinds = SPENDING_KINDS;
-  /** The purposes this anoPod may stake for (wallet spec 8.2, 2026-11-08): all six while the status has no role (no status yet, or an older masterpod); the four without moderator and attestor when the pod holds no role; those four and the role it holds. */
+  /** The purposes this anoPod may stake for (wallet spec 8.2, 2026-11-10): daoVote and guardian for everyone, and the role the anoPod holds, if it holds one (moderator, attestor, validator or masterPod). With no role, null or not loaded (no status yet, or an older masterpod), that is the two. */
   protected readonly stakePurposes = computed((): readonly StakePurpose[] => {
     const role = this.session.role();
-    if (role === undefined) return STAKE_PURPOSES;
-    return STAKE_PURPOSES.filter((purpose) => (purpose !== 'moderator' && purpose !== 'attestor') || purpose === role);
+    return STAKE_PURPOSES.filter((purpose) => purpose === 'daoVote' || purpose === 'guardian' || purpose === role);
   });
 
   protected readonly item = computed(() => this.session.accounts().find((a) => a.accountId === this.accountId()) ?? null);

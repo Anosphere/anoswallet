@@ -163,10 +163,14 @@ bucketTwoImages, bucketTwoInfos, the caller's rows in each. The wallet's
 next-step rule reads them (section 8.1).
 
 Since 2026-11-08 the answer also carries role, after isSuperSeed:
-"moderator", "attestor" or null, the pod's live appointment (masterpod
-spec section 16, forclaude/appointments-plan-1.md). The account page's
-Stake for list reads it (8.2). An older masterpod sends no role field,
-and the wallet then shows all six purposes.
+"moderator", "attestor", "validator", "masterPod" or null, the pod's live
+appointment (masterpod spec section 16, forclaude/appointments-plan-1.md).
+The names "validator" and "masterPod" came on 2026-11-10 (masterpod spec
+16.7, forclaude/validator-masterpod-stake-plan-1.md): a pod appointed
+for one of them may stake for it, and the appointment opens nothing
+else. The account page's Stake for list reads the role (8.2). An older
+masterpod sends no role field, and the wallet then shows daoVote and
+guardian only (since 2026-11-10; until then it showed all six purposes).
 
 ### 4.4 anos accounts
 
@@ -1115,15 +1119,20 @@ production); while the numbers have not loaded, Send is off and the line
 reads "The lock settings have not loaded from the proxy. Refresh to try
 again."; assisted sends
 assistedAnosTransfer. The Stake for list shows the purposes this anoPod
-may stake for (2026-11-08, section 11): all six while the status carries
-no role (no status yet, or an older masterpod, 4.3); the four without
-moderator and attestor when role is null; those four and the role the
-pod holds otherwise; a pick that leaves the list goes back to daoVote.
+may stake for (2026-11-10, section 11): daoVote and guardian for
+everyone, and the role the pod holds, if it holds one: moderator,
+attestor, validator or masterPod (4.3). While the status carries no
+role (no status yet, an older masterpod, or role null) the list is
+daoVote and guardian. From 2026-11-08 until then the list followed the
+role for moderator and attestor only: validator and masterPod showed to
+everyone, and all six showed while the status carried no role. A pick
+that leaves the list goes back to daoVote.
 Stake for starts at daoVote and the amount box starts empty (2026-11-10,
 section 11; they started at attestor and at 1), so the form on a fresh
 page and the form after a send are the same.
-A moderator or attestor stake the validator refuses for the appointment
-reads "Only an appointed attestor can stake for attestor." or "The
+A stake for moderator, attestor, validator or masterPod that the
+validator refuses for the appointment reads "Only an appointed attestor
+can stake for attestor.", with the stake's purpose in both places, or "The
 validator could not confirm this anoPod with the masterpod. Try again
 in a moment."; every other refusal shows as the validator says it. The
 fund proposal's Returns stake list keeps all six: a guardian returns
@@ -5529,6 +5538,82 @@ proxy change, no new package, no page changed.
   here, and no masterpod was at the limit: seeing the sentence takes 21
   accounts from one pod, and that run-through is the user's (the plan's
   section 4).
+
+### Validator and masterPod follow the appointment too (2026-11-10)
+
+Built from `forclaude/validator-masterpod-stake-plan-1.md` (FINAL), step 3
+of its four, one commit, after the masterpod's step 1 (masterpodsoftware
+4472d39: validator and masterPod are two more roles on its appointments
+list, masterpod spec 16.7) and the validators' step 2 (anossoftware
+d0cd95d: a validator or masterPod stake needs the pod's appointment,
+validator spec 26). Why: the Stake for list offered validator and
+masterPod to everyone. The user, 2026-11-10: "Send stake should only be to
+dao vote or guardian. Right now it also include validator and masterpod.
+We'll actually need to build a list for those, like we did with moderator
+and attestor. Unless the user is on that list, then those option should
+not show." It grows the note of 2026-11-08 above, "The Stake for list
+follows the appointment". Wallet only: no route, no proxy change, no new
+package.
+
+- `session.service.ts`: `StatusAnswer.role` is `'moderator' | 'attestor'
+  | 'validator' | 'masterPod' | null`, still optional; its comment and
+  the comment of the computed `role` name the four. The computed itself
+  did not change.
+- `account.page.ts`: `stakePurposes` is daoVote, guardian and the role
+  the pod holds, if any: `STAKE_PURPOSES.filter((purpose) => purpose ===
+  'daoVote' || purpose === 'guardian' || purpose === role)`. With no
+  role, null or not loaded, that is the two. Until this note the list
+  was all six while the role was not loaded, and validator and masterPod
+  showed to every pod. The list keeps the order of `STAKE_PURPOSES`: a
+  moderator pod sees daoVote, moderator, guardian, and a validator pod
+  daoVote, guardian, validator. The effect that sends a pick back to
+  daoVote when it leaves the list is as it was.
+- `th.ts`: the `ROLES` map behind `notAppointed` gains `validator:
+  'ผู้ตรวจสอบ'` and `masterPod: 'masterPod'`, the words the Stake for list
+  already uses, and its comment says four roles. So the refusal of a
+  validator stake reads
+  "มีเพียงผู้ตรวจสอบที่ได้รับแต่งตั้งเท่านั้นที่วางหลักประกันเพื่อผู้ตรวจสอบได้",
+  to be checked by a Thai reader like the rest. `en.ts` did not change:
+  "Only an appointed validator can stake for validator." comes from the
+  sentence that is there.
+- Unchanged: `guardian-new.page.ts`, whose Returns stake list keeps all
+  six purposes, since a guardian must be able to return any stake;
+  `refusal` on the account page, which already takes the purpose from
+  the order; every other page and service; `server/`.
+- What each pairing does (the plan's section 5). This wallet against a
+  masterpod from before its step 1 never offers validator or masterPod.
+  A wallet from before this note against the new masterpod shows an
+  appointed validator pod the four purposes it showed before. The
+  validators take their step at their next pull; until then a validator
+  or masterPod stake that somebody posts by hand is still accepted, and
+  the wallet no longer offers it. After `npm run appoint` on the
+  masterpod the pod sees its new purpose once the wallet has read its
+  status again.
+- Readings where the plan left a detail open. The computed keeps its
+  `const role = this.session.role()` line and loses only the early
+  return for an undefined role. The comment of `stakePurposes` is dated
+  2026-11-10 in place of 2026-11-08. In 4.3 the dated sentence also says
+  that the appointment opens nothing else. In 8.2 the old rule is kept
+  in one sentence with its two dates, and the sentence on the refusal
+  now names the four purposes. One comment the plan does not name still
+  says two purposes and was left: the comment of `refusal` in
+  `account.page.ts` ("the two appointment refusals of a moderator or
+  attestor stake").
+- Spec: 4.3 (the four names, a dated sentence, the last sentence), 8.2
+  (Account: the Stake for sentences) and this note. The note of
+  2026-11-08 is as it was written.
+- `npx ng build` clean (2.12 MB initial, no warnings), in the web_app
+  folder with this change alone in it. The built bundle holds the
+  `ROLES` map with its four words, each equal to the Stake for list's
+  word (the build writes Thai as escapes, so they were decoded first),
+  and the new filter in place of the old one. The filter's expression,
+  run in a script outside the repo on the six purposes as the bundle
+  spells them, gives daoVote and guardian for no role and for null, and
+  those two with the role for each of the four roles. Not run in a
+  browser here: the run-through is the user's (the plan's section 5). A
+  pod with no role sees daoVote and guardian only; after `npm run
+  appoint … validator` it also sees validator; an appointed moderator or
+  attestor sees what it saw before, without validator and masterPod.
 
 ## 12. Recovery and the moderator edition
 

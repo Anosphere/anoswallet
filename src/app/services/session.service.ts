@@ -14,8 +14,8 @@ export interface StatusAnswer {
   bucketOneImages: number;
   bucketTwoImages: number;
   bucketTwoInfos: number;
-  /** The pod's live appointment (masterpod spec 16): moderator, attestor or null when it holds none; an older masterpod sends no field. */
-  role?: 'moderator' | 'attestor' | null;
+  /** The pod's live appointment (masterpod spec 16): moderator, attestor, validator or masterPod (the last two since 2026-11-10, masterpod spec 16.7), or null when it holds none; an older masterpod sends no field. */
+  role?: 'moderator' | 'attestor' | 'validator' | 'masterPod' | null;
 }
 
 /** The two ids of docs/public-ledger-id.md, hex. */
@@ -111,7 +111,7 @@ export class SessionService {
   readonly vouched = computed(() => this.status()?.vouched ?? false);
   readonly setupComplete = computed(() => this.status()?.setupComplete ?? false);
   readonly isSeed = computed(() => (this.status()?.isSeed || this.status()?.isSuperSeed) ?? false);
-  /** The pod's appointed role from the status (wallet spec 4.3, 2026-11-08): moderator or attestor; null when it holds none; undefined while there is no status, or the masterpod sent no role. */
+  /** The pod's appointed role from the status (wallet spec 4.3, 2026-11-08): moderator, attestor, validator or masterPod (the last two since 2026-11-10); null when it holds none; undefined while there is no status, or the masterpod sent no role. */
   readonly role = computed(() => this.status()?.role);
 
   /**
