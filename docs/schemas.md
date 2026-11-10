@@ -5129,6 +5129,38 @@ id out of the chat, and the buyer's card blind. Wallet only.
   has an open trade with someone else: "This account already has an
   escrow trade or a transfer waiting on the validators. …".
 
+### The locked-out page's small text stays off the buttons (2026-11-10)
+
+Bug 2 of `test_net_phase_2/bugs-and-new-features.md`, one commit, no plan
+of its own: on the "I'm locked out" page (12.3, `/recover/open`) the small
+text under the Contact email box ran into the Back and Next buttons. Why:
+Angular Material keeps room for one line under a field (20 px) and draws
+a second line over whatever follows. The box is 280 px wide on every
+screen and its hint gets 236 px of that, where the English sentence takes
+two lines, so the second one lay across the buttons. Wallet only.
+
+- `src/app/pages/recover-open.page.ts`: the Contact email field has
+  `subscriptSizing="dynamic"`, so the hint takes the room it needs and
+  pushes the buttons down. `.fields` has `margin-bottom: 8px`: the dynamic
+  setting also drops the room Material kept under the box, and the hint
+  would touch the Next button. `mat-form-field` has `width: 280px` beside
+  its `min-width: 280px`: a hint that takes room also widens a box with
+  no width of its own (to 381 px on a wide screen), so the box keeps the
+  width it had on every screen.
+- Unchanged: the words (`recoverOpen.emailHint`, English and Thai), the
+  flow, every other page.
+- Left as it is: on a screen narrower than about 406 px the box is wider
+  than the room its step has, and the stepper cuts the box's right edge
+  off (16 px at 390 px wide, 31 px at 375). It was so before this change.
+- Spec: this note only.
+- `npx ng build` clean (2.10 MB initial, no warnings). Seen here in a
+  development build served from a scratch folder, with step 2 opened
+  through the browser's debug tools, so no keyholder and no masterpod was
+  asked: at 360, 375, 390, 430 and 1024 px wide the English hint takes two
+  lines and the Thai hint one, the buttons start 8 px under it, and
+  nothing overlaps. Not seen on a phone or on the test net: the user
+  checks it there.
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`
