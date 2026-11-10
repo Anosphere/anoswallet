@@ -20,6 +20,12 @@ export const MESSAGES_PAGE = 50;
 /** The transaction history opens with this many of the newest rows and Show more loads as many (wallet spec 8.2, Transaction history). */
 export const HISTORY_PAGE = 20;
 
+/** The pinned listing card reads a chat's messages for their account ids this many at a time, the most /list-messages answers (wallet spec 8.2, Chat, and 8.7). */
+export const CARD_MESSAGES_PAGE = 200;
+
+/** The pinned listing card reads an account's transactions since the chat was made this many at a time, the most /list-transactions answers (wallet spec 8.2, Chat). */
+export const CARD_TRANSACTIONS_PAGE = 200;
+
 /** The attesting lists, the two attestor case pages and My case refresh this often while open (wallet spec 13.3). */
 export const CASES_POLL_MS = 15_000;
 

@@ -1384,23 +1384,63 @@ latest transaction id, buildAnosTransferTransaction with type
 escrowTransfer, /api/sign, /anos-transfer), posts "Escrow trade started:
 100 anos from <my account id> to <their account id>. Transaction <id>."
 and shows the stage; a refusal shows the validator's reason as the
-account page shows it. The stage: every 5 seconds while the conversation
-is open, /list-escrows on each of this pod's accounts named in the chat
-(an id in the messages that is one of session.accounts, pair one from its
-keyBlob); the newest trade whose other side is an account named in the
-chat shows as "Escrow trade: 100 anos · Waiting for the seller to release
-the anos" (escrow-stage.ts, by this pod's side) with "See the trade" to
+account page shows it.
+
+The chat's trade (rewritten 2026-11-10, section 11, from
+forclaude/wallet-finished-trade-plan-1.md): the card reads it from the
+validators when the conversation opens, every 5 seconds while it is open,
+and once more when the seller says Yes to Start. Until the first check
+ends the card says "Checking for a trade…" where Share and Start go. The
+chat's account ids: the page holds the room's newest 50 messages only, so
+the card reads every message of the room itself, once (/list-messages
+from the first position, 200 at a time, CARD_MESSAGES_PAGE, decrypted
+with the room key), and adds the ids the page feeds it, which carry what
+arrived since; the form's To list and the "Ask them to share an account
+first" hint follow all of them. The accounts it reads: this pod's usable
+spending accounts when it is the seller, and this pod's usable accounts
+named in the chat (an id in the messages that is one of
+session.accounts), pair one from each keyBlob; with no account id in the
+chat nothing is read. A trade is the chat's when it is between one of
+those accounts and an account named in the chat, whoever posted the id.
+First /list-escrows on each account: the newest open trade of the chat
+shows as "Escrow trade: 100 anos · Waiting for the seller to release the
+anos" (escrow-stage.ts, by this pod's side) with "See the trade" to
 /wallet/<my account>/escrow/<transactionId>; Release, Cancel and Dispute
-stay on that page. A trade seen open here and then gone from the list is
-closed: its id on the first page of /list-transactions of my account
-means "Released: 100 anos went to the buyer.", otherwise "Cancelled: the
-seller kept the anos." (the trade page's rule); after a release the owner
-of an open listing gets "Close the listing", which asks once and calls
-/close-listing, and the card reads Closed once the room list is
-refreshed. Share and Start show until a trade has started, and again
-after a cancelled one; a closed listing's card shows only the stage of a
-trade when there is one. A room whose listing the masterpod does not give
-shows no card.
+stay on that page. With none open, /list-transactions on each account
+with `from` the room's createdAt, 200 rows at a time
+(CARD_TRANSACTIONS_PAGE), paging back with beforePosition while a page
+comes back full: an escrowTransfer of the chat is its released trade, the
+newest when there are several. The open list is read first because the
+validators write the link before the trade leaves /list-escrows
+(anossoftware src/accounts/accounts.service.js, writeApproved), so a
+released trade is never missing from both reads. A released trade ends
+the chat's trading: both sides read "Released: 100 anos went to the
+buyer." and "This trade is finished. To trade again, start a new chat.",
+Share and Start do not come back in this chat, on this visit or a later
+one, and the owner of an open listing gets "Close the listing", which
+asks once and calls /close-listing; the card reads Closed once the room
+list is refreshed. A new trade between the same two people needs a new
+chat, and so another listing, since the masterpod allows one chat per
+person per listing. A trade seen open here and then gone with nothing
+released reads "Cancelled: the seller kept the anos.", from the card's
+memory of this visit, and Share and Start come back. A read that fails,
+on the validators or the masterpod, is never taken as "no trade": the
+card keeps the trade or the Released lines it shows, and where Share and
+Start go it says "Could not check for a trade. Trying again." until a
+check has read everything. The Yes of Start runs one fresh check before
+anything is built or signed: when it cannot be read, nothing is sent and
+the card says "Could not check for an earlier trade, so nothing was sent.
+Try again."; when it finds a trade open or released, nothing is sent and
+the card says "Nothing was sent. This chat already has an escrow trade."
+and shows that trade. Three limits: the buyer's card can match a trade
+only when the seller's account id is in the chat, which only the "Escrow
+trade started" message puts there; two chats at once between the same two
+people on the same accounts both read Released after one release; a
+seller who recovered the account after a lost passkey cannot read the old
+account, so a release sent from it is not seen. Share and Start show
+until a trade has started, and again after a cancelled one; a closed
+listing's card shows only the stage of a trade when there is one. A room
+whose listing the masterpod does not give shows no card.
 
 Requests, at /chat/requests: the invites to this pod (the inviter's
 username, then `invited you to "<the public room's name>"`, `invited you
@@ -2035,7 +2075,10 @@ src/app/components/:
   sender and position, newest first; the page changes only to draw the
   card and feed it. The card posts its own messages (Share an account,
   Escrow trade started) encrypted with the room key, and the thread's poll
-  shows them. It exports `FoundAccountId`.
+  shows them. It exports `FoundAccountId`. Since 2026-11-10 the card also
+  reads the room's messages itself for their account ids (8.2, Chat): the
+  page's computed holds the ids of the newest 50 messages and of what
+  arrived since, which is not the whole chat.
 
 ### 8.8 The languages
 
@@ -4921,6 +4964,75 @@ plan's section 6). Step 5, the architecture records, is another chat.
   label "Passed, the money moved" or "Failed" with "decided …"; against
   an older validator or doorman, "/get-fund-proposal: HTTP 404: Not
   Found" in red.
+
+### The pinned card reads a finished trade (2026-11-10)
+
+Built in the planning chat from
+`forclaude/wallet-finished-trade-plan-1.md` (FINAL), one commit. Bug 3 of
+`test_net_phase_2/bugs-and-new-features.md`: in a marketplace chat, after
+an escrow trade was complete, "Start the escrow trade" came back, so
+someone could send the anos a second time. Why: the card knew a finished
+trade only from its own memory (`seen`, `ended`); the card is rebuilt
+whenever the person leaves the chat, and the release happens on the trade
+page, so on the way back nothing was known. A /list-escrows read that
+failed was also taken as "the trade is gone". And the card read only this
+pod's accounts named in the chat, so the seller's card never saw a trade
+whose "Escrow trade started" message was not posted (bug 1 of the same
+list). Wallet only: no validator, doorman, masterpod or proxy change.
+
+- `src/app/components/pinned-listing.component.ts`: `SeenTrade`, `Ended`,
+  `ended`, `endedText()`, `polling` and `myNamedKey` are gone. `older`
+  (the account ids the card read from the room itself, null until that
+  read is whole) and `ids` (those and the page's `accountIds`, newest
+  first) feed `theirAccountIds` and `myNamedAccounts`. `watched` is the
+  seller's usable spending accounts plus `myNamedAccounts`, and
+  `watchedKey` (the room's id and `watched`) drives the effect that
+  `myNamedKey` drove. `released` (`{ amount }`, kept for the room once
+  set), `cancelled` and `read` (null, true, false) replace `ended`.
+  `poll()` queues one `check()` behind the checks before it (`last`,
+  `waiting`) and resolves to `open`, `released`, `none` or `unread`; the
+  timer calls it only when none is waiting. `check()`: the pod's accounts
+  when the tab has none (once, `accountsAsked`), `readIds()` once per
+  room, /list-escrows on each watched account, then, with none open and
+  none released yet, `releasedLink()` on each. A refusal, or anything
+  thrown, is `unread`: `read` becomes false and nothing else changes. A
+  check that ends after the card was given another room changes nothing.
+  `start()` runs `poll()` first and throws `pinned.notSentUnread` or
+  `pinned.notSentAlready` before anything is built. The template: the
+  Released branch with the `finished` line and the Close the listing
+  block; `checking` and `cannotCheck` where Share and Start go.
+- `src/app/constants.ts`: `CARD_MESSAGES_PAGE` and
+  `CARD_TRANSACTIONS_PAGE`, 200 each, after `HISTORY_PAGE`.
+- Words: `pinned.checking`, `cannotCheck`, `finished`, `notSentUnread`
+  and `notSentAlready`, English and Thai (the Thai written here, to be
+  checked by a Thai reader). `pinned.closedUnknown` left both files: a
+  transactions read that fails now keeps the card as it is, so nothing
+  says "Closed" any more.
+- Unchanged: `chat-room.page.ts` (it draws the card and feeds it as
+  before), the services, the trade page, the account page, `server/`.
+- The reading of "The marketplace, step 3" that Share and Start stay away
+  after a release now holds across visits. A second trade in the same
+  chat after a release is not possible, by the user's decision: "The
+  danger is more real than the convenience. A vulnerable person might
+  send the trade several times."
+- Readings where the plan left a detail open: the place of the five new
+  keys inside `pinned` (`checking` and `cannotCheck` where
+  `closedUnknown` was, `finished` after `released`, the two `notSent`
+  lines after `pickAccounts`); the template's Released branch is an
+  `@else if (released(); as done)`.
+- Spec: 8.2 Chat (the chat's trade), 8.7 and this note.
+- `npx ng build` clean (2.09 MB initial, no warnings). Not run in a
+  browser here: the user deploys and runs it on the test net. The chat of
+  bug 3, where the trade was released: "Released: … anos went to the
+  buyer." and "This trade is finished. To trade again, start a new chat.",
+  no "Start the escrow trade", and "Close the listing" for the listing's
+  owner. The chat of bug 1: the seller's card shows the trade if it is
+  still open, or Released. A new listing and a new chat between the same
+  two people: Start works, and after the release on the trade page the
+  chat reads Released on both phones. A trade the buyer cancels while the
+  chat is open: "Cancelled: the seller kept the anos." and Start is back.
+  The network off for a moment: "Could not check for a trade. Trying
+  again." and no button, until it is back.
 
 ## 12. Recovery and the moderator edition
 
