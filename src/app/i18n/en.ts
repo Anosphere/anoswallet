@@ -708,8 +708,12 @@ export const en = {
     notSentUnread: 'Could not check for an earlier trade, so nothing was sent. Try again.',
     notSentAlready: 'Nothing was sent. This chat already has an escrow trade.',
     refused: (reason: string) => `The validator refused the trade: ${reason}`,
+    alreadyHeld: 'This account already has an escrow trade or a transfer waiting on the validators. Finish that first, or use another account.',
+    noAnswer: 'The validators did not answer. If the trade started, it will show here in a moment. If it does not, try again.',
     startedMessage: (anos: string, from: string, to: string, transactionId: string) =>
       `Escrow trade started: ${anos} anos from ${from} to ${to}. Transaction ${transactionId}.`,
+    releasedMessage: (anos: string, from: string, to: string, transactionId: string) =>
+      `Escrow trade released: ${anos} anos from ${from} to ${to}. Transaction ${transactionId}.`,
   },
   filters: {
     least: 'Least',

@@ -714,8 +714,12 @@ export const th: Words = {
     notSentUnread: 'ตรวจสอบการซื้อขายก่อนหน้าไม่ได้ จึงยังไม่ได้ส่งอะไร ลองอีกครั้ง',
     notSentAlready: 'ไม่ได้ส่งอะไร แชทนี้มีการซื้อขายแบบเอสโครว์อยู่แล้ว',
     refused: (reason: string) => `ผู้ตรวจสอบปฏิเสธการซื้อขาย: ${reason}`,
+    alreadyHeld: 'บัญชีนี้มีการซื้อขายแบบเอสโครว์หรือการโอนที่รออยู่บนผู้ตรวจสอบอยู่แล้ว ทำรายการนั้นให้เสร็จก่อน หรือใช้บัญชีอื่น',
+    noAnswer: 'ผู้ตรวจสอบไม่ตอบ หากการซื้อขายเริ่มแล้ว จะแสดงที่นี่ในอีกสักครู่ หากไม่แสดง ให้ลองอีกครั้ง',
     startedMessage: (anos: string, from: string, to: string, transactionId: string) =>
       `เริ่มการซื้อขายแบบเอสโครว์แล้ว: ${anos} anos จาก ${from} ไปยัง ${to} ธุรกรรม ${transactionId}`,
+    releasedMessage: (anos: string, from: string, to: string, transactionId: string) =>
+      `ปล่อยการซื้อขายแบบเอสโครว์แล้ว: ${anos} anos จาก ${from} ไปยัง ${to} ธุรกรรม ${transactionId}`,
   },
   filters: {
     least: 'น้อยสุด',

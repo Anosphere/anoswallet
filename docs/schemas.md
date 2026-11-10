@@ -1381,10 +1381,24 @@ Only the buyer can cancel; either side can dispute.", Yes or Back), and
 Yes builds the escrowTransfer as the account page's Send does (pair one
 from the account's keyBlob and the encryption key, /get-account for the
 latest transaction id, buildAnosTransferTransaction with type
-escrowTransfer, /api/sign, /anos-transfer), posts "Escrow trade started:
-100 anos from <my account id> to <their account id>. Transaction <id>."
-and shows the stage; a refusal shows the validator's reason as the
-account page shows it.
+escrowTransfer, /api/sign, /anos-transfer). What follows the answer
+(rewritten 2026-11-10, section 11, from
+forclaude/wallet-trade-message-plan-1.md): an answer with a 4xx status is
+a refusal and shows the validator's reason as the account page shows it,
+with plain words when the account already has something waiting on the
+validators ("This account already has an escrow trade or a transfer
+waiting on the validators. Finish that first, or use another account.").
+After any other answer the card checks the chat's trade once more
+(below), and that check posts the message "Escrow trade started: 100 anos
+from <my account id> to <their account id>. Transaction <id>."; Yes does
+not post it. The validator stores a trade before it answers, so an answer
+lost on the way (no network, the proxy's 502, the doorman's 502 or 504)
+may hide a trade that started: found open, it has started and no error
+shows; otherwise the card says "The validators did not answer. If the
+trade started, it will show here in a moment. If it does not, try again."
+and the form stays for another try. A trade the check finds, open or
+released, closes the form, so its question does not come back by itself
+once that trade is cancelled.
 
 The chat's trade (rewritten 2026-11-10, section 11, from
 forclaude/wallet-finished-trade-plan-1.md): the card reads it from the
@@ -1433,14 +1447,36 @@ the card says "Could not check for an earlier trade, so nothing was sent.
 Try again."; when it finds a trade open or released, nothing is sent and
 the card says "Nothing was sent. This chat already has an escrow trade."
 and shows that trade. Three limits: the buyer's card can match a trade
-only when the seller's account id is in the chat, which only the "Escrow
-trade started" message puts there; two chats at once between the same two
-people on the same accounts both read Released after one release; a
-seller who recovered the account after a lost passkey cannot read the old
-account, so a release sent from it is not seen. Share and Start show
-until a trade has started, and again after a cancelled one; a closed
-listing's card shows only the stage of a trade when there is one. A room
-whose listing the masterpod does not give shows no card.
+only when the seller's account id is in the chat, which the chat's
+message about the trade (the next paragraph) puts there the first time
+the seller has the chat open after the trade started; two chats at once
+between the same two people on the same accounts both read Released after
+one release; a seller who recovered the account after a lost passkey
+cannot read the old account, so a release sent from it is not seen. Share
+and Start show until a trade has started, and again after a cancelled
+one; a closed listing's card shows only the stage of a trade when there
+is one. A room whose listing the masterpod does not give shows no card.
+
+The chat's message about its trade (2026-11-10, section 11, from
+forclaude/wallet-trade-message-plan-1.md): whenever the check finds the
+chat's trade, open or released, the account it was read on sent it, and
+no message in the chat carries its transaction id (64 hex characters, so
+it is among the ids named in the chat), the card posts the message
+itself, in the seller's name, encrypted with the room key like any other:
+"Escrow trade started: 100 anos from <my account id> to <their account
+id>. Transaction <id>." for an open trade, "Escrow trade released: 100
+anos from <my account id> to <their account id>. Transaction <id>." for
+one already released. This is the only place the message is posted. So a
+lost answer to the transfer, a /send-message that failed, a tab closed in
+between and a trade started from the account page's Send (escrow kind) to
+an account named in the chat all end with the chat told, the next time
+the seller has the chat open; the message puts the seller's account id
+into the chat, and the buyer's card then finds the trade. The card keeps
+the transaction ids it posted about, per room (`told`), so a check that
+runs before the thread shows the message does not post it again; a post
+that fails is tried again by the next check; two devices of the seller in
+the same chat at the same moment can post it twice. The buyer's card
+never posts about a trade.
 
 Requests, at /chat/requests: the invites to this pod (the inviter's
 username, then `invited you to "<the public room's name>"`, `invited you
@@ -2074,11 +2110,12 @@ src/app/components/:
   decrypted messages (the 64-hex pieces of `piecesOf`), each with its
   sender and position, newest first; the page changes only to draw the
   card and feed it. The card posts its own messages (Share an account,
-  Escrow trade started) encrypted with the room key, and the thread's poll
-  shows them. It exports `FoundAccountId`. Since 2026-11-10 the card also
-  reads the room's messages itself for their account ids (8.2, Chat): the
-  page's computed holds the ids of the newest 50 messages and of what
-  arrived since, which is not the whole chat.
+  Escrow trade started and, since 2026-11-10, Escrow trade released, the
+  last two from its check) encrypted with the room key, and the thread's
+  poll shows them. It exports `FoundAccountId`. Since 2026-11-10 the card
+  also reads the room's messages itself for their account ids (8.2,
+  Chat): the page's computed holds the ids of the newest 50 messages and
+  of what arrived since, which is not the whole chat.
 
 ### 8.8 The languages
 
@@ -5033,6 +5070,64 @@ list). Wallet only: no validator, doorman, masterpod or proxy change.
   chat is open: "Cancelled: the seller kept the anos." and Start is back.
   The network off for a moment: "Could not check for a trade. Trying
   again." and no button, until it is back.
+
+### The pinned card tells the chat of its trade (2026-11-10)
+
+Built in the same chat from `forclaude/wallet-trade-message-plan-1.md`
+(FINAL), one commit, on top of 692c5ac (the note above). The finish for
+bug 1 of `test_net_phase_2/bugs-and-new-features.md`: "Start the escrow
+trade" said "could not reach the wallet proxy (network error)", the trade
+went through on the validators, and the chat was never told. Why: the
+validator stores a trade and answers only after the approval round;
+`start()` posted "Escrow trade started" only after a 202, so an answer
+lost on the way left the chat without the message, the seller's account
+id out of the chat, and the buyer's card blind. Wallet only.
+
+- `src/app/components/pinned-listing.component.ts`: `tell(room, named,
+  transactionId, text)` posts the chat's message about a trade when
+  neither `named` nor `told` (a plain Set, cleared by `reset()`) has its
+  transaction id: the room key, /send-message into the room the check
+  started with, the id into `told` on a 2xx answer while the card is
+  still on that room; no key, a refusal or a throw changes nothing.
+  `check()` calls it after its signals are set: for an open trade whose
+  `accountId` is the watched account, with `pinned.startedMessage`; for a
+  released trade with `mine` true, with `pinned.releasedMessage`.
+  `ReleasedTrade` gained `transactionId`, `from`, `to` and `mine` (the
+  account the link was read on is its `accountId`), so a released
+  message that failed is tried again on every later check. `start()`: a
+  failed answer with a status from 400 to 499 throws `refusal(res)`
+  (`pinned.alreadyHeld` for "for this accountId is already pending",
+  "held" or "locked", else `pinned.refused`); after any other answer one
+  `poll()`; a failed answer with no trade found open throws
+  `pinned.noAnswer` and leaves the form as it is; otherwise `starting`
+  and `confirmStart` become false. `start()` no longer posts the message.
+- Words: `pinned.releasedMessage(anos, from, to, transactionId)`,
+  `noAnswer` and `alreadyHeld`, English and Thai (the Thai written here,
+  to be checked by a Thai reader).
+- Unchanged: `chat-room.page.ts`, the services, `constants.ts`, the trade
+  page, the account page, `server/`. The buyer's side of the card has no
+  new code: once the message is in the chat, the rule of the note above
+  finds the trade from the buyer's side.
+- Added on the user's word after the first build, in the same commit: a
+  check that finds a trade, open or released, sets `starting` and
+  `confirmStart` false. After "The validators did not answer" the Yes
+  question stayed open behind the trade the card then found, and came
+  back by itself when that trade was cancelled.
+- Left as it is: two devices of the seller in the same chat at the same
+  moment can post the message twice; the buyer's card stays blind until
+  the seller has had the chat open once after the trade started.
+- Spec: 8.2 Chat (what follows the answer; the limits; the new paragraph
+  on the chat's message), 8.7 and this note.
+- `npx ng build` clean (2.10 MB initial, no warnings). Not run in a
+  browser here: the user deploys and runs it on the test net. The chat of
+  bug 1, opened by the seller: "Escrow trade released: …" appears once,
+  and the buyer's card there then reads Released and no longer offers
+  "Share an account". A new trade the normal way: "Escrow trade started:
+  …" appears once, as before. A new trade with the network cut right
+  after Yes: no "refused" words, and with the network back the card shows
+  the trade and the started message appears. Start from an account that
+  has an open trade with someone else: "This account already has an
+  escrow trade or a transfer waiting on the validators. …".
 
 ## 12. Recovery and the moderator edition
 

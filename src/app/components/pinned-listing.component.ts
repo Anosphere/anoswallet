@@ -15,7 +15,7 @@ import { BalancesService } from '../services/balances.service';
 import { ChatService, piecesOf } from '../services/chat.service';
 import { CryptoService, PairOne } from '../services/crypto.service';
 import { LanguageService } from '../services/language.service';
-import { reasonOf } from '../services/log.service';
+import { ApiResponse, reasonOf } from '../services/log.service';
 import { MarketplaceService } from '../services/marketplace.service';
 import { MasterpodApiService, RoomItem } from '../services/masterpod-api.service';
 import { SessionService } from '../services/session.service';
@@ -29,9 +29,13 @@ export interface FoundAccountId {
   position: number;
 }
 
-/** The chat's released trade, as the card shows it: the amount of its link on the chain. */
+/** The chat's released trade: the amount the card shows, and what the message about it needs, the link's id, its sender and receiver, and whether this pod sent it. */
 interface ReleasedTrade {
   amount: string;
+  transactionId: string;
+  from: string;
+  to: string;
+  mine: boolean;
 }
 
 /** What one check of the chat's trade found: an open trade, a released one, neither, or a read that failed. */
@@ -46,9 +50,9 @@ type Found = 'open' | 'released' | 'none' | 'unread';
  * pod's account ids into the chat; the seller's "Start the escrow trade",
  * once the other person has posted an account id, opens a small form (From,
  * To, Amount, the total at the listing's price), asks once, and builds the
- * escrowTransfer as the account page's Send does, then posts a message about
- * it. The roles come from the listing: the owner of a sell listing and the
- * other person of a buy listing are the seller.
+ * escrowTransfer as the account page's Send does. The roles come from the
+ * listing: the owner of a sell listing and the other person of a buy
+ * listing are the seller.
  *
  * What the chat's trade is, the card reads from the validators (2026-11-10,
  * forclaude/wallet-finished-trade-plan-1.md), when the chat opens, every 5
@@ -63,6 +67,13 @@ type Found = 'open' | 'released' | 'none' | 'unread';
  * with nothing released reads Cancelled, and Share and Start come back.
  * Share and Start show only after a check that read everything; a read that
  * fails changes nothing else on the card.
+ *
+ * The same check tells the chat of its trade (2026-11-10,
+ * forclaude/wallet-trade-message-plan-1.md): when this pod sent the trade
+ * and no message in the chat carries its transaction id, the card posts
+ * "Escrow trade started", or "Escrow trade released" for a trade already
+ * released. Start does not post it, so an answer lost on the way, a message
+ * that failed or a tab closed in between still ends with the chat told.
  */
 @Component({
   selector: 'app-pinned-listing',
@@ -284,6 +295,8 @@ export class PinnedListingComponent {
 
   /** The last check that read everything showed an open trade. */
   private seen = false;
+  /** The trades this card posted a message about in this room, so a check that runs before the thread shows the message does not post it again. */
+  private readonly told = new Set<string>();
   /** The checks run one after another: `last` is the one before, `waiting` how many are queued or running. */
   private last: Promise<unknown> = Promise.resolve();
   private waiting = 0;
@@ -322,6 +335,7 @@ export class PinnedListingComponent {
     this.confirmClose.set(false);
     this.error.set(null);
     this.seen = false;
+    this.told.clear();
   }
 
   protected shortId(accountId: string): string {
@@ -357,7 +371,12 @@ export class PinnedListingComponent {
    * the escrowTransfer the way the account page's Send builds it: pair one
    * from the account's keyBlob and the encryption key, /get-account for the
    * latest transaction id, buildAnosTransferTransaction with type
-   * escrowTransfer, /api/sign, /anos-transfer; then the message about it.
+   * escrowTransfer, /api/sign, /anos-transfer. A 4xx answer is a refusal
+   * (refusal). After any other answer, accepted or lost on the way (no
+   * network, a 502 or 504: the validator stores the trade before it
+   * answers), one more check shows the trade and posts its message (tell);
+   * an answer that failed with no trade found open says so, and the form
+   * stays for another try.
    */
   protected start(): Promise<void> {
     return this.run(async () => {
@@ -377,12 +396,19 @@ export class PinnedListingComponent {
       if (!latest.ok || !latest.body.latestTransactionId) throw new Error(this.t().common.noLatest);
       const tx = await this.signing.sign(this.crypto.buildAnosTransferTransaction(pairOne, from, latest.body.latestTransactionId, to, amount, 'escrowTransfer', new Date()));
       const res = await this.anos.anosTransfer(tx);
-      if (!res.ok) throw new Error(this.t().pinned.refused(reasonOf(res)));
+      if (!res.ok && res.status >= 400 && res.status < 500) throw new Error(this.refusal(res));
+      const after = await this.poll();
+      if (!res.ok && after !== 'open') throw new Error(this.t().pinned.noAnswer);
       this.starting.set(false);
       this.confirmStart.set(false);
-      await this.post(this.t().pinned.startedMessage(millionthsToAnos(amount), from, to, res.body.transactionId));
-      await this.poll();
     });
+  }
+
+  /** A refusal of the trade in words: plain words for an account that already has something waiting on the validators, anything else with its reason as the account page shows it. */
+  private refusal(res: ApiResponse<unknown>): string {
+    const reason = reasonOf(res);
+    if (/for this accountId is already (pending|held|locked)/.test(reason)) return this.t().pinned.alreadyHeld;
+    return this.t().pinned.refused(reason);
   }
 
   /** The owner closes the listing after a release; the room list is refreshed so the card reads Closed. */
@@ -448,10 +474,14 @@ export class PinnedListingComponent {
    * is read first because the validators write a release before the trade
    * leaves that list, so a trade gone from it is already on the chain. A
    * trade seen open and then gone with nothing released is cancelled. A
-   * read that fails, or anything thrown (no key blob key in this tab, a
-   * keyBlob that does not open), is unread: the card keeps the trade it
-   * shows, and Share and Start wait for a check that reads everything. A
-   * check that ends after the card was given another room changes nothing.
+   * trade this pod sent, found open or released, gets its message posted
+   * when the chat has none for it (tell). A trade found also closes the
+   * Start form, so its question does not come back by itself once that
+   * trade is cancelled. A read that fails, or anything thrown (no key blob
+   * key in this tab, a keyBlob that does not open), is unread: the card
+   * keeps the trade it shows, and Share and Start wait for a check that
+   * reads everything. A check that ends after the card was given another
+   * room changes nothing.
    */
   private async check(): Promise<Found> {
     const room = this.room();
@@ -485,11 +515,15 @@ export class PinnedListingComponent {
         }
       }
       let link: TransactionItem | null = null;
+      let linkAccount = '';
       if (open.length === 0 && this.released() === null) {
         for (const { accountId, pairOne } of opened) {
           const found = await this.releasedLink(pairOne, accountId, room.createdAt, named);
           if (found === undefined) return this.unread(room);
-          if (found !== null && (link === null || found.position > link.position)) link = found;
+          if (found !== null && (link === null || found.position > link.position)) {
+            link = found;
+            linkAccount = accountId;
+          }
         }
       }
       if (this.roomId !== room.chatRoomId) return 'unread';
@@ -497,17 +531,31 @@ export class PinnedListingComponent {
       open.sort((a, b) => b.trade.createdAt.localeCompare(a.trade.createdAt));
       const newest = open[0];
       if (newest) {
-        this.trade.set(newest.trade);
-        this.tradeAccount.set(newest.myAccount);
+        const { trade, myAccount } = newest;
+        this.trade.set(trade);
+        this.tradeAccount.set(myAccount);
         this.cancelled.set(false);
         this.seen = true;
+        this.starting.set(false);
+        this.confirmStart.set(false);
+        if (trade.accountId === myAccount) {
+          await this.tell(room, named, trade.transactionId, this.t().pinned.startedMessage(millionthsToAnos(trade.amount), trade.accountId, trade.accountIdTo, trade.transactionId));
+        }
         return 'open';
       }
       this.trade.set(null);
-      if (link !== null && this.released() === null) this.released.set({ amount: link.amount });
-      if (this.released() !== null) {
+      if (link !== null && this.released() === null) {
+        this.released.set({ amount: link.amount, transactionId: link.transactionId, from: link.accountId ?? '', to: link.accountIdTo ?? '', mine: link.accountId === linkAccount });
+      }
+      const done = this.released();
+      if (done !== null) {
         this.cancelled.set(false);
         this.seen = false;
+        this.starting.set(false);
+        this.confirmStart.set(false);
+        if (done.mine) {
+          await this.tell(room, named, done.transactionId, this.t().pinned.releasedMessage(millionthsToAnos(done.amount), done.from, done.to, done.transactionId));
+        }
         return 'released';
       }
       if (this.seen) {
@@ -524,6 +572,28 @@ export class PinnedListingComponent {
   private unread(room: RoomItem): Found {
     if (this.roomId === room.chatRoomId) this.read.set(false);
     return 'unread';
+  }
+
+  /**
+   * The chat's message about a trade this pod sent, posted when no message
+   * in the chat carries the trade's transaction id and this card has not
+   * posted one (2026-11-10, forclaude/wallet-trade-message-plan-1.md): the
+   * answer to the transfer may have been lost on the way, the message may
+   * have failed, or the tab was closed in between. Encrypted with the room
+   * key and sent into the room the check started with, so a room change in
+   * between cannot send it into another chat. No key, a refusal or anything
+   * thrown changes nothing: the next check tries again.
+   */
+  private async tell(room: RoomItem, named: Set<string>, transactionId: string, text: string): Promise<void> {
+    if (named.has(transactionId) || this.told.has(transactionId)) return;
+    try {
+      const key = await this.chat.roomKeyOf(room);
+      if (!key) return;
+      const res = await this.masterpod.sendMessage(room.chatRoomId, await this.crypto.encryptText(key, text));
+      if (res.ok && this.roomId === room.chatRoomId) this.told.add(transactionId);
+    } catch {
+      // The next check posts it.
+    }
   }
 
   /**
