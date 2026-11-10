@@ -1122,7 +1122,8 @@ any account's stake. Send first asks in the confirmation box (8.9;
 2026-11-10, section 11), for every kind of send. The box shows what the
 form held when the box opened: the title "Send 100 anos?"; Kind, the
 transaction type as the button names it ("transferToFund"); From, the
-account's name and short id ("Spending account 1 · a1b2c3d4…e5f6"); To,
+account's name and short id ("Spending account 1 · a1b2c3d4…e5f6", the
+short id kept whole where the line wraps); To,
 the recipient's full account id, or for a stake Stake for, the purpose;
 for a stake one more line, "A stake stays with the fund. It comes back
 only through a fund proposal that the guardians vote for."; the buttons
@@ -2272,10 +2273,14 @@ resolves true only when the box closed by its second button.
 
 What it is given, `ConfirmData`: `title`; `lines`, each a `ConfirmLine`
 `{ label, value, code? }`, drawn as a two-column grid, the label in the
-on-surface-variant colour and the value beside it, breaking anywhere so
-a 64-character id wraps on a phone, in the id font when `code` is true;
-`notes`, each a paragraph under the lines; and `confirmLabel`, the words
-on the second button. The two buttons, at the right: Cancel
+on-surface-variant colour and the value beside it, in the id font when
+`code` is true; `notes`, each a paragraph under the lines; and
+`confirmLabel`, the words on the second button. A value too long for its
+column wraps at a space, and is cut inside a word only when the word
+alone is too long (`overflow-wrap: anywhere`); a value in the id font is
+cut anywhere, by the global rule for `code`, so a 64-character id wraps
+on a phone (2026-11-10, section 11: at first every value was cut
+anywhere). The two buttons, at the right: Cancel
 (`common.cancel`), which closes with false, and the caller's button,
 which closes with true.
 
@@ -5416,12 +5421,27 @@ the Material already installed).
   `wallet` keys after `createAccount`. The class comment of the Wallet
   page gained a sentence too; the plan names the account page's comments
   only.
-- Left as it is: every value in the box breaks anywhere (`word-break:
-  break-all`, as the plan asks, for the 64-character id), not the id
-  alone. Worked out from the widths, not seen on a screen: on a phone
-  under about 400 px wide the From line of a stake ("Spending account 1
-  · a1b2c3d4…e5f6") is a few characters too long for its column, and it
-  then breaks inside the short id, not at a space.
+- Changed on the user's word after the commit (86a088e), in a commit of
+  its own, away from the plan's wording. The plan gave every value
+  `word-break: break-all`, for the 64-character id, and that cut the
+  From line anywhere too: on a phone under about 400 px wide the From
+  line of a stake ("Spending account 1 · a1b2c3d4…e5f6") is a few
+  characters too long for its column, and it broke inside the short id
+  ("…e5f" and "6" at 390 px). Now `.value` has `overflow-wrap: anywhere`
+  in its place: a value wraps at a space and is cut inside a word only
+  when the word alone is too long, and an id is still cut anywhere, by
+  the global rule for `code`. That alone still let a row end after the
+  ellipsis ("a1b2c3d4…" and "e5f6"), so `askSend()` puts a word joiner
+  (U+2060, `WORD_JOINER` in `account.page.ts`) after the ellipsis of the
+  short id in the From line, and the line wraps at the space before the
+  short id. Seen in Chrome run without a window, on a test page outside
+  the repo with the box's rules and Roboto, at 360, 375, 390, 393, 412
+  and 430 px, for a stake and a plain send, with and without a number in
+  the account's name: the From line is one row, or "Spending account 1
+  ·" and "a1b2c3d4…e5f6"; the 64-character id takes two or three rows;
+  nothing runs out of the box. Not seen in Safari or on a phone.
+  `npx ng build` clean (2.12 MB initial, no warnings). The plan file
+  still reads `word-break: break-all`.
 - Spec: 8.2 (Wallet, the "Open a new account" sentence; Account, the Send
   paragraph, in two places), the new 8.9 and this note. README: the
   layout gained the line of `components/confirm-dialog.component.ts`.

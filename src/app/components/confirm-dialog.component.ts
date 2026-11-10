@@ -25,8 +25,11 @@ export interface ConfirmData {
  * with MatDialog by askConfirm below: before a send on the account page and
  * before a new anos account on the Wallet page. The title; the lines as a
  * two-column grid, a label and its value, an id in the id font; each note as
- * a paragraph; then Cancel, which closes with false, and the button the
- * caller names, which closes with true. The box closes only by those two:
+ * a paragraph. A value wraps at a space and is cut inside a word only when
+ * the word alone is too long; an id is cut anywhere, by the global rule for
+ * `code`, so its 64 characters wrap on a phone. Then Cancel, which closes
+ * with false, and the button the caller names, which closes with true. The
+ * box closes only by those two:
  * askConfirm opens it so that a click outside it and the Escape key do
  * nothing, and with the focus on the box itself, so the Enter key answers
  * nothing. The second button cannot be pressed for the first CONFIRM_ARM_MS,
@@ -66,7 +69,7 @@ export interface ConfirmData {
     .lines { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; }
     .lines div { display: contents; }
     .label { color: var(--mat-sys-on-surface-variant); }
-    .value { color: var(--mat-sys-on-surface); word-break: break-all; }
+    .value { color: var(--mat-sys-on-surface); overflow-wrap: anywhere; }
     p { margin: 12px 0 0; }
   `,
 })

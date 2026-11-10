@@ -48,6 +48,9 @@ const TRANSFER_TYPES: Record<AccountType, TransferType> = {
 /** What a spending account's Send does: a plain transfer, an escrow transfer, or a stake with the fund. */
 const SPENDING_KINDS = ['plain', 'escrow', 'stake'] as const;
 
+/** The word joiner, U+2060: it shows nothing, and no row of text ends at it. After the ellipsis of a short id it keeps the id whole where the confirmation box wraps its From line (wallet spec 8.9). */
+const WORD_JOINER = String.fromCharCode(0x2060);
+
 /** Exactly 64 hex characters with no hex character on either side: an account id in whatever was copied. */
 const ACCOUNT_ID_IN_TEXT = /(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])/i;
 type SpendingKind = (typeof SPENDING_KINDS)[number];
@@ -541,7 +544,8 @@ export class AccountPage {
         ? { transactionType, amount, accountIdTo: null, stakePurpose: this.stakePurpose() }
         : { transactionType, amount, accountIdTo: this.accountIdTo().trim().toLowerCase(), stakePurpose: null };
     const words = this.t();
-    const short = shortId(this.accountId());
+    // the short id with a word joiner after its ellipsis: where the From line wraps, it wraps at the space before the id, not inside it
+    const short = shortId(this.accountId()).replace('…', `…${WORD_JOINER}`);
     const name = accountNames(this.session.accounts(), words.accountKinds).get(this.accountId());
     const confirmed = await askConfirm(this.dialog, {
       title: words.account.confirmSendTitle(millionthsToAnos(amount)),
