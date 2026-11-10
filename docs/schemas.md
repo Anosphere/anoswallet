@@ -5161,6 +5161,34 @@ two lines, so the second one lay across the buttons. Wallet only.
   nothing overlaps. Not seen on a phone or on the test net: the user
   checks it there.
 
+### The locked-out page's email box fits its step (2026-11-10)
+
+Bug 5 of `test_net_phase_2/bugs-and-new-features.md`, one commit, no plan
+of its own, on top of ec0d770 (the note above, which left this as it
+was): on a narrow phone the Contact email box of `/recover/open` was
+wider than the room its step has, and the stepper cut its right edge off.
+Why: the box had `min-width: 280px`, and a step has the screen's width
+less 150 px, which is under 280 px on every screen narrower than 430 px.
+Wallet only.
+
+- `src/app/pages/recover-open.page.ts`: `mat-form-field` has
+  `width: 280px; max-width: 100%;` where it had `min-width: 280px;
+  width: 280px;`. The box is 280 px wide where its step has the room and
+  as wide as the step where it has not: 210 px on a 360 px screen, 225 on
+  375, 240 on 390, 262 on 412, 280 from 430 up. The hint wraps to the box
+  and still pushes the buttons down.
+- Unchanged: the words, the flow, every other page.
+- Left as it is: the boxes of step 1 come from
+  `identity-form.component.ts` (240 px at the least); they are whole from
+  375 px up and lose 6 px on the right on a 360 px screen.
+- Spec: this note only.
+- `npx ng build` clean (2.10 MB initial, no warnings). Seen here the way
+  of the note above, in a development build served from a scratch folder:
+  at 360, 375, 390, 412, 430 and 1024 px wide, English and Thai, the box
+  is whole, its label is not cut, the hint takes one to three lines, the
+  buttons start 8 px under it and nothing overlaps. Not seen on a phone
+  or on the test net: the user checks it there.
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`

@@ -103,7 +103,7 @@ function isContactEmail(value: string): boolean {
   `,
   styles: `
     .fields { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
-    mat-form-field { min-width: 280px; width: 280px; }
+    mat-form-field { width: 280px; max-width: 100%; }
     .muted { color: var(--mat-sys-on-surface-variant); }
     .error { color: var(--mat-sys-error); }
     button + button { margin-left: 8px; }
