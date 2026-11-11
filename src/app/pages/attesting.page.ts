@@ -86,7 +86,7 @@ function groupByTransaction<T extends { transactionId: string }>(items: T[]): Ma
  * Attesting (wallet spec 13.3, /attesting, the attestor edition). The page
  * asks for the staked account once per session (the moderation case page's
  * picker, copied; AttestingService keeps the choice). The Trades tab lists
- * the assistedAnosTransfer rows of /list-assisted-transfers from the default
+ * the assistedAnosTransfer rows of /list-assisted-transfers from the session's
  * validator (the list carries the break-glass moves too since 2026-11-08,
  * told apart by type), the Disputes tab /list-disputed-escrows, each row the
  * people behind the account ids from /list-anos-account-profiles, the

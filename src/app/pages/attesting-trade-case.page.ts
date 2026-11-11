@@ -649,7 +649,7 @@ export class AttestingTradeCasePage {
   /**
    * Send to the validators (wallet spec 13.3): the stored attestations no
    * validator answer has accepted yet, posted one after the other to the
-   * default validator's /attestation, then /mark-attestor-case-sent with the
+   * session's validator's /attestation, then /mark-attestor-case-sent with the
    * answers (a refusal recorded too); Retry posts the ones still pending.
    */
   protected async send(): Promise<void> {
@@ -664,14 +664,14 @@ export class AttestingTradeCasePage {
         const res = await this.anos.attestation(attestation);
         results.push(res.ok ? { signer, status: res.status } : { signer, status: res.status, error: reasonOf(res).slice(0, 500) });
       }
-      const { defaultValidator } = await this.config.load();
-      const marked = await this.masterpod.markAttestorCaseSent(this.caseId(), defaultValidator, results);
+      const validator = await this.anos.validator();
+      const marked = await this.masterpod.markAttestorCaseSent(this.caseId(), validator, results);
       if (!marked.ok) throw new Error(this.refusal(marked, '/mark-attestor-case-sent'));
       const failed = results.filter((r) => !accepted(r));
       this.sendOutcome.set(
         failed.length === 0
-          ? { ok: true, text: this.t().attesting.sentAccepted(defaultValidator, results.length === 1 ? this.t().tradeCase.theAttestation : this.t().tradeCase.bothAttestations) }
-          : { ok: false, text: this.t().attesting.validatorRefused(defaultValidator, failed.length, results.length) },
+          ? { ok: true, text: this.t().attesting.sentAccepted(validator, results.length === 1 ? this.t().tradeCase.theAttestation : this.t().tradeCase.bothAttestations) }
+          : { ok: false, text: this.t().attesting.validatorRefused(validator, failed.length, results.length) },
       );
     } catch (err) {
       this.sendOutcome.set({ ok: false, text: err instanceof Error ? err.message : String(err) });

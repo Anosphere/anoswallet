@@ -60,7 +60,7 @@ on this machine).
     SIGNING_SERVER_URL  http://localhost:3300                                the signing server
     SHARE_THRESHOLD     3                                                    how many shares rebuild a secret
     DEPOSIT_FLOOR_PERCENT  80    how many of the keyholders must store a share for a deposit to go through, in percent, 1 to 100 (section 6; 2026-11-07)
-    DEFAULT_VALIDATOR   1                                                    the validator the wallet posts to
+    DEFAULT_VALIDATOR   1                                                    until 2026-11-10 the validator the wallet posted to; it no longer picks the validator (below)
     DIST_DIR            dist/wallet/browser                                  the Angular build it serves
     RP_ID               localhost                                            the relying-party id the browser uses in both ceremonies; the masterpod's RP_ID
     GUARDED_LOCK_MINUTES  1    the validators' time lock on a guarded account, in minutes (10 on the testnet; a week in production)
@@ -72,11 +72,20 @@ network/testnet.env); the wallet dates a guarded or vault transfer the
 lock plus the offset ahead and a validator refuses one outside its
 window, so the two files are changed together (2026-11-06, section 11).
 
+DEFAULT_VALIDATOR no longer picks the validator (2026-11-10, section 11):
+the browser picks one of the listed validators per session, at random,
+and moves to the next one when it does not answer (8.3). The variable
+stays, with its boot check that it is not larger than the list, and
+/api/config still answers it as defaultValidator, for a tab that was
+loaded before that change and still posts to it. The browser's code no
+longer reads defaultValidator. Taking both out is a later clean-up.
+
 Routes
 
     GET  /api/config                  200 { validators, keyholders, shareThreshold, depositFloorPercent, defaultValidator, edition,
                                       rpId, guardedLockMinutes, vaultLockMinutes, lockOffsetMinutes }: the two counts are the
-                                      list lengths; the browser never sees an address
+                                      list lengths; the browser never sees an address; defaultValidator is DEFAULT_VALIDATOR,
+                                      still answered and no longer read by the browser (2026-11-10, above)
     GET  /api/health                  200 { status: "ok" }
     ANY  /api/masterpod/<path>        forwarded to MASTERPOD_URL/<path>
     ANY  /api/anos/<n>/<path>         forwarded to VALIDATOR_URLS[n - 1]/<path>; n not 1..count: 404 { error: "unknown validator" }
@@ -1834,8 +1843,9 @@ GUARDIAN_VOTE_ANOS staked for guardian, the vote open for
 GUARDIAN_VOTE_MINUTES, passed at GUARDIAN_VOTE_PERCENT of the votes for);
 what is new is the reading side, two public reads built like
 /list-dao-stakes, /list-fund-proposals and /get-fund-proposal (5.4), and
-the two stake fields of /get-account. The data comes from the wallet's
-defaultValidator through its doorman and the proxy, never from the
+the two stake fields of /get-account. The data comes from the session's
+validator (8.3; the wallet's defaultValidator until 2026-11-10) through
+its doorman and the proxy, never from the
 masterpod. Everyone signed in may look; an account with at least one
 guardian vote acts, and every guardian account of the pod acts on its own
 with its own weight, since the validators count guardian stake per
@@ -2060,7 +2070,8 @@ excepted, with the keyholder and anos calls included.
                             types DaoStatus, DaoListStatus, DaoSettings, DaoListFilters, DaoProposalItem,
                             DaoProposal and DaoVoteItem
     keyholder-api.service   the keyholder test app's, base path /api/keyholder/<n>
-    anos-api.service        the anos test app's account-api.service.ts, base path /api/anos/<defaultValidator>,
+    anos-api.service        the anos test app's account-api.service.ts, base path /api/anos/<the session's
+                            validator> (2026-11-10, below; /api/anos/<defaultValidator> until then),
                             plus the five signed reads (listEscrows added 2026-11-05, getAssistedTransfer and
                             getLockedTransfer 2026-11-06; listTransactions takes from and to, 2026-11-06);
                             getAccountAs, the /get-account read with an envelope the caller signed, the
@@ -2071,7 +2082,31 @@ excepted, with the keyholder and anos calls included.
                             object body and no envelope, the wallet's first unsigned posts to a validator, with
                             the types FundProposalStatus, FundSettings, FundVoteItem, FundPayoutItem,
                             FundProposalItem, FundProposal and FundListFilters; AccountAnswer carries the
-                            optional stakes and guardianVotes of /get-account (5.4)
+                            optional stakes and guardianVotes of /get-account (5.4);
+                            the session's validator (2026-11-10, section 11): the wallet talks to one validator
+                            per session, a session being one load of the wallet in a tab, so a reload picks
+                            again; the first call picks it at random (Math.random) from 1 to the validators of
+                            /api/config, and every call goes to it, since the wallet reads an account and then
+                            builds a transfer on what it read and a balance refresh makes several reads at the
+                            same moment; validator() answers it, picking it when none is set, for the attestor
+                            case pages (13.3); no answer is status 0 (the network failed, or a read ran into
+                            its time limit), 502 (the proxy's "validator n unavailable", a doorman's "worker
+                            unavailable"), 503 (a just booted validator's "not counted yet") or 504 (a
+                            doorman's "worker timeout"), and every other status is an answer, a refusal and a
+                            500 included; with no answer the session moves to the next validator in the list,
+                            the first after the last, and stays there, by one place however many calls got no
+                            answer from that validator at the same moment; the nine reads (read: /get-account,
+                            /list-transactions, /list-escrows, /get-assisted-transfer, /get-locked-transfer,
+                            /list-assisted-transfers, /list-disputed-escrows, /list-fund-proposals,
+                            /get-fund-proposal) wait at most VALIDATOR_READ_TIMEOUT_MS, 10 seconds
+                            (constants.ts), and with no answer are asked again on the next validator, each
+                            validator at most once per call, the last failure returned when none answers; the
+                            eight submissions (write: /create-account, /anos-transfer, /transfer-to-fund,
+                            /fund-proposal, /attestation, /assisted-transfer-cancel, /guardian-vote,
+                            /escrow-signature) are tried once, with no time limit, and never sent again by the
+                            wallet on its own, since one that got no answer may still have been taken: the
+                            session moves on, the failure is shown as before, and the person's next try goes
+                            to the next validator
     guardian-accounts.service
                             the pod's guardian accounts (2026-11-08): read(quiet), /get-account for each of the
                             session's accounts at once, quietly, signed by pair one opened from the keyBlob and
@@ -5995,6 +6030,150 @@ new package.
   user's, after the deploy (the plan's section 2; only the wallet has
   something to deploy).
 
+### One validator per session, the next one when it does not answer (2026-11-10)
+
+Built from `forclaude/wallet-round-robin-plan-1.md` (FINAL), its one
+step, one commit, on top of e7f06ad. Why, in the user's words of
+2026-11-10: "The wallet has a registry of the current validators, I
+believe, but it only ever calls validator 1, we should instead have it
+round robin it." Asked whether that means one validator per browser
+session or another one for every call, the user took one per session
+("That sounds good"): the wallet reads an account and then builds a
+transfer on what it read, the latest transaction id, and a balance
+refresh makes three or four reads per account at the same moment, so
+reads spread over several validators could disagree for a moment. Until
+now every validator call of the browser went to
+`/api/anos/<defaultValidator>`, the proxy's `DEFAULT_VALIDATOR`, 1. The
+change is in the browser's code. In the proxy only comments changed, no
+line of code. There is no new route, no new env variable, no new
+package and no new word in either language, and nothing changes on the
+validators, the doormen, the masterpod, the keyholders or the signing
+server.
+
+- `src/app/constants.ts`: `VALIDATOR_READ_TIMEOUT_MS`, 10 000, how long
+  a validator has to answer a read (the plan's decision 7). Without a
+  limit a validator whose machine cannot be reached would hold a page
+  for the proxy's two minutes before the wallet moves on.
+- `src/app/services/anos-api.service.ts`: the private field
+  `sessionValidator`, a number from 1 to the `validators` of
+  `/api/config`, empty until the first call. `validator()`, public,
+  answers it and picks it when none is set, `1 +
+  Math.floor(Math.random() * validators)`; nothing secret hangs on the
+  pick. The private `post` is gone. `read(path, body, quiet)` took its
+  place for the nine reads (8.3 lists them; `getAccountAs` and
+  `getAssistedTransferAs` are the two that `getAccount` and
+  `getAssistedTransfer` call): the call goes to
+  `/api/anos/<the session's validator>` through `LogService.post` with
+  the time limit; an answer is returned; with no answer the session
+  moves on and the call is made again, until the session's validator is
+  one this call has asked already; then the last failure is returned.
+  So a call asks each validator at most once and makes at most
+  `validators` tries. `write(path, body, quiet)` took its place for the
+  eight submissions (8.3 lists them): one try, no time limit; with no
+  answer the session moves on; the result is returned as it is.
+  `moveOn(from, validators)`, private, puts the session on the next
+  validator in the list, the first after the last. `noAnswer(res)`, a
+  function under the class, is the plan's decision 4: status 0, 502,
+  503 or 504, and every other status is an answer. The comment of the
+  class says all this.
+- `src/app/pages/attesting-trade-case.page.ts`,
+  `attesting-dispute-case.page.ts` and
+  `attesting-recovery-case.page.ts`: in `send`, after the posts,
+  `await this.anos.validator()` in place of `defaultValidator` from the
+  configuration. The number goes where `defaultValidator` went: to
+  `/mark-attestor-case-sent` or `/mark-break-glass-case-sent`, and into
+  the sent line. The words on the screen and the masterpod call are
+  unchanged.
+- Comments only: `src/app/services/config.service.ts` (`defaultValidator`
+  is still in the answer and no longer read), `server/config.js`,
+  `network/wallet.env` and the variables sentence of `README.md`
+  (`DEFAULT_VALIDATOR` no longer picks the validator; the browser picks
+  one per session; the variable stays for tabs loaded before the
+  change). `DEFAULT_VALIDATOR`, its boot check and `defaultValidator` in
+  `/api/config` stay as they are (the plan's decision 10), so a tab
+  loaded before the deploy keeps working; taking them out is a later
+  clean-up. The list in `network/wallet.env` is the user's to keep and
+  was not changed (decision 11).
+- Unchanged: the code of every other page and service that calls the
+  validator API service (its methods take and resolve to what they did),
+  `LogService`, `en.ts` and `th.ts`, the code of `server/`.
+- Accepted by the plan (its decision 12). A validator that answers but
+  is behind the others is not noticed: a session that started on it
+  stays there until a reload. A phone without a connection makes one
+  quick try per validator for each read before it shows the failure.
+  Out of the plan: a health check of the validators; the proxy picking
+  the validator; weights; the keyholders, which are already asked all
+  at once; the signing server's second server; the masterpod's own call
+  to a validator.
+- Readings where the plan left a detail open. Calls that get no answer
+  from the same validator at the same moment move the session on by one
+  place, not by one each: `moveOn` changes the session's validator only
+  while it is still the one that did not answer. A balance refresh makes
+  its reads at once, so without this twenty reads on a stopped validator
+  would move the session twenty places and spread the repeated reads
+  over every validator, the stopped one among them. A repeated read goes
+  to the validator the session is on at that moment: the next one in the
+  list, or one further on when another call moved the session in the
+  meantime; a read that skipped a validator this way makes fewer than
+  `validators` tries before it gives up. When no validator answers a
+  read, the session has gone once round the list and stands where it
+  started. Past the time limit a read answers the way a keyholder
+  deposit call does (`LogService.post` with `timeoutMs`): status 0 with
+  `api.noAnswer(10)` as its reason, a word the wallet had. A read slower
+  than 10 seconds for any reason, a slow phone connection among them,
+  counts as not answered. A submission that fails with status 0, the
+  phone having no connection, moves the session on too, since that is no
+  answer at all. Every try of a read that is not quiet is a line of the
+  Log, with its validator's number in the path. When one of an attestor
+  page's posts got no answer, the session moved during the posts, and
+  the page names the validator the session is on after them, as the
+  plan's decision 9 says; the answer recorded for the earlier post came
+  from the validator before it. `validator()` is async, because the
+  count comes from `/api/config`. In the file the field stands under the
+  injected services, and `validator`, `read`, `write` and `moveOn` at
+  the end of the class, where `post` stood.
+- Put right on the user's word of 2026-11-10 ("Yes, fix them"), after
+  the first report of this build listed them as left because the plan
+  does not name them. Ten comments that said "the default validator"
+  for the validator the wallet asks say "the session's validator": the
+  one over `send` in each of the three attestor case pages, four more
+  in `attesting-recovery-case.page.ts`, the class comment of
+  `src/app/pages/attesting.page.ts` and two in
+  `src/app/services/attesting.service.ts`; one word each, no code. In
+  `attesting-dispute-case.page.ts` the `config` field and the
+  `ConfigService` import left the page: `send` was their only reader,
+  while the other two pages still read the keyholder count through
+  theirs. In this spec 8.2 (Guardians), 13.3 (the Trades tab's list and
+  the recovery case's moves) and 13.6 name the session's validator.
+- Left as they are. The sentences `tradeCase.stillToSend` and
+  `disputeCase.stillToSend` still end "to the default validator" in
+  `en.ts`, and say the same in `th.ts`: the plan keeps the words on the
+  screen. Read "the session's validator" there.
+- Spec: 2 (the row of `DEFAULT_VALIDATOR`, a paragraph under the lock
+  numbers, `defaultValidator` in the line of `/api/config`), 8.2
+  (Guardians: where the data comes from), 8.3 (the line of
+  `anos-api.service`: the base path, the session's validator, the read
+  and the submission, the time limit, what counts as no answer), 13.3
+  (the Trades tab's list, the recovery case's moves, and the three Send
+  to the validators points: the session's validator in place of the
+  default one, and which validator the sent line names), 13.6 (where
+  the lists come from) and this note. The older notes above stand as
+  the record of what was built then.
+- `npx ng build` clean (2.12 MB initial, no warnings), and clean again
+  with the lines above put right; `node --check server/config.js`
+  passes. The built bundle holds no
+  `defaultValidator` any more, and holds `read` with the time limit and
+  `write` without one. Not run in a browser here and no server was
+  started: the run-through is the user's, after the deploy (the plan's
+  section 2; only the wallet has something to deploy, wallet1 and then
+  wallet2). The Log page shows the calls as `/api/anos/<n>/...`; two
+  tabs, or one tab reloaded a few times, show different numbers. With
+  one listed validator stopped, a tab that picked it shows its balances
+  after the reads that were under way failed once each in the Log (502
+  at once when only the worker behind its doorman is down, status 0
+  after 10 seconds when the machine cannot be reached), and from then on
+  calls the next number.
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`
@@ -6645,7 +6824,7 @@ spending account picked; the choice signs every validator read, keyholder
 pull and sign-off until the tab closes.
 
 The Trades tab: the `assistedAnosTransfer` rows of `/list-assisted-transfers`
-from the default validator (since 2026-11-08 the list carries the
+from the session's validator (8.3, 2026-11-10; since 2026-11-08 the list carries the
 break-glass moves too, told apart by `type`; those belong to the Recoveries
 tab's case pages), each row the sender as a person (`/list-anos-account-profiles` once for
 the whole list: selfie, username, names; an unknown account shows its id
@@ -6704,10 +6883,15 @@ refreshed by a button and every 15 s. Top to bottom:
   `/sign-off-trade-case`. The page shows who has signed.
 - When the answer says decided and no `sent` event exists: Send to the
   validators, which posts both stored attestations (from the
-  `attestationSigned` events) to the default validator's `/attestation`
-  one after the other, then `/mark-attestor-case-sent` with the answers.
-  Shown as "Sent" with each answer, or Retry. The page of the attestor
-  whose signature decided the case runs it at once, without the click.
+  `attestationSigned` events) to the `/attestation` of the session's
+  validator (8.3; the default validator until 2026-11-10) one after the
+  other, then `/mark-attestor-case-sent` with the answers. Shown as
+  "Sent" with each answer, or Retry. The validator the sent line names
+  ("Sent: validator 3 accepted both attestations."), which is also the
+  one the masterpod is told, is the one the session is on after the
+  posts (`AnosApiService.validator()`, 2026-11-10). The page of the
+  attestor whose signature decided the case runs it at once, without the
+  click.
 - Dismiss: the preset reason, a note, Dismiss behind an inline
   confirmation (`/dismiss-attestor-case`).
 
@@ -6738,7 +6922,8 @@ refreshed by a button and every 15 s. Top to bottom:
 - When decided: Send to the validators posts the two agreeing verdicts
   (from the `verdictSigned` events whose verdict is the decided one) to
   `/escrow-signature`, then `/mark-attestor-case-sent`; Retry on a
-  refusal; the deciding attestor's page runs it at once.
+  refusal; the deciding attestor's page runs it at once. The sent line
+  names the session's validator, as on the trade case (2026-11-10).
 - Dismiss, as the trade case.
 
 **Recovery case** (`/attesting/recovery/:caseId`, 2026-11-08, break-glass
@@ -6749,7 +6934,7 @@ every 15 s, the trade case's frame. Top to bottom:
 - The recovery: the recovery case's status in words and the moderators'
   approvals, each "username · time".
 - The moves: per move the old account with its type, the new account with
-  Copy, the transaction id with Copy, and what the default validator lists
+  Copy, the transaction id with Copy, and what the session's validator lists
   for it (`/list-assisted-transfers` matched by transaction id, read again
   on every refresh and poll): the amount, when it was made and the
   attestations in its slots, or "not listed on this validator (both
@@ -6768,13 +6953,15 @@ every 15 s, the trade case's frame. Top to bottom:
   wallet pair from `/api/sign`) and runs `/sign-off-break-glass-case` with
   every move once.
 - When the answer says decided: Send to the validators posts the stored
-  attestations the default validator does not hold yet (two per move once
+  attestations the session's validator (8.3; the default validator until
+  2026-11-10) does not hold yet (two per move once
   two attestors signed, from the `attestationSigned` events; the listed
   move's `attestorIds` tell which it holds) to `/attestation` one after the
   other, then `/mark-break-glass-case-sent` with the answers; "Sent" once
   the validator holds every attestation for the moves it still lists, Retry
   otherwise; the page of the attestor whose sign-off decided the case runs
-  it at once.
+  it at once. The sent line names the session's validator, as on the
+  trade case (2026-11-10).
 - Dismiss: one of the five reasons, a note, Dismiss behind an inline
   confirmation (`/dismiss-break-glass-case`); the moves stay held on the
   validators until a cancel.
@@ -6857,7 +7044,7 @@ your copies stay."
 
 - Email or any message to the parties; the app is the channel.
 - A party deleting their evidence; evidence beyond the four content types.
-- Several validators asked at once; the lists come from the default
+- Several validators asked at once; the lists come from the session's
   validator, as every anos call does.
 - A moderator who is also an attestor.
 - Notifications to attestors when a recovery's moves are filed, and to the

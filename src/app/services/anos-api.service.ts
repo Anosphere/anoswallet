@@ -1,4 +1,5 @@
 import { Injectable, inject } from '@angular/core';
+import { VALIDATOR_READ_TIMEOUT_MS } from '../constants';
 import { ConfigService } from './config.service';
 import {
   AnosTransferTransaction,
@@ -213,7 +214,7 @@ export interface FundListFilters {
 
 /**
  * All HTTP calls to the validators (the anos test app's
- * account-api.service.ts, base path /api/anos/<defaultValidator>), plus the
+ * account-api.service.ts, base path /api/anos/<the session's validator>), plus the
  * five signed reads of the account level (/list-escrows: anossoftware 16,
  * /get-assisted-transfer: anossoftware 17, /get-locked-transfer and the
  * date range on /list-transactions: anossoftware 18), the two attestor
@@ -222,6 +223,36 @@ export interface FundListFilters {
  * wallet's first unsigned posts to a validator. One method per endpoint;
  * every one resolves to the status and the body, never throws on an HTTP
  * error.
+ *
+ * The session's validator (2026-11-10, wallet spec 8.3; the plan is
+ * forclaude/wallet-round-robin-plan-1.md). The wallet talks to one
+ * validator per session, a session being one load of the wallet in a tab,
+ * so a reload picks again. The first call picks it at random from the
+ * proxy's list, a number from 1 to the `validators` of /api/config, and
+ * every call goes to it: the wallet reads an account and then builds a
+ * transfer on what it read, and a balance refresh makes several reads at
+ * the same moment, so reads spread over several validators could disagree
+ * for a moment. Until then every call went to the proxy's
+ * `defaultValidator`, which this service no longer reads. When the
+ * session's validator does not answer, the session moves to the next one
+ * in the list, the first after the last, and stays there. No answer is:
+ * nothing came back (status 0: the network failed, or a read ran into its
+ * time limit), or 502, 503 or 504 (the wallet's proxy could not reach the
+ * validator's doorman, the doorman could not reach its worker or got
+ * nothing from it in time, or the validator has just booted and is not
+ * counted yet). Every other status is an answer, a refusal included, and
+ * so is a 500, which a validator gives to a submission when one of its
+ * peers is down.
+ *
+ * The nine reads go through `read`: each waits at most
+ * VALIDATOR_READ_TIMEOUT_MS and, with no answer, is asked again on the
+ * next validator, each validator at most once per call; when none answers
+ * the last failure is returned. The eight submissions go through `write`:
+ * one try, no time limit, and never sent again by the wallet on its own,
+ * because a submission that got no answer may still have been taken (a
+ * validator knows it by its transaction id and refuses a second copy).
+ * With no answer the session moves on and the failure is returned, so the
+ * person's next try goes to the next validator.
  */
 @Injectable({ providedIn: 'root' })
 export class AnosApiService {
@@ -229,44 +260,47 @@ export class AnosApiService {
   private readonly config = inject(ConfigService);
   private readonly crypto = inject(CryptoService);
 
+  /** The session's validator: its number, from 1 to the `validators` of /api/config, by position in the proxy's list. Empty until the first call, which picks it at random (validator); a call that gets no answer moves it on (moveOn). It lives as long as this load of the wallet in its tab. */
+  private sessionValidator: number | null = null;
+
   /** POST /create-account. */
   createAccount(tx: CreateAccountTransaction): Promise<ApiResponse<Accepted>> {
-    return this.post('/create-account', tx);
+    return this.write('/create-account', tx);
   }
 
   /** POST /anos-transfer: any of the six transfer types, the breakGlassTransfer of the recovery's finish included (2026-11-08). */
   anosTransfer(tx: AnosTransferTransaction): Promise<ApiResponse<Accepted>> {
-    return this.post('/anos-transfer', tx);
+    return this.write('/anos-transfer', tx);
   }
 
   /** POST /transfer-to-fund: a stake. */
   transferToFund(tx: TransferToFundTransaction): Promise<ApiResponse<Accepted>> {
-    return this.post('/transfer-to-fund', tx);
+    return this.write('/transfer-to-fund', tx);
   }
 
   /** POST /fund-proposal. */
   fundProposal(tx: FundProposalTransaction): Promise<ApiResponse<Accepted>> {
-    return this.post('/fund-proposal', tx);
+    return this.write('/fund-proposal', tx);
   }
 
   /** POST /attestation. */
   attestation(followUp: FollowUp<AttestationPayload>): Promise<ApiResponse<Accepted>> {
-    return this.post('/attestation', followUp);
+    return this.write('/attestation', followUp);
   }
 
   /** POST /assisted-transfer-cancel. */
   assistedTransferCancel(followUp: FollowUp<AssistedTransferCancelPayload>): Promise<ApiResponse<Accepted>> {
-    return this.post('/assisted-transfer-cancel', followUp);
+    return this.write('/assisted-transfer-cancel', followUp);
   }
 
   /** POST /guardian-vote. */
   guardianVote(followUp: FollowUp<GuardianVotePayload>): Promise<ApiResponse<Accepted>> {
-    return this.post('/guardian-vote', followUp);
+    return this.write('/guardian-vote', followUp);
   }
 
   /** POST /escrow-signature: a success, cancel or dispute signature, or a verdict, by payload.type. */
   escrowSignature(followUp: FollowUp<EscrowSignaturePayload> | FollowUp<EscrowVerdictPayload>): Promise<ApiResponse<Accepted>> {
-    return this.post('/escrow-signature', followUp);
+    return this.write('/escrow-signature', followUp);
   }
 
   // --- the account level (wallet spec 5.3, 5.4) --------------------------------
@@ -278,17 +312,17 @@ export class AnosApiService {
 
   /** POST /get-account with an envelope the caller signed: pair one's (getAccount) or, since 2026-11-08, the break-glass pair's (CryptoService.signAccountEnvelopeAsBreakGlass), which the validator accepts when pair one does not verify (anossoftware spec 22), so the recovery's finish reads a lost account's balance and latest transaction id with the recovered seed. */
   getAccountAs(envelope: Envelope, quiet = false): Promise<ApiResponse<AccountAnswer>> {
-    return this.post('/get-account', envelope, quiet);
+    return this.read('/get-account', envelope, quiet);
   }
 
   /** POST /list-transactions, signed by pair one; from and to (ISO 8601) cut the list to a date range (anossoftware spec 18.3). */
   listTransactions(pairOne: PairOne, accountId: string, body: { beforePosition?: number; limit?: number; from?: string; to?: string } = {}, quiet = false): Promise<ApiResponse<TransactionsAnswer>> {
-    return this.post('/list-transactions', this.crypto.signAccountEnvelope(pairOne, accountId, '/list-transactions', body), quiet);
+    return this.read('/list-transactions', this.crypto.signAccountEnvelope(pairOne, accountId, '/list-transactions', body), quiet);
   }
 
   /** POST /list-escrows, signed by pair one: the account's open escrow trades as seller or buyer, newest first (anossoftware spec 16). */
   listEscrows(pairOne: PairOne, accountId: string, quiet = false): Promise<ApiResponse<{ escrows: EscrowItem[] }>> {
-    return this.post('/list-escrows', this.crypto.signAccountEnvelope(pairOne, accountId, '/list-escrows', {}), quiet);
+    return this.read('/list-escrows', this.crypto.signAccountEnvelope(pairOne, accountId, '/list-escrows', {}), quiet);
   }
 
   /** POST /get-assisted-transfer, signed by pair one: the account's own held assisted transfer, or null when none is held (anossoftware spec 17). */
@@ -298,40 +332,79 @@ export class AnosApiService {
 
   /** POST /get-assisted-transfer with an envelope the caller signed: pair one's (getAssistedTransfer) or, since 2026-11-10, the break-glass pair's (CryptoService.signAccountEnvelopeAsBreakGlass), which the validator accepts when pair one does not verify (anossoftware spec 22), so the recovery's finish asks with the recovered seed whether a break-glass move is already held for a lost account, and reads its transaction id and the account it goes to. */
   getAssistedTransferAs(envelope: Envelope, quiet = false): Promise<ApiResponse<{ transfer: HeldAssistedTransfer | null }>> {
-    return this.post('/get-assisted-transfer', envelope, quiet);
+    return this.read('/get-assisted-transfer', envelope, quiet);
   }
 
   /** POST /get-locked-transfer, signed by pair one: the account's own guarded or vault transfer waiting out its lock, or null when none is held (anossoftware spec 18). */
   getLockedTransfer(pairOne: PairOne, accountId: string, quiet = false): Promise<ApiResponse<{ transfer: HeldLockedTransfer | null }>> {
-    return this.post('/get-locked-transfer', this.crypto.signAccountEnvelope(pairOne, accountId, '/get-locked-transfer', {}), quiet);
+    return this.read('/get-locked-transfer', this.crypto.signAccountEnvelope(pairOne, accountId, '/get-locked-transfer', {}), quiet);
   }
 
   // --- the attestor reads (anossoftware 13.2): the account envelope as getAccount builds it, the signer staked for attestor ---
 
   /** POST /list-assisted-transfers: the trades and, since 2026-11-08, the break-glass moves waiting for attestors on this validator, newest first, told apart by type. */
   listAssistedTransfers(pairOne: PairOne, accountId: string, quiet = false): Promise<ApiResponse<{ transfers: AssistedTransferItem[] }>> {
-    return this.post('/list-assisted-transfers', this.crypto.signAccountEnvelope(pairOne, accountId, '/list-assisted-transfers', {}), quiet);
+    return this.read('/list-assisted-transfers', this.crypto.signAccountEnvelope(pairOne, accountId, '/list-assisted-transfers', {}), quiet);
   }
 
   /** POST /list-disputed-escrows: the disputed escrows no verdict has decided, newest first. */
   listDisputedEscrows(pairOne: PairOne, accountId: string, quiet = false): Promise<ApiResponse<{ escrows: DisputedEscrowItem[] }>> {
-    return this.post('/list-disputed-escrows', this.crypto.signAccountEnvelope(pairOne, accountId, '/list-disputed-escrows', {}), quiet);
+    return this.read('/list-disputed-escrows', this.crypto.signAccountEnvelope(pairOne, accountId, '/list-disputed-escrows', {}), quiet);
   }
 
   // --- the public reads (anossoftware 25): no envelope, no signature, the plain body as the object ---
 
   /** POST /list-fund-proposals: the open fund proposal (one at most) or the decided ones, with the validator's settings; a validator or a doorman without the route answers 404. */
   listFundProposals(filters: FundListFilters, quiet = false): Promise<ApiResponse<{ settings: FundSettings; proposals: FundProposalItem[] }>> {
-    return this.post('/list-fund-proposals', filters, quiet);
+    return this.read('/list-fund-proposals', filters, quiet);
   }
 
   /** POST /get-fund-proposal: one fund proposal with its payouts, open or archived, with the settings; 404 unknown proposal. */
   getFundProposal(transactionId: string, quiet = false): Promise<ApiResponse<{ settings: FundSettings; proposal: FundProposal }>> {
-    return this.post('/get-fund-proposal', { transactionId }, quiet);
+    return this.read('/get-fund-proposal', { transactionId }, quiet);
   }
 
-  private async post<T>(path: string, body: unknown, quiet = false): Promise<ApiResponse<T>> {
-    const { defaultValidator } = await this.config.load();
-    return this.log.post<T>(`/api/anos/${defaultValidator}${path}`, body, quiet);
+  // --- the session's validator (wallet spec 8.3, 2026-11-10) --------------------
+
+  /** The session's validator, picked now when none is set yet: one of the proxy's list, at random (Math.random is enough, nothing secret hangs on it). The attestor case pages name it after their posts (wallet spec 13.3). */
+  async validator(): Promise<number> {
+    const { validators } = await this.config.load();
+    this.sessionValidator ??= 1 + Math.floor(Math.random() * validators);
+    return this.sessionValidator;
   }
+
+  /** A read: the call goes to the session's validator and waits at most VALIDATOR_READ_TIMEOUT_MS. An answer is returned. With no answer the session moves on and the call is made again on the validator it is on then, each validator at most once per call, so at most `validators` tries; when none answers, the last failure is returned. */
+  private async read<T>(path: string, body: unknown, quiet = false): Promise<ApiResponse<T>> {
+    const { validators } = await this.config.load();
+    const asked = new Set<number>();
+    let validator = await this.validator();
+    let res: ApiResponse<T>;
+    do {
+      asked.add(validator);
+      res = await this.log.post<T>(`/api/anos/${validator}${path}`, body, quiet, VALIDATOR_READ_TIMEOUT_MS);
+      if (!noAnswer(res)) return res;
+      this.moveOn(validator, validators);
+      validator = await this.validator();
+    } while (!asked.has(validator));
+    return res;
+  }
+
+  /** A submission: one try on the session's validator, no time limit. With no answer the session moves on. The result is returned as it is: the wallet never sends a submission again on its own, since one that got no answer may still have been taken. */
+  private async write<T>(path: string, body: unknown, quiet = false): Promise<ApiResponse<T>> {
+    const { validators } = await this.config.load();
+    const validator = await this.validator();
+    const res = await this.log.post<T>(`/api/anos/${validator}${path}`, body, quiet);
+    if (noAnswer(res)) this.moveOn(validator, validators);
+    return res;
+  }
+
+  /** The session moves on from a validator that did not answer, to the next one in the list, the first after the last, and stays there. Only while it is still on that validator: calls that got no answer from the same validator at the same moment (the reads of a balance refresh) move the session on by one place between them, not by one each. */
+  private moveOn(from: number, validators: number): void {
+    if (this.sessionValidator === from) this.sessionValidator = (from % validators) + 1;
+  }
+}
+
+/** True when a validator call got no answer (decision 4 of forclaude/wallet-round-robin-plan-1.md): status 0, nothing came back, because the network failed or a read ran into its time limit; 502, the wallet's proxy could not reach the validator's doorman, or the doorman its worker; 503, a validator that has just booted and is not counted yet; 504, the doorman got nothing from its worker in time. Every other status is an answer, a refusal and a 500 included. */
+function noAnswer(res: ApiResponse<unknown>): boolean {
+  return res.status === 0 || res.status === 502 || res.status === 503 || res.status === 504;
 }

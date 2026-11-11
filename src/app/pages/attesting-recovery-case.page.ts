@@ -73,7 +73,7 @@ interface Outcome {
   text: string;
 }
 
-/** A move of the case with what the default validator lists for it (the amount, when it was made, the attestations in its slots), or null when the validator does not list it. */
+/** A move of the case with what the session's validator lists for it (the amount, when it was made, the attestations in its slots), or null when the validator does not list it. */
 interface MoveRow {
   move: BreakGlassMove;
   listed: AssistedTransferItem | null;
@@ -86,7 +86,7 @@ interface StoredAttestation {
   attestation: FollowUp<AttestationPayload>;
 }
 
-/** The sending of a decided case: the stored attestations, the ones the default validator does not hold yet, and the last answers. */
+/** The sending of a decided case: the stored attestations, the ones the session's validator does not hold yet, and the last answers. */
 interface Sending {
   attestations: StoredAttestation[];
   pending: StoredAttestation[];
@@ -127,7 +127,7 @@ function storedAttestations(events: CaseEvent[]): StoredAttestation[] {
  * /get-break-glass-case, refreshed by a button and every 15 s, in the shape
  * of the trade case page: the person with the selfie; the recovery case's
  * status and its two moderator approvals; the moves (old account, new
- * account, type, and what the default validator's /list-assisted-transfers
+ * account, type, and what the session's validator's /list-assisted-transfers
  * lists for each, matched by transaction id: the amount, when, the
  * attestations in its slots, or "not listed on this validator"); the
  * timeline; Schedule; the recovery case's lookup id; the two buckets (the
@@ -466,7 +466,7 @@ export class AttestingRecoveryCasePage {
 
   /**
    * The sending, once the case is decided: the stored attestations (two per
-   * move once two attestors signed) and the ones the default validator does
+   * move once two attestors signed) and the ones the session's validator does
    * not hold yet: for a move the validator still lists, the attestations
    * whose signer is not among the listed attestorIds; a move it no longer
    * lists (both attestations in, written, or cancelled) has nothing to
@@ -720,7 +720,7 @@ export class AttestingRecoveryCasePage {
 
   /**
    * Send to the validators (wallet spec 13.3): the stored attestations the
-   * default validator does not hold yet, posted one after the other to its
+   * session's validator does not hold yet, posted one after the other to its
    * /attestation in move order, then /mark-break-glass-case-sent with the
    * answers (a refusal recorded too); Retry posts the ones still pending.
    */
@@ -737,14 +737,14 @@ export class AttestingRecoveryCasePage {
         const res = await this.anos.attestation(attestation);
         results.push(res.ok ? { signer, status: res.status } : { signer, status: res.status, error: reasonOf(res).slice(0, 500) });
       }
-      const { defaultValidator } = await this.config.load();
-      const marked = await this.masterpod.markBreakGlassCaseSent(this.caseId(), defaultValidator, results);
+      const validator = await this.anos.validator();
+      const marked = await this.masterpod.markBreakGlassCaseSent(this.caseId(), validator, results);
       if (!marked.ok) throw new Error(this.refusal(marked, '/mark-break-glass-case-sent'));
       const failed = results.filter((r) => !accepted(r));
       this.sendOutcome.set(
         failed.length === 0
-          ? { ok: true, text: this.t().attesting.sentAccepted(defaultValidator, this.t().recoveryCase.attestationCount(results.length)) }
-          : { ok: false, text: this.t().attesting.validatorRefused(defaultValidator, failed.length, results.length) },
+          ? { ok: true, text: this.t().attesting.sentAccepted(validator, this.t().recoveryCase.attestationCount(results.length)) }
+          : { ok: false, text: this.t().attesting.validatorRefused(validator, failed.length, results.length) },
       );
     } catch (err) {
       this.sendOutcome.set({ ok: false, text: err instanceof Error ? err.message : String(err) });

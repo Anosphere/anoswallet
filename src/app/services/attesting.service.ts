@@ -15,7 +15,7 @@ const PROFILE_IDS_PER_CALL = 200;
  * The attestor's state for the session (wallet spec 13.4): the staked
  * account picked once per session (its keyBlob is opened per signature, as
  * the account page does, never kept open), the trade and dispute lists from
- * the default validator with the people behind their account ids, and the
+ * the session's validator with the people behind their account ids, and the
  * case pairs of the dispute cases while a page is open. Everything lives in
  * RAM and goes when the session closes.
  */
@@ -76,7 +76,7 @@ export class AttestingService {
   // --- the lists -----------------------------------------------------------------
 
   /**
-   * Both reads from the default validator, signed by pair one of the staked
+   * Both reads from the session's validator, signed by pair one of the staked
    * account, then /list-anos-account-profiles once for every account id not
    * yet known. Throws with the refusal in words.
    */
