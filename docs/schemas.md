@@ -424,7 +424,11 @@ fifth, /get-locked-transfer, and the date range on /list-transactions on
     stakes and guardianVotes (2026-11-08, anossoftware spec 25.1): the account's stake per purpose, millionths
       as decimal strings, "0" each when the account has no stakes row, and floor(guardian / GUARDIAN_VOTE_ANOS)
       as a number, the account's guardian votes. A validator without the fund proposal reads sends neither;
-      the wallet's AccountAnswer has both optional, and only the Guardians pages read them.
+      the wallet's AccountAnswer has both optional. The Guardians pages and Home's fund proposal line read
+      guardianVotes. Since 2026-11-10 (section 11, forclaude/wallet-balance-card-plan-1.md) the balances
+      service (8.3) reads stakes, for the balance card (8.2, Wallet): it keeps each account's purposes above
+      zero and adds them up as Staked, which the card counts into Total, since a stake is a transfer to the
+      fund and has left the balance. An answer without stakes counts as nothing staked.
 
     POST /list-transactions (account)
     body { beforePosition?: integer, limit?: integer (default 50, at most 200), from?: ISO 8601, to?: ISO 8601 }
@@ -906,7 +910,8 @@ Home (2026-11-06, section 11), at /home, where an unlock lands once
 setup is complete, first in the navigation; no outer card. Top to
 bottom: the greeting, the person's avatar (8.6, 56 px) and "Hello,
 Somchai" (the first name, the username when it is empty); the balance
-card of the Wallet paragraph below, the same component; "Things to do",
+card of the Wallet paragraph below, the same component, with its rows
+and the sheets they open (2026-11-10, section 11); "Things to do",
 a short list of links, the heading and the list hidden when none
 applies, in this order, each only when it applies: "Add a recovery
 selfie" (bucketOneImages 0, to /account/recovery/selfie); "Add your
@@ -943,15 +948,27 @@ its votes; a refusal shows no line, the lines are a convenience
 
 Wallet. Titled "Wallet" (the subtitle left on 2026-11-06, section 11).
 On top the balance card (balance-card.component over balances.service,
-8.3), the card Home shows too: Total, the balances as the validator says
-them, with a refresh button; Available, Total minus what is spoken for;
-then one small line per kind spoken for, each only when its number is
-above zero ("25 anos in escrow trades", "10 anos in assisted transfers",
-"15 anos waiting out a lock", "5 anos in pending transfers"), then "1
+8.3), the card Home shows too, as it is since 2026-11-10 (section 11;
+the plan is forclaude/wallet-balance-card-plan-1.md): "Total" with a
+refresh button, and under it the big number, what the accounts hold on
+the ledger plus what they have staked (a stake is a transfer to the
+fund, so it has left its account's balance, and the card counts it back
+in). Then the rows, the label on the left and the amount on the right
+("900 anos"), which add up to Total: "Available", what the accounts hold
+less what is spoken for; "Staked", the accounts' stakes as /get-account
+answers them (5.4); "In escrow", the open escrow trades the accounts
+sell in; and "Being sent", only while its amount is above zero: the
+assisted transfers waiting for attestors, the guarded and vault
+transfers waiting out their lock and the transfers sent and not yet
+written, together. Available, Staked and In escrow always show, also at
+"0 anos". A row above zero is a button with a small arrow at its right,
+and a tap opens the balance sheet for it (the paragraph after this one);
+a row at zero is plain and opens nothing. Then the small lines "1
 account is not on the ledger yet" and "1 account could not be read"
 (plural likewise); "No anos account yet." without an account; "Reading…"
 until the first read finished. The validator moves a balance only when a
-transfer is written, so Total stays whole while anos are spoken for.
+transfer is written, so what is in escrow or being sent is still in its
+account's balance, and Available is what is left after it.
 Then (2026-11-07, section 11) a button "Noted transactions" to
 /wallet/notes. Then "Accounts": one card per account from /list-anos-accounts, in the
 masterpod's order (oldest first), in a grid; "No anos account yet. Open
@@ -1023,6 +1040,33 @@ shows "Waiting for the ledger…" until the wait sees it land; past 90
 seconds the page says "The account is not on the ledger yet after 90
 seconds. It may still land: refresh in a moment." and the 5-second poll
 picks it up.
+
+The balance sheet (2026-11-10, section 11; balance-sheet.component,
+8.3), what a row of the balance card opens, on Home and on the Wallet
+page: a panel that slides up from the bottom of the screen and lies over
+the page (MatBottomSheet, as the marketplace's two sheets, 8.7), closed
+by a tap outside it. Its title is the row's label and amount, "Staked ·
+250 anos". Under it one row per item, in the accounts' order, each with
+its account's name in bold ("Spending account", account-names.ts):
+- Available: one row per account that has anos available, the amount at
+  the right. A tap opens the account's page.
+- Staked: one row per account and purpose, the purpose under the name,
+  in the words of the Stake for list, and the amount at the right; an
+  account's purposes in the order of STAKE_PURPOSES (crypto.service).
+  Nothing to tap.
+- In escrow: one row per open trade the account sells in, as the account
+  page lists it: under the name "25 anos to a1b2c3d4…e5f6" (the buyer's
+  id in short form), then in small type the stage in words from the
+  seller's side and the date. A tap opens the trade's page.
+- Being sent: one row per waiting transfer, under the name the Wallet
+  page's sentence for its kind: "25 in an assisted transfer", "15
+  waiting out a lock", "5 pending". A tap opens the assisted transfer's
+  page, or the account's page for the other two. A pending row with no
+  amount (the validator answers "0" for it) sends no anos and is no row.
+A row that leads somewhere is a link, and a tap on it closes the sheet.
+The sheet reads the balances service itself, as the card does, so it
+follows a refresh and the 5-second poll while it is open, and its rows
+add up to the amount in its title.
 
 Account. The account id in the title with a copy button (8.5). Then, in
 this order: balance, type, the latest transaction id, created; Refresh,
@@ -2038,16 +2082,31 @@ excepted, with the keyholder and anos calls included.
     balances.service        what Home and the Wallet page share (2026-11-06): one entry per account (landed,
                             balance, what is pending, in escrow, assisted or locked, held, available, partial,
                             and guardianVotes as /get-account answers them, 0 while not landed or on a validator
-                            without the field, which Home's fund proposal line reads, 2026-11-08)
+                            without the field, which Home's fund proposal line reads, 2026-11-08; since
+                            2026-11-10, for the balance card and its sheet (8.2, Wallet): stakes, the account's
+                            stake per purpose in millionths, the purposes above zero only, from stakes of the
+                            same /get-account answer (5.4), empty when the answer has none; staked, their sum;
+                            and the held items as the reads answered them: escrows, the open trades the account
+                            sells in, the ones counted in escrow; assistedTransfer and lockedTransfer, the held
+                            transfer or null; pendingTransfers, the pending rows)
                             read by refresh from /get-account, /list-transactions, /list-escrows and the
                             held-transfer read of the account's type, every account at once; the totals over
-                            the session's accounts; needsPoll while an account is not on the ledger yet or
+                            the session's accounts, staked among them since 2026-11-10, while total stays what
+                            the accounts hold on the ledger; an entry that is not on the ledger or is lost
+                            carries the empty values; needsPoll while an account is not on the ledger yet or
                             any anos are held or pending; a lost account (2026-11-08: its keyBlob does not open
                             under the session's key blob key) gets the lost entry and counts in no total and no
                             poll, isLost and usableAccounts tell the pages and the pickers, markLost tries every
                             keyBlob whenever the account list changes, and the lost accounts' break-glass moves
                             (moves, moveOf, loadMoves over /list-my-break-glass-moves and the new account's
                             history) are read with the balances
+    balance-sheet.component not a service: the component the balance card opens with MatBottomSheet
+                            (2026-11-10; components/balance-sheet.component.ts, `BalanceSheetComponent`, the
+                            data { kind }: available, staked, escrow or sending), listed here because it reads
+                            balances.service, the session's accounts and their names itself, as the card does,
+                            and so follows a refresh while it is open (8.2, the balance sheet); its file also
+                            holds BALANCE_KINDS, the card's rows in order, and balanceLine(kind, totals, words),
+                            a kind's label and amount, which the card's rows and the sheet's title share
     notes.service           the noted transactions (2026-11-07): the last list read with its blobs opened,
                             byTransaction, add, update and remove, the preset kind and the starting currency
     settings.service        the wallet settings (2026-11-07): one encrypted object on the masterpod (4.7), read once
@@ -5811,6 +5870,130 @@ services and the spec below).
   after the first move went out; continue the recovery and run the finish
   again; no second new account is made for that old account, and the
   attestor edition lists its move.
+
+### The balance card: Total with the stakes, then Available, Staked and In escrow (2026-11-10)
+
+Built from `forclaude/wallet-balance-card-plan-1.md` (FINAL), its one
+step, one commit, on top of bfef9de. Why, in the user's words of
+2026-11-10: "It shows a big number and then a smaller number and calls
+the smaller number available Anos, but they're actually the same. We
+probably want to show total Anos big, first and clear. Then we probably
+want to show available Anos. Then we should show staked Anos. Then we
+should show escrowed Anos. Those three should add up to the total." and
+"we should be able to click on each to see more details". Until now the
+card showed Total, the accounts' balances, and under it "Available 900
+anos", the same number whenever nothing was spoken for; a stake had left
+its account and was on the card nowhere. Wallet only: the validators
+already answer each account's stakes in `/get-account` (5.4), so there
+is no server change, no route, no proxy change, no env variable and no
+new package.
+
+- `src/app/services/balances.service.ts`: `AccountBalance` gains
+  `stakes` (the account's stake per purpose in millionths, the purposes
+  above zero only, from `stakes` of the `/get-account` answer; empty
+  when the answer has none), `staked` (their sum) and what the sheet
+  lists, as the reads answer them: `escrows` (the trades counted in
+  `escrow`, the ones the account sells in), `assistedTransfer`,
+  `lockedTransfer` (the held transfer or null) and `pendingTransfers`.
+  `Totals` gains `staked`, summed over the landed accounts; `total`
+  keeps its meaning, what the accounts hold. The entry of an account
+  that is not on the ledger or is lost carries the empty values.
+  `needsPoll` is unchanged. No new read: `readOne` makes the same calls
+  as before and keeps more of their answers; `stakesOf` turns the
+  answer's stakes into the entry's.
+- `src/app/components/balance-card.component.ts`: the big number is
+  `total` plus `staked`. Under it the rows, the label on the left and
+  the amount on the right: Available, Staked, In escrow, and Being sent
+  (`assisted` plus `locked` plus `pending`) only when it is above zero.
+  A row above zero is a `<button>` with a small `chevron_right` and
+  opens the sheet for its kind with `MatBottomSheet`; a row at zero is a
+  plain `<div>`. Then the two small lines (accounts not on the ledger
+  yet, accounts not read). "Total", the refresh button, "No anos account
+  yet." and "Reading…" are as they were.
+- `src/app/components/balance-sheet.component.ts`, new:
+  `BalanceSheetComponent`, opened with the data `{ kind }`, one of
+  `available`, `staked`, `escrow` and `sending`. It reads
+  `BalancesService`, the session's accounts and their names itself. The
+  title is the row's label and amount ("Staked · 250 anos"); the rows
+  are those of 8.2 (the balance sheet), in the accounts' order, the
+  purposes in the order of `STAKE_PURPOSES`, the trade's stage through
+  `escrowStageWords` with the side `seller`. A row that leads somewhere
+  is an `<a routerLink>` whose tap also dismisses the sheet; a Staked
+  row is a `<div>`. The style follows `picker-sheet.component.ts`. The
+  file also exports `BALANCE_KINDS` and `balanceLine(kind, totals,
+  words)`, a kind's label and amount, which the card's rows and the
+  sheet's title both use, so the two cannot drift apart.
+- `src/app/i18n/en.ts`, `th.ts`, under `balanceCard`: `available` and
+  `inEscrow` were sentences with the amount inside and are plain labels
+  now ("Available", "In escrow"); `staked` ("Staked") and `sending`
+  ("Being sent") are new; `inAssisted`, `waitingOutLock` and `inPending`
+  are gone. The Thai is the plan's: "ใช้ได้", "วางหลักประกันไว้",
+  "อยู่ในเอสโครว์", "กำลังส่ง"; a Thai reader has not checked it. The
+  sheet's rows use words the wallet already had: `common.anos`,
+  `account.to`, `account.stakePurposes`, `escrowStages`,
+  `wallet.inAssisted`, `wallet.waitingOutLock` and `wallet.pending`.
+- Unchanged: the cards of the single accounts on the Wallet page (the
+  plan's decision 12), `wallet.page.ts`, `home.page.ts`,
+  `account.page.ts`, `anos-api.service.ts`, `server/`.
+- Accepted by the plan (its decision 13). An account with an open trade
+  or a waiting transfer can send nothing else until that is done, yet
+  the rest of its balance counts as available, as before. An account
+  lost with an old passkey counts nowhere, as before. The stakes of an
+  account that could not be read are not counted; the "could not be
+  read" line says an account is missing. Out of the plan: stakes on the
+  account page; taking a stake back; the anos of trades the person buys
+  in, which are not theirs yet; the value in a currency.
+- Readings where the plan left a detail open. The stakes are read for
+  the six purposes of `STAKE_PURPOSES`: one the answer leaves out counts
+  as zero, and a purpose the wallet does not know is not counted. Every
+  row of a sheet starts with its account's name in bold; what the plan
+  lists after it stands under it (the purpose; the trade and, in small
+  type, its stage and date; the transfer's sentence), and the amount
+  stands at the right on the Available and Staked rows, where no
+  sentence says it. The buyer's id in the In escrow row is the short
+  form in the id font (the account page's own list shows the full id).
+  Within one account the Being sent rows stand in the Wallet page's
+  order: the assisted transfer, the lock, the pending rows. A pending
+  row with no amount (the validator answers "0" for it) is no row of the
+  Being sent sheet, since it sends no anos; the service keeps it in
+  `pendingTransfers` as answered. The sheet's rows have no arrow, as the
+  picker's have none. A plain row of the card keeps the arrow's room, so
+  the amounts stand in one column. A sheet whose amount falls to zero
+  while it is open stays open, with "Being sent · 0 anos" and no rows.
+  The sheet opens with `autoFocus: 'dialog'`, as the marketplace's
+  sheets do. 8.3 lists the new component among the services, because the
+  plan names 8.3 for it.
+- Spec: 5.4 (`/get-account`: who reads `stakes`), 8.2 (Home; Wallet, the
+  card; the new paragraph on the balance sheet), 8.3 (the balances
+  service's fields, the new component) and this note. The older notes
+  above stand as the record of what was built then.
+- `npx ng build` clean (2.12 MB initial, no warnings). Seen here in a
+  development build served from a scratch folder, with a made-up session
+  set through the browser's debug tools to reach Home and the Wallet
+  page, and made-up accounts and balances (five accounts; two stakes, an
+  escrow trade, a pending transfer, a lock and an assisted transfer),
+  so no keyholder, masterpod or validator was asked. On Home at 360, 390
+  and 430 px wide, in English and in Thai: the card is whole, each row
+  is one line and 40 px high, the labels start under "Total", the
+  amounts end in one column with the arrows right of them, and nothing
+  overlaps or runs off the screen; each of the four sheets lies at the
+  bottom of the screen at the screen's full width, its title on one
+  line, its rows whole, and its rows add up to its title. The small line
+  of the In escrow row takes two lines in English at all three widths
+  and in Thai at 360 px. The same at 360 px on the Wallet page, where
+  the card is 294 px wide. With nothing staked and no trade, Total and
+  Available are equal, Staked and In escrow read "0 anos" with no arrow
+  and open nothing, and Being sent is not shown. A tap on a row of a
+  sheet closed the sheet and opened its page, and an open sheet followed
+  a change of the balances. With amounts of twelve digits at 360 px the
+  big number and the longest Thai label ("วางหลักประกันไว้") wrap to a
+  second line and nothing is cut. The browser pane was not on screen
+  during the look, so the page drew no frames of its own and the sheet's
+  slide was not watched: in the scratch page the animation was switched
+  off and its start and end were sent by hand. Not seen on a phone, not
+  on the test net and not against a validator: the run-through is the
+  user's, after the deploy (the plan's section 2; only the wallet has
+  something to deploy).
 
 ## 12. Recovery and the moderator edition
 
