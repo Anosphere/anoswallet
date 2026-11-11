@@ -6174,6 +6174,45 @@ server.
   after 10 seconds when the machine cannot be reached), and from then on
   calls the next number.
 
+### The script and style files travel compressed (2026-11-11)
+
+No plan: one change on the user's word of 2026-11-11 ("Turn on
+compression for scripts and styles"), after a look at why the site is
+slow at times. Measured from outside that day: the wallet servers sent
+the build's script as it is, 2,116,082 bytes (`main-FHPDFECC.js`), 4 to
+5 seconds to download, because nginx compresses only HTML unless it is
+told the other types. The site `deploy/nginx/wallet.conf` now says so,
+inside each of the three named server blocks: `gzip on`, `gzip_vary on`,
+`gzip_comp_level 6` and
+`gzip_types text/css text/javascript application/javascript`.
+
+- On the wire: a browser that sends `Accept-Encoding: gzip` gets the
+  script and the style file with `content-encoding: gzip`; at level 6
+  the script is about 483 KB (610 KB at nginx's own level, 1). A browser
+  that does not ask gets the files as before. `gzip_vary` adds
+  `Vary: Accept-Encoding`, so a cache in between keeps the two apart.
+- The answers under `/api` are JSON and are not compressed. The user
+  asked for scripts and styles, which are public and the same for
+  everyone; answers that carry secrets are a question of their own.
+- The lines stand in the server blocks, not at the top of the file. The
+  file is read at the level of the server's `/etc/nginx/nginx.conf`,
+  which has `gzip on` already (the HTML arrived compressed before this
+  change), and a second one at that level is refused as a duplicate.
+- `application/javascript` stands beside `text/javascript`, which is
+  what the proxy's static files say today, for a version that says the
+  older name.
+- Nothing in `server/` or `src/` changed and the Angular build is the
+  same. On a wallet server the change takes effect with the install
+  script, which copies the site, runs `nginx -t` and reloads nginx
+  (README, "The wallet servers"). Not run here: this machine has no
+  nginx. The install script's `nginx -t` is the check; when it refuses
+  the file the script stops before the reload and nginx keeps the old
+  site. To see it afterwards, with the script's name from the page's
+  source:
+  `curl -s -I -H 'Accept-Encoding: gzip' https://wallet.anocloud.com/main-<name>.js | grep -i content-encoding`
+  prints `content-encoding: gzip`.
+- Spec: this note; README, "The wallet servers"; the file's own header.
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`

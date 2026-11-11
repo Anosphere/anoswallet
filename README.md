@@ -118,6 +118,10 @@ servers from a chat. On each server:
   loopback. The certificate is the operator's, at
   `/etc/wallet/tls/fullchain.pem` and `/etc/wallet/tls/key.pem`, with a
   renewal hook that ends in `systemctl reload nginx`.
+- The site sends the build's script and style files gzip-compressed to a
+  browser that asks for it, so the 2.1 MB script travels as about 0.5 MB.
+  HTML is compressed already, by nginx's own default. The answers under
+  `/api` are not compressed.
 - The closed page, `deploy/nginx/closed.html`: nginx shows it in place of
   the wallet, on all three names, while the file `/etc/wallet/closed`
   exists, and whenever the wallet proxy does not answer. The three units
