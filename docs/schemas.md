@@ -60,7 +60,7 @@ on this machine).
     SIGNING_SERVER_URL  http://localhost:3300                                the signing server
     SHARE_THRESHOLD     3                                                    how many shares rebuild a secret
     DEPOSIT_FLOOR_PERCENT  80    how many of the keyholders must store a share for a deposit to go through, in percent, 1 to 100 (section 6; 2026-11-07)
-    DEFAULT_VALIDATOR   1                                                    the validator the wallet posts to
+    DEFAULT_VALIDATOR   1                                                    until 2026-11-10 the validator the wallet posted to; it no longer picks the validator (below)
     DIST_DIR            dist/wallet/browser                                  the Angular build it serves
     RP_ID               localhost                                            the relying-party id the browser uses in both ceremonies; the masterpod's RP_ID
     GUARDED_LOCK_MINUTES  1    the validators' time lock on a guarded account, in minutes (10 on the testnet; a week in production)
@@ -72,11 +72,20 @@ network/testnet.env); the wallet dates a guarded or vault transfer the
 lock plus the offset ahead and a validator refuses one outside its
 window, so the two files are changed together (2026-11-06, section 11).
 
+DEFAULT_VALIDATOR no longer picks the validator (2026-11-10, section 11):
+the browser picks one of the listed validators per session, at random,
+and moves to the next one when it does not answer (8.3). The variable
+stays, with its boot check that it is not larger than the list, and
+/api/config still answers it as defaultValidator, for a tab that was
+loaded before that change and still posts to it. The browser's code no
+longer reads defaultValidator. Taking both out is a later clean-up.
+
 Routes
 
     GET  /api/config                  200 { validators, keyholders, shareThreshold, depositFloorPercent, defaultValidator, edition,
                                       rpId, guardedLockMinutes, vaultLockMinutes, lockOffsetMinutes }: the two counts are the
-                                      list lengths; the browser never sees an address
+                                      list lengths; the browser never sees an address; defaultValidator is DEFAULT_VALIDATOR,
+                                      still answered and no longer read by the browser (2026-11-10, above)
     GET  /api/health                  200 { status: "ok" }
     ANY  /api/masterpod/<path>        forwarded to MASTERPOD_URL/<path>
     ANY  /api/anos/<n>/<path>         forwarded to VALIDATOR_URLS[n - 1]/<path>; n not 1..count: 404 { error: "unknown validator" }
@@ -424,7 +433,11 @@ fifth, /get-locked-transfer, and the date range on /list-transactions on
     stakes and guardianVotes (2026-11-08, anossoftware spec 25.1): the account's stake per purpose, millionths
       as decimal strings, "0" each when the account has no stakes row, and floor(guardian / GUARDIAN_VOTE_ANOS)
       as a number, the account's guardian votes. A validator without the fund proposal reads sends neither;
-      the wallet's AccountAnswer has both optional, and only the Guardians pages read them.
+      the wallet's AccountAnswer has both optional. The Guardians pages and Home's fund proposal line read
+      guardianVotes. Since 2026-11-10 (section 11, forclaude/wallet-balance-card-plan-1.md) the balances
+      service (8.3) reads stakes, for the balance card (8.2, Wallet): it keeps each account's purposes above
+      zero and adds them up as Staked, which the card counts into Total, since a stake is a transfer to the
+      fund and has left the balance. An answer without stakes counts as nothing staked.
 
     POST /list-transactions (account)
     body { beforePosition?: integer, limit?: integer (default 50, at most 200), from?: ISO 8601, to?: ISO 8601 }
@@ -459,7 +472,7 @@ fifth, /get-locked-transfer, and the date range on /list-transactions on
 
     POST /get-assisted-transfer (account)
     body { }
-    answer: 200 { transfer: { transactionId, accountId, accountIdTo, amount: string, createdAt,
+    answer: 200 { transfer: { transactionId, type, accountId, accountIdTo, amount: string, createdAt,
       stage: waiting | attesting | locked | writing | cancelling, attestations: 0 | 1 | 2,
       unlocksAt: ISO 8601 | null } | null }
     transfer: the assisted_transfers row whose account_id is the signer, or null when there is none. There is
@@ -477,6 +490,13 @@ fifth, /get-locked-transfer, and the date range on /list-transactions on
       then the moment a move out of a guarded or vault account may be written (null for every other row),
       and a fifth stage, locked, is both attestations approved with that moment ahead; the wallet reads it
       "Locked until <date>" (assistedStages.locked).
+    type (answered by the validator since 2026-11-08, read by the wallet since 2026-11-10,
+      forclaude/recovery-finish-order-plan-1.md): the row's transactionType, assistedAnosTransfer or
+      breakGlassTransfer. Since 2026-11-10 this read is also made with the break-glass pair, by the recovery's
+      finish (12.3, Move your money): the envelope is signed by a lost account's break-glass pair, which the
+      account level accepts as it does on /get-account (anossoftware spec 22). A breakGlassTransfer in the
+      answer is a move the validators already hold for that account, and its transactionId and accountIdTo
+      are what the finish files with the masterpod. Every other read of it is signed by pair one.
 
     POST /get-locked-transfer (account)
     body { }
@@ -899,7 +919,8 @@ Home (2026-11-06, section 11), at /home, where an unlock lands once
 setup is complete, first in the navigation; no outer card. Top to
 bottom: the greeting, the person's avatar (8.6, 56 px) and "Hello,
 Somchai" (the first name, the username when it is empty); the balance
-card of the Wallet paragraph below, the same component; "Things to do",
+card of the Wallet paragraph below, the same component, with its rows
+and the sheets they open (2026-11-10, section 11); "Things to do",
 a short list of links, the heading and the list hidden when none
 applies, in this order, each only when it applies: "Add a recovery
 selfie" (bucketOneImages 0, to /account/recovery/selfie); "Add your
@@ -936,15 +957,27 @@ its votes; a refusal shows no line, the lines are a convenience
 
 Wallet. Titled "Wallet" (the subtitle left on 2026-11-06, section 11).
 On top the balance card (balance-card.component over balances.service,
-8.3), the card Home shows too: Total, the balances as the validator says
-them, with a refresh button; Available, Total minus what is spoken for;
-then one small line per kind spoken for, each only when its number is
-above zero ("25 anos in escrow trades", "10 anos in assisted transfers",
-"15 anos waiting out a lock", "5 anos in pending transfers"), then "1
+8.3), the card Home shows too, as it is since 2026-11-10 (section 11;
+the plan is forclaude/wallet-balance-card-plan-1.md): "Total" with a
+refresh button, and under it the big number, what the accounts hold on
+the ledger plus what they have staked (a stake is a transfer to the
+fund, so it has left its account's balance, and the card counts it back
+in). Then the rows, the label on the left and the amount on the right
+("900 anos"), which add up to Total: "Available", what the accounts hold
+less what is spoken for; "Staked", the accounts' stakes as /get-account
+answers them (5.4); "In escrow", the open escrow trades the accounts
+sell in; and "Being sent", only while its amount is above zero: the
+assisted transfers waiting for attestors, the guarded and vault
+transfers waiting out their lock and the transfers sent and not yet
+written, together. Available, Staked and In escrow always show, also at
+"0 anos". A row above zero is a button with a small arrow at its right,
+and a tap opens the balance sheet for it (the paragraph after this one);
+a row at zero is plain and opens nothing. Then the small lines "1
 account is not on the ledger yet" and "1 account could not be read"
 (plural likewise); "No anos account yet." without an account; "Reading…"
 until the first read finished. The validator moves a balance only when a
-transfer is written, so Total stays whole while anos are spoken for.
+transfer is written, so what is in escrow or being sent is still in its
+account's balance, and Available is what is left after it.
 Then (2026-11-07, section 11) a button "Noted transactions" to
 /wallet/notes. Then "Accounts": one card per account from /list-anos-accounts, in the
 masterpod's order (oldest first), in a grid; "No anos account yet. Open
@@ -1016,6 +1049,33 @@ shows "Waiting for the ledger…" until the wait sees it land; past 90
 seconds the page says "The account is not on the ledger yet after 90
 seconds. It may still land: refresh in a moment." and the 5-second poll
 picks it up.
+
+The balance sheet (2026-11-10, section 11; balance-sheet.component,
+8.3), what a row of the balance card opens, on Home and on the Wallet
+page: a panel that slides up from the bottom of the screen and lies over
+the page (MatBottomSheet, as the marketplace's two sheets, 8.7), closed
+by a tap outside it. Its title is the row's label and amount, "Staked ·
+250 anos". Under it one row per item, in the accounts' order, each with
+its account's name in bold ("Spending account", account-names.ts):
+- Available: one row per account that has anos available, the amount at
+  the right. A tap opens the account's page.
+- Staked: one row per account and purpose, the purpose under the name,
+  in the words of the Stake for list, and the amount at the right; an
+  account's purposes in the order of STAKE_PURPOSES (crypto.service).
+  Nothing to tap.
+- In escrow: one row per open trade the account sells in, as the account
+  page lists it: under the name "25 anos to a1b2c3d4…e5f6" (the buyer's
+  id in short form), then in small type the stage in words from the
+  seller's side and the date. A tap opens the trade's page.
+- Being sent: one row per waiting transfer, under the name the Wallet
+  page's sentence for its kind: "25 in an assisted transfer", "15
+  waiting out a lock", "5 pending". A tap opens the assisted transfer's
+  page, or the account's page for the other two. A pending row with no
+  amount (the validator answers "0" for it) sends no anos and is no row.
+A row that leads somewhere is a link, and a tap on it closes the sheet.
+The sheet reads the balances service itself, as the card does, so it
+follows a refresh and the 5-second poll while it is open, and its rows
+add up to the amount in its title.
 
 Account. The account id in the title with a copy button (8.5). Then, in
 this order: balance, type, the latest transaction id, created; Refresh,
@@ -1783,8 +1843,9 @@ GUARDIAN_VOTE_ANOS staked for guardian, the vote open for
 GUARDIAN_VOTE_MINUTES, passed at GUARDIAN_VOTE_PERCENT of the votes for);
 what is new is the reading side, two public reads built like
 /list-dao-stakes, /list-fund-proposals and /get-fund-proposal (5.4), and
-the two stake fields of /get-account. The data comes from the wallet's
-defaultValidator through its doorman and the proxy, never from the
+the two stake fields of /get-account. The data comes from the session's
+validator (8.3; the wallet's defaultValidator until 2026-11-10) through
+its doorman and the proxy, never from the
 masterpod. Everyone signed in may look; an account with at least one
 guardian vote acts, and every guardian account of the pod acts on its own
 with its own weight, since the validators count guardian stake per
@@ -2009,17 +2070,43 @@ excepted, with the keyholder and anos calls included.
                             types DaoStatus, DaoListStatus, DaoSettings, DaoListFilters, DaoProposalItem,
                             DaoProposal and DaoVoteItem
     keyholder-api.service   the keyholder test app's, base path /api/keyholder/<n>
-    anos-api.service        the anos test app's account-api.service.ts, base path /api/anos/<defaultValidator>,
+    anos-api.service        the anos test app's account-api.service.ts, base path /api/anos/<the session's
+                            validator> (2026-11-10, below; /api/anos/<defaultValidator> until then),
                             plus the five signed reads (listEscrows added 2026-11-05, getAssistedTransfer and
                             getLockedTransfer 2026-11-06; listTransactions takes from and to, 2026-11-06);
                             getAccountAs, the /get-account read with an envelope the caller signed, the
-                            break-glass pair's at the recovery's finish (2026-11-08); the two public fund
+                            break-glass pair's at the recovery's finish (2026-11-08), and getAssistedTransferAs,
+                            the same for /get-assisted-transfer (2026-11-10, 12.4); the two public fund
                             proposal reads of anossoftware 25 (2026-11-08), listFundProposals(filters, quiet)
                             and getFundProposal(transactionId, quiet), each a plain unsigned post with the
                             object body and no envelope, the wallet's first unsigned posts to a validator, with
                             the types FundProposalStatus, FundSettings, FundVoteItem, FundPayoutItem,
                             FundProposalItem, FundProposal and FundListFilters; AccountAnswer carries the
-                            optional stakes and guardianVotes of /get-account (5.4)
+                            optional stakes and guardianVotes of /get-account (5.4);
+                            the session's validator (2026-11-10, section 11): the wallet talks to one validator
+                            per session, a session being one load of the wallet in a tab, so a reload picks
+                            again; the first call picks it at random (Math.random) from 1 to the validators of
+                            /api/config, and every call goes to it, since the wallet reads an account and then
+                            builds a transfer on what it read and a balance refresh makes several reads at the
+                            same moment; validator() answers it, picking it when none is set, for the attestor
+                            case pages (13.3); no answer is status 0 (the network failed, or a read ran into
+                            its time limit), 502 (the proxy's "validator n unavailable", a doorman's "worker
+                            unavailable"), 503 (a just booted validator's "not counted yet") or 504 (a
+                            doorman's "worker timeout"), and every other status is an answer, a refusal and a
+                            500 included; with no answer the session moves to the next validator in the list,
+                            the first after the last, and stays there, by one place however many calls got no
+                            answer from that validator at the same moment; the nine reads (read: /get-account,
+                            /list-transactions, /list-escrows, /get-assisted-transfer, /get-locked-transfer,
+                            /list-assisted-transfers, /list-disputed-escrows, /list-fund-proposals,
+                            /get-fund-proposal) wait at most VALIDATOR_READ_TIMEOUT_MS, 10 seconds
+                            (constants.ts), and with no answer are asked again on the next validator, each
+                            validator at most once per call, the last failure returned when none answers; the
+                            eight submissions (write: /create-account, /anos-transfer, /transfer-to-fund,
+                            /fund-proposal, /attestation, /assisted-transfer-cancel, /guardian-vote,
+                            /escrow-signature) are tried once, with no time limit, and never sent again by the
+                            wallet on its own, since one that got no answer may still have been taken: the
+                            session moves on, the failure is shown as before, and the person's next try goes
+                            to the next validator
     guardian-accounts.service
                             the pod's guardian accounts (2026-11-08): read(quiet), /get-account for each of the
                             session's accounts at once, quietly, signed by pair one opened from the keyBlob and
@@ -2030,16 +2117,31 @@ excepted, with the keyholder and anos calls included.
     balances.service        what Home and the Wallet page share (2026-11-06): one entry per account (landed,
                             balance, what is pending, in escrow, assisted or locked, held, available, partial,
                             and guardianVotes as /get-account answers them, 0 while not landed or on a validator
-                            without the field, which Home's fund proposal line reads, 2026-11-08)
+                            without the field, which Home's fund proposal line reads, 2026-11-08; since
+                            2026-11-10, for the balance card and its sheet (8.2, Wallet): stakes, the account's
+                            stake per purpose in millionths, the purposes above zero only, from stakes of the
+                            same /get-account answer (5.4), empty when the answer has none; staked, their sum;
+                            and the held items as the reads answered them: escrows, the open trades the account
+                            sells in, the ones counted in escrow; assistedTransfer and lockedTransfer, the held
+                            transfer or null; pendingTransfers, the pending rows)
                             read by refresh from /get-account, /list-transactions, /list-escrows and the
                             held-transfer read of the account's type, every account at once; the totals over
-                            the session's accounts; needsPoll while an account is not on the ledger yet or
+                            the session's accounts, staked among them since 2026-11-10, while total stays what
+                            the accounts hold on the ledger; an entry that is not on the ledger or is lost
+                            carries the empty values; needsPoll while an account is not on the ledger yet or
                             any anos are held or pending; a lost account (2026-11-08: its keyBlob does not open
                             under the session's key blob key) gets the lost entry and counts in no total and no
                             poll, isLost and usableAccounts tell the pages and the pickers, markLost tries every
                             keyBlob whenever the account list changes, and the lost accounts' break-glass moves
                             (moves, moveOf, loadMoves over /list-my-break-glass-moves and the new account's
                             history) are read with the balances
+    balance-sheet.component not a service: the component the balance card opens with MatBottomSheet
+                            (2026-11-10; components/balance-sheet.component.ts, `BalanceSheetComponent`, the
+                            data { kind }: available, staked, escrow or sending), listed here because it reads
+                            balances.service, the session's accounts and their names itself, as the card does,
+                            and so follows a refresh while it is open (8.2, the balance sheet); its file also
+                            holds BALANCE_KINDS, the card's rows in order, and balanceLine(kind, totals, words),
+                            a kind's label and amount, which the card's rows and the sheet's title share
     notes.service           the noted transactions (2026-11-07): the last list read with its blobs opened,
                             byTransaction, add, update and remove, the preset kind and the starting currency
     settings.service        the wallet settings (2026-11-07): one encrypted object on the masterpod (4.7), read once
@@ -5615,6 +5717,463 @@ package.
   appoint … validator` it also sees validator; an appointed moderator or
   attestor sees what it saw before, without validator and masterPod.
 
+### The finish: keyholders first, the money before the new key, every move filed (2026-11-10)
+
+Built from `forclaude/recovery-finish-order-plan-1.md` (FINAL), step 1 of
+its three, one commit; its step 2 (the masterpod's spec and two comments)
+and step 3 (the records) are words only and follow on the user's word.
+Three changes to the finish of a recovery (12.3), from a planning chat of
+2026-11-10. The user: "This is a real issue" and "We can just change the
+order, keyholders first, then masterpod" (A); "The swap of 3 and 4 sounds
+right" (B); "It would be great to go ahead and fix the filing with the
+masterpod at the same time" (C). Wallet only: nothing changes in what the
+masterpod, the validators, the doormen, the keyholders, the bankers'
+program or the signing server do; no route, no proxy change, no new
+package, and no new word in either language. Two more decisions of the
+user's came into the plan the same day, after the planning chat had
+checked this build against it, and are in the same commit: 16 (an old
+account the validators do not know counts as empty, under C below) and 17
+(three lines that described the old filing are put right, under the
+services and the spec below).
+
+- A, the new key's shares go to the keyholders first and the masterpod
+  is told second. Until now `completeRotation` posted
+  `/rotate-backup-code` and deposited afterwards, so between the two the
+  new key lived only in the tab. Three ways led into that gap: the tab
+  closed between the two calls; the masterpod's answer lost, after which
+  Retry signed with the old key and got `401 bad signature`; too few
+  keyholders up and the tab not kept open. The cost was an anoPod that
+  could not be recovered again: at the next lost passkey the bankers'
+  shares rebuild the old key, which opens nothing and which the masterpod
+  refuses. Now, in `src/app/pages/recover-case.page.ts`: the step's
+  signals are `deposited` (the shares are with the keyholders, only the
+  masterpod call is left), `depositFailed` (a deposit was tried and
+  failed) and `rotated` (the masterpod took the new key, the step is
+  done); until now `rotated` meant the masterpod was told with the
+  deposit left, and `deposited` the step done. In the template
+  `[completed]` and the result line read `rotated()`, and the button
+  reads `common.retry` when `deposited()`, `recoverCase.retryDeposit`
+  when `depositFailed()`, else `recoverCase.makeNewCode`. `makeNewCode`
+  lost the line that set `rotated` to false. `completeRotation` runs in
+  this order: the new key made when none is held, with the guards as
+  before; the old key in the tab (`recoveredCode`), else
+  `recoverCase.noCurrentCode`, now before anything is deposited; when
+  `deposited()` is false, the deposit (a failure sets `depositFailed` and
+  shows as before, a success clears it and sets `deposited`);
+  `/rotate-backup-code` with the same message and the proof by the old
+  key; then `rotated` set and the old key, the new key, its blob2 and
+  its keys dropped. The deposit is made once: when the masterpod call
+  fails after it, Retry repeats that call alone. When the masterpod call
+  is not ok, the new private `rotationLanded(blob2)` is asked, and
+  `/rotate-backup-code: <reason>` is thrown only when it answers false:
+  the recovery envelope for `/get-recovery-pod`, the call made quietly;
+  true when the answer is ok and its `blob2` is the hex of the new
+  blob2, false in every other case, a missing session included; an ok
+  answer is applied as the poll applies one. So a lost answer no longer
+  blocks the step.
+- B, "Move your money" is the third step and "New key for the bankers"
+  the fourth. In the template the two `<mat-step>` blocks traded places;
+  nothing else moved, and the methods stand in the file where they stood.
+  Why: Get back in opens the masterpod's blob2 with the key rebuilt from
+  the delivered shares, the old key; once the masterpod holds the new key
+  that fails, so a reload after the new key and before the money was
+  moved left the anos in the old accounts until a new recovery case (a
+  moderator dismisses the stuck one, two moderators approve again, the
+  bankers deliver again). The money step needs nothing from the new key.
+  `moveMoney` still wipes the seeds at its end and empties what
+  `RecoveryService` holds from Combine, the backup code candidates with
+  them; the new-key step reads the old key from the page's own field
+  `recoveredCode`, which Get back in set and the money step does not
+  touch. (The step 5 note of 2026-11-08 above says the candidates are
+  dropped when "the rotation is done": that was the old order. Nothing
+  reads them after Get back in.)
+- C, "Move your money" asks the validators what they already hold and
+  files every move with the masterpod at once, so the step can be run
+  again without losing or doubling anything. It closes the gap the step 5
+  note of 2026-11-08 above records, with the read that note names.
+  `moveMoney` now runs: the accounts and the seeds matched, as before;
+  the accounts of the moves `/list-my-break-glass-moves` lists count as
+  filed, as before; then the reads, every one before anything is
+  written: for each other matched account `/get-assisted-transfer` and
+  `/get-account`, both signed by its break-glass pair. A held transfer
+  whose `type` is `breakGlassTransfer` is a move to file, with the held
+  transfer's `transactionId` and `accountIdTo`; else a balance of 0 is
+  empty; else the account is one to move, with the balance, the latest
+  transaction id and the minutes ahead, as before. An old account the
+  validators do not know never reached the ledger, so it holds nothing
+  (the plan's decision 16): when its first read is refused with `401` and
+  a reason saying `unknown account`, it counts as empty and the next
+  account is read, without its second read. The test is the one
+  `balances.service.ts` uses for an account that has not landed,
+  `status === 401 && /unknown account/.test(reasonOf(res))`. Before
+  decision 16 that refused read stopped the step before any account was
+  moved. Every other refused read stops the step, as before. Each move to
+  file is filed. Then, for each account to move: `createAccount` of the
+  same type, the transfer built and posted as before; when the post is not
+  ok, `/get-assisted-transfer` is read again with the break-glass pair,
+  and a `breakGlassTransfer` there is the move, with the validator's
+  `transactionId` and `accountIdTo`, while anything else throws
+  `recoverCase.moveRefused` with the validator's reason; then the move is
+  filed, before the next account. Last the seeds wiped and the result
+  line, as before. The new private `fileMove(caseId, move)` posts
+  `/file-break-glass-moves` with the one move: an ok answer, or `409`
+  saying the move is already filed, counts as filed; anything else throws
+  `/file-break-glass-moves: <reason>`. Gone are the list of moves kept
+  for the end, the one filing call after the loop and the line that
+  counted a validator's "already there" as filed; `ALREADY_THERE` stays
+  in `account-creation.service.ts` for the creations, and its import left
+  the page. So an old account with a transaction of its own still waiting
+  on the validators (a lock, an escrow trade, an assisted transfer) now
+  stops the step with the validator's words, where it was counted as
+  filed although nothing was; the step can be run again in the same case
+  once that transaction is done. The 20 moves a single filing call may
+  carry stop being a limit.
+- `src/app/services/anos-api.service.ts`: `getAssistedTransferAs(envelope,
+  quiet)`, which `getAssistedTransfer` calls, as `getAccount` calls
+  `getAccountAs`; `HeldAssistedTransfer` gains `type`, as the validator
+  answers it. `src/app/services/crypto.service.ts`: the comment of
+  `signAccountEnvelopeAsBreakGlass` names both reads; no code changed
+  there. Two more comments, no code (the plan's decision 17): in
+  `src/app/services/account-creation.service.ts` the comment over
+  `ALREADY_THERE` no longer says the finish counts it as a move already
+  filed (the pattern is as it was, and only the creations read it now);
+  in `src/app/services/masterpod-api.service.ts` the comment over
+  `fileBreakGlassMoves` says the finish sends one move per call.
+- Unchanged: `SharesService`, the code of the masterpod API service and
+  of the account creation, the Wallet and Account pages, Setup, `en.ts`
+  and `th.ts`, `server/`. Every word on the screen is one the wallet
+  already had; "Retry" on the button is `common.retry`.
+- Accepted by the plan (its decision 15). The tab closed after the
+  deposit and before the masterpod call: the old key stays the key and a
+  second recovery works, but the unused new shares are then the newest
+  rows, so the bankers have to tick the older row as well. A failed
+  deposit leaves the shares that did get stored under a key id nothing
+  names, as Setup does. An anoPod that fell into the gap of A before this
+  change is not mended by it. While "Move your money" keeps failing, the
+  new key is not made and the case cannot be completed; the person is
+  back in all the same, and the finish can be picked up again in the same
+  case. A failure after a new account is made and before its move reaches
+  a validator leaves that account unused, and Retry makes another, as
+  before; each counts toward the 20 new accounts in 30 days (4.4). A
+  person who closes the tab in the moment between a move reaching the
+  validators and its filing, and never comes back, leaves that move
+  unfiled; coming back to the finish files it. The attestors may see the
+  case with fewer moves for a few minutes, since the moves arrive one by
+  one, and the case's log gets one "opened" line per move.
+- Readings where the plan left a detail open. Both reads of step (3) are
+  made for every account, `/get-assisted-transfer` first, also when it
+  already answered a break-glass move; a refusal of either stops the
+  step, as `/get-assisted-transfer: <reason>` or `/get-account:
+  <reason>`, but for the unknown account of decision 16. That test stands
+  on the first read alone: both reads pass the validator's same account
+  check, which answers `401 unknown account` before it looks at a
+  signature (anossoftware `src/auth/require-account.js`), so the second
+  read cannot say it of an account the first read knew. The reads are
+  not quiet, as the `/get-account` read was not, so the Log shows them.
+  After a refused post, a second read that is itself
+  refused or unanswered counts as "anything else": the step stops with
+  `moveRefused` and the post's reason. A move found on the validators is
+  filed with the old account's id as the masterpod lists it and the
+  validator's two other ids. `rotationLanded` keeps the poll's guard (an
+  answer that arrives after the recovery session went away is not kept,
+  and the answer is false), clears the page's error line on an ok answer
+  as the poll does, and sets no error on a refused one. Any failure of
+  the deposit sets `depositFailed`, a `DepositError` or not.
+  `HeldAssistedTransfer.type` is typed like `AssistedTransferItem.type`
+  (the two words or any string) and stands after `transactionId`, where
+  the validator answers it. `getAssistedTransferAs` stands after
+  `getAssistedTransfer`, as `getAccountAs` after `getAccount`. The three
+  signals stand where the two stood. The comments that number the steps
+  follow the new order (`makeNewCode` and `completeRotation` step 4,
+  `moveMoney` step 3), and the class comment names the order and the
+  changes.
+- Spec: 5.4 (`/get-assisted-transfer`: `type` in the answer, and the read
+  with the break-glass pair), 8.3 (the line of `anos-api.service` names
+  `getAssistedTransferAs`, decision 17), 12.3 (the order, steps 3 and 4,
+  the last paragraph), 12.4 (the line of `anos-api.service`) and this
+  note. The older notes above and 12.7 stand as the record of what was
+  built then.
+- `npx ng build` clean (2.12 MB initial, no warnings), in the web_app
+  folder with this change alone in it, and clean again with decisions 16
+  and 17 in. Not run in a browser here: the steps need a live recovery
+  case with delivered shares, so the run-through is the user's, after
+  the deploy (the plan's section 4; only the wallet has something to
+  deploy). The finish reads Combine, Get back
+  in, Move your money, New key for the bankers, Done. After "New key for
+  the bankers" each keyholder shows one more `backupcode` row for the
+  lookup id. To see C: reload the page while "Move your money" runs,
+  after the first move went out; continue the recovery and run the finish
+  again; no second new account is made for that old account, and the
+  attestor edition lists its move.
+
+### The balance card: Total with the stakes, then Available, Staked and In escrow (2026-11-10)
+
+Built from `forclaude/wallet-balance-card-plan-1.md` (FINAL), its one
+step, one commit, on top of bfef9de. Why, in the user's words of
+2026-11-10: "It shows a big number and then a smaller number and calls
+the smaller number available Anos, but they're actually the same. We
+probably want to show total Anos big, first and clear. Then we probably
+want to show available Anos. Then we should show staked Anos. Then we
+should show escrowed Anos. Those three should add up to the total." and
+"we should be able to click on each to see more details". Until now the
+card showed Total, the accounts' balances, and under it "Available 900
+anos", the same number whenever nothing was spoken for; a stake had left
+its account and was on the card nowhere. Wallet only: the validators
+already answer each account's stakes in `/get-account` (5.4), so there
+is no server change, no route, no proxy change, no env variable and no
+new package.
+
+- `src/app/services/balances.service.ts`: `AccountBalance` gains
+  `stakes` (the account's stake per purpose in millionths, the purposes
+  above zero only, from `stakes` of the `/get-account` answer; empty
+  when the answer has none), `staked` (their sum) and what the sheet
+  lists, as the reads answer them: `escrows` (the trades counted in
+  `escrow`, the ones the account sells in), `assistedTransfer`,
+  `lockedTransfer` (the held transfer or null) and `pendingTransfers`.
+  `Totals` gains `staked`, summed over the landed accounts; `total`
+  keeps its meaning, what the accounts hold. The entry of an account
+  that is not on the ledger or is lost carries the empty values.
+  `needsPoll` is unchanged. No new read: `readOne` makes the same calls
+  as before and keeps more of their answers; `stakesOf` turns the
+  answer's stakes into the entry's.
+- `src/app/components/balance-card.component.ts`: the big number is
+  `total` plus `staked`. Under it the rows, the label on the left and
+  the amount on the right: Available, Staked, In escrow, and Being sent
+  (`assisted` plus `locked` plus `pending`) only when it is above zero.
+  A row above zero is a `<button>` with a small `chevron_right` and
+  opens the sheet for its kind with `MatBottomSheet`; a row at zero is a
+  plain `<div>`. Then the two small lines (accounts not on the ledger
+  yet, accounts not read). "Total", the refresh button, "No anos account
+  yet." and "Reading…" are as they were.
+- `src/app/components/balance-sheet.component.ts`, new:
+  `BalanceSheetComponent`, opened with the data `{ kind }`, one of
+  `available`, `staked`, `escrow` and `sending`. It reads
+  `BalancesService`, the session's accounts and their names itself. The
+  title is the row's label and amount ("Staked · 250 anos"); the rows
+  are those of 8.2 (the balance sheet), in the accounts' order, the
+  purposes in the order of `STAKE_PURPOSES`, the trade's stage through
+  `escrowStageWords` with the side `seller`. A row that leads somewhere
+  is an `<a routerLink>` whose tap also dismisses the sheet; a Staked
+  row is a `<div>`. The style follows `picker-sheet.component.ts`. The
+  file also exports `BALANCE_KINDS` and `balanceLine(kind, totals,
+  words)`, a kind's label and amount, which the card's rows and the
+  sheet's title both use, so the two cannot drift apart.
+- `src/app/i18n/en.ts`, `th.ts`, under `balanceCard`: `available` and
+  `inEscrow` were sentences with the amount inside and are plain labels
+  now ("Available", "In escrow"); `staked` ("Staked") and `sending`
+  ("Being sent") are new; `inAssisted`, `waitingOutLock` and `inPending`
+  are gone. The Thai is the plan's: "ใช้ได้", "วางหลักประกันไว้",
+  "อยู่ในเอสโครว์", "กำลังส่ง"; a Thai reader has not checked it. The
+  sheet's rows use words the wallet already had: `common.anos`,
+  `account.to`, `account.stakePurposes`, `escrowStages`,
+  `wallet.inAssisted`, `wallet.waitingOutLock` and `wallet.pending`.
+- Unchanged: the cards of the single accounts on the Wallet page (the
+  plan's decision 12), `wallet.page.ts`, `home.page.ts`,
+  `account.page.ts`, `anos-api.service.ts`, `server/`.
+- Accepted by the plan (its decision 13). An account with an open trade
+  or a waiting transfer can send nothing else until that is done, yet
+  the rest of its balance counts as available, as before. An account
+  lost with an old passkey counts nowhere, as before. The stakes of an
+  account that could not be read are not counted; the "could not be
+  read" line says an account is missing. Out of the plan: stakes on the
+  account page; taking a stake back; the anos of trades the person buys
+  in, which are not theirs yet; the value in a currency.
+- Readings where the plan left a detail open. The stakes are read for
+  the six purposes of `STAKE_PURPOSES`: one the answer leaves out counts
+  as zero, and a purpose the wallet does not know is not counted. Every
+  row of a sheet starts with its account's name in bold; what the plan
+  lists after it stands under it (the purpose; the trade and, in small
+  type, its stage and date; the transfer's sentence), and the amount
+  stands at the right on the Available and Staked rows, where no
+  sentence says it. The buyer's id in the In escrow row is the short
+  form in the id font (the account page's own list shows the full id).
+  Within one account the Being sent rows stand in the Wallet page's
+  order: the assisted transfer, the lock, the pending rows. A pending
+  row with no amount (the validator answers "0" for it) is no row of the
+  Being sent sheet, since it sends no anos; the service keeps it in
+  `pendingTransfers` as answered. The sheet's rows have no arrow, as the
+  picker's have none. A plain row of the card keeps the arrow's room, so
+  the amounts stand in one column. A sheet whose amount falls to zero
+  while it is open stays open, with "Being sent · 0 anos" and no rows.
+  The sheet opens with `autoFocus: 'dialog'`, as the marketplace's
+  sheets do. 8.3 lists the new component among the services, because the
+  plan names 8.3 for it.
+- Spec: 5.4 (`/get-account`: who reads `stakes`), 8.2 (Home; Wallet, the
+  card; the new paragraph on the balance sheet), 8.3 (the balances
+  service's fields, the new component) and this note. The older notes
+  above stand as the record of what was built then.
+- `npx ng build` clean (2.12 MB initial, no warnings). Seen here in a
+  development build served from a scratch folder, with a made-up session
+  set through the browser's debug tools to reach Home and the Wallet
+  page, and made-up accounts and balances (five accounts; two stakes, an
+  escrow trade, a pending transfer, a lock and an assisted transfer),
+  so no keyholder, masterpod or validator was asked. On Home at 360, 390
+  and 430 px wide, in English and in Thai: the card is whole, each row
+  is one line and 40 px high, the labels start under "Total", the
+  amounts end in one column with the arrows right of them, and nothing
+  overlaps or runs off the screen; each of the four sheets lies at the
+  bottom of the screen at the screen's full width, its title on one
+  line, its rows whole, and its rows add up to its title. The small line
+  of the In escrow row takes two lines in English at all three widths
+  and in Thai at 360 px. The same at 360 px on the Wallet page, where
+  the card is 294 px wide. With nothing staked and no trade, Total and
+  Available are equal, Staked and In escrow read "0 anos" with no arrow
+  and open nothing, and Being sent is not shown. A tap on a row of a
+  sheet closed the sheet and opened its page, and an open sheet followed
+  a change of the balances. With amounts of twelve digits at 360 px the
+  big number and the longest Thai label ("วางหลักประกันไว้") wrap to a
+  second line and nothing is cut. The browser pane was not on screen
+  during the look, so the page drew no frames of its own and the sheet's
+  slide was not watched: in the scratch page the animation was switched
+  off and its start and end were sent by hand. Not seen on a phone, not
+  on the test net and not against a validator: the run-through is the
+  user's, after the deploy (the plan's section 2; only the wallet has
+  something to deploy).
+
+### One validator per session, the next one when it does not answer (2026-11-10)
+
+Built from `forclaude/wallet-round-robin-plan-1.md` (FINAL), its one
+step, one commit, on top of e7f06ad. Why, in the user's words of
+2026-11-10: "The wallet has a registry of the current validators, I
+believe, but it only ever calls validator 1, we should instead have it
+round robin it." Asked whether that means one validator per browser
+session or another one for every call, the user took one per session
+("That sounds good"): the wallet reads an account and then builds a
+transfer on what it read, the latest transaction id, and a balance
+refresh makes three or four reads per account at the same moment, so
+reads spread over several validators could disagree for a moment. Until
+now every validator call of the browser went to
+`/api/anos/<defaultValidator>`, the proxy's `DEFAULT_VALIDATOR`, 1. The
+change is in the browser's code. In the proxy only comments changed, no
+line of code. There is no new route, no new env variable, no new
+package and no new word in either language, and nothing changes on the
+validators, the doormen, the masterpod, the keyholders or the signing
+server.
+
+- `src/app/constants.ts`: `VALIDATOR_READ_TIMEOUT_MS`, 10 000, how long
+  a validator has to answer a read (the plan's decision 7). Without a
+  limit a validator whose machine cannot be reached would hold a page
+  for the proxy's two minutes before the wallet moves on.
+- `src/app/services/anos-api.service.ts`: the private field
+  `sessionValidator`, a number from 1 to the `validators` of
+  `/api/config`, empty until the first call. `validator()`, public,
+  answers it and picks it when none is set, `1 +
+  Math.floor(Math.random() * validators)`; nothing secret hangs on the
+  pick. The private `post` is gone. `read(path, body, quiet)` took its
+  place for the nine reads (8.3 lists them; `getAccountAs` and
+  `getAssistedTransferAs` are the two that `getAccount` and
+  `getAssistedTransfer` call): the call goes to
+  `/api/anos/<the session's validator>` through `LogService.post` with
+  the time limit; an answer is returned; with no answer the session
+  moves on and the call is made again, until the session's validator is
+  one this call has asked already; then the last failure is returned.
+  So a call asks each validator at most once and makes at most
+  `validators` tries. `write(path, body, quiet)` took its place for the
+  eight submissions (8.3 lists them): one try, no time limit; with no
+  answer the session moves on; the result is returned as it is.
+  `moveOn(from, validators)`, private, puts the session on the next
+  validator in the list, the first after the last. `noAnswer(res)`, a
+  function under the class, is the plan's decision 4: status 0, 502,
+  503 or 504, and every other status is an answer. The comment of the
+  class says all this.
+- `src/app/pages/attesting-trade-case.page.ts`,
+  `attesting-dispute-case.page.ts` and
+  `attesting-recovery-case.page.ts`: in `send`, after the posts,
+  `await this.anos.validator()` in place of `defaultValidator` from the
+  configuration. The number goes where `defaultValidator` went: to
+  `/mark-attestor-case-sent` or `/mark-break-glass-case-sent`, and into
+  the sent line. The words on the screen and the masterpod call are
+  unchanged.
+- Comments only: `src/app/services/config.service.ts` (`defaultValidator`
+  is still in the answer and no longer read), `server/config.js`,
+  `network/wallet.env` and the variables sentence of `README.md`
+  (`DEFAULT_VALIDATOR` no longer picks the validator; the browser picks
+  one per session; the variable stays for tabs loaded before the
+  change). `DEFAULT_VALIDATOR`, its boot check and `defaultValidator` in
+  `/api/config` stay as they are (the plan's decision 10), so a tab
+  loaded before the deploy keeps working; taking them out is a later
+  clean-up. The list in `network/wallet.env` is the user's to keep and
+  was not changed (decision 11).
+- Unchanged: the code of every other page and service that calls the
+  validator API service (its methods take and resolve to what they did),
+  `LogService`, `en.ts` and `th.ts`, the code of `server/`.
+- Accepted by the plan (its decision 12). A validator that answers but
+  is behind the others is not noticed: a session that started on it
+  stays there until a reload. A phone without a connection makes one
+  quick try per validator for each read before it shows the failure.
+  Out of the plan: a health check of the validators; the proxy picking
+  the validator; weights; the keyholders, which are already asked all
+  at once; the signing server's second server; the masterpod's own call
+  to a validator.
+- Readings where the plan left a detail open. Calls that get no answer
+  from the same validator at the same moment move the session on by one
+  place, not by one each: `moveOn` changes the session's validator only
+  while it is still the one that did not answer. A balance refresh makes
+  its reads at once, so without this twenty reads on a stopped validator
+  would move the session twenty places and spread the repeated reads
+  over every validator, the stopped one among them. A repeated read goes
+  to the validator the session is on at that moment: the next one in the
+  list, or one further on when another call moved the session in the
+  meantime; a read that skipped a validator this way makes fewer than
+  `validators` tries before it gives up. When no validator answers a
+  read, the session has gone once round the list and stands where it
+  started. Past the time limit a read answers the way a keyholder
+  deposit call does (`LogService.post` with `timeoutMs`): status 0 with
+  `api.noAnswer(10)` as its reason, a word the wallet had. A read slower
+  than 10 seconds for any reason, a slow phone connection among them,
+  counts as not answered. A submission that fails with status 0, the
+  phone having no connection, moves the session on too, since that is no
+  answer at all. Every try of a read that is not quiet is a line of the
+  Log, with its validator's number in the path. When one of an attestor
+  page's posts got no answer, the session moved during the posts, and
+  the page names the validator the session is on after them, as the
+  plan's decision 9 says; the answer recorded for the earlier post came
+  from the validator before it. `validator()` is async, because the
+  count comes from `/api/config`. In the file the field stands under the
+  injected services, and `validator`, `read`, `write` and `moveOn` at
+  the end of the class, where `post` stood.
+- Put right on the user's word of 2026-11-10 ("Yes, fix them"), after
+  the first report of this build listed them as left because the plan
+  does not name them. Ten comments that said "the default validator"
+  for the validator the wallet asks say "the session's validator": the
+  one over `send` in each of the three attestor case pages, four more
+  in `attesting-recovery-case.page.ts`, the class comment of
+  `src/app/pages/attesting.page.ts` and two in
+  `src/app/services/attesting.service.ts`; one word each, no code. In
+  `attesting-dispute-case.page.ts` the `config` field and the
+  `ConfigService` import left the page: `send` was their only reader,
+  while the other two pages still read the keyholder count through
+  theirs. In this spec 8.2 (Guardians), 13.3 (the Trades tab's list and
+  the recovery case's moves) and 13.6 name the session's validator.
+- Left as they are. The sentences `tradeCase.stillToSend` and
+  `disputeCase.stillToSend` still end "to the default validator" in
+  `en.ts`, and say the same in `th.ts`: the plan keeps the words on the
+  screen. Read "the session's validator" there.
+- Spec: 2 (the row of `DEFAULT_VALIDATOR`, a paragraph under the lock
+  numbers, `defaultValidator` in the line of `/api/config`), 8.2
+  (Guardians: where the data comes from), 8.3 (the line of
+  `anos-api.service`: the base path, the session's validator, the read
+  and the submission, the time limit, what counts as no answer), 13.3
+  (the Trades tab's list, the recovery case's moves, and the three Send
+  to the validators points: the session's validator in place of the
+  default one, and which validator the sent line names), 13.6 (where
+  the lists come from) and this note. The older notes above stand as
+  the record of what was built then.
+- `npx ng build` clean (2.12 MB initial, no warnings), and clean again
+  with the lines above put right; `node --check server/config.js`
+  passes. The built bundle holds no
+  `defaultValidator` any more, and holds `read` with the time limit and
+  `write` without one. Not run in a browser here and no server was
+  started: the run-through is the user's, after the deploy (the plan's
+  section 2; only the wallet has something to deploy, wallet1 and then
+  wallet2). The Log page shows the calls as `/api/anos/<n>/...`; two
+  tabs, or one tab reloaded a few times, show different numbers. With
+  one listed validator stopped, a tab that picked it shows its balances
+  after the reads that were under way failed once each in the Log (502
+  at once when only the worker behind its doorman is down, status 0
+  after 10 seconds when the machine cannot be reached), and from then on
+  calls the next number.
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`
@@ -5720,7 +6279,15 @@ with the passkey you just made."
 When three shares of one backup code `keyId` are in, the finish appears as
 a second stepper on the same page. The person never sees a backup code,
 here or on Setup (2026-11-10, section 11): on these screens it is "the
-key the bankers keep", "the rebuilt key" or "the key".
+key the bankers keep", "the rebuilt key" or "the key". The steps stand in
+this order since 2026-11-10 (`forclaude/recovery-finish-order-plan-1.md`,
+section 11): Combine, Get back in, Move your money, New key for the
+bankers, Done. Until then the new key was third and the money fourth, and
+a reload after the new key had landed shut the person out of the money
+step: Get back in opens the masterpod's blob2 with the old key, which
+fails once the masterpod holds the new one, so the anos stayed in the old
+accounts until a new recovery case. Move your money needs nothing from
+the new key.
 
 1. Combine: opens every share with the recovery hybrid private key, groups
    by `keyId`, combines each group of three; the backup code and the
@@ -5735,56 +6302,109 @@ key the bankers keep", "the rebuilt key" or "the key".
    ordinary unlock (`/challenge` unlock, the assertion, `/unlock`), which
    opens the normal session in this tab with the same passkey: `blob1`,
    the chat keys, the identity blob, the status.
-3. New key for the bankers (until 2026-11-10 "New backup code", which
-   showed the new code once as on Setup and waited for "I have written it
-   down, complete"): one button, "Make the new key", makes a new code
-   without showing it; `newBlob2`, the new backup code keys, the proof by
-   the old keys, `/rotate-backup-code`; then the deposit as `backupcode`
-   through `SharesService.deposit`, a new `keyId`; the button reads "Retry
-   the deposit" when only the deposit failed. "The old key is now
-   worthless."
-4. Move your money (2026-11-08, `forclaude/break-glass-plan-1.md` step 5,
+3. Move your money (2026-11-08, `forclaude/break-glass-plan-1.md` step 5,
    section 11; in place of the "Break-glass keys" step that stood third
    from 2026-10-26, which matched each recovered seed to its account and
    stored it there with `/store-break-glass-blob`, and left with step 4 of
-   that plan): "Your old accounts' keys are gone with the lost passkey.
-   For each account that holds anos the wallet opens a new account of the
-   same type and files a move signed by its break-glass key. Two attestors
-   check you and sign; a guarded or vault account's move also waits out
-   its lock." The button Move my money runs: (1) `/list-anos-accounts`
-   into the session; each recovered seed's two break-glass public keys
-   find the account whose `creation.payload.publicKeys` names them, and a
-   seed that matches none is unmatched; (2) an account whose move
-   `/list-my-break-glass-moves` already lists is filed and skipped; every
-   other matched account is read with `/get-account` signed by its
+   that plan; it stood fourth, after the new key, until 2026-11-10): "Your
+   old accounts' keys are gone with the lost passkey. For each account
+   that holds anos the wallet opens a new account of the same type and
+   files a move signed by its break-glass key. Two attestors check you and
+   sign; a guarded or vault account's move also waits out its lock." The
+   button Move my money runs, in this order since 2026-11-10 (the read of
+   a held move and the filing of each move by itself are that day's,
+   section 11): (1) `/list-anos-accounts` into the session; each
+   recovered seed's two break-glass public keys find the account whose
+   `creation.payload.publicKeys` names them, and a seed that matches none
+   is unmatched; (2) an account whose move `/list-my-break-glass-moves`
+   already lists is filed and skipped; (3) the reads, every one before
+   any write: every other matched account is read with
+   `/get-assisted-transfer` and `/get-account` (5.4), both signed by its
    break-glass pair (the validators accept it since the user keys are
-   gone, anossoftware 22), a balance of 0 is empty and skipped, every
-   read before any write; (3) for each account left, a new account of the
-   same type through `account-creation.service` (8.3), waited for on the
-   ledger; (4) the `breakGlassTransfer` of the whole balance into it,
-   chained on the latest transaction id read, dated now plus the type's
-   minutes ahead (guarded and vault the lock plus the offset by the
-   proxy's numbers, else 0), signed by the break-glass pair alone and
-   posted to `/anos-transfer`, no signing server; a refusal saying the
-   account already has a held transaction counts as filed; (5)
-   `/file-break-glass-moves` with the case id and this run's moves, a
-   `409 move already filed` counting as filed; (6) the seeds wiped and
-   dropped from `RecoveryService`. The result: "2 moves filed, 1 account
-   was empty, 0 seeds matched no account", or "No break-glass seeds were
-   recovered, so there is nothing to move." The step is complete when the
-   run ended without an error, even with nothing to move; Retry runs it
-   again and skips what is filed. This is the one place in the wallet
-   that uses a break-glass key: no card, account page or Account entry
-   offers one. The old accounts' key blobs do not open under the new
-   passkey's key blob key (section 7), so the wallet shows them as lost,
-   with the move's progress (8.2).
+   gone, anossoftware 22). A held transfer whose `type` is
+   `breakGlassTransfer` is a move to file, with the held transfer's
+   `transactionId` and `accountIdTo`: an earlier run posted it and its
+   filing never reached the masterpod. Else a balance of 0 is empty and
+   skipped. Else the account is one to move, with its balance and its
+   latest transaction id. An account the validators do not know never
+   reached the ledger, so it holds nothing: when its first read is
+   refused with `401` and a reason saying `unknown account` (the test
+   `balances.service` uses for an account that has not landed), it is
+   empty too, its second read is not made, and the next account is read.
+   Every other refused read stops the step; (4) each move to file is
+   filed, and no new account is made for its old account; (5) for
+   each account to move, a new account of the same type through
+   `account-creation.service` (8.3), waited for on the ledger, then the
+   `breakGlassTransfer` of the whole balance into it, chained on the
+   latest transaction id read, dated now plus the type's minutes ahead
+   (guarded and vault the lock plus the offset by the proxy's numbers,
+   else 0), signed by the break-glass pair alone and posted to
+   `/anos-transfer`, no signing server. When the validator refuses the
+   post or gives no answer, `/get-assisted-transfer` is read again with
+   the break-glass pair: a `breakGlassTransfer` there is the move, with
+   the validator's `transactionId` and `accountIdTo`; anything else stops
+   the step with "The validator refused the move out of <account>:
+   <reason>", the reason being the post's. Then the move is filed, before
+   the next account is touched; (6) the seeds wiped and dropped from
+   `RecoveryService`. Filing a move is `/file-break-glass-moves` with the
+   case id and that one move, a call per move, made as soon as the move
+   is on the validators: an ok answer or a `409 move already filed`
+   counts as filed, anything else stops the step as
+   `/file-break-glass-moves: <reason>`. So a step that stops half way has
+   filed every move it posted, and the 20 moves one call may carry are no
+   limit. A validator's "already there" by itself does not count as
+   filed: an old account with a transaction of its own still waiting on
+   the validators (a guarded or vault transfer in its lock, an open
+   escrow trade, an assisted transfer) stops the step with the
+   validator's words, and the step can be run again in the same case once
+   that transaction is done. Until 2026-11-10 the moves of a run went to
+   the masterpod in one call after the last account, so anything that
+   stopped the step before that call lost them; on Retry the validator's
+   refusal of a second move for the account then counted as filed with
+   nothing filed, after another new account had been made. The result:
+   "2 moves filed, 1 account was empty, 0 seeds matched no account", or
+   "No break-glass seeds were recovered, so there is nothing to move."
+   The step is complete when the run ended without an error, even with
+   nothing to move; Retry runs it again and skips what is filed. This is
+   the one place in the wallet that uses a break-glass key: no card,
+   account page or Account entry offers one. The old accounts' key blobs
+   do not open under the new passkey's key blob key (section 7), so the
+   wallet shows them as lost, with the move's progress (8.2).
+4. New key for the bankers (until 2026-11-10 "New backup code", which
+   showed the new code once as on Setup and waited for "I have written it
+   down, complete"; it stood third, before the money, until 2026-11-10):
+   one button, "Make the new key". It makes a new code without showing
+   it, with `newBlob2` and the new backup code keys, when none is held
+   yet. Then, the keyholders first since 2026-11-10 (section 11): the
+   page checks that the old key is still in the tab, before anything is
+   deposited, since the masterpod call needs it for the proof ("The
+   rebuilt key is not in this tab: combine and get back in first."); the
+   deposit as `backupcode` through `SharesService.deposit`, a new
+   `keyId`, made once; then `/rotate-backup-code` with `newBlob2`, the
+   new keys and the proof by the old keys. When that call is refused or
+   gets no answer, the page reads the case again (`/get-recovery-pod`,
+   quietly, an ok answer kept as the poll keeps one): if the blob2 the
+   masterpod holds is the new one, the rotation landed and the step is
+   done; otherwise the refusal shows as `/rotate-backup-code: <reason>`.
+   The button reads "Make the new key" at first, "Retry the deposit"
+   after a failed deposit (it deposits the same new key again under a
+   fresh key id) and "Retry" when only the masterpod call is left (it
+   repeats that call alone). "The old key is now worthless." Until
+   2026-11-10 the masterpod was told first and the deposit came second,
+   and between the two the new key lived only in the tab: a tab closed
+   there, or a lost answer of the masterpod (Retry then signed with the
+   old key and got `401 bad signature`), left an anoPod whose shares
+   rebuild the old key, which opens nothing and which the masterpod
+   refuses, and the wallet could not mend it later. Setup already
+   deposits first (8.2).
 5. Done: `/complete-recovery-case`; "You're back in." Continue to
    `/wallet`.
 
 Each step keeps its result in RAM and can be retried; a refresh of the
 page loses the combined code and the seeds, and the person starts the
 finish again from Combine after unlocking the recovery pod (Move your
-money then skips the moves already filed).
+money then skips the moves already filed, and files a move the
+validators hold that was not filed yet, without a second new account).
 
 **Moderation** (`/moderation`). The cases from `/list-recovery-cases`, a
 status filter (the four open statuses by default, plus completed and
@@ -5833,7 +6453,11 @@ button and every 15 s
                             (2026-11-08); listAnosAccounts items carry breakGlassBlob;
                             listMyBreakGlassMoves and fileBreakGlassMoves (masterpod 14.4.1, 2026-11-08)
     anos-api.service        getAccountAs(envelope, quiet) (2026-11-08): /get-account with an envelope the caller
-                            signed, the break-glass pair's at the finish; getAccount calls it
+                            signed, the break-glass pair's at the finish; getAccount calls it;
+                            getAssistedTransferAs(envelope, quiet) (2026-11-10): /get-assisted-transfer the same
+                            way, the finish's read of a break-glass move the validators already hold;
+                            getAssistedTransfer calls it; HeldAssistedTransfer carries type, as the validator
+                            answers it (5.4)
     account-creation.service
                             the new accounts of Move your money, opened as the Wallet page opens one (8.3;
                             2026-11-08)
@@ -6200,7 +6824,7 @@ spending account picked; the choice signs every validator read, keyholder
 pull and sign-off until the tab closes.
 
 The Trades tab: the `assistedAnosTransfer` rows of `/list-assisted-transfers`
-from the default validator (since 2026-11-08 the list carries the
+from the session's validator (8.3, 2026-11-10; since 2026-11-08 the list carries the
 break-glass moves too, told apart by `type`; those belong to the Recoveries
 tab's case pages), each row the sender as a person (`/list-anos-account-profiles` once for
 the whole list: selfie, username, names; an unknown account shows its id
@@ -6259,10 +6883,15 @@ refreshed by a button and every 15 s. Top to bottom:
   `/sign-off-trade-case`. The page shows who has signed.
 - When the answer says decided and no `sent` event exists: Send to the
   validators, which posts both stored attestations (from the
-  `attestationSigned` events) to the default validator's `/attestation`
-  one after the other, then `/mark-attestor-case-sent` with the answers.
-  Shown as "Sent" with each answer, or Retry. The page of the attestor
-  whose signature decided the case runs it at once, without the click.
+  `attestationSigned` events) to the `/attestation` of the session's
+  validator (8.3; the default validator until 2026-11-10) one after the
+  other, then `/mark-attestor-case-sent` with the answers. Shown as
+  "Sent" with each answer, or Retry. The validator the sent line names
+  ("Sent: validator 3 accepted both attestations."), which is also the
+  one the masterpod is told, is the one the session is on after the
+  posts (`AnosApiService.validator()`, 2026-11-10). The page of the
+  attestor whose signature decided the case runs it at once, without the
+  click.
 - Dismiss: the preset reason, a note, Dismiss behind an inline
   confirmation (`/dismiss-attestor-case`).
 
@@ -6293,7 +6922,8 @@ refreshed by a button and every 15 s. Top to bottom:
 - When decided: Send to the validators posts the two agreeing verdicts
   (from the `verdictSigned` events whose verdict is the decided one) to
   `/escrow-signature`, then `/mark-attestor-case-sent`; Retry on a
-  refusal; the deciding attestor's page runs it at once.
+  refusal; the deciding attestor's page runs it at once. The sent line
+  names the session's validator, as on the trade case (2026-11-10).
 - Dismiss, as the trade case.
 
 **Recovery case** (`/attesting/recovery/:caseId`, 2026-11-08, break-glass
@@ -6304,7 +6934,7 @@ every 15 s, the trade case's frame. Top to bottom:
 - The recovery: the recovery case's status in words and the moderators'
   approvals, each "username · time".
 - The moves: per move the old account with its type, the new account with
-  Copy, the transaction id with Copy, and what the default validator lists
+  Copy, the transaction id with Copy, and what the session's validator lists
   for it (`/list-assisted-transfers` matched by transaction id, read again
   on every refresh and poll): the amount, when it was made and the
   attestations in its slots, or "not listed on this validator (both
@@ -6323,13 +6953,15 @@ every 15 s, the trade case's frame. Top to bottom:
   wallet pair from `/api/sign`) and runs `/sign-off-break-glass-case` with
   every move once.
 - When the answer says decided: Send to the validators posts the stored
-  attestations the default validator does not hold yet (two per move once
+  attestations the session's validator (8.3; the default validator until
+  2026-11-10) does not hold yet (two per move once
   two attestors signed, from the `attestationSigned` events; the listed
   move's `attestorIds` tell which it holds) to `/attestation` one after the
   other, then `/mark-break-glass-case-sent` with the answers; "Sent" once
   the validator holds every attestation for the moves it still lists, Retry
   otherwise; the page of the attestor whose sign-off decided the case runs
-  it at once.
+  it at once. The sent line names the session's validator, as on the
+  trade case (2026-11-10).
 - Dismiss: one of the five reasons, a note, Dismiss behind an inline
   confirmation (`/dismiss-break-glass-case`); the moves stay held on the
   validators until a cancel.
@@ -6412,7 +7044,7 @@ your copies stay."
 
 - Email or any message to the parties; the app is the channel.
 - A party deleting their evidence; evidence beyond the four content types.
-- Several validators asked at once; the lists come from the default
+- Several validators asked at once; the lists come from the session's
   validator, as every anos call does.
 - A moderator who is also an attestor.
 - Notifications to attestors when a recovery's moves are filed, and to the

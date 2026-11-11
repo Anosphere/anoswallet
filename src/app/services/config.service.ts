@@ -11,6 +11,7 @@ export interface WalletConfig {
   shareThreshold: number;
   /** How many of the keyholders must store a share for a deposit to go through, in percent (wallet spec 6). Optional: a proxy that does not send it means every keyholder must. */
   depositFloorPercent?: number;
+  /** The proxy's DEFAULT_VALIDATOR. Still in the answer and no longer read (2026-11-10): the validator API service picks the session's validator itself (wallet spec 8.3). The proxy keeps sending it for a tab loaded before that change, which posts to it. */
   defaultValidator: number;
   edition: Edition;
   /** The relying-party id of both passkey ceremonies: the proxy's RP_ID. */

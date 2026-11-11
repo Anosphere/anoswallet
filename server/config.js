@@ -68,6 +68,7 @@ export const config = Object.freeze({
   shareThreshold: integer('SHARE_THRESHOLD', 3),
   /** How many of the listed keyholders must store a share for a deposit to go through, in percent (wallet spec 6); the browser rounds up and never goes below shareThreshold. */
   depositFloorPercent: percent('DEPOSIT_FLOOR_PERCENT', 80),
+  /** No longer picks the validator (2026-11-10, wallet spec 2 and 8.3): the browser picks one of the listed validators per session, at random, and moves to the next one when it does not answer. The variable stays, and /api/config still answers it, for a tab loaded before that change, which posts to it; the browser's code no longer reads it. */
   defaultValidator: integer('DEFAULT_VALIDATOR', 1),
   /** The time locks on guarded and vault accounts and the offset, in minutes: the validators' numbers (wallet spec 2), answered to the browser by /api/config. The local defaults are this machine's validators'. */
   guardedLockMinutes: integer('GUARDED_LOCK_MINUTES', 1),

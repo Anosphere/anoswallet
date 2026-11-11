@@ -439,8 +439,10 @@ export class CryptoService {
    * The account envelope signed by the account's break-glass pair
    * (2026-11-08): the validators' account level accepts it when pair one
    * does not verify (anossoftware spec 22), so a recovery's finish reads a
-   * lost account's balance and latest transaction id with the recovered
-   * seed. The one read the wallet makes with a break-glass key.
+   * lost account with the recovered seed: /get-account for its balance and
+   * latest transaction id and, since 2026-11-10, /get-assisted-transfer
+   * for a break-glass move the validators already hold for it. The two
+   * reads the wallet makes with a break-glass key.
    */
   signAccountEnvelopeAsBreakGlass(keys: BreakGlassKeys, accountId: string, path: string, body: object): Envelope {
     return this.signAccountEnvelopeWith({ ecdsa: keys.breakGlassKey, mldsa: keys.breakGlassPostQuantumKey }, accountId, path, body);

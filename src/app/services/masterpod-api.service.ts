@@ -974,7 +974,7 @@ export class MasterpodApiService {
     return this.signed('/list-my-break-glass-moves', {}, quiet);
   }
 
-  /** The moves of one run of the recovery finish's Move your money step (masterpod 14.4.1): the recovery case's id and 1 to 20 moves; 201 { caseId, status, moves } with the count now on the case, 409 move already filed when a transaction id was filed before, 409 case not ready while the recovery case is neither delivering nor completed. A second call for the same case adds moves. */
+  /** The break-glass moves of the recovery finish's Move your money step, filed for the attestors (masterpod 14.4.1): the recovery case's id and 1 to 20 moves. Since 2026-11-10 the finish sends one move per call, as soon as that move is on the validators (recovery finish order plan 1); until then it sent the moves of one run in one call. 201 { caseId, status, moves } with the count now on the case, 409 move already filed when a transaction id was filed before, 409 case not ready while the recovery case is neither delivering nor completed. A second call for the same case adds moves. */
   fileBreakGlassMoves(caseId: string, moves: BreakGlassMoveToFile[]): Promise<ApiResponse<{ caseId: string; status: AttestorCaseStatus; moves: number }>> {
     return this.signed('/file-break-glass-moves', { caseId, moves });
   }

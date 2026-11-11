@@ -14,7 +14,6 @@ import { CASES_POLL_MS } from '../constants';
 import { AnosApiService } from '../services/anos-api.service';
 import { AttestingService, attestingError } from '../services/attesting.service';
 import { BalancesService } from '../services/balances.service';
-import { ConfigService } from '../services/config.service';
 import { CryptoService, EscrowVerdictPayload, FollowUp, HybridKeys, Verdict } from '../services/crypto.service';
 import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
@@ -377,7 +376,6 @@ export class AttestingDisputeCasePage {
   private readonly masterpod = inject(MasterpodApiService);
   private readonly anos = inject(AnosApiService);
   private readonly signing = inject(SigningService);
-  private readonly config = inject(ConfigService);
   private readonly crypto = inject(CryptoService);
   protected readonly lang = inject(LanguageService);
   protected readonly t = this.lang.words;
@@ -679,7 +677,7 @@ export class AttestingDisputeCasePage {
   /**
    * Send to the validators (wallet spec 13.3): the agreeing verdicts no
    * validator answer has accepted yet, posted one after the other to the
-   * default validator's /escrow-signature, then /mark-attestor-case-sent
+   * session's validator's /escrow-signature, then /mark-attestor-case-sent
    * with the answers; Retry posts the ones still pending.
    */
   protected async send(): Promise<void> {
@@ -694,14 +692,14 @@ export class AttestingDisputeCasePage {
         const res = await this.anos.escrowSignature(object);
         results.push(res.ok ? { signer, status: res.status } : { signer, status: res.status, error: reasonOf(res).slice(0, 500) });
       }
-      const { defaultValidator } = await this.config.load();
-      const marked = await this.masterpod.markAttestorCaseSent(this.caseId(), defaultValidator, results);
+      const validator = await this.anos.validator();
+      const marked = await this.masterpod.markAttestorCaseSent(this.caseId(), validator, results);
       if (!marked.ok) throw new Error(this.refusal(marked, '/mark-attestor-case-sent'));
       const failed = results.filter((r) => !accepted(r));
       this.sendOutcome.set(
         failed.length === 0
-          ? { ok: true, text: this.t().attesting.sentAccepted(defaultValidator, results.length === 1 ? this.t().disputeCase.theVerdict : this.t().disputeCase.bothVerdicts) }
-          : { ok: false, text: this.t().attesting.validatorRefused(defaultValidator, failed.length, results.length) },
+          ? { ok: true, text: this.t().attesting.sentAccepted(validator, results.length === 1 ? this.t().disputeCase.theVerdict : this.t().disputeCase.bothVerdicts) }
+          : { ok: false, text: this.t().attesting.validatorRefused(validator, failed.length, results.length) },
       );
     } catch (err) {
       this.sendOutcome.set({ ok: false, text: err instanceof Error ? err.message : String(err) });

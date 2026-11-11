@@ -6,7 +6,7 @@ import { MatListModule } from '@angular/material/list';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatStepper, MatStepperModule } from '@angular/material/stepper';
 import { Router, RouterLink } from '@angular/router';
-import { ALREADY_THERE, AccountCreationService } from '../services/account-creation.service';
+import { AccountCreationService } from '../services/account-creation.service';
 import { AnosApiService } from '../services/anos-api.service';
 import { ConfigService, WalletConfig } from '../services/config.service';
 import { AccountType, BackupCodeKeys, BreakGlassKeys, CryptoService } from '../services/crypto.service';
@@ -61,22 +61,26 @@ const FINISH_STATUSES = ['approved', 'delivering'];
  * status in words, the timeline from the events the person may see, a
  * Refresh button, and a 15-second poll of /get-recovery-pod while the page
  * is open. When three shares of one backup code keyId are in, the finish
- * appears as a second stepper (Combine, Get back in, New key for the
- * bankers, Move your money, Done), each step retryable, the ordinary unlock
- * reused from unlock.ts and the deposit from SharesService; the combined
- * code and seeds live in RecoveryService while it runs and die with the
- * tab. The backup code is the secret the keyholders hold in shares, and the
- * person never sees one (2026-11-10, wallet spec 11): the screens call it
- * the key the bankers keep, and the third step makes the new one, rotates
- * and deposits it without showing it. Move your
+ * appears as a second stepper (Combine, Get back in, Move your money, New
+ * key for the bankers, Done; the money before the new key since
+ * 2026-11-10, recovery finish order plan 1, because a reload after the new
+ * key landed shut the person out of the money step), each step retryable,
+ * the ordinary unlock reused from unlock.ts and the deposit from
+ * SharesService; the combined code and seeds live in RecoveryService while
+ * it runs and die with the tab. The backup code is the secret the
+ * keyholders hold in shares, and the person never sees one (2026-11-10,
+ * wallet spec 11): the screens call it the key the bankers keep, and the
+ * fourth step makes the new one, deposits it with the keyholders and then
+ * rotates it on the masterpod, without showing it. Move your
  * money (2026-11-08, break-glass plan 1, step 5, in place of the Break-glass
  * keys step that stored the seeds): the old accounts' keys died with the
  * lost passkey, so for each account that holds anos a new account of the
  * same type is opened (account-creation.service) and a breakGlassTransfer
  * of the whole balance into it is signed by the recovered seed's
  * break-glass pair, posted to the validator and filed on the masterpod for
- * the attestors; then the seeds are wiped. The one place in the wallet
- * that uses a break-glass key.
+ * the attestors, each move by itself as soon as it is on the validators; a
+ * move the validators already hold is filed as it stands there; then the
+ * seeds are wiped. The one place in the wallet that uses a break-glass key.
  */
 @Component({
   selector: 'app-recover-case-page',
@@ -144,23 +148,23 @@ const FINISH_STATUSES = ['approved', 'delivering'];
               <button mat-flat-button type="button" (click)="getBackIn(finish)" [disabled]="finishBusy()">{{ t().recoverCase.getBackIn }}</button>
             </mat-step>
 
-            <mat-step [completed]="deposited()" [editable]="false" [label]="t().recoverCase.stepNewCode">
-              <p>{{ t().recoverCase.newCodeText }}</p>
-              @if (deposited()) {
-                <p class="result">{{ t().recoverCase.oldCodeWorthless }}</p>
-              } @else {
-                <button mat-flat-button type="button" (click)="completeRotation(finish)" [disabled]="finishBusy()">
-                  {{ rotated() ? t().recoverCase.retryDeposit : t().recoverCase.makeNewCode }}
-                </button>
-              }
-            </mat-step>
-
             <mat-step [completed]="moved() !== null" [editable]="false" [label]="t().recoverCase.stepMove">
               <p>{{ t().recoverCase.moveText }}</p>
               @if (moved(); as m) {
                 <p class="result">{{ movedText(m) }}</p>
               }
               <button mat-flat-button type="button" (click)="moveMoney(finish)" [disabled]="finishBusy()">{{ t().recoverCase.moveMoney }}</button>
+            </mat-step>
+
+            <mat-step [completed]="rotated()" [editable]="false" [label]="t().recoverCase.stepNewCode">
+              <p>{{ t().recoverCase.newCodeText }}</p>
+              @if (rotated()) {
+                <p class="result">{{ t().recoverCase.oldCodeWorthless }}</p>
+              } @else {
+                <button mat-flat-button type="button" (click)="completeRotation(finish)" [disabled]="finishBusy()">
+                  {{ deposited() ? t().common.retry : depositFailed() ? t().recoverCase.retryDeposit : t().recoverCase.makeNewCode }}
+                </button>
+              }
             </mat-step>
 
             <mat-step [completed]="completed()" [label]="t().common.done">
@@ -217,9 +221,12 @@ export class RecoverCasePage {
   private readonly finishActive = signal(false);
   protected readonly combined = signal<Combined | null>(null);
   protected readonly backIn = signal(false);
-  /** The rotation landed on the masterpod; only the deposit is left (a retry deposits the same new code again). */
-  protected readonly rotated = signal(false);
+  /** The new key's shares are with the keyholders; only the masterpod call is left (a retry repeats that call alone). */
   protected readonly deposited = signal(false);
+  /** A deposit of the new key was tried and failed (a retry deposits the same new code again). */
+  protected readonly depositFailed = signal(false);
+  /** The masterpod took the new key: the step is done. */
+  protected readonly rotated = signal(false);
   protected readonly moved = signal<Moved | null>(null);
   protected readonly completed = signal(false);
 
@@ -449,7 +456,7 @@ export class RecoverCasePage {
     this.recoveredCode = code;
   }
 
-  /** Step 3, first half: a fresh backup code, its blob2 and keys, kept in this page's fields and never shown. Run by completeRotation when none is held yet; a missing encryption key throws, as a step's failure does. */
+  /** Step 4, first half: a fresh backup code, its blob2 and keys, kept in this page's fields and never shown. Run by completeRotation when none is held yet; a missing encryption key throws, as a step's failure does. */
   private async makeNewCode(): Promise<void> {
     const encryptionKey = this.session.getEncryptionKey();
     if (!encryptionKey) throw new Error(this.t().recoverCase.noKeyInTab);
@@ -457,15 +464,26 @@ export class RecoverCasePage {
     this.newCode = code;
     this.newBlob2 = await this.crypto.encrypt(await this.crypto.deriveKekBackup(code), encryptionKey);
     this.newKeys = await this.crypto.backupCodeKeys(code);
-    this.rotated.set(false);
   }
 
   /**
-   * Step 3, the one button: the new code made when none is held yet
-   * (makeNewCode), /rotate-backup-code with the new blob2 and keys and the
-   * proof by the old code (once), then the deposit of the new code as
-   * backupcode under a fresh keyId through SharesService. A failed deposit
-   * leaves the rotation standing: Retry deposits the same new code again.
+   * Step 4, the one button (the keyholders first since 2026-11-10, recovery
+   * finish order plan 1: until then the masterpod was told first, and a tab
+   * closed between the two left an anoPod whose shares rebuilt a key the
+   * masterpod no longer held):
+   * 1. The new code made when none is held yet (makeNewCode).
+   * 2. The old code is still in the tab, checked before anything is
+   *    deposited: the masterpod call needs it for the proof.
+   * 3. The deposit of the new code as backupcode under a fresh keyId
+   *    through SharesService, once. A failed deposit: Retry deposits the
+   *    same new code again.
+   * 4. /rotate-backup-code with the new blob2 and keys and the proof by the
+   *    old code. A failure here: Retry repeats this call alone. A call that
+   *    was refused or got no answer may have landed all the same (a lost
+   *    answer, after which the old code's proof is refused), so the case is
+   *    read again (rotationLanded): with the new blob2 on the masterpod the
+   *    step is done, else the refusal is thrown.
+   * 5. The old code, the new code, its blob2 and its keys dropped.
    */
   protected async completeRotation(stepper: MatStepper): Promise<void> {
     await this.runStep(async () => {
@@ -476,27 +494,29 @@ export class RecoverCasePage {
       const anopodId = this.session.anopodId();
       if (!code || !blob2 || !keys) throw new Error(this.t().recoverCase.makeCodeFirst);
       if (!anopodId) throw new Error(this.t().recoverCase.noSessionInTab);
-      if (!this.rotated()) {
-        const oldCode = this.recoveredCode;
-        if (!oldCode) throw new Error(this.t().recoverCase.noCurrentCode);
-        const message: RotationMessage = {
-          anopodId,
-          newBackupCodePublicKey: this.crypto.toHex(keys.p256Public),
-          newBackupCodePublicKeyPq: this.crypto.toHex(keys.mldsaPublic),
-          newBlob2: this.crypto.toHex(blob2),
-        };
-        const res = await this.api.rotateBackupCode({ ...message, proof: await this.crypto.backupCodeProof(oldCode, message) });
-        if (!res.ok) throw new Error(`/rotate-backup-code: ${reasonOf(res)}`);
-        this.rotated.set(true);
-        this.recoveredCode = null;
+      const oldCode = this.recoveredCode;
+      if (!oldCode) throw new Error(this.t().recoverCase.noCurrentCode);
+      if (!this.deposited()) {
+        try {
+          await this.shares.deposit(code, 'backupcode');
+        } catch (err) {
+          this.depositFailed.set(true);
+          if (err instanceof DepositError) throw new Error(this.t().recoverCase.retryDeposits(err.message));
+          throw err;
+        }
+        this.depositFailed.set(false);
+        this.deposited.set(true);
       }
-      try {
-        await this.shares.deposit(code, 'backupcode');
-      } catch (err) {
-        if (err instanceof DepositError) throw new Error(this.t().recoverCase.retryDeposits(err.message));
-        throw err;
-      }
-      this.deposited.set(true);
+      const message: RotationMessage = {
+        anopodId,
+        newBackupCodePublicKey: this.crypto.toHex(keys.p256Public),
+        newBackupCodePublicKeyPq: this.crypto.toHex(keys.mldsaPublic),
+        newBlob2: this.crypto.toHex(blob2),
+      };
+      const res = await this.api.rotateBackupCode({ ...message, proof: await this.crypto.backupCodeProof(oldCode, message) });
+      if (!res.ok && !(await this.rotationLanded(blob2))) throw new Error(`/rotate-backup-code: ${reasonOf(res)}`);
+      this.rotated.set(true);
+      this.recoveredCode = null;
       this.newCode = null;
       this.newBlob2 = null;
       this.newKeys = null;
@@ -504,28 +524,61 @@ export class RecoverCasePage {
   }
 
   /**
-   * Step 4, Move your money (wallet spec 12.3; break-glass plan 1, 5.4):
+   * Whether the masterpod holds `blob2`, the new code's, as the pod's blob2
+   * right now: asked when /rotate-backup-code was refused or got no answer.
+   * /get-recovery-pod with the recovery envelope, quietly; true when the
+   * answer is ok and its blob2 is the hex of `blob2`, false in every other
+   * case, a missing recovery session included. An ok answer is kept as the
+   * poll keeps one.
+   */
+  private async rotationLanded(blob2: Bytes): Promise<boolean> {
+    const envelope = this.recovery.sign('/get-recovery-pod', {});
+    if (!envelope) return false;
+    const res = await this.api.getRecoveryPod(envelope, true);
+    if (!this.recovery.hasSession() || !res.ok) return false;
+    this.recovery.applyPod(res.body);
+    this.error.set(null);
+    return res.body.blob2 === this.crypto.toHex(blob2);
+  }
+
+  /**
+   * Step 3, Move your money (wallet spec 12.3; break-glass plan 1, 5.4;
+   * before the new key, with the read of the held move and a filing per
+   * move, since 2026-11-10, recovery finish order plan 1):
    * 1. /list-anos-accounts into the session; each recovered seed's two
    *    break-glass public keys find the account whose creation names them;
    *    a seed that matches none is unmatched.
-   * 2. The moves /list-my-break-glass-moves already lists count as filed;
-   *    every other matched account is read with /get-account signed by its
-   *    break-glass pair (the validator accepts it since the user keys are
-   *    gone); a balance of 0 is empty. Every read is made before anything
-   *    is written.
-   * 3. A new account of the same type through account-creation.service,
-   *    waited for on the ledger.
-   * 4. The breakGlassTransfer of the whole balance into it, chained on the
+   * 2. The moves /list-my-break-glass-moves already lists count as filed.
+   * 3. Every other matched account is read with /get-assisted-transfer and
+   *    /get-account, both signed by its break-glass pair (the validator
+   *    accepts it since the user keys are gone). A held breakGlassTransfer
+   *    is a move to file, with the transaction id and the receiving account
+   *    the validator holds: an earlier run posted it and its filing never
+   *    reached the masterpod. Else a balance of 0 is empty. Else the
+   *    account is one to move. An account the validators do not know (the
+   *    first read refused with 401 unknown account, the test
+   *    balances.service uses for an account that has not landed) never
+   *    reached the ledger: it is empty too, and its second read is not
+   *    made. Every other refused read stops the step. Every read is made
+   *    before anything is written.
+   * 4. Each move to file is filed (fileMove), and no new account is made
+   *    for its old account.
+   * 5. For each account to move: a new account of the same type through
+   *    account-creation.service, waited for on the ledger; the
+   *    breakGlassTransfer of the whole balance into it, chained on the
    *    latest transaction id read, dated the type's lock plus the offset
    *    ahead (guarded, vault) or now, signed by the break-glass pair alone,
-   *    to /anos-transfer; a refusal saying the account already has a held
-   *    transaction counts as filed.
-   * 5. /file-break-glass-moves with the case id and this run's moves; 409
-   *    move already filed counts as filed.
+   *    to /anos-transfer. When the validator refuses it or gives no answer,
+   *    /get-assisted-transfer is read again: a breakGlassTransfer held there
+   *    is the move, as the validator holds it; anything else is the refusal
+   *    it is, so an account's own transaction still waiting on the
+   *    validators stops the step. Then the move is filed (fileMove), before
+   *    the next account is touched.
    * 6. The seeds wiped and dropped from RecoveryService; the result line.
    * The step is complete when the run ended without an error, even with
    * nothing to move; Retry runs it again and skips what is filed. A page
-   * refresh loses the seeds: Combine again.
+   * refresh loses the seeds: Combine again, and the step then files what
+   * the validators hold without a second new account.
    */
   protected async moveMoney(stepper: MatStepper): Promise<void> {
     await this.runStep(async () => {
@@ -548,21 +601,38 @@ export class RecoverCasePage {
         else unmatched += 1;
       }
 
-      // 2. What is filed already, then each account's balance with its break-glass pair.
+      // 2. What is filed already.
       const cases = await this.api.listMyBreakGlassMoves();
       if (!cases.ok) throw new Error(`/list-my-break-glass-moves: ${reasonOf(cases)}`);
       const filedBefore = new Set(cases.body.cases.flatMap((c) => c.moves.map((m) => m.accountId)));
+
+      // 3. The reads, with each other account's break-glass pair: a break-glass move the validators already hold, else the balance.
       const config = await this.config.load();
       let filed = 0;
       let empty = 0;
+      const toFile: BreakGlassMoveToFile[] = [];
       const toMove: { keys: BreakGlassKeys; account: AnosAccountItem; balance: bigint; previous: string; ahead: number }[] = [];
       for (const { keys, account } of matched) {
         if (filedBefore.has(account.accountId)) {
           filed += 1;
           continue;
         }
+        const held = await this.anos.getAssistedTransferAs(this.crypto.signAccountEnvelopeAsBreakGlass(keys, account.accountId, '/get-assisted-transfer', {}));
+        if (!held.ok) {
+          // An account the validators do not know never reached the ledger, so it holds nothing: empty, and on to the next account.
+          if (held.status === 401 && /unknown account/.test(reasonOf(held))) {
+            empty += 1;
+            continue;
+          }
+          throw new Error(`/get-assisted-transfer: ${reasonOf(held)}`);
+        }
         const read = await this.anos.getAccountAs(this.crypto.signAccountEnvelopeAsBreakGlass(keys, account.accountId, '/get-account', {}));
         if (!read.ok) throw new Error(`/get-account: ${reasonOf(read)}`);
+        const transfer = held.body.transfer;
+        if (transfer?.type === 'breakGlassTransfer') {
+          toFile.push({ accountId: account.accountId, accountIdTo: transfer.accountIdTo, transactionId: transfer.transactionId });
+          continue;
+        }
         const balance = BigInt(read.body.balance);
         if (balance === 0n) {
           empty += 1;
@@ -574,28 +644,27 @@ export class RecoverCasePage {
         toMove.push({ keys, account, balance, previous: read.body.latestTransactionId, ahead });
       }
 
-      // 3. and 4. A new account of the same type, then the move into it.
-      const moves: BreakGlassMoveToFile[] = [];
+      // 4. The moves the validators already hold, filed as they stand there.
+      for (const move of toFile) {
+        await this.fileMove(caseId, move);
+        filed += 1;
+      }
+
+      // 5. A new account of the same type, the move into it, and its filing, before the next account.
       for (const { keys, account, balance, previous, ahead } of toMove) {
         const created = await this.creation.createAccount(account.accountType as AccountType);
         const createdAt = new Date(Date.now() + ahead * 60_000);
         const tx = this.crypto.buildBreakGlassTransferTransaction(keys, account.accountId, previous, created.accountId, balance, createdAt);
         const res = await this.anos.anosTransfer(tx);
+        let move: BreakGlassMoveToFile = { accountId: account.accountId, accountIdTo: created.accountId, transactionId: tx.payload.transactionId };
         if (!res.ok) {
-          if (ALREADY_THERE.test(reasonOf(res))) {
-            filed += 1;
-            continue;
-          }
-          throw new Error(words.moveRefused(shortId(account.accountId), reasonOf(res)));
+          const held = await this.anos.getAssistedTransferAs(this.crypto.signAccountEnvelopeAsBreakGlass(keys, account.accountId, '/get-assisted-transfer', {}));
+          const transfer = held.ok ? held.body.transfer : null;
+          if (transfer?.type !== 'breakGlassTransfer') throw new Error(words.moveRefused(shortId(account.accountId), reasonOf(res)));
+          move = { accountId: account.accountId, accountIdTo: transfer.accountIdTo, transactionId: transfer.transactionId };
         }
-        moves.push({ accountId: account.accountId, accountIdTo: created.accountId, transactionId: tx.payload.transactionId });
-      }
-
-      // 5. This run's moves to the masterpod, for the attestors.
-      if (moves.length > 0) {
-        const res = await this.api.fileBreakGlassMoves(caseId, moves);
-        if (!res.ok && !(res.status === 409 && /move already filed/.test(reasonOf(res)))) throw new Error(`/file-break-glass-moves: ${reasonOf(res)}`);
-        filed += moves.length;
+        await this.fileMove(caseId, move);
+        filed += 1;
       }
 
       // 6. The seeds wiped.
@@ -603,6 +672,12 @@ export class RecoverCasePage {
       this.recovery.setCombined([], []);
       this.moved.set({ filed, empty, unmatched, seeds: seeds.length });
     }, stepper);
+  }
+
+  /** One break-glass move filed with the masterpod for the attestors (masterpod 14.4.1), in a call of its own, as soon as the move is on the validators: an ok answer, or 409 move already filed, counts as filed; anything else throws. */
+  private async fileMove(caseId: string, move: BreakGlassMoveToFile): Promise<void> {
+    const res = await this.api.fileBreakGlassMoves(caseId, [move]);
+    if (!res.ok && !(res.status === 409 && /move already filed/.test(reasonOf(res)))) throw new Error(`/file-break-glass-moves: ${reasonOf(res)}`);
   }
 
   /** The account whose creation.payload.publicKeys names these two break-glass keys (hex), or undefined. */

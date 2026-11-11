@@ -12,11 +12,14 @@ import { SigningService } from './signing.service';
 
 /**
  * A 400 from the validator that means the creation is already there, which
- * counts as submitted; and (2026-11-08) the holding tables' refusals of a
- * transfer, "a transaction for this accountId is already pending | locked |
- * held in assisted_transfers | held in escrow_transfers" and "a fund
- * proposal is already open" (anossoftware *_CONFLICT_REASONS), which the
- * recovery's finish counts as a move already filed (recover-case.page).
+ * counts as submitted. The pattern also matches (2026-11-08) the holding
+ * tables' refusals of a transfer, "a transaction for this accountId is
+ * already pending | locked | held in assisted_transfers | held in
+ * escrow_transfers" and "a fund proposal is already open" (anossoftware
+ * *_CONFLICT_REASONS), which the recovery's finish counted as a move
+ * already filed until 2026-11-10. It no longer does (recovery finish order
+ * plan 1): it asks the validator what it holds for the account and files
+ * that (recover-case.page), so only the creations read this pattern now.
  */
 export const ALREADY_THERE = /already (exists|pending|locked|held in (assisted|escrow)_transfers|open|in the garlic chain)/;
 

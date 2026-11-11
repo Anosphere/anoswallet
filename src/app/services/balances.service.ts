@@ -1,12 +1,12 @@
 import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
-import { AnosApiService } from './anos-api.service';
-import { CryptoService, KeyBlobLostError } from './crypto.service';
+import { AnosApiService, EscrowItem, HeldAssistedTransfer, HeldLockedTransfer, PendingItem } from './anos-api.service';
+import { CryptoService, KeyBlobLostError, STAKE_PURPOSES, StakePurpose } from './crypto.service';
 import { LanguageService } from './language.service';
 import { reasonOf } from './log.service';
 import { BreakGlassCaseItem, BreakGlassMove, MasterpodApiService } from './masterpod-api.service';
 import { AnosAccountItem, SessionService } from './session.service';
 
-/** What is known about one account's anos (wallet spec 8.2, Wallet): the ledger's answer and what is spoken for. */
+/** What is known about one account's anos (wallet spec 8.2, Wallet): the ledger's answer, what is spoken for and, since 2026-11-10, what is staked and the held items themselves, which the balance card's sheet lists. */
 export interface AccountBalance {
   /** /get-account answered. */
   landed: boolean;
@@ -32,10 +32,23 @@ export interface AccountBalance {
   partial: boolean;
   /** The account's guardian votes as /get-account answers them (anossoftware 25.1), 0 while not landed or on a validator without the field; Home's fund proposal line reads it (2026-11-08). */
   guardianVotes: number;
+  /** The account's stake per purpose in millionths, the purposes above zero only, from stakes of the /get-account answer (anossoftware 25.1); empty while not landed or on a validator without the field (2026-11-10, the balance card). A stake is a transfer to the fund, so it is not part of balance. */
+  stakes: Partial<Record<StakePurpose, bigint>>;
+  /** The stakes added up. */
+  staked: bigint;
+  /** The open escrow trades counted in escrow, the ones this account sells in, as /list-escrows answers them; the balance sheet lists them (2026-11-10). */
+  escrows: EscrowItem[];
+  /** The held assisted transfer counted in assisted, as /get-assisted-transfer answers it; null when none is held. */
+  assistedTransfer: HeldAssistedTransfer | null;
+  /** The guarded or vault transfer counted in locked, as /get-locked-transfer answers it; null when none waits. */
+  lockedTransfer: HeldLockedTransfer | null;
+  /** The pending rows counted in pending, as /list-transactions answers them. */
+  pendingTransfers: PendingItem[];
 }
 
 /** The pod's anos added up over its landed accounts, for the balance card. A lost account counts nowhere. */
 export interface Totals {
+  /** What the accounts hold on the ledger. The stakes are not in it: the card's big number is total plus staked. */
   total: bigint;
   available: bigint;
   held: bigint;
@@ -43,6 +56,8 @@ export interface Totals {
   escrow: bigint;
   assisted: bigint;
   locked: bigint;
+  /** What the accounts have staked with the fund (2026-11-10). */
+  staked: bigint;
   /** Accounts whose error is 'not landed yet', or not read yet. */
   notLanded: number;
   /** Accounts whose read was refused for another reason. */
@@ -74,7 +89,11 @@ export interface MoveState {
  * totals over the session's accounts; needsPoll while an account is not
  * on the ledger yet or any anos are held or pending. The validator moves a
  * balance only when a transfer is written, so a balance stays whole while
- * anos are spoken for, and available is what is left after them. An
+ * anos are spoken for, and available is what is left after them. Since
+ * 2026-11-10 an entry also keeps the account's stakes, from the same
+ * /get-account answer (a stake is a transfer to the fund, so it has left
+ * the balance; the totals sum it apart, as staked), and the held items as
+ * the reads answered them, for the balance card and its sheet. An
  * account whose keyBlob does not open is lost (its keys went with an old
  * passkey): its entry says so, nothing is read for it, it counts in no
  * total and no poll, and the pickers leave it out (usableAccounts); the
@@ -104,7 +123,7 @@ export class BalancesService {
   /** The sums over the landed accounts of session.accounts(), and the counts of the others; a lost account, and an entry for an account no longer in the session, does not count. */
   readonly totals = computed<Totals>(() => {
     const entries = this.byAccount();
-    const totals: Totals = { total: 0n, available: 0n, held: 0n, pending: 0n, escrow: 0n, assisted: 0n, locked: 0n, notLanded: 0, failed: 0 };
+    const totals: Totals = { total: 0n, available: 0n, held: 0n, pending: 0n, escrow: 0n, assisted: 0n, locked: 0n, staked: 0n, notLanded: 0, failed: 0 };
     for (const account of this.session.accounts()) {
       const entry = entries[account.accountId];
       if (entry?.lost) continue;
@@ -120,6 +139,7 @@ export class BalancesService {
         totals.escrow += entry.escrow;
         totals.assisted += entry.assisted;
         totals.locked += entry.locked;
+        totals.staked += entry.staked;
       }
     }
     return totals;
@@ -230,11 +250,16 @@ export class BalancesService {
           entry = notLanded(account.status === 401 && /unknown account/.test(reasonOf(account)) ? 'not landed yet' : reasonOf(account));
         } else {
           const balance = BigInt(account.body.balance);
-          const pending = list.ok ? list.body.pending.reduce((sum, p) => sum + BigInt(p.amount), 0n) : 0n;
-          const escrow = escrows.ok ? escrows.body.escrows.filter((e) => e.accountId === id).reduce((sum, e) => sum + BigInt(e.amount), 0n) : 0n;
-          const assistedHeld = assisted?.ok && assisted.body.transfer ? BigInt(assisted.body.transfer.amount) : 0n;
-          const lockedHeld = locked?.ok && locked.body.transfer ? BigInt(locked.body.transfer.amount) : 0n;
+          const pendingTransfers = list.ok ? list.body.pending : [];
+          const pending = pendingTransfers.reduce((sum, p) => sum + BigInt(p.amount), 0n);
+          const sold = escrows.ok ? escrows.body.escrows.filter((e) => e.accountId === id) : [];
+          const escrow = sold.reduce((sum, e) => sum + BigInt(e.amount), 0n);
+          const assistedTransfer = assisted?.ok ? assisted.body.transfer : null;
+          const assistedHeld = assistedTransfer ? BigInt(assistedTransfer.amount) : 0n;
+          const lockedTransfer = locked?.ok ? locked.body.transfer : null;
+          const lockedHeld = lockedTransfer ? BigInt(lockedTransfer.amount) : 0n;
           const held = pending + escrow + assistedHeld + lockedHeld;
+          const stakes = stakesOf(account.body.stakes);
           entry = {
             landed: true,
             lost: false,
@@ -248,6 +273,12 @@ export class BalancesService {
             available: balance > held ? balance - held : 0n,
             partial: !list.ok || !escrows.ok || (assisted !== null && !assisted.ok) || (locked !== null && !locked.ok),
             guardianVotes: account.body.guardianVotes ?? 0,
+            stakes,
+            staked: STAKE_PURPOSES.reduce((sum, purpose) => sum + (stakes[purpose] ?? 0n), 0n),
+            escrows: sold,
+            assistedTransfer,
+            lockedTransfer,
+            pendingTransfers,
           };
         }
       } catch (err) {
@@ -300,9 +331,20 @@ export class BalancesService {
   }
 }
 
-/** The entry of an account /get-account did not answer for, or that could not be asked: nothing landed, nothing held. */
+/** The stakes of a /get-account answer as the entry keeps them: the purposes above zero, in millionths; empty when the answer has no stakes (a validator without the field). */
+function stakesOf(answer: Record<StakePurpose, string> | undefined): Partial<Record<StakePurpose, bigint>> {
+  const stakes: Partial<Record<StakePurpose, bigint>> = {};
+  if (!answer) return stakes;
+  for (const purpose of STAKE_PURPOSES) {
+    const amount = BigInt(answer[purpose] ?? '0');
+    if (amount > 0n) stakes[purpose] = amount;
+  }
+  return stakes;
+}
+
+/** The entry of an account /get-account did not answer for, or that could not be asked: nothing landed, nothing held, nothing staked. */
 function notLanded(error: string): AccountBalance {
-  return { landed: false, lost: false, balance: null, error, pending: 0n, escrow: 0n, assisted: 0n, locked: 0n, held: 0n, available: 0n, partial: false, guardianVotes: 0 };
+  return { landed: false, lost: false, balance: null, error, pending: 0n, escrow: 0n, assisted: 0n, locked: 0n, held: 0n, available: 0n, partial: false, guardianVotes: 0, stakes: {}, staked: 0n, escrows: [], assistedTransfer: null, lockedTransfer: null, pendingTransfers: [] };
 }
 
 /** The entry of a lost account (wallet spec 8.2): the keyBlob did not open under the key blob key, so nothing was read. */
