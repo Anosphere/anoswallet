@@ -459,7 +459,7 @@ fifth, /get-locked-transfer, and the date range on /list-transactions on
 
     POST /get-assisted-transfer (account)
     body { }
-    answer: 200 { transfer: { transactionId, accountId, accountIdTo, amount: string, createdAt,
+    answer: 200 { transfer: { transactionId, type, accountId, accountIdTo, amount: string, createdAt,
       stage: waiting | attesting | locked | writing | cancelling, attestations: 0 | 1 | 2,
       unlocksAt: ISO 8601 | null } | null }
     transfer: the assisted_transfers row whose account_id is the signer, or null when there is none. There is
@@ -477,6 +477,13 @@ fifth, /get-locked-transfer, and the date range on /list-transactions on
       then the moment a move out of a guarded or vault account may be written (null for every other row),
       and a fifth stage, locked, is both attestations approved with that moment ahead; the wallet reads it
       "Locked until <date>" (assistedStages.locked).
+    type (answered by the validator since 2026-11-08, read by the wallet since 2026-11-10,
+      forclaude/recovery-finish-order-plan-1.md): the row's transactionType, assistedAnosTransfer or
+      breakGlassTransfer. Since 2026-11-10 this read is also made with the break-glass pair, by the recovery's
+      finish (12.3, Move your money): the envelope is signed by a lost account's break-glass pair, which the
+      account level accepts as it does on /get-account (anossoftware spec 22). A breakGlassTransfer in the
+      answer is a move the validators already hold for that account, and its transactionId and accountIdTo
+      are what the finish files with the masterpod. Every other read of it is signed by pair one.
 
     POST /get-locked-transfer (account)
     body { }
@@ -2013,7 +2020,8 @@ excepted, with the keyholder and anos calls included.
                             plus the five signed reads (listEscrows added 2026-11-05, getAssistedTransfer and
                             getLockedTransfer 2026-11-06; listTransactions takes from and to, 2026-11-06);
                             getAccountAs, the /get-account read with an envelope the caller signed, the
-                            break-glass pair's at the recovery's finish (2026-11-08); the two public fund
+                            break-glass pair's at the recovery's finish (2026-11-08), and getAssistedTransferAs,
+                            the same for /get-assisted-transfer (2026-11-10, 12.4); the two public fund
                             proposal reads of anossoftware 25 (2026-11-08), listFundProposals(filters, quiet)
                             and getFundProposal(transactionId, quiet), each a plain unsigned post with the
                             object body and no envelope, the wallet's first unsigned posts to a validator, with
@@ -5615,6 +5623,195 @@ package.
   appoint … validator` it also sees validator; an appointed moderator or
   attestor sees what it saw before, without validator and masterPod.
 
+### The finish: keyholders first, the money before the new key, every move filed (2026-11-10)
+
+Built from `forclaude/recovery-finish-order-plan-1.md` (FINAL), step 1 of
+its three, one commit; its step 2 (the masterpod's spec and two comments)
+and step 3 (the records) are words only and follow on the user's word.
+Three changes to the finish of a recovery (12.3), from a planning chat of
+2026-11-10. The user: "This is a real issue" and "We can just change the
+order, keyholders first, then masterpod" (A); "The swap of 3 and 4 sounds
+right" (B); "It would be great to go ahead and fix the filing with the
+masterpod at the same time" (C). Wallet only: nothing changes in what the
+masterpod, the validators, the doormen, the keyholders, the bankers'
+program or the signing server do; no route, no proxy change, no new
+package, and no new word in either language. Two more decisions of the
+user's came into the plan the same day, after the planning chat had
+checked this build against it, and are in the same commit: 16 (an old
+account the validators do not know counts as empty, under C below) and 17
+(three lines that described the old filing are put right, under the
+services and the spec below).
+
+- A, the new key's shares go to the keyholders first and the masterpod
+  is told second. Until now `completeRotation` posted
+  `/rotate-backup-code` and deposited afterwards, so between the two the
+  new key lived only in the tab. Three ways led into that gap: the tab
+  closed between the two calls; the masterpod's answer lost, after which
+  Retry signed with the old key and got `401 bad signature`; too few
+  keyholders up and the tab not kept open. The cost was an anoPod that
+  could not be recovered again: at the next lost passkey the bankers'
+  shares rebuild the old key, which opens nothing and which the masterpod
+  refuses. Now, in `src/app/pages/recover-case.page.ts`: the step's
+  signals are `deposited` (the shares are with the keyholders, only the
+  masterpod call is left), `depositFailed` (a deposit was tried and
+  failed) and `rotated` (the masterpod took the new key, the step is
+  done); until now `rotated` meant the masterpod was told with the
+  deposit left, and `deposited` the step done. In the template
+  `[completed]` and the result line read `rotated()`, and the button
+  reads `common.retry` when `deposited()`, `recoverCase.retryDeposit`
+  when `depositFailed()`, else `recoverCase.makeNewCode`. `makeNewCode`
+  lost the line that set `rotated` to false. `completeRotation` runs in
+  this order: the new key made when none is held, with the guards as
+  before; the old key in the tab (`recoveredCode`), else
+  `recoverCase.noCurrentCode`, now before anything is deposited; when
+  `deposited()` is false, the deposit (a failure sets `depositFailed` and
+  shows as before, a success clears it and sets `deposited`);
+  `/rotate-backup-code` with the same message and the proof by the old
+  key; then `rotated` set and the old key, the new key, its blob2 and
+  its keys dropped. The deposit is made once: when the masterpod call
+  fails after it, Retry repeats that call alone. When the masterpod call
+  is not ok, the new private `rotationLanded(blob2)` is asked, and
+  `/rotate-backup-code: <reason>` is thrown only when it answers false:
+  the recovery envelope for `/get-recovery-pod`, the call made quietly;
+  true when the answer is ok and its `blob2` is the hex of the new
+  blob2, false in every other case, a missing session included; an ok
+  answer is applied as the poll applies one. So a lost answer no longer
+  blocks the step.
+- B, "Move your money" is the third step and "New key for the bankers"
+  the fourth. In the template the two `<mat-step>` blocks traded places;
+  nothing else moved, and the methods stand in the file where they stood.
+  Why: Get back in opens the masterpod's blob2 with the key rebuilt from
+  the delivered shares, the old key; once the masterpod holds the new key
+  that fails, so a reload after the new key and before the money was
+  moved left the anos in the old accounts until a new recovery case (a
+  moderator dismisses the stuck one, two moderators approve again, the
+  bankers deliver again). The money step needs nothing from the new key.
+  `moveMoney` still wipes the seeds at its end and empties what
+  `RecoveryService` holds from Combine, the backup code candidates with
+  them; the new-key step reads the old key from the page's own field
+  `recoveredCode`, which Get back in set and the money step does not
+  touch. (The step 5 note of 2026-11-08 above says the candidates are
+  dropped when "the rotation is done": that was the old order. Nothing
+  reads them after Get back in.)
+- C, "Move your money" asks the validators what they already hold and
+  files every move with the masterpod at once, so the step can be run
+  again without losing or doubling anything. It closes the gap the step 5
+  note of 2026-11-08 above records, with the read that note names.
+  `moveMoney` now runs: the accounts and the seeds matched, as before;
+  the accounts of the moves `/list-my-break-glass-moves` lists count as
+  filed, as before; then the reads, every one before anything is
+  written: for each other matched account `/get-assisted-transfer` and
+  `/get-account`, both signed by its break-glass pair. A held transfer
+  whose `type` is `breakGlassTransfer` is a move to file, with the held
+  transfer's `transactionId` and `accountIdTo`; else a balance of 0 is
+  empty; else the account is one to move, with the balance, the latest
+  transaction id and the minutes ahead, as before. An old account the
+  validators do not know never reached the ledger, so it holds nothing
+  (the plan's decision 16): when its first read is refused with `401` and
+  a reason saying `unknown account`, it counts as empty and the next
+  account is read, without its second read. The test is the one
+  `balances.service.ts` uses for an account that has not landed,
+  `status === 401 && /unknown account/.test(reasonOf(res))`. Before
+  decision 16 that refused read stopped the step before any account was
+  moved. Every other refused read stops the step, as before. Each move to
+  file is filed. Then, for each account to move: `createAccount` of the
+  same type, the transfer built and posted as before; when the post is not
+  ok, `/get-assisted-transfer` is read again with the break-glass pair,
+  and a `breakGlassTransfer` there is the move, with the validator's
+  `transactionId` and `accountIdTo`, while anything else throws
+  `recoverCase.moveRefused` with the validator's reason; then the move is
+  filed, before the next account. Last the seeds wiped and the result
+  line, as before. The new private `fileMove(caseId, move)` posts
+  `/file-break-glass-moves` with the one move: an ok answer, or `409`
+  saying the move is already filed, counts as filed; anything else throws
+  `/file-break-glass-moves: <reason>`. Gone are the list of moves kept
+  for the end, the one filing call after the loop and the line that
+  counted a validator's "already there" as filed; `ALREADY_THERE` stays
+  in `account-creation.service.ts` for the creations, and its import left
+  the page. So an old account with a transaction of its own still waiting
+  on the validators (a lock, an escrow trade, an assisted transfer) now
+  stops the step with the validator's words, where it was counted as
+  filed although nothing was; the step can be run again in the same case
+  once that transaction is done. The 20 moves a single filing call may
+  carry stop being a limit.
+- `src/app/services/anos-api.service.ts`: `getAssistedTransferAs(envelope,
+  quiet)`, which `getAssistedTransfer` calls, as `getAccount` calls
+  `getAccountAs`; `HeldAssistedTransfer` gains `type`, as the validator
+  answers it. `src/app/services/crypto.service.ts`: the comment of
+  `signAccountEnvelopeAsBreakGlass` names both reads; no code changed
+  there. Two more comments, no code (the plan's decision 17): in
+  `src/app/services/account-creation.service.ts` the comment over
+  `ALREADY_THERE` no longer says the finish counts it as a move already
+  filed (the pattern is as it was, and only the creations read it now);
+  in `src/app/services/masterpod-api.service.ts` the comment over
+  `fileBreakGlassMoves` says the finish sends one move per call.
+- Unchanged: `SharesService`, the code of the masterpod API service and
+  of the account creation, the Wallet and Account pages, Setup, `en.ts`
+  and `th.ts`, `server/`. Every word on the screen is one the wallet
+  already had; "Retry" on the button is `common.retry`.
+- Accepted by the plan (its decision 15). The tab closed after the
+  deposit and before the masterpod call: the old key stays the key and a
+  second recovery works, but the unused new shares are then the newest
+  rows, so the bankers have to tick the older row as well. A failed
+  deposit leaves the shares that did get stored under a key id nothing
+  names, as Setup does. An anoPod that fell into the gap of A before this
+  change is not mended by it. While "Move your money" keeps failing, the
+  new key is not made and the case cannot be completed; the person is
+  back in all the same, and the finish can be picked up again in the same
+  case. A failure after a new account is made and before its move reaches
+  a validator leaves that account unused, and Retry makes another, as
+  before; each counts toward the 20 new accounts in 30 days (4.4). A
+  person who closes the tab in the moment between a move reaching the
+  validators and its filing, and never comes back, leaves that move
+  unfiled; coming back to the finish files it. The attestors may see the
+  case with fewer moves for a few minutes, since the moves arrive one by
+  one, and the case's log gets one "opened" line per move.
+- Readings where the plan left a detail open. Both reads of step (3) are
+  made for every account, `/get-assisted-transfer` first, also when it
+  already answered a break-glass move; a refusal of either stops the
+  step, as `/get-assisted-transfer: <reason>` or `/get-account:
+  <reason>`, but for the unknown account of decision 16. That test stands
+  on the first read alone: both reads pass the validator's same account
+  check, which answers `401 unknown account` before it looks at a
+  signature (anossoftware `src/auth/require-account.js`), so the second
+  read cannot say it of an account the first read knew. The reads are
+  not quiet, as the `/get-account` read was not, so the Log shows them.
+  After a refused post, a second read that is itself
+  refused or unanswered counts as "anything else": the step stops with
+  `moveRefused` and the post's reason. A move found on the validators is
+  filed with the old account's id as the masterpod lists it and the
+  validator's two other ids. `rotationLanded` keeps the poll's guard (an
+  answer that arrives after the recovery session went away is not kept,
+  and the answer is false), clears the page's error line on an ok answer
+  as the poll does, and sets no error on a refused one. Any failure of
+  the deposit sets `depositFailed`, a `DepositError` or not.
+  `HeldAssistedTransfer.type` is typed like `AssistedTransferItem.type`
+  (the two words or any string) and stands after `transactionId`, where
+  the validator answers it. `getAssistedTransferAs` stands after
+  `getAssistedTransfer`, as `getAccountAs` after `getAccount`. The three
+  signals stand where the two stood. The comments that number the steps
+  follow the new order (`makeNewCode` and `completeRotation` step 4,
+  `moveMoney` step 3), and the class comment names the order and the
+  changes.
+- Spec: 5.4 (`/get-assisted-transfer`: `type` in the answer, and the read
+  with the break-glass pair), 8.3 (the line of `anos-api.service` names
+  `getAssistedTransferAs`, decision 17), 12.3 (the order, steps 3 and 4,
+  the last paragraph), 12.4 (the line of `anos-api.service`) and this
+  note. The older notes above and 12.7 stand as the record of what was
+  built then.
+- `npx ng build` clean (2.12 MB initial, no warnings), in the web_app
+  folder with this change alone in it, and clean again with decisions 16
+  and 17 in. Not run in a browser here: the steps need a live recovery
+  case with delivered shares, so the run-through is the user's, after
+  the deploy (the plan's section 4; only the wallet has something to
+  deploy). The finish reads Combine, Get back
+  in, Move your money, New key for the bankers, Done. After "New key for
+  the bankers" each keyholder shows one more `backupcode` row for the
+  lookup id. To see C: reload the page while "Move your money" runs,
+  after the first move went out; continue the recovery and run the finish
+  again; no second new account is made for that old account, and the
+  attestor edition lists its move.
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`
@@ -5720,7 +5917,15 @@ with the passkey you just made."
 When three shares of one backup code `keyId` are in, the finish appears as
 a second stepper on the same page. The person never sees a backup code,
 here or on Setup (2026-11-10, section 11): on these screens it is "the
-key the bankers keep", "the rebuilt key" or "the key".
+key the bankers keep", "the rebuilt key" or "the key". The steps stand in
+this order since 2026-11-10 (`forclaude/recovery-finish-order-plan-1.md`,
+section 11): Combine, Get back in, Move your money, New key for the
+bankers, Done. Until then the new key was third and the money fourth, and
+a reload after the new key had landed shut the person out of the money
+step: Get back in opens the masterpod's blob2 with the old key, which
+fails once the masterpod holds the new one, so the anos stayed in the old
+accounts until a new recovery case. Move your money needs nothing from
+the new key.
 
 1. Combine: opens every share with the recovery hybrid private key, groups
    by `keyId`, combines each group of three; the backup code and the
@@ -5735,56 +5940,109 @@ key the bankers keep", "the rebuilt key" or "the key".
    ordinary unlock (`/challenge` unlock, the assertion, `/unlock`), which
    opens the normal session in this tab with the same passkey: `blob1`,
    the chat keys, the identity blob, the status.
-3. New key for the bankers (until 2026-11-10 "New backup code", which
-   showed the new code once as on Setup and waited for "I have written it
-   down, complete"): one button, "Make the new key", makes a new code
-   without showing it; `newBlob2`, the new backup code keys, the proof by
-   the old keys, `/rotate-backup-code`; then the deposit as `backupcode`
-   through `SharesService.deposit`, a new `keyId`; the button reads "Retry
-   the deposit" when only the deposit failed. "The old key is now
-   worthless."
-4. Move your money (2026-11-08, `forclaude/break-glass-plan-1.md` step 5,
+3. Move your money (2026-11-08, `forclaude/break-glass-plan-1.md` step 5,
    section 11; in place of the "Break-glass keys" step that stood third
    from 2026-10-26, which matched each recovered seed to its account and
    stored it there with `/store-break-glass-blob`, and left with step 4 of
-   that plan): "Your old accounts' keys are gone with the lost passkey.
-   For each account that holds anos the wallet opens a new account of the
-   same type and files a move signed by its break-glass key. Two attestors
-   check you and sign; a guarded or vault account's move also waits out
-   its lock." The button Move my money runs: (1) `/list-anos-accounts`
-   into the session; each recovered seed's two break-glass public keys
-   find the account whose `creation.payload.publicKeys` names them, and a
-   seed that matches none is unmatched; (2) an account whose move
-   `/list-my-break-glass-moves` already lists is filed and skipped; every
-   other matched account is read with `/get-account` signed by its
+   that plan; it stood fourth, after the new key, until 2026-11-10): "Your
+   old accounts' keys are gone with the lost passkey. For each account
+   that holds anos the wallet opens a new account of the same type and
+   files a move signed by its break-glass key. Two attestors check you and
+   sign; a guarded or vault account's move also waits out its lock." The
+   button Move my money runs, in this order since 2026-11-10 (the read of
+   a held move and the filing of each move by itself are that day's,
+   section 11): (1) `/list-anos-accounts` into the session; each
+   recovered seed's two break-glass public keys find the account whose
+   `creation.payload.publicKeys` names them, and a seed that matches none
+   is unmatched; (2) an account whose move `/list-my-break-glass-moves`
+   already lists is filed and skipped; (3) the reads, every one before
+   any write: every other matched account is read with
+   `/get-assisted-transfer` and `/get-account` (5.4), both signed by its
    break-glass pair (the validators accept it since the user keys are
-   gone, anossoftware 22), a balance of 0 is empty and skipped, every
-   read before any write; (3) for each account left, a new account of the
-   same type through `account-creation.service` (8.3), waited for on the
-   ledger; (4) the `breakGlassTransfer` of the whole balance into it,
-   chained on the latest transaction id read, dated now plus the type's
-   minutes ahead (guarded and vault the lock plus the offset by the
-   proxy's numbers, else 0), signed by the break-glass pair alone and
-   posted to `/anos-transfer`, no signing server; a refusal saying the
-   account already has a held transaction counts as filed; (5)
-   `/file-break-glass-moves` with the case id and this run's moves, a
-   `409 move already filed` counting as filed; (6) the seeds wiped and
-   dropped from `RecoveryService`. The result: "2 moves filed, 1 account
-   was empty, 0 seeds matched no account", or "No break-glass seeds were
-   recovered, so there is nothing to move." The step is complete when the
-   run ended without an error, even with nothing to move; Retry runs it
-   again and skips what is filed. This is the one place in the wallet
-   that uses a break-glass key: no card, account page or Account entry
-   offers one. The old accounts' key blobs do not open under the new
-   passkey's key blob key (section 7), so the wallet shows them as lost,
-   with the move's progress (8.2).
+   gone, anossoftware 22). A held transfer whose `type` is
+   `breakGlassTransfer` is a move to file, with the held transfer's
+   `transactionId` and `accountIdTo`: an earlier run posted it and its
+   filing never reached the masterpod. Else a balance of 0 is empty and
+   skipped. Else the account is one to move, with its balance and its
+   latest transaction id. An account the validators do not know never
+   reached the ledger, so it holds nothing: when its first read is
+   refused with `401` and a reason saying `unknown account` (the test
+   `balances.service` uses for an account that has not landed), it is
+   empty too, its second read is not made, and the next account is read.
+   Every other refused read stops the step; (4) each move to file is
+   filed, and no new account is made for its old account; (5) for
+   each account to move, a new account of the same type through
+   `account-creation.service` (8.3), waited for on the ledger, then the
+   `breakGlassTransfer` of the whole balance into it, chained on the
+   latest transaction id read, dated now plus the type's minutes ahead
+   (guarded and vault the lock plus the offset by the proxy's numbers,
+   else 0), signed by the break-glass pair alone and posted to
+   `/anos-transfer`, no signing server. When the validator refuses the
+   post or gives no answer, `/get-assisted-transfer` is read again with
+   the break-glass pair: a `breakGlassTransfer` there is the move, with
+   the validator's `transactionId` and `accountIdTo`; anything else stops
+   the step with "The validator refused the move out of <account>:
+   <reason>", the reason being the post's. Then the move is filed, before
+   the next account is touched; (6) the seeds wiped and dropped from
+   `RecoveryService`. Filing a move is `/file-break-glass-moves` with the
+   case id and that one move, a call per move, made as soon as the move
+   is on the validators: an ok answer or a `409 move already filed`
+   counts as filed, anything else stops the step as
+   `/file-break-glass-moves: <reason>`. So a step that stops half way has
+   filed every move it posted, and the 20 moves one call may carry are no
+   limit. A validator's "already there" by itself does not count as
+   filed: an old account with a transaction of its own still waiting on
+   the validators (a guarded or vault transfer in its lock, an open
+   escrow trade, an assisted transfer) stops the step with the
+   validator's words, and the step can be run again in the same case once
+   that transaction is done. Until 2026-11-10 the moves of a run went to
+   the masterpod in one call after the last account, so anything that
+   stopped the step before that call lost them; on Retry the validator's
+   refusal of a second move for the account then counted as filed with
+   nothing filed, after another new account had been made. The result:
+   "2 moves filed, 1 account was empty, 0 seeds matched no account", or
+   "No break-glass seeds were recovered, so there is nothing to move."
+   The step is complete when the run ended without an error, even with
+   nothing to move; Retry runs it again and skips what is filed. This is
+   the one place in the wallet that uses a break-glass key: no card,
+   account page or Account entry offers one. The old accounts' key blobs
+   do not open under the new passkey's key blob key (section 7), so the
+   wallet shows them as lost, with the move's progress (8.2).
+4. New key for the bankers (until 2026-11-10 "New backup code", which
+   showed the new code once as on Setup and waited for "I have written it
+   down, complete"; it stood third, before the money, until 2026-11-10):
+   one button, "Make the new key". It makes a new code without showing
+   it, with `newBlob2` and the new backup code keys, when none is held
+   yet. Then, the keyholders first since 2026-11-10 (section 11): the
+   page checks that the old key is still in the tab, before anything is
+   deposited, since the masterpod call needs it for the proof ("The
+   rebuilt key is not in this tab: combine and get back in first."); the
+   deposit as `backupcode` through `SharesService.deposit`, a new
+   `keyId`, made once; then `/rotate-backup-code` with `newBlob2`, the
+   new keys and the proof by the old keys. When that call is refused or
+   gets no answer, the page reads the case again (`/get-recovery-pod`,
+   quietly, an ok answer kept as the poll keeps one): if the blob2 the
+   masterpod holds is the new one, the rotation landed and the step is
+   done; otherwise the refusal shows as `/rotate-backup-code: <reason>`.
+   The button reads "Make the new key" at first, "Retry the deposit"
+   after a failed deposit (it deposits the same new key again under a
+   fresh key id) and "Retry" when only the masterpod call is left (it
+   repeats that call alone). "The old key is now worthless." Until
+   2026-11-10 the masterpod was told first and the deposit came second,
+   and between the two the new key lived only in the tab: a tab closed
+   there, or a lost answer of the masterpod (Retry then signed with the
+   old key and got `401 bad signature`), left an anoPod whose shares
+   rebuild the old key, which opens nothing and which the masterpod
+   refuses, and the wallet could not mend it later. Setup already
+   deposits first (8.2).
 5. Done: `/complete-recovery-case`; "You're back in." Continue to
    `/wallet`.
 
 Each step keeps its result in RAM and can be retried; a refresh of the
 page loses the combined code and the seeds, and the person starts the
 finish again from Combine after unlocking the recovery pod (Move your
-money then skips the moves already filed).
+money then skips the moves already filed, and files a move the
+validators hold that was not filed yet, without a second new account).
 
 **Moderation** (`/moderation`). The cases from `/list-recovery-cases`, a
 status filter (the four open statuses by default, plus completed and
@@ -5833,7 +6091,11 @@ button and every 15 s
                             (2026-11-08); listAnosAccounts items carry breakGlassBlob;
                             listMyBreakGlassMoves and fileBreakGlassMoves (masterpod 14.4.1, 2026-11-08)
     anos-api.service        getAccountAs(envelope, quiet) (2026-11-08): /get-account with an envelope the caller
-                            signed, the break-glass pair's at the finish; getAccount calls it
+                            signed, the break-glass pair's at the finish; getAccount calls it;
+                            getAssistedTransferAs(envelope, quiet) (2026-11-10): /get-assisted-transfer the same
+                            way, the finish's read of a break-glass move the validators already hold;
+                            getAssistedTransfer calls it; HeldAssistedTransfer carries type, as the validator
+                            answers it (5.4)
     account-creation.service
                             the new accounts of Move your money, opened as the Wallet page opens one (8.3;
                             2026-11-08)

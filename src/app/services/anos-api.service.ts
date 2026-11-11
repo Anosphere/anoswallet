@@ -116,9 +116,10 @@ export interface EscrowItem {
 /** Where a held assisted transfer is, as the validator names it (anossoftware spec 17.2); locked (2026-11-08) is a break-glass move out of a guarded or vault account waiting out its lock with both attestations in. A word the wallet does not know is shown as held with no action. */
 export type AssistedStage = 'waiting' | 'attesting' | 'locked' | 'writing' | 'cancelling';
 
-/** The signer's own held assisted transfer, as /get-assisted-transfer answers it (anossoftware spec 17): accountId the sender, accountIdTo the receiver, attestations the slots holding one, 0, 1 or 2; unlocksAt (2026-11-08) the moment a break-glass move out of a guarded or vault account may be written, null for every other row. */
+/** The signer's own held assisted transfer, as /get-assisted-transfer answers it (anossoftware spec 17): type (the validator answers it since 2026-11-08, the wallet reads it since 2026-11-10) tells an assistedAnosTransfer from a breakGlassTransfer, the move of a recovery's finish out of a lost account (anossoftware 22), which the finish looks for with the break-glass pair; accountId the sender, accountIdTo the receiver, attestations the slots holding one, 0, 1 or 2; unlocksAt (2026-11-08) the moment a break-glass move out of a guarded or vault account may be written, null for every other row. */
 export interface HeldAssistedTransfer {
   transactionId: string;
+  type: 'assistedAnosTransfer' | 'breakGlassTransfer' | string;
   accountId: string;
   accountIdTo: string;
   amount: string;
@@ -292,7 +293,12 @@ export class AnosApiService {
 
   /** POST /get-assisted-transfer, signed by pair one: the account's own held assisted transfer, or null when none is held (anossoftware spec 17). */
   getAssistedTransfer(pairOne: PairOne, accountId: string, quiet = false): Promise<ApiResponse<{ transfer: HeldAssistedTransfer | null }>> {
-    return this.post('/get-assisted-transfer', this.crypto.signAccountEnvelope(pairOne, accountId, '/get-assisted-transfer', {}), quiet);
+    return this.getAssistedTransferAs(this.crypto.signAccountEnvelope(pairOne, accountId, '/get-assisted-transfer', {}), quiet);
+  }
+
+  /** POST /get-assisted-transfer with an envelope the caller signed: pair one's (getAssistedTransfer) or, since 2026-11-10, the break-glass pair's (CryptoService.signAccountEnvelopeAsBreakGlass), which the validator accepts when pair one does not verify (anossoftware spec 22), so the recovery's finish asks with the recovered seed whether a break-glass move is already held for a lost account, and reads its transaction id and the account it goes to. */
+  getAssistedTransferAs(envelope: Envelope, quiet = false): Promise<ApiResponse<{ transfer: HeldAssistedTransfer | null }>> {
+    return this.post('/get-assisted-transfer', envelope, quiet);
   }
 
   /** POST /get-locked-transfer, signed by pair one: the account's own guarded or vault transfer waiting out its lock, or null when none is held (anossoftware spec 18). */
