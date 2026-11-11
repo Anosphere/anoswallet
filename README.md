@@ -62,7 +62,7 @@ src/app/
   unlock.ts                the unlock flow, shared by the landing page and setup
   components/camera.component.ts   the camera: live preview, Take photo, a file input as the fallback
   components/note-form.component.ts   the note form under a history row: the kind, the money and the currency, the memo (spec 8.2)
-  components/confirm-dialog.component.ts   the confirmation box before a send and before a new anos account, and askConfirm (spec 8.9)
+  components/confirm-dialog.component.ts   the confirmation box before a send, before a new anos account and before the cancel of a locked transfer, and askConfirm (spec 8.9)
   pages/                   one file per route: landing, create, recover, vouching, identity, setup,
                            bucket-one, bucket-two, wallet, noted-transactions, account, account-protect, chat, marketplace, notifications, seed, log
   services/

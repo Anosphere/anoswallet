@@ -501,16 +501,22 @@ fifth, /get-locked-transfer, and the date range on /list-transactions on
     POST /get-locked-transfer (account)
     body { }
     answer: 200 { transfer: { transactionId, accountId, accountIdTo, amount: string, createdAt,
-      unlocksAt: ISO 8601, stage: waiting | locked | due } | null }
+      unlocksAt: ISO 8601, stage: waiting | locked | due | cancelling } | null }
     transfer: the locked_transactions row whose account_id is the signer, a guarded or vault transfer waiting
       out its time lock, or null when there is none (2026-11-06, anossoftware spec section 18). There is at
       most one: account_id is unique there, and the validator holds one transaction per account. The sender's
       only: the receiver sees it in the history when it lands. The held transfer only, nothing from logs or
       archives: a written transfer is on the chain under the same id, and the row is deleted when written.
-      Nothing can be done with a locked transfer: no follow-up exists for it. unlocksAt is the row's
+      Since 2026-11-11 the sender can cancel a locked transfer until it is written, with the follow-up
+      lockedTransferCancel at POST /locked-transfer-cancel (anossoftware spec section 28; 8.2, Account). A
+      cancelled transfer's row moves to the validator's logs, and this read then answers null: a cancelled
+      transfer leaves no trace the wallet reads. Until that day nothing could be done with a locked
+      transfer, since no follow-up existed for it. unlocksAt is the row's
       future_date, the moment the transfer may be written. stage is named by the validator from the row by the
       database's clock, the one the ready list reads (anossoftware spec 18.2): waiting until every validator
-      accepted the transfer; locked while the unlock moment is ahead; due once it has passed, until the next
+      accepted the transfer; cancelling (2026-11-11) with the sender's cancel on it, which the validator
+      decides right after waiting, until every validator accepted the cancel and the row is gone; locked
+      while the unlock moment is ahead; due once it has passed, until the next
       leader round writes it (a round starts with the next transaction of any kind).
 
 Refusals are 400 or 401 + { error }, logged "failed: <reason>" like
@@ -1147,18 +1153,68 @@ shows.
 
 Locked transfer (2026-11-06, section 11), after Escrow trades, on a
 guarded or vault account only: the transfer waiting out its time lock
-from /get-locked-transfer as one row that is not a link, since nothing
-can be done with it (no follow-up exists for a locked transfer, and it
-has no page of its own): "5 anos to <receiver>", then "Waiting out the
-lock · until <the unlock moment>" while the stage is locked, else the
-stage in words and the date it was made; "No transfer is waiting." when
-there is none; the read's refusal in red when it fails (a validator or
-doorman without the route), the rest of the page unharmed. The stage
-words, from the validator's stage (anossoftware spec 18.2,
+from /get-locked-transfer as one row that is not a link, since a locked
+transfer has no page of its own: "5 anos to <receiver>", then "Waiting
+out the lock · until <the unlock moment>" while the stage is locked,
+else the stage in words and the date it was made; "No transfer is
+waiting." when there is none; the read's refusal in red when it fails (a
+validator or doorman without the route), the rest of the page unharmed.
+The stage words, from the validator's stage (anossoftware spec 18.2,
 locked-stage.ts): waiting, "Waiting for the validators"; locked,
-"Waiting out the lock"; due, "Unlocked, being written"; a word the
-wallet does not know, "Held". On any other account type nothing is read
-and nothing shows.
+"Waiting out the lock"; due, "Unlocked, being written"; cancelling
+(2026-11-11), "Being cancelled"; a word the wallet does not know,
+"Held". On any other account type nothing is read and nothing shows.
+
+The sender can cancel the locked transfer from its row (2026-11-11,
+section 11; the plan is forclaude/locked-transfer-cancel-plan-1.md, the
+validators' part anossoftware spec sections 27 and 28, the doorman's
+doormansoftware spec section 9). Until then nothing could be done with
+it. The button: "Cancel transfer", stroked, under the row, while the
+stage is locked or due, that is from the moment every validator has
+accepted the transfer until it is written; off while the page is busy.
+It does not show while the stage is waiting, when the validators would
+refuse the cancel, nor while it is cancelling. The button asks in the
+confirmation box (8.9): the title "Cancel this transfer?"; Amount, "12
+anos"; To, the receiver's full account id; the note "The 12 anos stay in
+this account. It cannot be undone."; the buttons Back and "Yes, cancel
+the transfer". The first button reads Back in this box, where Cancel
+would read as the cancel itself. Back does nothing. Yes builds the
+follow-up lockedTransferCancel for the transfer the box showed,
+{ type: "lockedTransferCancel", transactionId, accountId } with signedAt
+added (crypto buildFollowUp, pair one from the keyBlob); /api/sign adds
+the wallet pair; /locked-transfer-cancel takes it (anos-api
+lockedTransferCancel); the page refreshes. While the cancel is on its
+way a progress bar shows under the row, with no words, as on the
+assisted transfer page, and the page's buttons are off; the bar and
+"Sending…" under the Send form are the send's and do not show then. The
+line under the row, in
+green: "Sent. The transfer is being cancelled; the anos stay in this
+account." The row then reads "Being cancelled · <the date it was made>"
+until every validator has accepted the cancel. Then the row is gone, the
+section reads "No transfer is waiting." and the account can send again.
+The wallet shows nothing more about a cancelled transfer, no line in the
+history and no notification, as for a cancelled assisted transfer. The
+line under the row stands until the next cancel or the next send starts.
+
+The wait. The validators refuse a cancel in the transfer's first
+minutes, for as long as they would still take the same signed transfer
+in again (anossoftware spec 27.2): with the wallet's dating that is the
+offset after sending, 5 minutes on the testnet. The wallet shows nothing
+about the wait ahead of time. The button is there from the start, a
+press inside the wait goes to the validators, and their refusal reads
+under the row, in red: "A transfer can be cancelled 5 minutes after it
+is sent. Try again in a few minutes.", the number being the proxy's
+lockOffsetMinutes in words (section 2). The refusals in plain words
+(`cancelRefusal`), by what the validator's reason holds: "not approved
+yet", "The validators have not all accepted this transfer yet. Try again
+in a moment."; "cannot be cancelled yet", the sentence of the wait, or,
+while the lock numbers have not loaded, the refusal as it came; "a
+cancellation is already present", "This transfer is already being
+cancelled."; "no locked_transactions transaction", "This transfer is no
+longer held: it was written or cancelled."; "not the transfer's sender",
+"This account cannot cancel this transfer." Every other refusal reads
+"/locked-transfer-cancel: HTTP <status>: <reason>": against a doorman
+without the route, "/locked-transfer-cancel: HTTP 404: Not Found".
 
 Send: recipient account id (typed, or by the paste button at the right
 end of the box, which reads the clipboard and takes the run of exactly 64
@@ -1173,7 +1229,9 @@ date the transfer the lock plus the offset ahead by the numbers
 /api/config gives (section 2: the proxy's env, the validators' numbers;
 10 + 5 and 20 + 5 minutes on the testnet, 1 + 1 and 2 + 1 locally;
 2026-11-06, section 11), with the line "A guarded transfer is dated 15
-minutes ahead and waits out its lock on the validators." under Send, the
+minutes ahead and waits out its lock on the validators. You can cancel
+it until it is written." under Send (the last sentence since 2026-11-11,
+section 11), the
 minutes in words (minutes-words.ts: "7 days and 10 minutes" in
 production); while the numbers have not loaded, Send is off and the line
 reads "The lock settings have not loaded from the proxy. Refresh to try
@@ -1229,7 +1287,8 @@ lock numbers have not loaded, with the line "An escrow trade is open.
 This account can send again when it closes.", "An assisted transfer is
 waiting. This account can send again when it is written or cancelled."
 or "A transfer is waiting out its lock. This account can send again when
-it is written." Under Send, an assisted account
+it is written or cancelled." (the last two words since 2026-11-11,
+section 11). Under Send, an assisted account
 reads "An assisted transfer waits until two attestors have checked it.
 An attestor will open a case and ask for your lookup id. You can cancel
 it until it is written." where a guarded or vault account reads its lock
@@ -1359,7 +1418,13 @@ Yes builds the escrowSuccess, escrowCancel or escrowDispute follow-up
 wallet pair, /escrow-signature takes it, then "Sent. ..." in green or
 the validator's refusal in plain words (not all accepted yet; the other
 side moved first, naming what they did; already in dispute; not this
-account's to sign), and the page refreshes. No buttons in any other
+account's to sign; and, since 2026-11-11, section 11, the wait before
+the buyer's cancel: the validators refuse it in the trade's first
+minutes, while the same signed transfer could still be sent in again,
+anossoftware spec 27.2, and the page reads "A trade can be cancelled 5
+minutes after it is made. Try again in a few minutes.", the number being
+the proxy's lockOffsetMinutes in words; while that number has not loaded
+the refusal reads as it came), and the page refreshes. No buttons in any other
 stage, nor for a stage word the wallet does not know, which reads Open.
 In dispute: who disputed it (you or the other side), the verdicts so far
 ("No verdict yet.", or "Verdicts so far: 1 to release. Waiting for one
@@ -1413,7 +1478,13 @@ buildFollowUp, pair one from the keyBlob), /api/sign adds the wallet
 pair, /assisted-transfer-cancel takes it, then "Sent. The transfer is
 being cancelled; the anos stay in this account." in green or the
 validator's refusal in plain words (not all accepted yet; already being
-cancelled; no longer held; not this account's to cancel), the rest as
+cancelled; no longer held; not this account's to cancel; and, since
+2026-11-11, section 11, the wait: the validators refuse the cancel in
+the transfer's first minutes, while the same signed transfer could still
+be sent in again, anossoftware spec 27.2, and the page reads "A transfer
+can be cancelled 5 minutes after it is sent. Try again in a few
+minutes.", the number being the proxy's lockOffsetMinutes in words;
+while that number has not loaded the refusal reads as it came), the rest as
 "/assisted-transfer-cancel: <reason>", and the page refreshes. The
 closed view, for someone on the page when the transfer leaves the
 validator: the first page of /list-transactions is read, and the id on
@@ -2101,9 +2172,11 @@ excepted, with the keyholder and anos calls included.
                             /get-fund-proposal) wait at most VALIDATOR_READ_TIMEOUT_MS, 10 seconds
                             (constants.ts), and with no answer are asked again on the next validator, each
                             validator at most once per call, the last failure returned when none answers; the
-                            eight submissions (write: /create-account, /anos-transfer, /transfer-to-fund,
-                            /fund-proposal, /attestation, /assisted-transfer-cancel, /guardian-vote,
-                            /escrow-signature) are tried once, with no time limit, and never sent again by the
+                            nine submissions (write: /create-account, /anos-transfer, /transfer-to-fund,
+                            /fund-proposal, /attestation, /assisted-transfer-cancel, /locked-transfer-cancel,
+                            /guardian-vote, /escrow-signature; eight until 2026-11-11, when
+                            lockedTransferCancel, the post of a locked transfer's cancel, was added, section
+                            11) are tried once, with no time limit, and never sent again by the
                             wallet on its own, since one that got no answer may still have been taken: the
                             session moves on, the failure is shown as before, and the person's next try goes
                             to the next validator
@@ -2169,7 +2242,10 @@ excepted, with the keyholder and anos calls included.
                             unwrapJson (2026-11-07); deriveKekKeys, the key blob under it and KeyBlobLostError
                             (2026-11-08); the break-glass transfer and the account envelope signed by the
                             break-glass pair (buildBreakGlassTransferTransaction, signAccountEnvelopeAsBreakGlass,
-                            2026-11-08)
+                            2026-11-08); the follow-up payloads that buildFollowUp signs, FollowUpPayload:
+                            AttestationPayload, AssistedTransferCancelPayload, LockedTransferCancelPayload
+                            (2026-11-11, section 11), GuardianVotePayload, EscrowSignaturePayload and
+                            EscrowVerdictPayload
     passkey.service         the keyholder test app's, unchanged
     shares.service          the deposit rule of section 6, one function: deposit(secret, shareType)
     account-creation.service
@@ -2396,15 +2472,17 @@ resolves true only when the box closed by its second button.
 What it is given, `ConfirmData`: `title`; `lines`, each a `ConfirmLine`
 `{ label, value, code? }`, drawn as a two-column grid, the label in the
 on-surface-variant colour and the value beside it, in the id font when
-`code` is true; `notes`, each a paragraph under the lines; and
-`confirmLabel`, the words on the second button. A value too long for its
+`code` is true; `notes`, each a paragraph under the lines;
+`confirmLabel`, the words on the second button; and, since 2026-11-11
+(section 11), `cancelLabel`, which a caller may leave out: the words on
+the first button. A value too long for its
 column wraps at a space, and is cut inside a word only when the word
 alone is too long (`overflow-wrap: anywhere`); a value in the id font is
 cut anywhere, by the global rule for `code`, so a 64-character id wraps
 on a phone (2026-11-10, section 11: at first every value was cut
-anywhere). The two buttons, at the right: Cancel
-(`common.cancel`), which closes with false, and the caller's button,
-which closes with true.
+anywhere). The two buttons, at the right: the first, which closes with
+false and reads Cancel (`common.cancel`), or the caller's `cancelLabel`
+when one is given; and the caller's button, which closes with true.
 
 The box closes only by those two buttons. A click outside it and the
 Escape key do nothing (`disableClose`), so the second click of a double
@@ -2416,9 +2494,13 @@ land on it. Nothing in the box has the focus when it opens (`autoFocus:
 nothing. The box is 480 px wide, or the screen's width less 32 px where
 that is narrower.
 
-Two places use it (8.2): the Send form of the account page, before every
-kind of send, and "Open a new account" on the Wallet page, before Create
-anos account and Retry. Each does nothing while a box is already open.
+Three places use it (8.2): the Send form of the account page, before
+every kind of send; "Open a new account" on the Wallet page, before
+Create anos account and Retry; and, since 2026-11-11 (section 11),
+"Cancel transfer" under the Locked transfer row of the account page.
+That third place is the only one that gives `cancelLabel`: Back
+(`common.back`), since Cancel there would read as the cancel itself; the
+other two keep Cancel. Each does nothing while a box is already open.
 
 ## 9. Configuration, and running it on this machine
 
@@ -2465,11 +2547,14 @@ network/testnet.env numbers (2026-11-06, section 11).
 - From the Home plan (forclaude/wallet-home-plan-1.md, 2026-11-06): a
   nickname for an account (would need a masterpod column); a QR code of
   an account id (would need a package); the Log as a tile on Home; a
-  count of waiting vouch requests on Home for a seed (needs a read); a
-  cancel for a locked transfer (none exists on the validator); the
+  count of waiting vouch requests on Home for a seed (needs a read); the
   receiver's view of an incoming assisted transfer; a username for an
   account id; a notification when a transfer is written; asking several
-  validators instead of one; "Anos" with a capital.
+  validators instead of one; "Anos" with a capital. A cancel for a
+  locked transfer stood in this list, with "none exists on the
+  validator", until 2026-11-11, when
+  forclaude/locked-transfer-cancel-plan-1.md built it on the validators,
+  the doormen and here (8.2, Account; section 11).
 - Asking a validator for its lock numbers, so that they live in one
   place, set aside 2026-11-06 (forclaude/wallet-locks-plan-1.md): the
   proxy's env carries the validators' numbers and the two files are
@@ -2530,6 +2615,11 @@ network/testnet.env numbers (2026-11-06, section 11).
   the guardians into one page; an entry of their own in the side panel
   or a Home tile (a card on the DAO page instead, since very few people
   are guardians).
+- From the locked transfer cancel plan
+  (forclaude/locked-transfer-cancel-plan-1.md, 2026-11-11): a cancel by
+  the break-glass key, for someone who lost their passkey; a line in the
+  history or a notification for a cancelled transfer; the receiver's
+  view of a locked transfer.
 - Several passkeys, push delivery, a custom theme, rate limits.
 
 ## 11. Build notes
@@ -6212,6 +6302,200 @@ inside each of the three named server blocks: `gzip on`, `gzip_vary on`,
   `curl -s -I -H 'Accept-Encoding: gzip' https://wallet.anocloud.com/main-<name>.js | grep -i content-encoding`
   prints `content-encoding: gzip`.
 - Spec: this note; README, "The wallet servers"; the file's own header.
+
+### The locked transfer cancel (2026-11-11)
+
+Built from `forclaude/locked-transfer-cancel-plan-1.md` (FINAL), its step
+4 of five, its section 3, one commit, on top of ab766a5. Why, in the
+user's words of 2026-11-11: "I believe at some point I wanted to add the
+feature where the user could cancel a guarded or vault transfer. But I
+don't see any button like that on the web app." And: "We need cancel
+before production." A guarded or vault transfer waits out its lock on
+the validators, a week or a month in production. One sent by mistake
+went through when the lock ended, and the account could send nothing
+else until then. The cancel had never been built: the validators had no
+route for it, and the Home plan of 2026-11-06 left it out (section 10).
+Steps 1 to 3 of the plan built the other two parts. The validators'
+(anossoftware 0f80003 and becc435, its spec sections 27 and 28): the
+time check on every transfer, the wait before a cancel, the follow-up
+kind `lockedTransferCancel` at `POST /locked-transfer-cancel`, and the
+stage `cancelling` in `/get-locked-transfer`. The doorman's
+(doormansoftware 30434d5, its spec section 9): the validator door lets
+the route through. This step is the wallet: one button, one box, one
+follow-up, and one sentence on three pages for a cancel pressed too
+early. No route of the proxy, no setting, no npm package.
+
+- `src/app/services/crypto.service.ts`: the interface
+  `LockedTransferCancelPayload` (`type: 'lockedTransferCancel'`,
+  `transactionId`, `accountId`) after `AssistedTransferCancelPayload`,
+  and in `FollowUpPayload`. `buildFollowUp` is untouched: it adds
+  `signedAt` and signs with pair one, as for every follow-up.
+- `src/app/services/anos-api.service.ts`: `LockedStage` has
+  `'cancelling'`, and its comment says what the stage is;
+  `lockedTransferCancel(followUp)` after `assistedTransferCancel`, which
+  is `this.write('/locked-transfer-cancel', followUp)`, the ninth
+  submission; the import.
+- `src/app/locked-stage.ts`: `case 'cancelling'` reads
+  `words.cancelling`. The comment says the transfer can be cancelled
+  from its row and still has no page of its own.
+- `src/app/components/confirm-dialog.component.ts`: `ConfirmData` has
+  `cancelLabel?: string`, and the first button shows
+  `data.cancelLabel ?? t().common.cancel`. The comments say so.
+  `askConfirm` and the two places that used the box are untouched and
+  keep Cancel.
+- `src/app/pages/account.page.ts`: the signal `cancelOutcome`, beside
+  `sendOutcome`. In the template's Locked transfer section, inside the
+  branch that shows the row and after the `mat-list`: a `div` of class
+  `row` with one stroked button, `assisted.cancelTransfer`, which calls
+  `askCancelLocked()`, is off while `busy()` and is drawn while the
+  stage is `locked` or `due`. After the section's `@if` chain, still
+  inside the guarded or vault block: the outcome line of
+  `cancelOutcome()` with the classes `ok` and `error`, as `sendOutcome`
+  is shown. The row's own lines are untouched: a stage that is not
+  `locked` reads its stage word and the date, so a `cancelling` row
+  reads "Being cancelled · <date>". `askCancelLocked()` does nothing
+  with no locked transfer or with a box already open. Else it opens the
+  box with `askConfirm`: the title `account.confirmCancelTitle`; the
+  lines `common.amount`, the amount through `common.anos`, and
+  `common.to`, the receiver's id with `code` true; the note
+  `account.confirmCancelNote(anos)`; `confirmLabel`
+  `assisted.yesCancel`; `cancelLabel` `common.back`. On Back nothing
+  happens. On yes, through `act(this.cancelOutcome, ...)`: pair one;
+  `buildFollowUp` with `{ type: 'lockedTransferCancel', transactionId,
+  accountId }`; `this.signing.sign(...)`, the way `send()` signs;
+  `anos.lockedTransferCancel`; a refusal thrown in the words of
+  `cancelRefusal`, else `assisted.sentCancel`; then `refresh(true)`.
+  `cancelRefusal(res)` is the body of the assisted transfer page's
+  `plainReason` for this route, the five refusals as 8.2 lists them.
+  `send()` starts with `this.cancelOutcome.set(null)`, so the line of an
+  old cancel does not stand under a new transfer; nothing else in
+  `send()` changed. The class comment says the transfer can be cancelled
+  from its row, where it said "nothing can be done with it".
+- `src/app/pages/assisted-transfer.page.ts` and
+  `src/app/pages/escrow-trade.page.ts`: one new line in each
+  `plainReason`, before its last. A reason that holds "cannot be
+  cancelled yet" reads `account.cancelNotYet` on the first page and
+  `escrow.cancelNotYet` on the second, with the proxy's
+  `lockOffsetMinutes` in words (`minutes`). While that number has not
+  loaded the line is skipped, and the refusal reads as any other does.
+  Each page injects `ConfigService` for the number; neither had it.
+  Nothing else on the two pages changed: the buttons are as they were
+  (the plan's decisions 24 and 32). The validators' waits behind the two
+  sentences are the plan's step 1 (anossoftware spec 27.2).
+- Words, English and Thai, as the plan's table 3.2 gives them. Changed:
+  `account.lockWaiting` ("... when it is written or cancelled.") and
+  `account.lockLine` (one sentence more at the end, "You can cancel it
+  until it is written."). New: `account.confirmCancelTitle`,
+  `account.confirmCancelNote(anos)`, `account.cancelNotYet(minutes)`,
+  `escrow.cancelNotYet(minutes)` and `lockedStages.cancelling`. Reused
+  as they are: `assisted.cancelTransfer`, `assisted.yesCancel`,
+  `assisted.sentCancel`, `assisted.notAllAccepted`,
+  `assisted.alreadyCancelling`, `assisted.noLongerHeldReason`,
+  `assisted.cannotCancel`, `common.back`, `common.amount`, `common.to`
+  and `common.anos`. The Thai is the planner's, built from the Thai of
+  the assisted cancel, and a Thai reader has still to check it (the
+  plan's decision 21).
+- `README.md`: the layout line of `confirm-dialog.component.ts` names
+  the cancel of a locked transfer too.
+- Unchanged: `server/`, where the proxy forwards the new path as it
+  forwards every path under `/api/anos/<n>`; `network/wallet.env`; the
+  signing service; the balances service, the Wallet page and Home, where
+  a transfer being cancelled counts as waiting out a lock until its row
+  is gone; the history page, which gets no line for a cancelled transfer
+  (the plan's decision 16).
+- Readings where the plan left a detail open. The `@if` on the stage
+  stands around the button's `div`, so no empty row is drawn in the
+  stages without the button. What is cancelled is the transfer the box
+  showed: `askCancelLocked()` takes it from `locked()` before the box
+  opens and builds the follow-up from that, since the 5-second poll goes
+  on while the box is open; when the transfer was written in the
+  meantime the validators answer that it is no longer held.
+  `cancelling` stands after `due` in `LockedStage`, in the `switch` of
+  `locked-stage.ts` and in both dictionaries, as it stands last in
+  `AssistedStage` and in `assistedStages`; the validator decides it
+  second (5.4). In `cancelRefusal` the checks stand in the order the
+  plan lists them, the wait second; in the two `plainReason` functions
+  the wait is the line before the last, as the plan says. To stay one
+  line there, the line reads the number from the configuration service
+  itself, `this.config.config()?.lockOffsetMinutes`, once to see that it
+  is a number and once to put it into words, and `cancelRefusal` has the
+  same line. The number is there by the time a refusal comes back: every
+  submission waits for `/api/config` before it posts (`write`, 8.3), so
+  the line is skipped only against a proxy that does not send the lock
+  numbers. In the file `cancelOutcome` stands after `sendOutcome`, and
+  `askCancelLocked` and `cancelRefusal` after `refusal`, before `act`.
+  The three new `account` keys stand after `waitingOutLockUntil`, in the
+  order the page uses them, `escrow.cancelNotYet` after `cannotSign`,
+  and `lockedStages.cancelling` after `due`. `LockedTransferCancelPayload`
+  has no comment of its own, as its neighbours have none. Nothing
+  differed from the plan in what the wallet does, but for the progress
+  bar of the next point.
+- Put right on the user's word of 2026-11-11 ("All three"), after the
+  first report of this build listed three places as left because the
+  plan does not name them. One: the class comment of
+  `src/app/services/anos-api.service.ts` said "The eight submissions go
+  through `write`" and says nine; one word, no code. Two: section 10
+  gained the bullet "From the locked transfer cancel plan", what the
+  plan leaves out on the wallet's side; the plan's 3.3 names only the
+  line that left the Home plan's list. Three, the one change to what
+  the page does that the plan does not have: the progress bar of a
+  cancel. As first built, the bar and "Sending…" under the Send form
+  showed while a cancel was on its way, since `act()` turns `busy` on
+  for a send and for a cancel alike and that block read `busy()`; under
+  the row nothing moved, and on a phone the Send form may be off the
+  screen by then. Asked whether the fix adds a bar or takes the other
+  one away, the user took one bar per action. In
+  `src/app/pages/account.page.ts`: the signal `cancelBusy`, which
+  `askCancelLocked()` turns on before `act(...)` and off after it; the
+  Send form's block reads `busy() && !cancelBusy()`, so it shows for a
+  send only; and after the Locked transfer section's `@if` chain, before
+  the outcome line, a `mat-progress-bar` while `cancelBusy()`, with no
+  words, as the assisted transfer page has it, so no new entry in either
+  language. The buttons stay off during a send and during a cancel, as
+  before: they still read `busy()`. `act()` is untouched; it catches
+  whatever its action throws, so `cancelBusy` always goes off again. The
+  class comment and the comment of `askCancelLocked()` say so, and 8.2
+  (Account) has the sentence.
+- Spec: 5.4 (the block of `/get-locked-transfer`: the stage list, the
+  cancel in place of "Nothing can be done with a locked transfer"), 8.2
+  (Account: the Locked transfer paragraph rewritten and two paragraphs
+  added after it, the cancel and the wait; the Send paragraph's two
+  lines; the Escrow trade and the Assisted transfer pages: the wait
+  among each cancel's refusals in words), 8.3 (the line of
+  `anos-api.service`: nine submissions, with `/locked-transfer-cancel`;
+  the line of `crypto.service`: the follow-up payloads), 8.9
+  (`cancelLabel`; three places use the box), section 10 (the cancel
+  left the Home plan's leftovers; the bullet of this plan's own
+  leftovers) and this note. The older notes above
+  stand as the record of what was built then.
+- Checked. `npx ng build` in the web_app folder: clean, 2.13 MB initial
+  (the script 2.12 MB), no warnings, and clean again with the three
+  places put right; `git status` showed this step's
+  eleven files and no others. The words: a script outside the repo read
+  the seven rows of the plan's table 3.2 and the fourteen entries in
+  `en.ts` and `th.ts`, and each entry equals the plan's cell character
+  for character. The five reasons a validator gives on this route and
+  the reason of the escrow wait were read in the validator's source at
+  becc435, and each holds the piece its line of `cancelRefusal` or
+  `plainReason` looks for. Not run in a browser here and no server was
+  started: the run-through is the user's, on the launched network (the
+  plan's section 5), and needs every validator and every doorman on the
+  new code. A guarded transfer sent from the wallet: the row reads
+  "Waiting for the validators" and has no button; once every validator
+  has accepted it the row reads "Waiting out the lock · until ..." with
+  "Cancel transfer" under it. A press at once: the box "Cancel this
+  transfer?" with Amount, To, the note and the buttons Back and "Yes,
+  cancel the transfer"; Back does nothing; yes ends in red under the
+  row, "A transfer can be cancelled 5 minutes after it is sent. Try
+  again in a few minutes." The same after the wait: a progress bar under
+  the row and none under the Send form, then "Sent. The transfer
+  is being cancelled; the anos stay in this account." in green, the row
+  reads "Being cancelled", then the row is gone, "No transfer is
+  waiting." shows and Send is free again. Against validators or doormen
+  without the route the button shows and a press ends in the refusal
+  under the row; nothing else on the page changes. The wallet goes out
+  by section 10 of `forclaude/wallet-deploy-plan-1.md`, wallet1 and then
+  wallet2, with no setting in `network/wallet.env` and no `npm ci`.
 
 ## 12. Recovery and the moderator edition
 

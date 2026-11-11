@@ -13,6 +13,7 @@ import {
   FollowUp,
   FundProposalTransaction,
   GuardianVotePayload,
+  LockedTransferCancelPayload,
   PairOne,
   StakePurpose,
   TransferToFundTransaction,
@@ -130,8 +131,8 @@ export interface HeldAssistedTransfer {
   unlocksAt: string | null;
 }
 
-/** Where a locked transfer is, as the validator names it (anossoftware spec 18.2). A word the wallet does not know is shown as held with no action. */
-export type LockedStage = 'waiting' | 'locked' | 'due';
+/** Where a locked transfer is, as the validator names it (anossoftware spec 18.2); cancelling (2026-11-11, anossoftware spec 28) is a transfer with the sender's cancel on it, which the validator decides right after waiting: the row is gone once every validator accepted the cancel. A word the wallet does not know is shown as held with no action. */
+export type LockedStage = 'waiting' | 'locked' | 'due' | 'cancelling';
 
 /** The signer's own locked transfer, as /get-locked-transfer answers it (anossoftware spec 18): a guarded or vault transfer waiting out its time lock, accountId the sender, accountIdTo the receiver, unlocksAt the moment it may be written. */
 export interface HeldLockedTransfer {
@@ -247,7 +248,7 @@ export interface FundListFilters {
  * The nine reads go through `read`: each waits at most
  * VALIDATOR_READ_TIMEOUT_MS and, with no answer, is asked again on the
  * next validator, each validator at most once per call; when none answers
- * the last failure is returned. The eight submissions go through `write`:
+ * the last failure is returned. The nine submissions go through `write`:
  * one try, no time limit, and never sent again by the wallet on its own,
  * because a submission that got no answer may still have been taken (a
  * validator knows it by its transaction id and refuses a second copy).
@@ -291,6 +292,11 @@ export class AnosApiService {
   /** POST /assisted-transfer-cancel. */
   assistedTransferCancel(followUp: FollowUp<AssistedTransferCancelPayload>): Promise<ApiResponse<Accepted>> {
     return this.write('/assisted-transfer-cancel', followUp);
+  }
+
+  /** POST /locked-transfer-cancel: the sender's cancel of a guarded or vault transfer waiting out its lock (2026-11-11, anossoftware spec 28). */
+  lockedTransferCancel(followUp: FollowUp<LockedTransferCancelPayload>): Promise<ApiResponse<Accepted>> {
+    return this.write('/locked-transfer-cancel', followUp);
   }
 
   /** POST /guardian-vote. */

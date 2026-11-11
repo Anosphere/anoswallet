@@ -8,6 +8,7 @@ import { millionthsToAnos } from '../amounts';
 import { ACCOUNT_POLL_MS } from '../constants';
 import { escrowStageWords } from '../escrow-stage';
 import { AnosApiService, EscrowItem } from '../services/anos-api.service';
+import { ConfigService } from '../services/config.service';
 import { CryptoService, EscrowSignatureType, KeyBlobLostError, PairOne } from '../services/crypto.service';
 import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
@@ -144,6 +145,7 @@ export class EscrowTradePage {
   private readonly anos = inject(AnosApiService);
   private readonly crypto = inject(CryptoService);
   private readonly signing = inject(SigningService);
+  private readonly config = inject(ConfigService);
   protected readonly lang = inject(LanguageService);
   protected readonly t = this.lang.words;
 
@@ -348,6 +350,7 @@ export class EscrowTradePage {
     if (/cancel signature is already present/.test(reason)) return words.alreadyCancelled;
     if (/dispute signature is already present/.test(reason)) return words.alreadyDisputed;
     if (/not the seller|not the buyer|neither the seller/.test(reason)) return words.cannotSign;
+    if (/cannot be cancelled yet/.test(reason) && typeof this.config.config()?.lockOffsetMinutes === 'number') return words.cancelNotYet(this.t().minutes(this.config.config()!.lockOffsetMinutes!));
     return `/escrow-signature: ${reason}`;
   }
 }
