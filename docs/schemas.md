@@ -1549,7 +1549,12 @@ title. A room's title: a public room's name; an old listing room's "Sell
 50 anos for THB" from the listing summary the masterpod sends; a private
 room's other people, the invited as "mai (invited)", or "Just you", and
 for a private room about a listing (2026-11-06) the listing's words after
-them, "somchai · Selling 100 anos for THB". The
+them, "somchai · Selling 100 anos for THB". A private room about an
+attestor case (2026-11-12, section 11) has the case's kind in words after
+its people: "attestorjoy · Assisted transfer case", or "Escrow dispute
+case", or "Recovery case". The invited mark stays, "somchai (invited) ·
+Recovery case", and with one other person the row still shows that
+person's avatar. The
 rooms are the latest /list-chat-rooms answer kept in the session, which
 the shell's 5-second poll refreshes once setup is complete; the list
 refreshes it once when it opens. "No chat keys in this tab: unlock
@@ -1704,7 +1709,13 @@ never posts about a trade.
 Requests, at /chat/requests: the invites to this pod (the inviter's
 username, then `invited you to "<the public room's name>"`, `invited you
 to a private chat` or, for a room about one of this pod's listings,
-`wants to chat about your listing Selling 100 anos for THB`; 2026-11-06),
+`wants to chat about your listing Selling 100 anos for THB`; 2026-11-06;
+for a room about an attestor case, by the case's kind, `is an attestor
+and wants to chat about your assisted transfer`, `is an attestor and
+wants to chat about your escrow dispute` or `is an attestor and wants to
+chat about your recovery`, and in the wallet of a pod that is itself an
+attestor (its role, 4.3) `invited you to a chat about a case`;
+2026-11-12, section 11),
 Accept (the room opens) and Decline; the join
 requests on the rooms this pod created (`<username> asks to join
 <title>`), Approve (the room key wrapped to the requester) and Decline;
@@ -2174,7 +2185,11 @@ excepted, with the keyholder and anos calls included.
                             masterpod 15 (2026-11-08): createDaoProposal, supportDaoProposal, voteDaoProposal,
                             listDaoProposals (with the quiet flag), getDaoProposal and listDaoVotes, with the
                             types DaoStatus, DaoListStatus, DaoSettings, DaoListFilters, DaoProposalItem,
-                            DaoProposal and DaoVoteItem
+                            DaoProposal and DaoVoteItem; the case chats (2026-11-12, section 11): the type
+                            CaseKind (trade, dispute or recovery), caseId and caseKind on RoomItem and on
+                            InviteItem (a masterpod of before sends neither, and a missing one reads as null),
+                            and a fifth optional parameter of createChatRoom, caseId, put into the body when
+                            given
     keyholder-api.service   the keyholder test app's, base path /api/keyholder/<n>
     anos-api.service        the anos test app's account-api.service.ts, base path /api/anos/<the session's
                             validator> (2026-11-10, below; /api/anos/<defaultValidator> until then),
@@ -2275,7 +2290,17 @@ excepted, with the keyholder and anos calls included.
     chat.service            what the chat pages share (2026-11-05): room keys (roomKeyOf, wrapFor), decryptMessage,
                             piecesOf, a room's title, kind, icon and other person, the order by activity, shortWhen,
                             timeOf and dayLabel, requestedRooms, refreshRooms; listingWords, a listing in a few
-                            words for a title or a request (2026-11-06)
+                            words for a title or a request (2026-11-06); the case chats (2026-11-12, section
+                            11): the title of a room about a case; caseRoomWith(caseId, anopodId), the
+                            attestor's side: the room about the case that this pod created with the person in
+                            it, a member first, else invited, and when there is none the newest room about the
+                            case that this pod created with no member but this pod and nobody invited, the
+                            room of a person who declined, else null; caseRoomsOf(caseId) and
+                            caseInvitesOf(caseId), the person's side: the rooms and the invites about the
+                            case; startCaseChat(caseId, anopodId), the Message someone flow of New chat with
+                            the case, which answers the refusal of the call that failed, else the invite's
+                            answer; inviteAgain(room, anopodId), for a person who declined: wrapFor, the
+                            invite, the rooms refreshed
     marketplace.service     what the marketplace pages share (2026-11-06): load, get, mine and close (the reads
                             and the close), sideWords, mySide and firstWords, the rooms and invites about a
                             listing out of session.chatRooms (roomsAbout, myRoomAbout, invitesAbout,
@@ -2355,9 +2380,12 @@ of the username. The profile comes from profile-cache.service (8.3), one
 header, the members panel and the chat requests; since 2026-11-06 also on
 the listing cards (24 px), the listing page (56 px), the people who
 connected and the pinned listing card (8.7), and on Home beside the
-greeting (56 px).
+greeting (56 px); since 2026-11-08 on the cards of the Vouch requests
+page (72 px) and beside the proposer on the DAO proposal page (40 px);
+since 2026-11-12 (section 11) in the person's chats about an attestor
+case on My case (8.7).
 
-### 8.7 The marketplace components
+### 8.7 The marketplace components and the case chat components
 
 Five small components (2026-11-06, section 11), under
 src/app/components/:
@@ -2402,6 +2430,37 @@ src/app/components/:
   also reads the room's messages itself for their account ids (8.2,
   Chat): the page's computed holds the ids of the newest 50 messages and
   of what arrived since, which is not the whole chat.
+
+Two more small components, for the chat on an attestor case (2026-11-12,
+section 11; the plan is forclaude/wallet-case-chats-plan-1.md), under
+src/app/components/ too:
+
+- case-chat-start.component.ts (`<app-case-chat-start [caseId] [person]
+  [open]>`): the attestor's button on the three attestor case pages
+  (13.3), under the person's facts. `person` is the profile the case page
+  has (its `anopodId` and `username`), or null, which draws nothing;
+  `open` is false on a closed case. It goes by chat.service's
+  `caseRoomWith` (8.3), live from session.chatRooms. No room: a stroked
+  Start chat, shown while `open`, which runs `startCaseChat`. A room with
+  the person invited: Open chat, a link to /chat/:chatRoomId, and the
+  muted line "somchai has not accepted the chat yet." A room with the
+  person a member: Open chat. A room the person is not in: the muted line
+  "somchai did not accept the chat." and, while `open`, Invite again,
+  which runs `inviteAgain`. Start chat and Invite again are off while one
+  of them runs and without chat keys, and then "No chat keys in this tab:
+  unlock again." shows. A refusal shows in red under the button: the
+  masterpod's `403 not an attestor` as "This anoPod is not an attestor.",
+  the rest as the masterpod says it.
+- case-chat-list.component.ts (`<app-case-chat-list [caseId]>`): the
+  person's block on My case (13.3), in the shape of
+  listing-people.component.ts. The invites to this pod into a room about
+  the case (`caseInvitesOf`): the attestor's avatar (8.6), "attestorjoy is
+  an attestor on this case and wants to chat with you", Accept, which
+  calls /accept-invite, refreshes the rooms and opens /chat/:chatRoomId,
+  and Decline. Then the rooms about the case (`caseRoomsOf`): the avatar
+  and username of the room's creator, who is the attestor, and Open chat.
+  "No attestor has started a chat with you about this case yet." when
+  both are empty. Live from session.chatRooms.
 
 ### 8.8 The languages
 
@@ -6863,6 +6922,138 @@ the doormen, the masterpod, the keyholders or the signing server.
   Mac on 2026-11-11). After it the third is clearly shorter:
   `curl -s -o /dev/null -o /dev/null -o /dev/null -w '%{time_total}\n' https://wallet.anocloud.com/api/health https://wallet.anocloud.com/api/anos/1/health https://wallet.anocloud.com/api/anos/1/health`
 
+### The case chats, step 2 (2026-11-12)
+
+Built from `forclaude/wallet-case-chats-plan-1.md` (FINAL, 2026-11-12),
+its step 2 of seven, its section 2, one commit, on top of 30b50bc. Why,
+in the user's words of 2026-11-11: "All of the cases that attestors do
+need to have a 'start chat button'. This is because at the very least,
+the attestor needs to be able to talk to the user about when to schedule
+the meeting. This button should start a private chat with that person and
+said chat should have a special name in the chat page so that the user
+knows what it's for. There should also be a button on both the case from
+the attestor's side and the user's side on the case page that can bring
+them to this chat." The masterpod's part is the plan's step 1
+(masterpodsoftware 68c35da, its spec's section 18): a private room can be
+about an attestor case, `/list-chat-rooms` says so on every room and on
+every invite, only an appointed attestor makes such a room, and it takes
+only a person on that case or an appointed attestor. This step is the
+wallet's part: the Start chat button on the three attestor case pages,
+the chat block on the person's case page, the title of such a chat and
+the wording of its request. No route, no env variable and no npm package;
+the proxy (`server/`) is not touched.
+
+- `src/app/services/masterpod-api.service.ts`: the type `CaseKind`;
+  `caseId` and `caseKind` on `RoomItem` and on `InviteItem`; the fifth
+  optional parameter `caseId` of `createChatRoom`. The two fields are
+  typed `string | null` and `CaseKind | null`. A masterpod of before
+  sends neither, and every reader compares the id with `===` or tests the
+  kind for truth, so a missing field behaves as null.
+- `src/app/services/chat.service.ts`: `title` puts the case's kind in
+  words after the people of a private room about a case; `caseRoomWith`,
+  `caseRoomsOf`, `caseInvitesOf`, `startCaseChat` and `inviteAgain`, as
+  8.3 gives them.
+- New, the two components of 8.7's last paragraph:
+  `src/app/components/case-chat-start.component.ts`
+  (`CaseChatStartComponent`) and
+  `src/app/components/case-chat-list.component.ts`
+  (`CaseChatListComponent`).
+- The pages. `attesting-trade-case.page.ts` and
+  `attesting-recovery-case.page.ts`: `<app-case-chat-start
+  [caseId]="caseId()" [person]="d.profile" [open]="!final()" />` under
+  the person's facts. `attesting-dispute-case.page.ts`: the same inside
+  each party's block, with `party.profile`. `my-case.page.ts`: the
+  heading `caseChat.title` and `<app-case-chat-list [caseId]="caseId()"
+  />`, after the kind's own part and before the timeline.
+  `chat-requests.page.ts`, `inviteText`: an invite with a `caseKind`
+  reads `chatRequests.aboutCase[caseKind]`, and `chatRequests.toCaseChat`
+  when `session.role()` is `attestor`; the rest as before. The chat list
+  and the conversation page did not change: they take the title from
+  `chat.title`.
+- The words, in both files, as the plan's table gives them:
+  `rooms.caseChat` and `chatRequests.aboutCase`, each a record by case
+  kind; `chatRequests.toCaseChat`; and a new section `caseChat` (`start`,
+  `notAccepted`, `declined`, `inviteAgain`, `title`, `wants`, `none`),
+  after `caseStatus`. Reused as they are: `common.openChat`,
+  `common.accept`, `common.decline`, `common.noChatKeysUnlock`,
+  `common.podHasNoChatKeys`, `attesting.notAttestor`. The Thai is the
+  plan's, by the glossary, for Thai readers to correct (8.8).
+- Readings where the plan left a detail open. `caseRoomWith`: the
+  masterpod does not count the chats of a case (the plan's decision 18),
+  so there can be more than one room with the person; a room with the
+  person a member then comes before one with the person invited, and
+  "newest" goes by `createdAt`. Where the button sits: on all three
+  pages the person's facts and the button are wrapped in one plain `div`
+  inside the person's block, so the button is right under the facts,
+  beside the selfie; no style of a page changed. Invite again is off
+  while a call runs and without chat keys, as Start chat is, and the "No
+  chat keys" line shows for either: the invite needs the room's key, and
+  that needs the chat keys. A refusal other than `403 not an attestor`
+  shows as `reasonOf` gives it, "HTTP 409: case closed", with no route
+  before it, since the call that failed is one of two; a thrown error
+  ("That anoPod has no chat keys (setup not complete)") shows in the same
+  red line. Start chat does not open the conversation: once the room list
+  is refreshed the button reads Open chat, with the "has not accepted"
+  line. Accept in the person's block opens the conversation, as Accept on
+  the Requests page does. A room whose invite failed after the room was
+  made holds only the attestor, so it reads as the room of a person who
+  declined, and Invite again brings the person in. In `inviteText` the
+  case is tested before the listing; a room has one or the other, never
+  both, by the masterpod's check. The component's `person` is typed
+  `Pick<Profile, 'anopodId' | 'username'> | null`, and its three inputs
+  are required. The paragraph for the two components is the last one of
+  8.7, where the small components are listed.
+- Known and left as it is. The room list comes from the shell's 5-second
+  poll (8.2). On a case page opened before the first read after an
+  unlock the list is not there yet, so Start chat shows even when a chat
+  exists, and a second chat then stands (decision 18). The plan's
+  decision 5 says the person sees the attestor's username, name and
+  selfie: the block, the request and the chat show the username and the
+  selfie (the avatar), and the first and last name are drawn nowhere in
+  the chat pages; the plan's section 2 names no place for them. New
+  chat's Message someone opens the private room that holds exactly the
+  two people when there is one (8.2); a case chat is such a room, as a
+  chat about a listing is.
+- Put right on the user's word of 2026-11-12 ("Yes, update them"), after
+  the first report of this build listed thirteen places as left because
+  the plan does not name them. Nine comments in the code and no line of
+  code: the comment of `createChatRoom` in `masterpod-api.service.ts`
+  names `caseId` too; the class comment of `ChatService` and the comment
+  of `title` in `chat.service.ts` name the chats about a case and the
+  title of one; the comment of `inviteText` in `chat-requests.page.ts`
+  gives the wording of a request about a case; the class comments of
+  `attesting-trade-case.page.ts`, `attesting-recovery-case.page.ts`,
+  `attesting-dispute-case.page.ts` and `my-case.page.ts` name the chat
+  among what the page shows; the class comment of
+  `src/app/components/avatar.component.ts` lists every place the avatar
+  is drawn, where it had named the chat's four places only. Four places
+  here: 8.6, the avatar in the person's chats about a case; the heading
+  of 8.7, which said "The marketplace components"; the summaries of the
+  four pages in 13.2; the first point of 13.6. Two of the places that 8.6
+  and the avatar's comment now name are older than this step: the Vouch
+  requests page and the DAO proposal page, both of 2026-11-08, which 8.2
+  describes and 8.6 had never listed.
+- Spec: 8.2 (Chat: the title of a room about a case; the Requests
+  wording), 8.3 (`chat.service`, `masterpod-api.service`), 8.7 (the new
+  last paragraph), 13.3 (the three attestor case pages; My case), this
+  note. README: the lines of the two components, and a line for
+  `chat.service.ts`, which had none.
+- Checked. `npx ng build` in the web_app folder: clean, no warnings
+  (2.14 MB initial). `git status` showed this step's thirteen files and
+  no others, and `src/app/components/avatar.component.ts` as the
+  fourteenth once its comment was put right. `npx ng build` after that:
+  clean, no warnings, and the script is the same file as before,
+  `main-BBMAXXTI.js`. Nothing was run in a browser and no server was
+  started.
+  Step 1 was not deployed when this was built, so nothing here was tried
+  against a masterpod that knows a case chat. The run-through is the
+  user's, on the running network (the plan's section 8): Start chat from
+  the attestor edition on a trade case, a dispute case and a recovery
+  case, the request on the person's side, Accept on the case page, the
+  title in the chat list, Open chat on both case pages. The masterpod
+  goes out first: against a masterpod of before, Start chat makes a plain
+  private chat with no case on it, which no case page finds again.
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`
@@ -7493,11 +7684,11 @@ complete.
 ### 13.2 Routes and guards
 
     /attesting                    the trades and the disputes waiting for attestors (attestor edition)
-    /attesting/trade/:caseId      one trade case: the person, the trade, the buckets, the sign-off
-    /attesting/dispute/:caseId    one dispute case: the parties, the escrow, the evidence, the verdicts
-    /attesting/recovery/:caseId   one recovery's break-glass moves: the person, the recovery case, the moves, the buckets, the sign-off (2026-11-08)
+    /attesting/trade/:caseId      one trade case: the person, the chat with the person, the trade, the buckets, the sign-off
+    /attesting/dispute/:caseId    one dispute case: the parties, the chat with each, the escrow, the evidence, the verdicts
+    /attesting/recovery/:caseId   one recovery's break-glass moves: the person, the chat with the person, the recovery case, the moves, the buckets, the sign-off (2026-11-08)
     /cases                        my cases (every edition)
-    /cases/:caseId                one of my cases: share the lookup id, upload evidence, the timeline
+    /cases/:caseId                one of my cases: share the lookup id, upload evidence, the chat with the attestor, the timeline
 
 The four Attesting pages need a session and the attestor edition
 (`attestingGuard`, the shape of `moderationGuard`); a pod that is not an
@@ -7546,7 +7737,16 @@ case (12.3). The status filter applies to this tab too.
 **Trade case** (`/attesting/trade/:caseId`), from `/get-trade-case`,
 refreshed by a button and every 15 s. Top to bottom:
 
-- The person: public selfie, username, names, the status in words.
+- The person: public selfie, username, names, the status in words. Under
+  these facts, since 2026-11-12 (section 11), the chat with the person
+  (8.7, `<app-case-chat-start>`): Start chat while the case is open or in
+  review, which makes a private room about the case (`/create-chat-room`
+  with the `caseId`, masterpod 18) and invites the person; Open chat once
+  there is one, with "somchai has not accepted the chat yet." until the
+  person accepts; "somchai did not accept the chat." and Invite again
+  when the person declined. One chat per attestor per person. The chat
+  stays when the case closes: Open chat stays, Start chat and Invite
+  again go.
 - The trade: the amount, the receiver's account id with Copy, when it was
   made (from the Trades list, cached in the service; the case answers the
   ids), the transaction id with Copy.
@@ -7588,7 +7788,9 @@ refreshed by a button and every 15 s. Top to bottom:
 `/get-dispute-case`, the same frame:
 
 - The parties: the seller and the buyer, each with selfie, username and
-  names, and which of them disputed; the status.
+  names, and which of them disputed; the status. Each party has its own
+  Start chat button under its facts, as on the trade case (2026-11-12):
+  one chat with the seller, one with the buyer.
 - The escrow: the amount (from the Disputes list, cached), the
   transaction id with Copy.
 - The case key: when `myKey` is null, "You hold no key for this case; ask
@@ -7619,7 +7821,8 @@ refreshed by a button and every 15 s. Top to bottom:
 plan 1 step 6), from `/get-break-glass-case`, refreshed by a button and
 every 15 s, the trade case's frame. Top to bottom:
 
-- The person: public selfie, username, names, the status in words.
+- The person: public selfie, username, names, the status in words; the
+  Start chat button under these facts, as on the trade case (2026-11-12).
 - The recovery: the recovery case's status in words and the moderators'
   approvals, each "username · time".
 - The moves: per move the old account with its type, the new account with
@@ -7691,6 +7894,18 @@ which wraps its content key to this case's key and posts it under
 `existing`. After the decision: "The attestors' copies have been deleted;
 your copies stay."
 
+Both kinds have, since 2026-11-12 (section 11), the heading "Chat with
+the attestor" after the kind's own part (the lookup id, the evidence) and
+before the timeline, and under it the person's chats about the case (8.7,
+`<app-case-chat-list>`): an attestor who started a chat and waits for an
+answer, "attestorjoy is an attestor on this case and wants to chat with
+you", with Accept (the conversation opens) and Decline; a chat the person
+is in, the attestor's avatar and username with Open chat; "No attestor
+has started a chat with you about this case yet." when there is neither.
+Two attestors work on a case, so a person can have two chats on one case.
+The same request shows on the Requests page of Chat (8.2), and the person
+may accept it there.
+
 ### 13.4 Services and state, new or changed
 
     attesting.service       the attestor's staked account for the session (accountId, its keyBlob opened per
@@ -7731,7 +7946,10 @@ your copies stay."
 
 ### 13.6 Out of scope, not built
 
-- Email or any message to the parties; the app is the channel.
+- Email or any message to the parties outside the app; the app is the
+  channel: the case pages, the notifications and, since 2026-11-12
+  (section 11), the chat an attestor starts with a party from the case
+  page (13.3).
 - A party deleting their evidence; evidence beyond the four content types.
 - Several validators asked at once; the lists come from the session's
   validator, as every anos call does.

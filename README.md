@@ -68,6 +68,8 @@ src/app/
   components/camera.component.ts   the camera: live preview, Take photo, a file input as the fallback
   components/note-form.component.ts   the note form under a history row: the kind, the money and the currency, the memo (spec 8.2)
   components/confirm-dialog.component.ts   the confirmation box before a send, before a new anos account and before the cancel of a locked transfer, and askConfirm (spec 8.9)
+  components/case-chat-start.component.ts   the attestor's Start chat button for the person on a case page: Start chat, Open chat, Invite again (spec 8.7, 13.3)
+  components/case-chat-list.component.ts   the person's chats with the attestors of a case, on My case: Accept, Decline, Open chat (spec 8.7, 13.3)
   pages/                   one file per route: landing, create, recover, vouching, identity, setup,
                            bucket-one, bucket-two, wallet, noted-transactions, account, account-protect, chat, marketplace, notifications, seed, log
   services/
@@ -83,6 +85,7 @@ src/app/
     log.service.ts         the activity log, and the HTTP plumbing every call goes through
     notes.service.ts      the noted transactions: the last list read, the blobs opened on the phone, add, update, remove (spec 8.2)
     settings.service.ts   the wallet settings on the masterpod, one encrypted object: the Protect your passkey answer (spec 8.2)
+    chat.service.ts       what the chat pages share: the room keys, a room's title, and the chats about an attestor case: the room, the invites, Start chat, Invite again (spec 8.3)
 docs/                      schemas.md (the spec, build notes in section 11), public-ledger-id.md, build-plan.md
 proxy.conf.json            ng serve forwards /api to the proxy
 ```

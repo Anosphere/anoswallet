@@ -10,6 +10,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { RouterLink } from '@angular/router';
 import { millionthsToAnos } from '../amounts';
+import { CaseChatStartComponent } from '../components/case-chat-start.component';
 import { CASES_POLL_MS } from '../constants';
 import { AnosApiService } from '../services/anos-api.service';
 import { AttestingService, attestingError } from '../services/attesting.service';
@@ -88,7 +89,8 @@ function accepted(result: SentResult): boolean {
 /**
  * Dispute case (wallet spec 13.3, /attesting/dispute/:caseId, the attestor
  * edition), from /get-dispute-case, refreshed by a button and every 15 s:
- * the parties and who disputed, the escrow (the amount from the Disputes
+ * the parties and who disputed, each with a Start chat button under its
+ * facts (8.7, 2026-11-12), the escrow (the amount from the Disputes
  * list cached in AttestingService), the case key (opened from myKey with the
  * session's chat keys, or asked from a holder; Share to an attestor who
  * holds none), the timeline, the evidence in two columns opened with the
@@ -103,7 +105,7 @@ function accepted(result: SentResult): boolean {
  */
 @Component({
   selector: 'app-attesting-dispute-case-page',
-  imports: [FormsModule, RouterLink, MatCardModule, MatButtonModule, MatListModule, MatIconModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatProgressBarModule],
+  imports: [FormsModule, RouterLink, MatCardModule, MatButtonModule, MatListModule, MatIconModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatProgressBarModule, CaseChatStartComponent],
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
@@ -136,11 +138,14 @@ function accepted(result: SentResult): boolean {
                 @if (party.profile?.selfie; as selfie) {
                   <img class="selfie" [src]="'data:' + selfie.contentType + ';base64,' + selfie.image" [alt]="t().sides[party.side]" />
                 }
-                <div class="facts">
-                  <div><span class="label">{{ t().common.side }}</span><span class="value">{{ t().sides[party.side] }}{{ party.disputed ? t().disputeCase.disputedTheEscrow : '' }}</span></div>
-                  <div><span class="label">{{ t().common.username }}</span><span class="value">{{ party.profile?.username ?? t().common.unknownPod }}</span></div>
-                  <div><span class="label">{{ t().common.name }}</span><span class="value">{{ party.profile?.firstName }} {{ party.profile?.lastName }}</span></div>
-                  <div><span class="label">{{ t().common.account }}</span><span class="value"><code>{{ party.accountId }}</code></span></div>
+                <div>
+                  <div class="facts">
+                    <div><span class="label">{{ t().common.side }}</span><span class="value">{{ t().sides[party.side] }}{{ party.disputed ? t().disputeCase.disputedTheEscrow : '' }}</span></div>
+                    <div><span class="label">{{ t().common.username }}</span><span class="value">{{ party.profile?.username ?? t().common.unknownPod }}</span></div>
+                    <div><span class="label">{{ t().common.name }}</span><span class="value">{{ party.profile?.firstName }} {{ party.profile?.lastName }}</span></div>
+                    <div><span class="label">{{ t().common.account }}</span><span class="value"><code>{{ party.accountId }}</code></span></div>
+                  </div>
+                  <app-case-chat-start [caseId]="caseId()" [person]="party.profile" [open]="!final()" />
                 </div>
               </div>
             }

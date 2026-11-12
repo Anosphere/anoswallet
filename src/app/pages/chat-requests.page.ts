@@ -91,8 +91,9 @@ export class ChatRequestsPage {
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
 
-  /** An invite about a listing reads "wants to chat about your listing Selling 100 anos for THB" (2026-11-06); the others as before. */
+  /** An invite about an attestor case reads, by the case's kind, "is an attestor and wants to chat about your assisted transfer", or "invited you to a chat about a case" when this pod is itself an attestor (2026-11-12); an invite about a listing reads "wants to chat about your listing Selling 100 anos for THB" (2026-11-06); the others as before. */
   protected inviteText(invite: InviteItem): string {
+    if (invite.caseKind) return this.session.role() === 'attestor' ? this.t().chatRequests.toCaseChat : this.t().chatRequests.aboutCase[invite.caseKind];
     if (invite.listing) return this.t().chatRequests.aboutListing(this.chat.listingWords(invite.listing));
     return invite.type === 'public' ? this.t().chatRequests.invitedToRoom(invite.name) : this.t().chatRequests.invitedPrivate;
   }

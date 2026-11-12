@@ -10,6 +10,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { RouterLink } from '@angular/router';
 import { millionthsToAnos } from '../amounts';
+import { CaseChatStartComponent } from '../components/case-chat-start.component';
 import { CASES_POLL_MS } from '../constants';
 import { AnosApiService, AssistedTransferItem } from '../services/anos-api.service';
 import { AttestingService, attestingError } from '../services/attesting.service';
@@ -125,7 +126,8 @@ function storedAttestations(events: CaseEvent[]): StoredAttestation[] {
  * Recovery case (wallet spec 13.3, /attesting/recovery/:caseId, the attestor
  * edition, break-glass plan 1 step 6, 2026-11-08), from
  * /get-break-glass-case, refreshed by a button and every 15 s, in the shape
- * of the trade case page: the person with the selfie; the recovery case's
+ * of the trade case page: the person with the selfie and, under the facts,
+ * the Start chat button (8.7, 2026-11-12); the recovery case's
  * status and its two moderator approvals; the moves (old account, new
  * account, type, and what the session's validator's /list-assisted-transfers
  * lists for each, matched by transaction id: the amount, when, the
@@ -142,7 +144,7 @@ function storedAttestations(events: CaseEvent[]): StoredAttestation[] {
  */
 @Component({
   selector: 'app-attesting-recovery-case-page',
-  imports: [FormsModule, RouterLink, MatCardModule, MatButtonModule, MatListModule, MatIconModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatProgressBarModule],
+  imports: [FormsModule, RouterLink, MatCardModule, MatButtonModule, MatListModule, MatIconModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatProgressBarModule, CaseChatStartComponent],
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
@@ -173,10 +175,13 @@ function storedAttestations(events: CaseEvent[]): StoredAttestation[] {
             @if (d.profile?.selfie; as selfie) {
               <img class="selfie" [src]="'data:' + selfie.contentType + ';base64,' + selfie.image" [alt]="t().common.publicSelfie" />
             }
-            <div class="facts">
-              <div><span class="label">{{ t().common.username }}</span><span class="value">{{ d.profile?.username ?? t().common.unknownPod }}</span></div>
-              <div><span class="label">{{ t().common.name }}</span><span class="value">{{ d.profile?.firstName }} {{ d.profile?.lastName }}</span></div>
-              <div><span class="label">{{ t().common.status }}</span><span class="value">{{ t().common.statusOpened(t().caseStatus[d.case.status] ?? d.case.status, lang.dateTime(d.case.createdAt)) }}</span></div>
+            <div>
+              <div class="facts">
+                <div><span class="label">{{ t().common.username }}</span><span class="value">{{ d.profile?.username ?? t().common.unknownPod }}</span></div>
+                <div><span class="label">{{ t().common.name }}</span><span class="value">{{ d.profile?.firstName }} {{ d.profile?.lastName }}</span></div>
+                <div><span class="label">{{ t().common.status }}</span><span class="value">{{ t().common.statusOpened(t().caseStatus[d.case.status] ?? d.case.status, lang.dateTime(d.case.createdAt)) }}</span></div>
+              </div>
+              <app-case-chat-start [caseId]="caseId()" [person]="d.profile" [open]="!final()" />
             </div>
           </div>
 

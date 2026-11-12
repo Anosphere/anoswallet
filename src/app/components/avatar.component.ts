@@ -6,7 +6,11 @@ import { ProfileCacheService } from '../services/profile-cache.service';
  * one, else a round disc in the primary-container colour with the first
  * letter of the username. The profile comes from ProfileCacheService, one
  * read per pod per tab. In the chat list, the conversation header, the
- * members panel and the chat requests.
+ * members panel and the chat requests; since 2026-11-06 on the listing
+ * cards, the listing page, the people who connected, the pinned listing
+ * card and Home; since 2026-11-08 on the Vouch requests page and the DAO
+ * proposal page; since 2026-11-12 in the person's chats about a case, on
+ * My case.
  */
 @Component({
   selector: 'app-avatar',

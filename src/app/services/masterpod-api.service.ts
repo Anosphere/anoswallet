@@ -205,6 +205,9 @@ export interface RoomListing {
   owner: RoomMember;
 }
 
+/** The kind of attestor case a chat room is about, as /list-chat-rooms gives it (2026-11-12): an assisted transfer case, an escrow dispute case or a recovery case. */
+export type CaseKind = 'trade' | 'dispute' | 'recovery';
+
 export interface RoomItem {
   chatRoomId: string;
   type: 'private' | 'public' | 'marketplace';
@@ -212,6 +215,9 @@ export interface RoomItem {
   listingId: string | null;
   /** The listing the room is about (an old marketplace room, or a private room made with a listingId), null for the others. */
   listing: RoomListing | null;
+  /** The attestor case the room is about (a private room made with a caseId) and its kind, null for the others (2026-11-12). A masterpod of before sends neither field: a missing one reads as null. */
+  caseId: string | null;
+  caseKind: CaseKind | null;
   creatorAnopodId: string;
   hpkeKey: string;
   members: RoomMember[];
@@ -231,6 +237,9 @@ export interface InviteItem {
   /** The listing the room is about, null for a room without one (2026-11-06). */
   listingId: string | null;
   listing: RoomListing | null;
+  /** The attestor case the room is about and its kind, null for a room without one (2026-11-12). A masterpod of before sends neither field: a missing one reads as null. */
+  caseId: string | null;
+  caseKind: CaseKind | null;
   from: Profile;
   createdAt: string;
 }
@@ -845,10 +854,11 @@ export class MasterpodApiService {
 
   // --- level setup: chat --------------------------------------------------
 
-  /** A room; `listingId` makes a private room about that listing (2026-11-06). */
-  createChatRoom(type: 'private' | 'public', name: string | undefined, hpkeKey: string, listingId?: string): Promise<ApiResponse<{ chatRoomId: string }>> {
+  /** A room; `listingId` makes a private room about that listing (2026-11-06), `caseId` a private room about that attestor case, which only an appointed attestor can make (2026-11-12). */
+  createChatRoom(type: 'private' | 'public', name: string | undefined, hpkeKey: string, listingId?: string, caseId?: string): Promise<ApiResponse<{ chatRoomId: string }>> {
     const body: Record<string, unknown> = type === 'public' ? { type, name, hpkeKey } : { type, hpkeKey };
     if (listingId !== undefined) body['listingId'] = listingId;
+    if (caseId !== undefined) body['caseId'] = caseId;
     return this.signed('/create-chat-room', body);
   }
 

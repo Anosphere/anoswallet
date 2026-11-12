@@ -5,6 +5,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatListModule } from '@angular/material/list';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { RouterLink } from '@angular/router';
+import { CaseChatListComponent } from '../components/case-chat-list.component';
 import { CASES_POLL_MS } from '../constants';
 import { CryptoService } from '../services/crypto.service';
 import { LanguageService } from '../services/language.service';
@@ -55,11 +56,13 @@ interface Outcome {
  * aad), posted to /add-dispute-evidence; the person's files opened with
  * keyForMe; Supply again on a file of theirs from another case (the other
  * cases' /get-my-case answers, cached for the page), which wraps its
- * content key to this case's key and posts it under existing.
+ * content key to this case's key and posts it under existing. Both kinds,
+ * since 2026-11-12: "Chat with the attestor" and the person's chats about
+ * the case (8.7), after the kind's own part and above the timeline.
  */
 @Component({
   selector: 'app-my-case-page',
-  imports: [RouterLink, MatCardModule, MatButtonModule, MatIconModule, MatListModule, MatProgressBarModule],
+  imports: [RouterLink, MatCardModule, MatButtonModule, MatIconModule, MatListModule, MatProgressBarModule, CaseChatListComponent],
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
@@ -159,6 +162,9 @@ interface Outcome {
               </div>
             }
           }
+
+          <h3>{{ t().caseChat.title }}</h3>
+          <app-case-chat-list [caseId]="caseId()" />
 
           <h3>{{ t().common.timeline }}</h3>
           @if (timeline().length === 0) {

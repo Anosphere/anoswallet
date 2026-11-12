@@ -617,6 +617,12 @@ export const th: Words = {
     noRequests: 'ไม่มีคำขอ',
     invitesTitle: 'คำเชิญถึงคุณ',
     aboutListing: (words: string) => `ต้องการแชทเกี่ยวกับประกาศของคุณ ${words}`,
+    aboutCase: {
+      trade: 'เป็นผู้ยืนยันและต้องการแชทเกี่ยวกับการโอนแบบมีผู้ยืนยันของคุณ',
+      dispute: 'เป็นผู้ยืนยันและต้องการแชทเกี่ยวกับข้อพิพาทเอสโครว์ของคุณ',
+      recovery: 'เป็นผู้ยืนยันและต้องการแชทเกี่ยวกับการกู้คืนของคุณ',
+    },
+    toCaseChat: 'เชิญคุณเข้าร่วมแชทเกี่ยวกับเคส',
     invitedToRoom: (name: string | null) => `เชิญคุณเข้าร่วม "${name}"`,
     invitedPrivate: 'เชิญคุณเข้าร่วมแชทส่วนตัว',
     none: 'ไม่มี',
@@ -651,6 +657,7 @@ export const th: Words = {
     justYou: 'คุณคนเดียว',
     selling: (anos: string, currency: string) => `ขาย ${anos} anos รับ ${currency}`,
     buying: (anos: string, currency: string) => `ซื้อ ${anos} anos ด้วย ${currency}`,
+    caseChat: { trade: 'เคสการโอนแบบมีผู้ยืนยัน', dispute: 'เคสข้อพิพาทเอสโครว์', recovery: 'เคสการกู้คืน' },
   },
   marketplace: {
     sorts: { newest: 'ใหม่สุด', priceLow: 'ราคาต่ำไปสูง', priceHigh: 'ราคาสูงไปต่ำ' },
@@ -1025,6 +1032,15 @@ export const th: Words = {
     eventSent: 'คำตัดสินถูกส่งไปยังผู้ตรวจสอบแล้ว',
   },
   caseStatus: { open: 'เปิดอยู่', inReview: 'กำลังตรวจสอบ', decided: 'ตัดสินแล้ว', dismissed: 'ถูกยกคำร้อง' },
+  caseChat: {
+    start: 'เริ่มแชท',
+    notAccepted: (username: string) => `${username} ยังไม่ได้ยอมรับแชท`,
+    declined: (username: string) => `${username} ไม่ได้ยอมรับแชท`,
+    inviteAgain: 'เชิญอีกครั้ง',
+    title: 'แชทกับผู้ยืนยัน',
+    wants: 'เป็นผู้ยืนยันของเคสนี้และต้องการแชทกับคุณ',
+    none: 'ยังไม่มีผู้ยืนยันเริ่มแชทกับคุณเกี่ยวกับเคสนี้',
+  },
   moderation: {
     title: 'การดูแล',
     subtitle: 'เคสกู้คืน เปิดเคสเพื่อนัดหมายการโทร อ่าน bucket และลงนามรับรอง',

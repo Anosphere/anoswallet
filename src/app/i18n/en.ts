@@ -611,6 +611,12 @@ export const en = {
     noRequests: 'No requests.',
     invitesTitle: 'Invites to you',
     aboutListing: (words: string) => `wants to chat about your listing ${words}`,
+    aboutCase: {
+      trade: 'is an attestor and wants to chat about your assisted transfer',
+      dispute: 'is an attestor and wants to chat about your escrow dispute',
+      recovery: 'is an attestor and wants to chat about your recovery',
+    },
+    toCaseChat: 'invited you to a chat about a case',
     invitedToRoom: (name: string | null) => `invited you to "${name}"`,
     invitedPrivate: 'invited you to a private chat',
     none: 'None.',
@@ -645,6 +651,7 @@ export const en = {
     justYou: 'Just you',
     selling: (anos: string, currency: string) => `Selling ${anos} anos for ${currency}`,
     buying: (anos: string, currency: string) => `Buying ${anos} anos for ${currency}`,
+    caseChat: { trade: 'Assisted transfer case', dispute: 'Escrow dispute case', recovery: 'Recovery case' },
   },
   marketplace: {
     sorts: { newest: 'Newest', priceLow: 'Price low to high', priceHigh: 'Price high to low' },
@@ -1024,6 +1031,15 @@ export const en = {
     eventSent: 'The decision was sent to the validators',
   },
   caseStatus: { open: 'Open', inReview: 'In review', decided: 'Decided', dismissed: 'Dismissed' } as Record<string, string>,
+  caseChat: {
+    start: 'Start chat',
+    notAccepted: (username: string) => `${username} has not accepted the chat yet.`,
+    declined: (username: string) => `${username} did not accept the chat.`,
+    inviteAgain: 'Invite again',
+    title: 'Chat with the attestor',
+    wants: 'is an attestor on this case and wants to chat with you',
+    none: 'No attestor has started a chat with you about this case yet.',
+  },
   moderation: {
     title: 'Moderation',
     subtitle: 'The recovery cases. Open one to schedule the call, read the buckets and sign off.',
