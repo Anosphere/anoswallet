@@ -99,6 +99,33 @@ export interface MoveState {
  * total and no poll, and the pickers leave it out (usableAccounts); the
  * break-glass moves of the lost accounts are read with the balances
  * (moves, moveOf).
+ *
+ * Two reads (2026-11-11; the plan is forclaude/wallet-speed-plan-1.md).
+ * refresh is the full read: every account of the session. poll is one
+ * round of the 5-second read the two pages make while needsPoll, and it
+ * reads the watched accounts only: the session's accounts that are not
+ * lost and have no entry yet, an entry that is not on the ledger, or
+ * anos held or pending, which is the test needsPoll makes, per account.
+ * Until then a round was a full read, so one open trade on one account
+ * made the page read every account every 5 seconds. A round runs under
+ * busy, as a full read does, and returns at once while a read runs; with
+ * no watched account it reads nothing; for another pod than the one last
+ * read it is a quiet full read. After the reads of a round a full read
+ * follows in two cases. One: the round changed landed, balance or held
+ * in a watched account's entry, and the session has an account that is
+ * not lost and was not read in the round; so a move between two of the
+ * person's own accounts does not leave the total short for longer than
+ * about one round. Two: a full read was asked for while the round ran.
+ * refresh leaves word when it finds a round running, where it returns
+ * when it finds another full read running, and the round runs that read
+ * when it ends, quiet only when every refresh that left word was quiet.
+ * Otherwise the round ends as a full read ends: the lost accounts' moves
+ * when an account is lost, then readAt. While something is held on one
+ * account, the other accounts are not read again by themselves: anos
+ * that arrive on them show when Home or the Wallet page is next opened,
+ * or with the card's refresh button, as it already is when nothing is
+ * held. An account whose creation was never finished stays not on the
+ * ledger, so it is still read every 5 seconds, alone now.
  */
 @Injectable({ providedIn: 'root' })
 export class BalancesService {
@@ -110,15 +137,19 @@ export class BalancesService {
 
   /** The entries by account id. */
   readonly byAccount = signal<Record<string, AccountBalance>>({});
-  /** The lost accounts' break-glass moves by the old account's id, from /list-my-break-glass-moves (masterpod 14.4.1), read by refresh while an account is lost. */
+  /** The lost accounts' break-glass moves by the old account's id, from /list-my-break-glass-moves (masterpod 14.4.1), read by refresh, and by a poll round at its end, while an account is lost. */
   readonly moves = signal<Record<string, MoveState>>({});
-  /** True while a refresh runs. */
+  /** True while a read runs: a refresh or a poll round. */
   readonly busy = signal(false);
-  /** When the last refresh finished; null until one has. */
+  /** When the last read finished, a refresh or a poll round; null until one has. */
   readonly readAt = signal<string | null>(null);
 
   /** The pod whose accounts were last read, so another pod's entries are cleared first. */
   private readPod: string | null = null;
+  /** True while a poll round runs, from its reads to its end (poll). */
+  private polling = false;
+  /** The word a refresh leaves when it finds a poll round running: null while none did, else whether the full read the round runs when it ends is quiet, which it is only when every refresh that left word was. */
+  private fullAsked: boolean | null = null;
 
   /** The sums over the landed accounts of session.accounts(), and the counts of the others; a lost account, and an entry for an account no longer in the session, does not count. */
   readonly totals = computed<Totals>(() => {
@@ -201,9 +232,15 @@ export class BalancesService {
    * Reads every account of the session at the same time and replaces its
    * entry, then the lost accounts' moves when there is a lost account;
    * returns at once while a refresh runs. Another pod than the one last
-   * read clears the entries first.
+   * read clears the entries first. While a poll round runs (2026-11-11)
+   * it leaves word and returns, and the round runs this read when it ends
+   * (poll), quiet only when every refresh that left word was quiet.
    */
   async refresh(quiet = false): Promise<void> {
+    if (this.polling) {
+      this.fullAsked = (this.fullAsked ?? true) && quiet;
+      return;
+    }
     if (this.busy()) return;
     this.busy.set(true);
     try {
@@ -220,6 +257,54 @@ export class BalancesService {
     } finally {
       this.busy.set(false);
     }
+  }
+
+  /**
+   * One round of the 5-second read (2026-11-11), which Home and the Wallet
+   * page make while needsPoll: the watched accounts only, read at the same
+   * time and quietly, under busy. Watched are the session's accounts that
+   * are not lost and have no entry yet, an entry that is not on the
+   * ledger, or anos held or pending (isWatched); with none nothing is
+   * read. Returns at once while a read runs, as refresh does. For another
+   * pod than the one last read the round is a quiet refresh. After the
+   * reads a full read follows, a refresh, in two cases: the round changed
+   * landed, balance or held in a watched account's entry (entryChanged)
+   * and the session has an account that is not lost and was not read in
+   * the round; or a refresh left word while the round ran, and then the
+   * read is quiet only when every such refresh was. Otherwise the round
+   * ends as a refresh ends: the lost accounts' moves when an account is
+   * lost, then readAt.
+   */
+  async poll(): Promise<void> {
+    if (this.busy()) return;
+    if (this.session.anopodId() !== this.readPod) {
+      await this.refresh(true);
+      return;
+    }
+    const before = this.byAccount();
+    const accounts = this.session.accounts();
+    const watched = accounts.filter((a) => isWatched(before[a.accountId]));
+    if (watched.length === 0) return;
+    let full: boolean | null = null;
+    this.busy.set(true);
+    this.polling = true;
+    try {
+      await Promise.all(watched.map((item) => this.readOne(item, true)));
+      const after = this.byAccount();
+      const changed = watched.some((a) => entryChanged(before[a.accountId], after[a.accountId]));
+      const others = accounts.some((a) => !watched.includes(a) && !this.isLost(a.accountId));
+      if (!(changed && others) && this.fullAsked === null) {
+        if (accounts.some((a) => this.isLost(a.accountId))) await this.loadMoves(true);
+        this.readAt.set(new Date().toISOString());
+      }
+      // Word may have been left during the moves' read too, so it is looked at last.
+      if ((changed && others) || this.fullAsked !== null) full = this.fullAsked ?? true;
+    } finally {
+      this.polling = false;
+      this.fullAsked = null;
+      this.busy.set(false);
+    }
+    if (full !== null) await this.refresh(full);
   }
 
   /**
@@ -329,6 +414,16 @@ export class BalancesService {
       return false;
     }
   }
+}
+
+/** True for the entry of an account a poll round reads (2026-11-11): no entry yet, an entry that is not on the ledger, or anos held or pending, and never a lost one. It is the test needsPoll makes, for one account. */
+function isWatched(entry: AccountBalance | undefined): boolean {
+  return !entry?.lost && (!entry?.landed || entry.held > 0n);
+}
+
+/** True when a poll round's read changed landed, balance or held in an account's entry (2026-11-11): the account landed, its balance moved or its held amount changed. No entry before the read counts as not landed with nothing held. */
+function entryChanged(before: AccountBalance | undefined, after: AccountBalance | undefined): boolean {
+  return (before?.landed ?? false) !== (after?.landed ?? false) || (before?.balance ?? null) !== (after?.balance ?? null) || (before?.held ?? 0n) !== (after?.held ?? 0n);
 }
 
 /** The stakes of a /get-account answer as the entry keeps them: the purposes above zero, in millionths; empty when the answer has no stakes (a validator without the field). */

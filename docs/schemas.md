@@ -949,9 +949,13 @@ and Log, with the entry's icon and label, Chat and Notifications
 carrying their unread counts at the top right, drawn from the same list
 as the side panel (navigation.service, 8.3). On open /list-anos-accounts
 (quiet) fills the session's accounts, a refusal in red, then the
-balances are read; every 5 seconds they are read again while an account
-is not on the ledger yet or any anos are held or pending, as the Wallet
-page does. Beside the accounts, /list-dao-proposals { status: 'open',
+balances are read; every 5 seconds while an account is not on the ledger
+yet or any anos are held or pending, those accounts are read again, the
+ones that are not on the ledger yet and the ones with anos held or
+pending, and every account once when one of them changed, as the Wallet
+page does (2026-11-11, section 11; until then every account was read
+again every 5 seconds). Beside the accounts, /list-dao-proposals {
+status: 'open',
 limit: 100 } (quiet) counts the proposals with yourWeight at least 1 and
 no vote of this pod for the open-votes line, and /list-fund-proposals {
 status: 'open' } (quiet) brings the open fund proposal for the fund line,
@@ -1012,10 +1016,21 @@ history lists the move, "The attestors dismissed the move". The card's
 footer: the id in short form ("a1b2c3d4…e5f6",
 the first 8 and the last 4 characters), a copy button (8.5) with the
 full id, and Resubmit on an unsubmitted account. The balances are read
-when the page opens, by the card's refresh button, by Refresh (which
-reloads the account list too) and every 5 seconds while an account is
-not on the ledger yet or any anos are held or pending; quiet in the log,
-as the polls are. Then "Open a new account": a type select (spending,
+when the page opens, by the card's refresh button and by Refresh (which
+reloads the account list too): every account. Every 5 seconds while an
+account is not on the ledger yet or any anos are held or pending, the
+watched accounts are read again, quiet in the log, as the polls are: the
+accounts that are not on the ledger yet and the ones with anos held or
+pending (2026-11-11, section 11; balances.service's poll, 8.3; until
+then every account was read again every 5 seconds). When such a round
+changed a watched account (it landed, its balance moved or its held
+amount changed), every account is read once, so a move between two of
+the person's own accounts does not leave the total short for longer than
+about one round. While something is held on one account, the other
+accounts are not read again by themselves: anos that arrive on them show
+when Home or the Wallet page is next opened, or with the card's refresh
+button, as it already is when nothing is held. Then "Open a new
+account": a type select (spending,
 guarded, vault, assisted) and Create anos account, which first asks in
 the confirmation box (8.9; 2026-11-10, section 11): the title "Open a new
 spending account?", with the type from the select, the line "The account
@@ -2207,7 +2222,21 @@ excepted, with the keyholder and anos calls included.
                             poll, isLost and usableAccounts tell the pages and the pickers, markLost tries every
                             keyBlob whenever the account list changes, and the lost accounts' break-glass moves
                             (moves, moveOf, loadMoves over /list-my-break-glass-moves and the new account's
-                            history) are read with the balances
+                            history) are read with the balances; since 2026-11-11 (section 11) two reads:
+                            refresh(quiet), the full read, every account, and poll(), one round of the 5-second
+                            read Home and the Wallet page make while needsPoll, which reads the watched accounts
+                            only (the session's accounts that are not lost and have no entry yet, an entry that
+                            is not on the ledger, or anos held or pending: needsPoll's test, per account), at
+                            the same time, quietly and under busy; a round returns at once while a read runs,
+                            reads nothing with no watched account, and is a quiet refresh for another pod than
+                            the one last read; after a round's reads a full read follows in two cases: the round
+                            changed landed, balance or held in a watched account's entry and the session has an
+                            account that is not lost and was not read in the round (a move between two of the
+                            person's own accounts), or a full read was asked for during the round: refresh
+                            leaves word when it finds a round running, where it returns when it finds another
+                            refresh running, and the round runs that read when it ends, quiet only when every
+                            refresh that left word was quiet; otherwise the round ends as refresh ends, the lost
+                            accounts' moves when an account is lost, then readAt
     balance-sheet.component not a service: the component the balance card opens with MatBottomSheet
                             (2026-11-10; components/balance-sheet.component.ts, `BalanceSheetComponent`, the
                             data { kind }: available, staked, escrow or sending), listed here because it reads
@@ -6496,6 +6525,155 @@ early. No route of the proxy, no setting, no npm package.
   under the row; nothing else on the page changes. The wallet goes out
   by section 10 of `forclaude/wallet-deploy-plan-1.md`, wallet1 and then
   wallet2, with no setting in `network/wallet.env` and no `npm ci`.
+
+### The 5-second balance read takes only the watched accounts (2026-11-11)
+
+Built from `forclaude/wallet-speed-plan-1.md` (FINAL), its step 1 of
+two, its section 1, one commit, on top of 0cfb88c. Why, in the user's
+words of 2026-11-11: "I'm also trying to figure out why sometimes the
+site starts moving soooo slow." And, of this cure: "What about keeping
+connections open and the re read only if an account has something?"
+Home and the Wallet page read the balances again every 5 seconds while
+an account is not on the ledger yet or any anos are held or pending, and
+that read took every account of the session: three signed reads per
+account, four on an assisted, a guarded or a vault one. So one open
+trade on one account made the page read every account every 5 seconds.
+With ten accounts that is 30 to 40 calls a round, each signed in the
+browser on the page's own thread: about 0.35 to 0.45 seconds of signing
+a round on the user's M4 Mac (a phone was not measured). Now a round
+reads only the watched accounts: the ones that are not on the ledger
+yet, and the ones with anos held or pending. The change is in the
+browser's code only. There is no route, no proxy change, no env
+variable, no npm package and no new word in either language, and
+nothing changes on the validators, the doormen, the masterpod, the
+keyholders or the signing server. A send never used these entries: the
+account page and the listing card read `/get-account` fresh right before
+they build a transfer. So this changes what is shown, never what is
+sent. Step 2 of the plan, the proxy's connections to the validators, is
+not built with it.
+
+- `src/app/services/balances.service.ts`: `poll()`, public and new, one
+  round of the 5-second read. It returns at once while a read runs
+  (`busy`), as `refresh` does. When the pod is not the one last read,
+  the round is `refresh(true)`. The watched accounts are the session's
+  accounts that are not lost and have no entry yet, an entry that is not
+  landed, or an entry whose `held` is above zero: the test `needsPoll`
+  makes, for one account (`isWatched`, a function under the class). With
+  no watched account nothing is read and nothing is set. Otherwise the
+  watched accounts are read at the same time with `readOne(item, true)`,
+  under `busy`, as `refresh` reads every account. After the reads a full
+  read follows, `refresh`, in two cases. One: the round changed
+  `landed`, `balance` or `held` in a watched account's entry
+  (`entryChanged`, a function under the class), and the session has an
+  account that is not lost and was not read in the round. Two: a full
+  read was asked for during the round. Otherwise the round ends as
+  `refresh` ends: `loadMoves(true)` when an account is lost, then
+  `readAt`.
+- The same file, `refresh(quiet)`: one change, its first lines. When it
+  finds a poll round running (the private field `polling`), it leaves
+  word (the private field `fullAsked`) and returns, and the round runs
+  that read when it ends. The read is quiet only when every `refresh`
+  that left word during the round was quiet. When it finds another
+  `refresh` running it returns, as before. `needsPoll`, `readOne`, the
+  totals, `usableAccounts`, `markLost` and `loadMoves` are unchanged.
+  The class comment has a second paragraph that says all this, and the
+  comment of `refresh` names the word it leaves.
+- `src/app/pages/home.page.ts` and `src/app/pages/wallet.page.ts`: in
+  the constructor's timer, `void this.balances.refresh(true)` became
+  `void this.balances.poll()`. The condition in front of it is as it
+  was, and the comment over the timer says which accounts are read
+  again. Nothing else in the two pages changed, but for their class
+  comments (the point "Put right" below).
+- Unchanged: the pages' `load`, the card's refresh button, the Wallet
+  page's Refresh and `src/app/services/account-creation.service.ts`,
+  which keep calling `refresh`, the full read; the account page, which
+  reads its one account by itself; the marketplace chat's listing card,
+  which keeps its own 5-second check (the plan's decision 4); `server/`.
+- Accepted by the plan. Its decision 7: while something is held on one
+  account, the other accounts are not read again by themselves. Anos
+  that arrive on them show when Home or the Wallet page is next opened,
+  or with the refresh button on the card. That is how it already was
+  when nothing is held. Its decision 10: an account whose creation was
+  never finished stays "not on the ledger yet", so `needsPoll` stays
+  true for good and that account is still read every 5 seconds, alone
+  now. Out of the plan: the listing card's check; a slower read of the
+  other accounts during a hold; leaving an unfinished account out of the
+  round.
+- Readings where the plan left a detail open. "Changed" compares a
+  watched account's entry before the round with its entry after it, in
+  `landed`, `balance` and `held`. An account with no entry before the
+  round counts as not landed with nothing held, so an account that is
+  still not on the ledger did not change. A watched account whose read
+  fails in a round (no validator answered) goes from landed to not
+  landed. That is a change by the plan's rule, so a full read follows,
+  and one more when the account reads well again; until this build every
+  round was a full read. The full read after a changed round is quiet,
+  as the round is. When word was left, the word decides, also when the
+  round changed something as well. The word is looked at last, after the
+  moves: a `refresh` that arrives while the round reads the lost
+  accounts' moves is not dropped either; the round has ended as a round
+  ends by then, and the full read follows. A `refresh` that leaves word
+  returns at once and does not wait for the read, as a `refresh` that
+  finds another one running returns at once; no caller needs the read to
+  be done when `refresh` returns. The round takes the session's account
+  list once, at its start, as `refresh` does: the watched accounts, "not
+  read in the round" and "an account is lost" all go by that list. An
+  account that joins the session during a round has no entry, so the
+  next round reads it; the pages' `load` and the account creation
+  service also call `refresh` right after they set the list, which
+  leaves word. Between a round and the full read that
+  follows it, `busy` goes off and on again in one go, with nothing able
+  to run in between, so the card's refresh button does not flicker.
+  During that full read no round is running, so a `refresh` that arrives
+  then returns, as during any full read. In the file `polling` and
+  `fullAsked` stand after `readPod`, `poll()` after `refresh`, and
+  `isWatched` and `entryChanged` under the class, before `stakesOf`.
+- Put right on the user's word of 2026-11-11 ("Yes, update them"),
+  after the first report of this build listed five comments as left
+  because the plan names the service's class comment and the comment
+  over each timer and no other. In `balances.service.ts` the one-line
+  comments of three fields spoke of a refresh only: `busy` is true while
+  a read runs, a refresh or a poll round; `readAt` is when the last
+  read finished, a refresh or a poll round; `moves` are read by
+  `refresh`, and by a poll round at its end, while an account is lost.
+  The class comments of `home.page.ts` and `wallet.page.ts` said that
+  the balances are read again every 5 seconds, and now say which
+  accounts are, in the words of the comment over each timer. Comments
+  only, no line of code.
+- Spec: 8.2 (Home: the sentence on the 5-second read; Wallet: the
+  sentence on when the balances are read, and the sentences after it),
+  8.3 (the line of `balances.service`) and this note. README: nothing,
+  it does not speak of this read. The older notes above stand as the
+  record of what was built then.
+- Checked. `npx ng build` in the web_app folder: clean, 2.13 MB initial
+  (the script 2.12 MB), no warnings, and clean again with the five
+  comments put right, the script the same file as before; `git status`
+  showed this step's four files and no others. The cases of a round were
+  run once outside
+  the repo and nothing of it is kept: the service's file as it is,
+  bundled with stand-ins for Angular and for the services it calls,
+  against a made-up ledger, with no server. A round read only the
+  account with a pending transfer, quietly, and set `readAt`. When that
+  transfer was written, the round was followed by one quiet read of
+  every account, the total was right and `needsPoll` went off. With one
+  account only, a change was followed by no second read. A `refresh`
+  during a round read nothing itself, and one full read followed the
+  round, loud when one of the askers was loud and quiet when all were. A
+  `refresh` during the moves at the round's end was followed by a full
+  read too. A lost account was not opened or read in a round, and its
+  moves were read at the round's end. An account not on the ledger was
+  read alone, round after round, and every account once when it landed.
+  A watched account whose read failed was followed by a full read, and
+  by one more when it read well again. Another pod than the one last
+  read made the round a full read. A round during a full read, and a
+  `refresh` during a full read, read nothing. Not run in a
+  browser here and no server was started: the run-through is the user's,
+  after the deploy (the plan's section 3; only the wallet has something
+  to deploy, wallet1 and then wallet2). With two or more accounts and an
+  open escrow trade on one of them, the browser's network list on Home
+  shows three or four calls to `/api/anos/<n>/` every 5 seconds, not
+  three or four per account. Then a send from one own account to
+  another: once it lands, the total on Home is right within two rounds.
 
 ## 12. Recovery and the moderator edition
 

@@ -34,9 +34,12 @@ interface TodoLine {
  * and Log, drawn from navigation.service so the two cannot drift apart,
  * Chat and Notifications carrying their unread counts. On open the
  * accounts are listed (/list-anos-accounts, quiet) into the session and
- * the balances read; every 5 seconds they are read again while an account
- * is not on the ledger yet or any anos are held or pending, as the Wallet
- * page does. Beside the accounts the open DAO proposals are listed
+ * the balances read; every 5 seconds while an account is not on the
+ * ledger yet or any anos are held or pending, those accounts are read
+ * again, the ones not on the ledger yet and the ones with anos held or
+ * pending, and every account once when one of them changed
+ * (balances.service's poll, 2026-11-11), as the Wallet page does. Beside
+ * the accounts the open DAO proposals are listed
  * (quiet) for the line "2 proposals open for your vote" (2026-11-08), and
  * the open fund proposal (/list-fund-proposals, quiet) for the line "A fund
  * proposal is open for your vote", shown while one of the pod's guardian
@@ -153,10 +156,13 @@ export class HomePage {
 
   constructor() {
     void this.load();
-    // The balances are read again every 5 seconds while an account is not
-    // on the ledger yet or any anos are held or pending, as the Wallet page does.
+    // Every 5 seconds while an account is not on the ledger yet or any anos
+    // are held or pending, those accounts are read again: the ones that are
+    // not on the ledger yet and the ones with anos held or pending, and every
+    // account once when one of them changed (balances.service, poll;
+    // 2026-11-11), as the Wallet page does.
     const timer = setInterval(() => {
-      if (this.balances.needsPoll() && !this.balances.busy()) void this.balances.refresh(true);
+      if (this.balances.needsPoll() && !this.balances.busy()) void this.balances.poll();
     }, ACCOUNT_POLL_MS);
     inject(DestroyRef).onDestroy(() => clearInterval(timer));
   }
