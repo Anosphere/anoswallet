@@ -27,8 +27,12 @@ export interface RecoveryPodAnswer {
   caseId: string;
   status: CaseStatus;
   username: string | null;
-  contactEmail: string;
+  contactEmail: string | null;
+  /** The contact phone (2026-11-12; masterpod 18). A masterpod of before sends none. */
+  contactPhone?: string | null;
   lookupId: string;
+  /** How many anos accounts the recovered pod has, in every status of the case (2026-11-12; masterpod 18): how many account keys My recovery waits for. A masterpod of before sends none. */
+  anosAccounts?: number;
   hybridKey: HybridPublicKey;
   hybridKeyBlob: string;
   blob2: string | null;
@@ -68,6 +72,7 @@ export class RecoveryService {
   readonly status = signal<CaseStatus | null>(null);
   readonly username = signal<string | null>(null);
   readonly contactEmail = signal<string | null>(null);
+  readonly contactPhone = signal<string | null>(null);
   readonly lookupId = signal<string | null>(null);
   /** The last /get-recovery-pod answer. */
   readonly pod = signal<RecoveryPodAnswer | null>(null);
@@ -104,6 +109,7 @@ export class RecoveryService {
     this.status.set(null);
     this.username.set(null);
     this.contactEmail.set(null);
+    this.contactPhone.set(null);
     this.lookupId.set(null);
     this.pod.set(null);
     this.hasPrf.set(false);
@@ -131,6 +137,7 @@ export class RecoveryService {
     this.status.set(answer.status);
     this.username.set(answer.username);
     this.contactEmail.set(answer.contactEmail);
+    this.contactPhone.set(answer.contactPhone ?? null);
     this.lookupId.set(answer.lookupId);
   }
 

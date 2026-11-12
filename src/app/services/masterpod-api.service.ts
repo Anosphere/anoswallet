@@ -408,7 +408,9 @@ export interface RecoveryCaseItem {
   username: string | null;
   firstName: string | null;
   lastName: string | null;
-  contactEmail: string;
+  contactEmail: string | null;
+  /** The contact phone (2026-11-12; masterpod 18). A masterpod of before sends none. */
+  contactPhone?: string | null;
   approvals: number;
   createdAt: string;
   updatedAt: string;
@@ -441,7 +443,7 @@ export interface BankerPacket {
 
 /** What /get-recovery-case answers. */
 export interface RecoveryCaseAnswer {
-  case: { caseId: string; status: CaseStatus; lookupId: string; contactEmail: string; createdAt: string; updatedAt: string };
+  case: { caseId: string; status: CaseStatus; lookupId: string; contactEmail: string | null; contactPhone?: string | null; createdAt: string; updatedAt: string };
   profile: Profile | null;
   events: CaseEvent[];
   shares: CaseShare[];

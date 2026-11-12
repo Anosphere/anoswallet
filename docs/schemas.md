@@ -7213,6 +7213,157 @@ package; the proxy (`server/`) is not touched.
   the video call; an attestor's Start chat shows under Chat with the
   attestor; the accounts; the timeline.
 
+### The contact phone and the two counts, step 4 (2026-11-12)
+
+Built from `forclaude/wallet-case-chats-plan-1.md` (FINAL, 2026-11-12),
+its step 4 of seven, its section 4, one commit, on top of 1a844e5 (step
+3). Two things. The contact phone, in the user's words of 2026-11-11:
+"The user should however be able to give a phone number as well as the
+email. Probably an either / or. And the moderator should be able to see
+both the email and phone number provided. This is because people in
+thailand don't use email too much." And the wait page of a recovery (the
+plan's decision 10): it shows both kinds of shares coming in, the key
+the bankers keep and the account keys, and the finish opens only when
+both are complete. Until this step the page counted the backup code's
+shares alone. The bankers send the rows they tick in their GUI, so the
+two kinds of shares can arrive at different times, and a finish started
+before an account's key was in moved the other accounts and left that
+account's money behind without a word. The masterpod's part is the
+plan's step 1 (masterpodsoftware 68c35da, its spec's 12.4.2, 12.4.3,
+12.4.4 and section 18): `/open-recovery-case` takes `contactEmail` and
+`contactPhone`, each optional, and wants at least one of the two; the
+three reads `/get-recovery-pod`, `/list-recovery-cases` and
+`/get-recovery-case` answer `contactPhone` beside `contactEmail`, each a
+string or null; and `/get-recovery-pod` answers `anosAccounts`, how many
+anos accounts the recovered pod has, in every status. This step is the
+wallet's part: the phone box of the locked-out stepper, the phone on the
+moderator's case page, and the status line and the finish of My
+recovery. No route, no env variable and no npm package; the proxy
+(`server/`) is not touched.
+
+- `src/app/pages/recover-open.page.ts`: step 2 has the line
+  `recoverOpen.contactText` above the boxes and a second box under the
+  email's, `recoverOpen.contactPhone`, `type="tel"`,
+  `autocomplete="tel"`, with the hint `recoverOpen.phoneHint`; a signal
+  `phone`; `isContactPhone(value)` beside `isContactEmail`, the
+  masterpod's check (6 to 32 characters, each a digit, a space, `+`, `-`
+  or a round bracket, with at least 6 digits); `whoDone` is true when at
+  least one box is filled in and every box that is filled in is valid;
+  `open()` puts `contactEmail` into the payload only when an email is
+  given and `contactPhone` only when a phone is given, both trimmed, and
+  keeps both in `RecoveryService`. The class comment says so.
+- `src/app/services/recovery.service.ts`: `RecoveryPodAnswer` has
+  `contactEmail: string | null`, `contactPhone?: string | null` and
+  `anosAccounts?: number`; a signal `contactPhone` beside
+  `contactEmail`, set by `applyPod` and emptied by `close()`, which is
+  the one place that empties `contactEmail`.
+  `src/app/services/masterpod-api.service.ts`: `RecoveryCaseItem` and
+  the `case` of `RecoveryCaseAnswer` have `contactEmail: string | null`
+  and `contactPhone?: string | null`. No method changed.
+- `src/app/pages/recover-case.page.ts`: `statusText` gives `statusOpen`
+  the contact, which is the email and the phone that are there, joined
+  by a comma and a space, or `recoverCase.yourEmail` when neither is.
+  Two computeds beside `backupShares`: `accountKeysComplete`, how many
+  key ids of share type `breakglasskey` have at least the threshold of
+  shares, and `accountKeysExpected`, the pod's `anosAccounts`, undefined
+  when the masterpod sent none. While the case is delivering, with
+  `accountKeysExpected` a number above 0, the line is
+  `recoverCase.statusDeliveringBoth` with the backup code's count, the
+  threshold, the complete account keys (never shown above the expected
+  number) and the expected number; otherwise
+  `recoverCase.statusDelivering`, as before. `showFinish` is true once
+  the finish has started in the tab, as before, or when the case takes
+  it and both are in: the backup code has the threshold of shares, and
+  `accountKeysComplete` is at least `accountKeysExpected`; with that
+  undefined the backup code alone decides, as before. One sentence of
+  the class comment, "When three shares of one backup code keyId are in,
+  the finish appears", is put right: the threshold of both. Combine and
+  the five steps of the finish did not change.
+- `src/app/pages/moderation-case.page.ts`: among the person's facts the
+  Email row shows when the case has an email, and a new row under it,
+  `common.phone`, shows the phone number with a copy button
+  (`moderationCase.copyPhone`, `copy('phone', …)`) when the case has
+  one.
+- The words, in both files, as the plan's table gives them:
+  `recoverOpen.contactText`, `recoverOpen.contactPhone` and
+  `recoverOpen.phoneHint`; `recoverCase.yourEmail`, changed to "the
+  contact you gave" where it said "your email";
+  `recoverCase.statusDeliveringBoth`, which takes four numbers;
+  `common.phone`; `moderationCase.copyPhone`. `recoverCase.statusOpen`
+  keeps its words; what it is given changed. Reused as they are:
+  `recoverOpen.contactEmail`, `recoverOpen.emailHint`, `common.email`,
+  `moderationCase.copyEmail`, `copy.copied`. The Thai is the plan's, by
+  the glossary, for Thai readers to correct (8.8).
+- Readings where the plan left a detail open. On the locked-out
+  stepper: the phone box sits in a `.fields` block of its own under the
+  email's block, so it stands under the email box on every screen,
+  where one block would put the two side by side on a wide one. No
+  style changed, and the phone's field has `subscriptSizing="dynamic"`
+  like the email's, so its hint pushes the buttons down (the two notes
+  of 2026-11-10 on this page, above). A box is filled in when something
+  is left after the spaces around it are dropped. `isContactPhone` is
+  the masterpod's check as it stands there: it measures `value.length`
+  and takes the digits 0 to 9 only, so a number typed in Thai digits is
+  not valid in the box, as the masterpod would refuse it. It runs on
+  the trimmed value, which is what is sent; the masterpod does not
+  trim. A contact that is not given is left out of the payload: it is
+  not sent as null, and not as an empty string, which the masterpod
+  refuses as not valid. `RecoveryService` keeps null for the one not
+  given, as the masterpod answers it, and `applyPod` reads a missing
+  `contactPhone` as null. On My recovery: the two computeds stand after
+  `threshold`, which the first one reads. The backup code's count is
+  shown as it comes, also above the threshold ("5 of 4"), as before;
+  only the account keys are capped, as the plan says. With
+  `anosAccounts` 0 the line is the one of before, by the plan's "a
+  number above 0", and the finish goes by the backup code alone, since
+  no account key is waited for. On the moderator's case page the two
+  rows are drawn through `@if (…; as email)` and `@if (…; as phone)`,
+  so a null, a missing field and an empty string all draw no row. In
+  the dictionaries `contactText` stands in front of `contactEmail`,
+  `contactPhone` and `phoneHint` after `emailHint`,
+  `statusDeliveringBoth` after `statusDelivering`, `copyPhone` after
+  `copyEmail` and `common.phone` after `common.email`. The comments and
+  this spec carry 2026-11-12, the day of the build; the masterpod's
+  carry 2026-11-11, the day of the design.
+- Known and left as it is. A break-glass key whose account was never
+  finished counts as an account key, so in that rare case the finish
+  can open one key early (the plan's 4.3): the deposit comes before the
+  account's row on the masterpod (8.2, Wallet), and a deposit that
+  stopped under its floor can still have left the threshold of shares
+  with the keyholders. The other way round, the finish stays closed for
+  as long as one account's key has fewer than the threshold of shares:
+  the bankers have to send every row, and the page offers no way past a
+  key that never comes (the plan's decision 10). The counts move with
+  the 15-second poll and with Refresh, as before; nothing tells the
+  page that a share arrived. Against a masterpod of before (the plan's
+  section 8): a recovery opened with a phone number alone is refused,
+  shown as `/open-recovery-case: HTTP 400: bad request shape`; one
+  opened with both keeps the email and loses the phone without a word;
+  and the wait page works as before, since no `anosAccounts` comes. The
+  card on `/recover` still says "You'll need your birth record and an
+  email where a moderator can reach you" (`recover.lockedOutText`): the
+  plan does not change that word. The parameter of
+  `recoverCase.statusOpen` is still named `email` in both dictionary
+  files, and the key `recoverCase.yourEmail` keeps its name.
+- Spec: 12.3 (Locked out: step 2, and the payload in step 3; My
+  recovery: the contact in the Open line, the Delivering line with its
+  two counts, when the finish shows; Case: the Phone row), 12.4
+  (`recovery.service`), this note. The README names none of these pages
+  by itself and did not change.
+- Checked. `npx ng build` in the web_app folder: clean, no warnings
+  (2.16 MB initial total, `main-UA677LVQ.js`). Every string of the
+  plan's table was compared with the two dictionary files. `git status`
+  showed this step's eight files and no others. Nothing was run in a
+  browser and no server was started.
+  Step 1 was not deployed when this was built, so nothing here was
+  tried against a masterpod that takes a phone or answers
+  `anosAccounts`. The run-through is the user's, on the running network
+  (the plan's section 8): a recovery opened with a phone number alone,
+  seen by a moderator; the wait page while the bankers send the two
+  kinds of shares one after the other, where both counts move and the
+  finish opens only when both are complete. The masterpod goes out
+  first.
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`
@@ -7291,32 +7442,83 @@ the authenticator's message shows.
    A masterpod refusal shows as `/challenge: <reason>`. Once found, with
    the form empty, a line says the account was found and the answers
    dropped, and that filling the form in again starts over.
-2. Your account: "We found your account: alice" and the contact email.
-   Next. Nobody types a username; there is no username path.
+2. Your account: "We found your account: alice", then "Give an email
+   address, a phone number, or both. A moderator uses them to reach you."
+   and two boxes, the second under the first: Contact email, and Phone
+   number with the hint "With the country code, for example +66 81 234
+   5678." (the line and the phone box since 2026-11-12, section 11; until
+   then the email alone, and it had to be given). Next works once at
+   least one box is filled in and every box that is filled in is valid
+   as the masterpod takes it (masterpod 12.4.2): an email of 3 to 254
+   characters with an `@` that is not first; a phone of 6 to 32
+   characters, each a digit, a space, `+`, `-` or a round bracket, with
+   at least 6 digits. The spaces around either are dropped first; a box
+   with nothing else in it counts as empty. Nobody types a username;
+   there is no username path.
 3. Open my case: one button. `/challenge` (openCase, the anoPod id) gives
    a fresh challenge and the username; the passkey registration with the
    PRF extension, that id as user handle and the username as name and
    display name; the PRF output from the registration or, when it
    returned none, one local assertion with a random challenge; `KEK_prf`;
    the recovery hybrid pair and `hybridKeyBlob`; the ephemeral keys;
-   `/open-recovery-case`, the payload without a username. On 201 the
-   recovery session is open and the page goes to `/recover/case`. The
+   `/open-recovery-case`, the payload without a username, with
+   `contactEmail` only when an email is given and `contactPhone` only
+   when a phone is given, each as typed less the spaces around it
+   (2026-11-12; until then `contactEmail` always). On 201 the recovery
+   session is open, both contacts are kept in `RecoveryService` (12.4)
+   and the page goes to `/recover/case`. The
    refusals shown: "a case is already open for this identity" (409), a
    masterpod refusal as `/challenge: <reason>` or `/open-recovery-case:
    <reason>`, the passkey messages as on Create.
 
 **My recovery** (`/recover/case`). The case id (short, with Copy), the
-status in words ("Open: a moderator will contact you at <email> and meet
-you on a video call", "In review", "Approved: the bankers are sending your
-keys", "Delivering: n of 3 key shares received", "Completed",
+status in words ("Open: a moderator will contact you at <contact> and
+meet you on a video call", "In review", "Approved: the bankers are
+sending your keys", the Delivering line below, "Completed",
 "Dismissed: <reason in words>"), the timeline from the events the person
 may see (scheduled with the meeting link as a link, approved, dismissed,
 recovered, completed), a Refresh button (`/get-recovery-pod`; also polled
 every 15 s while the page is open). "Keep this device: you unlock this case
 with the passkey you just made."
 
-When three shares of one backup code `keyId` are in, the finish appears as
-a second stepper on the same page. The person never sees a backup code,
+The contact in the Open line (2026-11-12, section 11; until then the
+email) is the email and the phone the case has, joined by a comma and a
+space, "alice@example.com, +66 81 234 5678", or the one of the two that
+was given. When the page knows neither, which is the moment between
+Continue a recovery and the first `/get-recovery-pod` answer, it says
+"the contact you gave" (until 2026-11-12 "your email").
+
+The Delivering line counts both kinds of shares (2026-11-12, section 11;
+decision 10 of `forclaude/wallet-case-chats-plan-1.md`): "Delivering:
+the key the bankers keep has 2 of 4 shares. 1 of 3 account keys are
+complete." The first pair is the backup code: the largest group of
+`backupcode` shares of one `keyId`, and `shareThreshold` from
+`/api/config`. The second pair is the account keys. Each anos account
+has a break-glass key of its own, deposited as `breakglasskey` under a
+`keyId` of its own when the account is made (section 6; 8.2, Wallet),
+so an account key is complete when one `breakglasskey` `keyId` has at
+least `shareThreshold` shares, and the number to wait for is
+`anosAccounts` of the `/get-recovery-pod` answer: every anos account the
+anoPod has on the masterpod, sent in every status of the case (masterpod
+12.4.3 and 18). The count of complete keys is never shown above that
+number. When `anosAccounts` is 0, or is missing because the masterpod is
+one of before, the line is the one of before, the backup code's count
+alone: "Delivering: 2 of 4 key shares received".
+
+The finish appears as a second stepper on the same page when the case
+takes it (approved or delivering) and both are in: the backup code has
+`shareThreshold` shares of one `keyId`, and at least as many account
+keys are complete as `anosAccounts` says. Until 2026-11-12 the backup
+code's shares alone decided, and they still do when the masterpod sends
+no `anosAccounts`. Why both: the bankers send the rows they tick in
+their GUI, so the two kinds of shares can arrive at different times, and
+Move your money moves the accounts whose key came back and says nothing
+of an account whose key did not, whose money then stays behind. Once
+Combine has run in the tab the finish stays. Known and left as it is: a
+break-glass key whose account was never finished counts as an account
+key, so in that rare case the finish can open one key early.
+
+The person never sees a backup code,
 here or on Setup (2026-11-10, section 11): on these screens it is "the
 key the bankers keep", "the rebuilt key" or "the key". The steps stand in
 this order since 2026-11-10 (`forclaude/recovery-finish-order-plan-1.md`,
@@ -7453,8 +7655,11 @@ opens `/moderation/:caseId`.
 **Case** (`/moderation/:caseId`), from `/get-recovery-case`, refreshed by a
 button and every 15 s
 
-- The person: public selfie, username, names, the contact email with
-  Copy, the lookup id with Copy, the status.
+- The person: public selfie, username, names, the Email row with Copy
+  when the case has an email, the Phone row under it with Copy when the
+  case has a phone (2026-11-12, section 11; a case has at least one of
+  the two, and until then the Email row always showed), the lookup id
+  with Copy, the status.
 - The timeline: every event, the acting moderator's username, the details
   in words (a note shown as typed).
 - Schedule: a date-time and a meeting link, Save (`/schedule-recovery-case`).
@@ -7486,7 +7691,11 @@ button and every 15 s
     recovery.service        the recovery session, apart from SessionService: caseId, the recovery session keys,
                             the PRF output and KEK_prf, the recovery hybrid private key, the last /get-recovery-pod
                             answer, the combined backup code and seeds while the finish runs; sign(path, body)
-                            builds the recovery envelope (caseId as the signer); everything in RAM
+                            builds the recovery envelope (caseId as the signer); everything in RAM; the contact
+                            email and the contact phone are two signals, each a string or null (the phone since
+                            2026-11-12), set by the locked-out stepper at the open and by every /get-recovery-pod
+                            answer (applyPod), emptied by close(); RecoveryPodAnswer carries contactPhone and
+                            anosAccounts, both optional, since a masterpod of before sends neither
     masterpod-api.service   one method per new route (masterpod 12.4); challenge() takes the three new purposes,
                             openCase with the anoPod id the keyholders named, and answers its username
                             (2026-11-08); listAnosAccounts items carry breakGlassBlob;

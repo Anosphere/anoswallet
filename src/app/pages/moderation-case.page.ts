@@ -117,10 +117,18 @@ interface Outcome {
             <div class="facts">
               <div><span class="label">{{ t().common.username }}</span><span class="value">{{ d.profile?.username ?? t().common.unknownPod }}</span></div>
               <div><span class="label">{{ t().common.name }}</span><span class="value">{{ d.profile?.firstName }} {{ d.profile?.lastName }}</span></div>
-              <div>
-                <span class="label">{{ t().common.email }}</span>
-                <span class="value">{{ d.case.contactEmail }} <button mat-icon-button type="button" (click)="copy('email', d.case.contactEmail)" [attr.aria-label]="t().moderationCase.copyEmail"><mat-icon>content_copy</mat-icon></button>@if (copied() === 'email') { <span class="muted">{{ t().copy.copied }}</span> }</span>
-              </div>
+              @if (d.case.contactEmail; as email) {
+                <div>
+                  <span class="label">{{ t().common.email }}</span>
+                  <span class="value">{{ email }} <button mat-icon-button type="button" (click)="copy('email', email)" [attr.aria-label]="t().moderationCase.copyEmail"><mat-icon>content_copy</mat-icon></button>@if (copied() === 'email') { <span class="muted">{{ t().copy.copied }}</span> }</span>
+                </div>
+              }
+              @if (d.case.contactPhone; as phone) {
+                <div>
+                  <span class="label">{{ t().common.phone }}</span>
+                  <span class="value">{{ phone }} <button mat-icon-button type="button" (click)="copy('phone', phone)" [attr.aria-label]="t().moderationCase.copyPhone"><mat-icon>content_copy</mat-icon></button>@if (copied() === 'phone') { <span class="muted">{{ t().copy.copied }}</span> }</span>
+                </div>
+              }
               <div>
                 <span class="label">{{ t().moderationCase.lookupId }}</span>
                 <span class="value"><code>{{ d.case.lookupId }}</code> <button mat-icon-button type="button" (click)="copy('lookupId', d.case.lookupId)" [attr.aria-label]="t().common.copyLookupId"><mat-icon>content_copy</mat-icon></button>@if (copied() === 'lookupId') { <span class="muted">{{ t().copy.copied }}</span> }</span>
