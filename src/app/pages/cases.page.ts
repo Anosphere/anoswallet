@@ -28,6 +28,16 @@ interface CaseRow {
   otherAccountId: string | null;
 }
 
+/** One recovery row (2026-11-12): a recovery case of this pod's from /list-my-break-glass-moves, the case under which the money of the lost accounts is being moved. It has no transaction of its own; its line counts the accounts. */
+interface RecoveryRow {
+  kind: 'recovery';
+  caseId: string;
+  status: AttestorCaseStatus;
+  createdAt: string;
+  /** How many accounts are being moved: the case's moves. */
+  accounts: number;
+}
+
 /** What /list-transactions knows of a transaction: its amount and its two accounts. */
 interface KnownTransaction {
   amount: string;
@@ -36,16 +46,22 @@ interface KnownTransaction {
 }
 
 /**
- * Cases (wallet spec 13.3, /cases, every edition): /list-my-cases, the
- * trades and the disputes where this pod is a party, newest first, each row
- * the kind, the amount and the other account when the account's transaction
- * list (/list-transactions, as the account page reads it) or, on an
- * assisted account, its held transfer (/get-assisted-transfer, 2026-11-06)
- * knows the transaction, otherwise the transaction id, the status in words
- * and when it was opened. A row opens /cases/:caseId. A held escrow is not
- * in that list until it lands, so the id shows while a dispute case is
- * open; a trade row reads its amount and the receiver from the held
- * transfer while it waits.
+ * Cases (wallet spec 13.3, /cases, every edition): three kinds of rows,
+ * newest first. From /list-my-cases, the trades and the disputes where this
+ * pod is a party, each row the kind, the amount and the other account when
+ * the account's transaction list (/list-transactions, as the account page
+ * reads it) or, on an assisted account, its held transfer
+ * (/get-assisted-transfer, 2026-11-06) knows the transaction, otherwise the
+ * transaction id, the status in words and when it was opened. Such a row
+ * opens /cases/:caseId. A held escrow is not in that list until it lands,
+ * so the id shows while a dispute case is open; a trade row reads its
+ * amount and the receiver from the held transfer while it waits. And, since
+ * 2026-11-12, from /list-my-break-glass-moves, read beside /list-my-cases,
+ * the third kind: this pod's recovery cases, each row "Recovery: moving
+ * your money", the status in words, how many accounts are being moved and
+ * when it was opened. Such a row opens /cases/recovery/:caseId. When that
+ * read is refused, the refusal shows in the error line and the trade and
+ * dispute rows still show.
  */
 @Component({
   selector: 'app-cases-page',
@@ -68,15 +84,24 @@ interface KnownTransaction {
         }
         <mat-list>
           @for (c of rows(); track c.caseId) {
-            <mat-list-item lines="3">
-              <mat-icon matListItemIcon>{{ c.kind === 'trade' ? 'group' : 'balance' }}</mat-icon>
-              <a matListItemTitle [routerLink]="['/cases', c.caseId]">
-                {{ c.kind === 'trade' ? t().cases.assistedTrade : t().cases.escrowDispute }}
-                @if (c.amount !== null) { {{ t().common.anosFragment(millionthsToAnos(c.amount)) }} @if (c.otherAccountId) { {{ t().cases.with }} <code>{{ c.otherAccountId.slice(0, 16) }}…</code> } } @else { {{ t().cases.transaction }} <code>{{ c.transactionId.slice(0, 16) }}…</code> }
-              </a>
-              <span matListItemLine><mat-icon class="inline">{{ icons[c.status] }}</mat-icon> {{ t().cases.line(t().caseStatus[c.status] ?? c.status, c.role, lang.dateTime(c.createdAt)) }}</span>
-              <span matListItemLine><code>{{ c.caseId }}</code></span>
-            </mat-list-item>
+            @if (c.kind === 'recovery') {
+              <mat-list-item lines="3">
+                <mat-icon matListItemIcon>lock_reset</mat-icon>
+                <a matListItemTitle [routerLink]="['/cases/recovery', c.caseId]">{{ t().cases.recovery }}</a>
+                <span matListItemLine><mat-icon class="inline">{{ icons[c.status] }}</mat-icon> {{ t().cases.line(t().caseStatus[c.status] ?? c.status, t().cases.accounts(c.accounts), lang.dateTime(c.createdAt)) }}</span>
+                <span matListItemLine><code>{{ c.caseId }}</code></span>
+              </mat-list-item>
+            } @else {
+              <mat-list-item lines="3">
+                <mat-icon matListItemIcon>{{ c.kind === 'trade' ? 'group' : 'balance' }}</mat-icon>
+                <a matListItemTitle [routerLink]="['/cases', c.caseId]">
+                  {{ c.kind === 'trade' ? t().cases.assistedTrade : t().cases.escrowDispute }}
+                  @if (c.amount !== null) { {{ t().common.anosFragment(millionthsToAnos(c.amount)) }} @if (c.otherAccountId) { {{ t().cases.with }} <code>{{ c.otherAccountId.slice(0, 16) }}…</code> } } @else { {{ t().cases.transaction }} <code>{{ c.transactionId.slice(0, 16) }}…</code> }
+                </a>
+                <span matListItemLine><mat-icon class="inline">{{ icons[c.status] }}</mat-icon> {{ t().cases.line(t().caseStatus[c.status] ?? c.status, c.role, lang.dateTime(c.createdAt)) }}</span>
+                <span matListItemLine><code>{{ c.caseId }}</code></span>
+              </mat-list-item>
+            }
           } @empty {
             @if (!busy() && !error()) {
               <p class="muted">{{ t().cases.none }}</p>
@@ -104,7 +129,7 @@ export class CasesPage {
 
   protected readonly millionthsToAnos = millionthsToAnos;
   protected readonly icons = STATUS_ICONS;
-  protected readonly rows = signal<CaseRow[]>([]);
+  protected readonly rows = signal<(CaseRow | RecoveryRow)[]>([]);
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
 
@@ -112,16 +137,19 @@ export class CasesPage {
     void this.load();
   }
 
-  /** /list-my-cases, then what each of this pod's accounts on the cases knows of the transactions. */
+  /** /list-my-cases and /list-my-break-glass-moves (the recovery rows, 2026-11-12), then what each of this pod's accounts on the trade and dispute cases knows of the transactions. */
   protected async load(): Promise<void> {
     this.busy.set(true);
     this.error.set(null);
     try {
-      const res = await this.masterpod.listMyCases();
+      const [res, recoveries] = await Promise.all([this.masterpod.listMyCases(), this.masterpod.listMyBreakGlassMoves()]);
       if (!res.ok) {
         this.error.set(`/list-my-cases: ${reasonOf(res)}`);
         return;
       }
+      // The recovery rows (2026-11-12): a refused read shows in the error line and the trade and dispute rows still show.
+      if (!recoveries.ok) this.error.set(`/list-my-break-glass-moves: ${reasonOf(recoveries)}`);
+      const recoveryRows = recoveries.ok ? recoveries.body.cases.map((c): RecoveryRow => ({ kind: 'recovery', caseId: c.caseId, status: c.status, createdAt: c.createdAt, accounts: c.moves.length })) : [];
       const rows: CaseRow[] = [
         ...res.body.trades.map((t): CaseRow => ({ kind: 'trade', caseId: t.caseId, status: t.status, createdAt: t.createdAt, transactionId: t.transactionId, myAccountId: t.accountId, role: this.t().cases.youSent, amount: null, otherAccountId: null })),
         ...res.body.disputes.map((d): CaseRow => ({ kind: 'dispute', caseId: d.caseId, status: d.status, createdAt: d.createdAt, transactionId: d.transactionId, myAccountId: d.side === 'seller' ? d.accountId : d.accountIdTo, role: this.t().cases.youAre(this.t().sides[d.side]), amount: null, otherAccountId: null })),
@@ -133,7 +161,7 @@ export class CasesPage {
         row.amount = t.amount;
         row.otherAccountId = t.accountId === row.myAccountId ? t.accountIdTo : t.accountId;
       }
-      this.rows.set(rows);
+      this.rows.set([...rows, ...recoveryRows].sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
     } finally {
       this.busy.set(false);
     }

@@ -731,6 +731,12 @@ dao/:proposalId would otherwise swallow dao/guardians. The Guardians have
 no entry of their own in the side panel or the Home tiles: the DAO page
 carries a card to them (8.2).
 
+The route of the person's recovery case, cases/recovery/:caseId
+(2026-11-12, section 11; the plan is
+forclaude/wallet-case-chats-plan-1.md), sits in front of cases/:caseId
+in app.routes.ts, the more specific path first. The Cases routes are not
+in the list above: they are in 13.2, and this one is there with them.
+
 A guard sends anyone without a session to /. Which pages the navigation
 shows follows the status: vouching until vouched; identity and setup
 until setup is complete; home first, then wallet, chat, marketplace, DAO
@@ -2141,7 +2147,12 @@ runs while a session is open and updates the status (vouched, counts),
 and the chat rooms with them once setup is complete. The chat kinds
 link: chatInvite and joinRequest to /chat/requests; inviteAccepted,
 inviteDeclined and joinApproved to the room, /chat/:chatRoomId
-(2026-11-05, section 11).
+(2026-11-05, section 11). The kind recoveryCaseScheduled (2026-11-12,
+section 11; masterpod 14.7), which the masterpod writes to the person
+when an attestor sets up the video call of their recovery case, reads "A
+video call was scheduled for your recovery" and links to the person's
+recovery case page, /cases/recovery/:caseId (13.3): its reference id is
+the case id.
 
 Seed: the Vouch requests page, for a seed or super seed (2026-11-08,
 section 11). One small call, /list-vouch-requests, answers the open
@@ -2383,7 +2394,7 @@ connected and the pinned listing card (8.7), and on Home beside the
 greeting (56 px); since 2026-11-08 on the cards of the Vouch requests
 page (72 px) and beside the proposer on the DAO proposal page (40 px);
 since 2026-11-12 (section 11) in the person's chats about an attestor
-case on My case (8.7).
+case on My case and My recovery case (8.7).
 
 ### 8.7 The marketplace components and the case chat components
 
@@ -2452,7 +2463,7 @@ src/app/components/ too:
   masterpod's `403 not an attestor` as "This anoPod is not an attestor.",
   the rest as the masterpod says it.
 - case-chat-list.component.ts (`<app-case-chat-list [caseId]>`): the
-  person's block on My case (13.3), in the shape of
+  person's block on My case and My recovery case (13.3), in the shape of
   listing-people.component.ts. The invites to this pod into a room about
   the case (`caseInvitesOf`): the attestor's avatar (8.6), "attestorjoy is
   an attestor on this case and wants to chat with you", Accept, which
@@ -7054,6 +7065,154 @@ the proxy (`server/`) is not touched.
   goes out first: against a masterpod of before, Start chat makes a plain
   private chat with no case on it, which no case page finds again.
 
+### The recovery case on the Cases page, step 3 (2026-11-12)
+
+Built from `forclaude/wallet-case-chats-plan-1.md` (FINAL, 2026-11-12),
+its step 3 of seven, its section 3, one commit, on top of 98ffd03 (step
+2). Why, in the user's words of 2026-11-11: "Right now, when the
+attetestor opens a recovery case, a case doesn't show up for the user in
+the cases section. So there's no way for the user to even go to the
+meeting that the attestor scheduled." The recovery case the attestors
+work on is a break-glass case (masterpod 14), keyed by the recovery
+case's id. The masterpod has answered it to the person all along, with
+`/list-my-break-glass-moves`: the status, the sign-offs, the moves and
+the person's events, the `scheduled` one with the time and the meeting
+link among them. Until this step the wallet read that answer only for
+the line under a lost account's card (8.2, Wallet) and for the recovery
+finish (12.3), and drew the video call nowhere. The masterpod's part is
+the plan's step 1 (masterpodsoftware 68c35da, its spec's 14.4.2, 14.7
+and section 18): `/schedule-break-glass-case` now writes the recovered
+pod one notification, kind `recoveryCaseScheduled`, its reference the
+case id. This step is the wallet's part: the recovery case as a third
+kind of row on Cases, a case page of its own for the person, the
+notification's link and label, and new words for the line the attestor
+reads after scheduling. One new route. No env variable and no npm
+package; the proxy (`server/`) is not touched.
+
+- `src/app/pages/cases.page.ts`: `load()` reads
+  `/list-my-break-glass-moves` beside `/list-my-cases`, and each case of
+  it is a row of a third kind, `recovery`, sorted with the others by
+  `createdAt`: the icon `lock_reset`, the title `cases.recovery` as a
+  link to `/cases/recovery/<caseId>`, the line `cases.line(status,
+  cases.accounts(moves), when)`, the case id under it. A refused read
+  shows in the error line as `/list-my-break-glass-moves: <reason>` and
+  the trade and dispute rows still show. The class comment names the
+  third kind.
+- New, `src/app/pages/my-recovery-case.page.ts` (`MyRecoveryCasePage`),
+  as 13.3 gives it, and its route in `src/app/app.routes.ts`,
+  `cases/recovery/:caseId`, in front of `cases/:caseId`, behind
+  `sessionGuard`, title "My recovery case".
+- `src/app/pages/notifications.page.ts`, `linkOf`: the kind
+  `recoveryCaseScheduled` leads to `/cases/recovery/<referenceId>`. Its
+  label comes from the dictionary like every other.
+- `src/app/pages/attesting-recovery-case.page.ts` did not change: the
+  line after Save is `recoveryCase.scheduled`, whose words changed.
+- The words, in both files, as the plan's table gives them:
+  `cases.subtitle` (changed), `cases.recovery` and `cases.accounts`; a
+  new section `myRecoveryCase` (`title`, `notFound`, `statusOpen`,
+  `statusInReview`, `statusDecided`, `signed`, `callAt`, `joinCall`,
+  `noCall`, `accounts`, `moveLine`, `eventDecided`), after `myCase`;
+  `notifications.labels.recoveryCaseScheduled`, the sixteenth label; and
+  `recoveryCase.scheduled` (changed). Reused as they are: the words the
+  plan lists, and `copy.copied` and `common.couldNotCopyId`, which the
+  page's Copy uses as My case's does and the plan's list does not name.
+  The Thai is the plan's, by the glossary, for Thai readers to correct
+  (8.8).
+- Where the code was not what the plan says it stands on. The plan names
+  `balances.service` (`loadMoves`) as the only reader of
+  `/list-my-break-glass-moves`. The recovery finish reads it too
+  (`recover-case.page.ts`, Move your money, for the moves already
+  filed). Nothing in this step depends on it. The plan's 3.6 names 8.1
+  for the route, and 8.1 does not list the Cases routes: they are in the
+  table of 13.2. So the route's line is in 13.2, with the sentence under
+  the table now counting three Cases pages, and 8.1 got a short
+  paragraph that says where the route sits in `app.routes.ts`.
+- Readings where the plan left a detail open. On Cases the two reads run
+  at the same time. A refused `/list-my-cases` still ends the read with
+  its own line, as before, and then no row changes; the plan speaks only
+  of a refused `/list-my-break-glass-moves`. The recovery row is a type
+  of its own (`RecoveryRow`) and the template draws one list item or the
+  other, so the type and the code of a trade or dispute row stayed as
+  they were. The count in the row's line is the number of the case's
+  moves: one move per old account. On the new page: the status of a
+  dismissed case takes its reason as My case does (the dictionary's
+  words; the word as the masterpod sent it when the dictionary has none;
+  "another reason" without one). The line of the sign-offs is plain
+  text under the status, and it and the video call go by one test: the
+  case is open or in review. Join the video call is a link drawn as a
+  flat button, with `target="_blank"` and `rel="noopener"` like the
+  timeline's meeting link, and shows when the newest `scheduled` event
+  carries a `meetLink` (the masterpod always writes one); an event
+  without a time reads "a time to be confirmed". Your accounts makes no
+  read of its own: the new account's name comes from the session's
+  accounts as they stand (Home and the Wallet page read the list), else
+  the short id shows. `moveLine` is one sentence per language, and only
+  the new account is the link, so the page builds the sentence with the
+  new account's full id in the account's place and cuts it there; the
+  link then stands wherever a language puts the account. A kind the
+  dictionary does not know shows the type word. A refused read leaves
+  what the page shows. The page keeps its own copy code, as the other
+  case pages do (8.5). In `app.routes.ts` the new route has a one-line
+  comment of its own. The README's line for the page sits under the
+  `pages/` lines of the layout.
+- Known and left as it is. The page shows a case only once the person's
+  finish has filed a move: until then there is no break-glass case. Only
+  the video call notifies; a decision and a dismissal show on the page
+  (the plan's decision 20). A second schedule writes a second
+  notification and a second timeline line, and the Video call part shows
+  the newest. The Cases page reads when it opens and by Refresh, as
+  before; the new page also reads every 15 seconds. A lost account's
+  card has no link to this page (the plan's decision 29). The chat block
+  has what step 2's note says of it: the room list comes from the
+  shell's 5-second poll.
+- Put right on the user's word of 2026-11-12 ("Yes, update them"), after
+  the first report of this build listed fifteen places as left because
+  the plan does not name them. Nine comments in the code and no line of
+  code: the comment of `load()` in `cases.page.ts` names both reads; the
+  class comment of `notifications.page.ts` and the comment of `linkOf`
+  name the kind `recoveryCaseScheduled` and where it leads; in
+  `masterpod-api.service.ts` the comment of `scheduleBreakGlassCase`
+  names the notification, where it had said that none is sent, and the
+  comment of `listMyBreakGlassMoves` names every reader of the answer;
+  the comment above `routes` in `app.routes.ts` counts three Cases
+  pages; the comment of `CASES_POLL_MS` in `constants.ts` names every
+  page that refreshes on it; the class comments of
+  `src/app/components/case-chat-list.component.ts` and
+  `src/app/components/avatar.component.ts` name My recovery case beside
+  My case. Five places here: 8.6 and 8.7, My recovery case beside My
+  case; 13.1, the recovery case among what Cases shows; the line of the
+  notifications page in 13.4; the last point of 13.6, which had listed a
+  notification to the person as not built. One line of the README, that
+  of `case-chat-list.component.ts`. Two things these comments now name
+  are older than this step: the recovery finish as a reader of
+  `/list-my-break-glass-moves` (`recover-case.page.ts`), and the
+  attestors' Recovery case page of 2026-11-08 as the third attestor case
+  page that refreshes on `CASES_POLL_MS`, where the comment had counted
+  two.
+- Spec: 8.1 (where the route sits), 8.2 (Notifications: the kind), 13.2
+  (the route's line; three Cases pages), 13.3 (Cases: the third kind of
+  row; My recovery case; the attestor's line after scheduling), this
+  note. README: the line of the new page.
+- Checked. `npx ng build` in the web_app folder: clean, no warnings
+  (2.15 MB initial). Every string of the plan's table was compared with
+  the two dictionary files. `git status` showed this step's eight files
+  and no others, and twelve once the comments were put right: the four
+  that joined are `src/app/services/masterpod-api.service.ts`,
+  `src/app/constants.ts`,
+  `src/app/components/case-chat-list.component.ts` and
+  `src/app/components/avatar.component.ts`. `npx ng build` after that:
+  clean, no warnings, and the script is the same file as before,
+  `main-RWGW6332.js`. Nothing was run in a browser and no server was
+  started.
+  Step 1 was not deployed when this was built, so the notification was
+  not tried against a masterpod that writes it. The run-through is the
+  user's, on the running network (the plan's section 8): after a
+  recovery's Move your money, the row on Cases; an attestor schedules
+  the call from the Recovery case page and reads the new line; the
+  person's notification opens the recovery case page; the time and Join
+  the video call; an attestor's Start chat shows under Chat with the
+  attestor; the accounts; the timeline.
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`
@@ -7678,8 +7837,8 @@ account page's Send, as today). A pod is a moderator or an attestor by its
 username, never both.
 
 Every edition, the wallet included, gets Cases (13.3): the person's side
-of a trade or dispute case. It shows in the navigation once setup is
-complete.
+of a trade or dispute case and, since 2026-11-12 (section 11), of a
+recovery case. It shows in the navigation once setup is complete.
 
 ### 13.2 Routes and guards
 
@@ -7688,12 +7847,15 @@ complete.
     /attesting/dispute/:caseId    one dispute case: the parties, the chat with each, the escrow, the evidence, the verdicts
     /attesting/recovery/:caseId   one recovery's break-glass moves: the person, the chat with the person, the recovery case, the moves, the buckets, the sign-off (2026-11-08)
     /cases                        my cases (every edition)
+    /cases/recovery/:caseId       my recovery case: the status, the video call, the chat with the attestor, the accounts being moved, the timeline (2026-11-12)
     /cases/:caseId                one of my cases: share the lookup id, upload evidence, the chat with the attestor, the timeline
 
 The four Attesting pages need a session and the attestor edition
 (`attestingGuard`, the shape of `moderationGuard`); a pod that is not an
 attestor sees the masterpod's `403 not an attestor` as "This anoPod is not
-an attestor". The two Cases pages need a session (`sessionGuard`).
+an attestor". The three Cases pages need a session (`sessionGuard`). In
+`app.routes.ts` `cases/recovery/:caseId` sits in front of `cases/:caseId`
+(8.1).
 
 ### 13.3 The screens
 
@@ -7834,7 +7996,13 @@ every 15 s, the trade case's frame. Top to bottom:
 - The timeline: every event in words, as the trade case; the filing reads
   "<username> filed n moves", a sign-off "<attestor> signed n attestations
   with account …".
-- Schedule: as the trade case (`/schedule-break-glass-case`).
+- Schedule: as the trade case (`/schedule-break-glass-case`). After Save
+  the attestor reads "Scheduled for <time>; the person sees the time and
+  the link on their case page." (2026-11-12, section 11; until then "the
+  time and the link are recorded on the case."): the masterpod now writes
+  the person a `recoveryCaseScheduled` notification (masterpod 14.7), and
+  the person's recovery case page, My recovery case below, shows the
+  call. The words changed and nothing else on this page.
 - The lookup id: the recovery case's, with Copy; no sharing step.
 - Bucket one and two: the trade case's pull, pointed at
   `/list-break-glass-case-security-records`, by the recovery case's lookup
@@ -7871,6 +8039,25 @@ the transaction id, the status in words and when it was opened. A row
 opens `/cases/:caseId`. The notifications page's labels for the five
 case kinds (13.4) link here.
 
+Since 2026-11-12 (section 11) the page has a third kind of row, the
+recovery case: the case under which the money of the person's lost
+accounts is moved (masterpod 14; the attestors' Recovery case above).
+The page reads `/list-my-break-glass-moves` (masterpod 14.4.1) beside
+`/list-my-cases`, and each case of its answer is a row, sorted with the
+trades and the disputes by the date it was opened: the icon
+`lock_reset`; the title "Recovery: moving your money", a link to
+`/cases/recovery/:caseId`; under it the status in words, how many
+accounts are being moved (the case's moves) and when it was opened, "In
+review · 2 accounts · opened Nov 11, 2026, 3:50:12 PM"; then the case
+id, as the other rows have it. When `/list-my-break-glass-moves` is
+refused, the error line reads `/list-my-break-glass-moves: <reason>` and
+the trade and dispute rows still show. The subtitle names all three
+kinds: "Your side of a trade an attestor is checking, of an escrow in
+dispute, or of a recovery whose money is being moved." Until then the
+recovery case showed nowhere on the person's side but in the line under
+a lost account's card (8.2, Wallet), so the person had no way to the
+video call an attestor had scheduled.
+
 **My case** (`/cases/:caseId`), from `/get-my-case`, refreshed by a button
 and every 15 s. For a trade: "An attestor is checking your trade", the
 status in words, "See the transfer" under the transaction id, to the
@@ -7906,6 +8093,55 @@ Two attestors work on a case, so a person can have two chats on one case.
 The same request shows on the Requests page of Chat (8.2), and the person
 may accept it there.
 
+**My recovery case** (`/cases/recovery/:caseId`, every edition,
+2026-11-12, section 11; the plan is
+forclaude/wallet-case-chats-plan-1.md, its section 3): the person's side
+of the recovery case, in the frame of My case. It reads
+`/list-my-break-glass-moves` when it opens, by Refresh and every 15 s
+(`CASES_POLL_MS`, quiet in the log), and takes the case with its id;
+when the answer has none: "No recovery case of yours with this id." A
+refused read shows as `/list-my-break-glass-moves: <reason>` and leaves
+what the page shows. Top to bottom:
+
+- The card's title "Your recovery: moving your money"; the case id in
+  short form with Copy; a link back to Cases; Refresh.
+- The status in words, with the status's icon: "Open: two attestors have
+  to check that it is you. Then your money moves to your new accounts.",
+  "In review: an attestor is checking your case.", "Decided: two
+  attestors signed. Your money is moving to your new accounts.", or
+  "Dismissed: <the reason in words>.", as My case words a dismissal.
+  Under it, while the case is open or in review, "1 of 2 attestors have
+  signed.", the number from the answer's `signOffs`.
+- Video call, while the case is open or in review. With a `scheduled`
+  event, the newest one: "An attestor set up a video call for <date and
+  time>." and the flat button Join the video call, which opens the
+  event's `meetLink` in a new tab. Without one, the muted line "No video
+  call is set up yet. An attestor will set one up, or start a chat with
+  you to agree on a time." A closed case shows neither the heading nor
+  the lines; the call stays in the timeline.
+- Chat with the attestor: the person's chats about the case (8.7,
+  `<app-case-chat-list>`), as on My case. The masterpod marks a recovery
+  chat with the break-glass case's id, which is the recovery case's id
+  (masterpod 18), so the block finds the chat an attestor started from
+  the Recovery case page.
+- Your accounts: one line per move, in the answer's order, "Spending
+  account: a1b2c3d4…e5f6 to Spending account 2": the account's kind in
+  words, the old account's id in short form, and the new account by its
+  name among the session's accounts (account-names.ts, as the Wallet
+  page names them), else its id in short form. The new account is a link
+  to its page, `/wallet/:accountId`.
+- The timeline, as My case draws it, with the four kinds the masterpod
+  shows the person (masterpod 14.4.1): `scheduled` reads "Video call
+  scheduled for <time>." with the meeting link, `decided` "Two attestors
+  signed", `sent` "The decision was sent to the validators", `dismissed`
+  "Dismissed: <the reason in words>"; "Nothing yet." while there is
+  none. The filing of the moves is not among the person's events, so a
+  new case has an empty timeline.
+
+No attestor is named on the page outside the chat block: the answer
+carries none. The notification `recoveryCaseScheduled` leads here (8.2,
+Notifications).
+
 ### 13.4 Services and state, new or changed
 
     attesting.service       the attestor's staked account for the session (accountId, its keyBlob opened per
@@ -7928,7 +8164,8 @@ may accept it there.
                             decrypt, encryptToHybrid, decryptFromHybrid, generateHybridKeys,
                             hybridKeysFromSecret, buildFollowUp, signAccountEnvelope)
     config.service          attestorEdition in WalletConfig's edition
-    notifications page      the five case kinds in words, each linking to /cases/:caseId by reference id
+    notifications page      the five case kinds in words, each linking to /cases/:caseId by reference id; since
+                            2026-11-12 recoveryCaseScheduled too, linking to /cases/recovery/:caseId
     constants               CASES_POLL_MS (15 s)
     shell                   Attesting in the navigation when the edition is attestor and a session is open;
                             Cases when setup is complete; the brand "Attestor wallet"
@@ -7955,8 +8192,10 @@ may accept it there.
   validator, as every anos call does.
 - A moderator who is also an attestor.
 - Notifications to attestors when a recovery's moves are filed, and to the
-  person when the case moves (2026-11-08; masterpod 14.7): the attestor
-  edition lists the cases, the person's wallet reads them.
+  person when the case is decided, sent or dismissed (2026-11-08;
+  masterpod 14.7): the attestor edition lists the cases, the person's
+  wallet reads them. Since 2026-11-12 (section 11) one thing does notify
+  the person: a scheduled video call, `recoveryCaseScheduled` (13.3).
 
 ### 13.7 Build notes
 

@@ -10,7 +10,7 @@ import { ProfileCacheService } from '../services/profile-cache.service';
  * cards, the listing page, the people who connected, the pinned listing
  * card and Home; since 2026-11-08 on the Vouch requests page and the DAO
  * proposal page; since 2026-11-12 in the person's chats about a case, on
- * My case.
+ * My case and My recovery case.
  */
 @Component({
   selector: 'app-avatar',

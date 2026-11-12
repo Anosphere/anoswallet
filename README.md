@@ -69,9 +69,10 @@ src/app/
   components/note-form.component.ts   the note form under a history row: the kind, the money and the currency, the memo (spec 8.2)
   components/confirm-dialog.component.ts   the confirmation box before a send, before a new anos account and before the cancel of a locked transfer, and askConfirm (spec 8.9)
   components/case-chat-start.component.ts   the attestor's Start chat button for the person on a case page: Start chat, Open chat, Invite again (spec 8.7, 13.3)
-  components/case-chat-list.component.ts   the person's chats with the attestors of a case, on My case: Accept, Decline, Open chat (spec 8.7, 13.3)
+  components/case-chat-list.component.ts   the person's chats with the attestors of a case, on My case and My recovery case: Accept, Decline, Open chat (spec 8.7, 13.3)
   pages/                   one file per route: landing, create, recover, vouching, identity, setup,
                            bucket-one, bucket-two, wallet, noted-transactions, account, account-protect, chat, marketplace, notifications, seed, log
+  pages/my-recovery-case.page.ts   the person's recovery case, /cases/recovery/:caseId: the status, the video call with its time and its link, the chat with the attestor, the accounts being moved, the timeline (spec 13.3)
   services/
     config.service.ts      GET /api/config once
     language.service.ts    the language on screen: Thai when the browser's first language is Thai,

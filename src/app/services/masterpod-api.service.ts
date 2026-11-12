@@ -979,7 +979,7 @@ export class MasterpodApiService {
     return this.signed('/rotate-backup-code', body);
   }
 
-  /** The caller's break-glass cases, newest first, each with its moves and the events the person may see (masterpod 14.4.1): what a lost account's card reads. /store-break-glass-blob is no longer called (2026-11-08). */
+  /** The caller's break-glass cases, newest first, each with its moves and the events the person may see (masterpod 14.4.1): what a lost account's card reads, and the recovery finish; since 2026-11-12 the Cases page and My recovery case too (wallet spec 13.3). /store-break-glass-blob is no longer called (2026-11-08). */
   listMyBreakGlassMoves(quiet = false): Promise<ApiResponse<{ cases: BreakGlassCaseItem[] }>> {
     return this.signed('/list-my-break-glass-moves', {}, quiet);
   }
@@ -1105,7 +1105,7 @@ export class MasterpodApiService {
     return this.signed('/list-break-glass-case-security-records', { caseId, bucket });
   }
 
-  /** As /schedule-attestor-case; the person's wallet reads the event from /list-my-break-glass-moves, no notification is sent. */
+  /** As /schedule-attestor-case; the person's wallet reads the event from /list-my-break-glass-moves, and the masterpod writes the person one notification, recoveryCaseScheduled (masterpod 14.7, 2026-11-11). */
   scheduleBreakGlassCase(caseId: string, at: string, meetLink: string): Promise<ApiResponse<{ caseId: string; status: AttestorCaseStatus }>> {
     return this.signed('/schedule-break-glass-case', { caseId, at, meetLink });
   }

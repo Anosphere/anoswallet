@@ -32,6 +32,7 @@ import { ModerationCasePage } from './pages/moderation-case.page';
 import { ModerationPage } from './pages/moderation.page';
 import { MyCasePage } from './pages/my-case.page';
 import { MyListingsPage } from './pages/my-listings.page';
+import { MyRecoveryCasePage } from './pages/my-recovery-case.page';
 import { NotedTransactionsPage } from './pages/noted-transactions.page';
 import { NotificationsPage } from './pages/notifications.page';
 import { RecoverCasePage } from './pages/recover-case.page';
@@ -52,7 +53,7 @@ import { sessionGuard } from './session.guard';
  * and the three Recover pages needs a session; /recover/case needs a
  * recovery session instead; the two Moderation pages need a session and the
  * moderator edition; the four Attesting pages a session and the attestor
- * edition; the two Cases pages a session.
+ * edition; the three Cases pages a session.
  */
 export const routes: Routes = [
   { path: '', component: LandingPage, title: 'Wallet' },
@@ -107,6 +108,8 @@ export const routes: Routes = [
   { path: 'attesting/dispute/:caseId', component: AttestingDisputeCasePage, canActivate: [attestingGuard], title: 'Dispute case' },
   { path: 'attesting/recovery/:caseId', component: AttestingRecoveryCasePage, canActivate: [attestingGuard], title: 'Recovery case' },
   { path: 'cases', component: CasesPage, canActivate: [sessionGuard], title: 'Cases' },
+  // The person's recovery case (2026-11-12) sits in front of cases/:caseId: the more specific path first.
+  { path: 'cases/recovery/:caseId', component: MyRecoveryCasePage, canActivate: [sessionGuard], title: 'My recovery case' },
   { path: 'cases/:caseId', component: MyCasePage, canActivate: [sessionGuard], title: 'My case' },
   { path: 'log', component: LogPage, canActivate: [sessionGuard], title: 'Log' },
   { path: '**', redirectTo: '' },

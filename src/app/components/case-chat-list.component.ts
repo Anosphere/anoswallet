@@ -9,15 +9,15 @@ import { AvatarComponent } from './avatar.component';
 
 /**
  * The person's chats with the attestors of a case (wallet spec 8.7 and
- * 13.3), on My case, in the shape of the listing's people: the attestors
- * waiting (the invites to this pod into a room about the case: avatar,
- * "attestorjoy is an attestor on this case and wants to chat with you",
- * Accept, which calls /accept-invite, refreshes the rooms and opens the
- * conversation, and Decline), then the chats (the rooms about the case:
- * the avatar and username of the room's creator, who is the attestor, and
- * Open chat to the conversation); "No attestor has started a chat with you
- * about this case yet." when both are empty. The lists are live from
- * session.chatRooms.
+ * 13.3), on My case and My recovery case, in the shape of the listing's
+ * people: the attestors waiting (the invites to this pod into a room about
+ * the case: avatar, "attestorjoy is an attestor on this case and wants to
+ * chat with you", Accept, which calls /accept-invite, refreshes the rooms
+ * and opens the conversation, and Decline), then the chats (the rooms
+ * about the case: the avatar and username of the room's creator, who is
+ * the attestor, and Open chat to the conversation); "No attestor has
+ * started a chat with you about this case yet." when both are empty. The
+ * lists are live from session.chatRooms.
  */
 @Component({
   selector: 'app-case-chat-list',
