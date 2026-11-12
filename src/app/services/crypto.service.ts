@@ -245,6 +245,12 @@ export interface AssistedTransferCancelPayload {
   accountId: string;
 }
 
+export interface LockedTransferCancelPayload {
+  type: 'lockedTransferCancel';
+  transactionId: string;
+  accountId: string;
+}
+
 export type Vote = 'for' | 'against';
 
 export interface GuardianVotePayload {
@@ -274,6 +280,7 @@ export interface EscrowVerdictPayload {
 export type FollowUpPayload =
   | AttestationPayload
   | AssistedTransferCancelPayload
+  | LockedTransferCancelPayload
   | GuardianVotePayload
   | EscrowSignaturePayload
   | EscrowVerdictPayload;

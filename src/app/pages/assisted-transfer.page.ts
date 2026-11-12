@@ -8,6 +8,7 @@ import { millionthsToAnos } from '../amounts';
 import { assistedStageWords } from '../assisted-stage';
 import { ACCOUNT_POLL_MS } from '../constants';
 import { AnosApiService, HeldAssistedTransfer } from '../services/anos-api.service';
+import { ConfigService } from '../services/config.service';
 import { CryptoService, KeyBlobLostError, PairOne } from '../services/crypto.service';
 import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
@@ -139,6 +140,7 @@ export class AssistedTransferPage {
   private readonly anos = inject(AnosApiService);
   private readonly crypto = inject(CryptoService);
   private readonly signing = inject(SigningService);
+  private readonly config = inject(ConfigService);
   protected readonly lang = inject(LanguageService);
   protected readonly t = this.lang.words;
 
@@ -317,6 +319,7 @@ export class AssistedTransferPage {
     if (/a cancellation is already present/.test(reason)) return words.alreadyCancelling;
     if (/no assisted_transfers transaction/.test(reason)) return words.noLongerHeldReason;
     if (/not the transfer's sender/.test(reason)) return words.cannotCancel;
+    if (/cannot be cancelled yet/.test(reason) && typeof this.config.config()?.lockOffsetMinutes === 'number') return this.t().account.cancelNotYet(this.t().minutes(this.config.config()!.lockOffsetMinutes!));
     return `/assisted-transfer-cancel: ${reason}`;
   }
 }

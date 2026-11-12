@@ -113,9 +113,20 @@ type SendOrder =
  * attestation, the transfer page the cancel). Locked transfer (2026-11-06,
  * section 11): on a guarded or vault account /get-locked-transfer is read
  * with the others; the transfer waiting out its lock is one row with no
- * link, since nothing can be done with it, with the stage in words and
+ * link, since it has no page of its own, with the stage in words and
  * its unlock moment, and a line under the balance says what is waiting
- * out the lock. The guardian features live on the Guardians page
+ * out the lock. The sender can cancel it from that row (2026-11-11,
+ * section 11): a Cancel transfer button under the row while the stage is
+ * locked or due asks in the confirmation box, whose first button reads
+ * Back there; on yes the lockedTransferCancel follow-up is built with
+ * pair one, signed by /api/sign and posted to /locked-transfer-cancel,
+ * and the sent line or the refusal in plain words shows under the row. A
+ * cancel pressed in the transfer's first minutes is refused by the
+ * validators, and the line says when it can be cancelled. The row reads
+ * Being cancelled until it is gone. While the cancel is on its way a
+ * progress bar shows under the row; the bar and "Sending…" under the
+ * Send form are the send's and do not show then.
+ * The guardian features live on the Guardians page
  * (2026-11-08). A lost account (2026-11-08: its keyBlob does not open under
  * the key blob key, the keys went with an old passkey) shows the lost title
  * and text and its break-glass move's state in place of the summary, keeps
@@ -212,7 +223,7 @@ type SendOrder =
               </mat-form-field>
               <button mat-flat-button type="button" (click)="askSend()" [disabled]="busy() || pending().length > 0 || sellerEscrowOpen() || assisted() !== null || locked() !== null || minutesAhead() === null || !canSend()">{{ t().common.send }} {{ transferType() }}</button>
             </div>
-            @if (busy()) {
+            @if (busy() && !cancelBusy()) {
               <mat-progress-bar mode="indeterminate"></mat-progress-bar>
               <p class="muted">{{ t().account.sending }}</p>
             }
@@ -303,9 +314,18 @@ type SendOrder =
                   </span>
                 </mat-list-item>
               </mat-list>
+              @if (waiting.stage === 'locked' || waiting.stage === 'due') {
+                <div class="row">
+                  <button mat-stroked-button type="button" (click)="askCancelLocked()" [disabled]="busy()">{{ t().assisted.cancelTransfer }}</button>
+                </div>
+              }
             } @else {
               <p class="muted">{{ t().account.noTransferWaiting }}</p>
             }
+            @if (cancelBusy()) {
+              <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+            }
+            @if (cancelOutcome(); as o) { <p [class.error]="!o.ok" [class.ok]="o.ok">{{ o.text }}</p> }
           }
         }
 
@@ -378,6 +398,10 @@ export class AccountPage {
   /** Starts empty (2026-11-10; it started at 1), as resetForm() leaves it: Send stays off until an amount is typed. */
   protected readonly amount = signal('');
   protected readonly sendOutcome = signal<Outcome | null>(null);
+  /** The line under the Locked transfer row after Cancel transfer (2026-11-11): the sent line, or the refusal in the words of cancelRefusal; null until a cancel is sent, and again when a new send starts. */
+  protected readonly cancelOutcome = signal<Outcome | null>(null);
+  /** True while a cancel of the locked transfer is on its way (2026-11-11): the progress bar under the Locked transfer row shows then, and the Send form's bar and "Sending…" do not, since busy() is on for a send and for a cancel alike. */
+  protected readonly cancelBusy = signal(false);
 
   /** The transaction type Send makes, from the account type and the spending kind. */
   protected readonly transferType = computed((): string => {
@@ -574,6 +598,7 @@ export class AccountPage {
 
   /** Builds, signs (pair one here, the wallet pair at /api/sign) and posts the order the confirmation box showed (2026-11-10). It never reads the form, which is empty by now: a transferToFund when the order has a purpose, else a transfer of the order's type to the order's recipient. minutesAhead() and the date of a guarded or vault transfer are worked out here, after the box, so the time spent reading the box does not use up the lock's offset. */
   private async send(order: SendOrder): Promise<void> {
+    this.cancelOutcome.set(null);
     await this.act(this.sendOutcome, async () => {
       const pairOne = await this.pairOne();
       const latest = await this.anos.getAccount(pairOne, this.accountId(), true);
@@ -602,6 +627,47 @@ export class AccountPage {
     if (order.stakePurpose !== null && /not appointed as/.test(reason)) return this.t().account.notAppointed(order.stakePurpose);
     if (/could not confirm/.test(reason)) return this.t().account.masterpodNotConfirmed;
     return reason;
+  }
+
+  /** The Cancel transfer button under the Locked transfer row (wallet spec 8.2, Account, and 8.9; 2026-11-11): the sender's cancel of the guarded or vault transfer waiting out its lock. It asks in the confirmation box, whose first button reads Back here, and nothing is sent until "Yes, cancel the transfer" is pressed there. Then the lockedTransferCancel follow-up for the transfer the box showed is built with pair one, /api/sign adds the wallet pair and /locked-transfer-cancel takes it, with a progress bar under the row meanwhile (cancelBusy); the line under the row is the sent line or the refusal in the words of cancelRefusal, and the page refreshes. Nothing happens with no locked transfer or while a box is already open. */
+  protected async askCancelLocked(): Promise<void> {
+    const waiting = this.locked();
+    if (!waiting || this.dialog.openDialogs.length > 0) return;
+    const words = this.t();
+    const anos = millionthsToAnos(waiting.amount);
+    const confirmed = await askConfirm(this.dialog, {
+      title: words.account.confirmCancelTitle,
+      lines: [
+        { label: words.common.amount, value: words.common.anos(anos) },
+        { label: words.common.to, value: waiting.accountIdTo, code: true },
+      ],
+      notes: [words.account.confirmCancelNote(anos)],
+      confirmLabel: words.assisted.yesCancel,
+      cancelLabel: words.common.back,
+    });
+    if (!confirmed) return;
+    this.cancelBusy.set(true);
+    await this.act(this.cancelOutcome, async () => {
+      const pairOne = await this.pairOne();
+      const signed = await this.signing.sign(this.crypto.buildFollowUp(pairOne, { type: 'lockedTransferCancel', transactionId: waiting.transactionId, accountId: this.accountId() }));
+      const res = await this.anos.lockedTransferCancel(signed);
+      if (!res.ok) throw new Error(this.cancelRefusal(res));
+      return this.t().assisted.sentCancel;
+    });
+    this.cancelBusy.set(false);
+    await this.refresh(true);
+  }
+
+  /** The validator's refusal of the cancel in plain words where the reason is a known one: the assisted transfer page's plainReason, for /locked-transfer-cancel. A cancel pressed in the transfer's first minutes (cannot be cancelled yet, anossoftware spec 27.2) names the wait, the proxy's lockOffsetMinutes in words; while that number has not loaded it reads like any other refusal. */
+  private cancelRefusal(res: ApiResponse<unknown>): string {
+    const reason = reasonOf(res);
+    const words = this.t().assisted;
+    if (/not approved yet/.test(reason)) return words.notAllAccepted;
+    if (/cannot be cancelled yet/.test(reason) && typeof this.config.config()?.lockOffsetMinutes === 'number') return this.t().account.cancelNotYet(this.t().minutes(this.config.config()!.lockOffsetMinutes!));
+    if (/a cancellation is already present/.test(reason)) return words.alreadyCancelling;
+    if (/no locked_transactions transaction/.test(reason)) return words.noLongerHeldReason;
+    if (/not the transfer's sender/.test(reason)) return words.cannotCancel;
+    return `/locked-transfer-cancel: ${reason}`;
   }
 
   private async act(outcome: ReturnType<typeof signal<Outcome | null>>, action: () => Promise<string>): Promise<void> {

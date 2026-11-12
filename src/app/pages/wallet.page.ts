@@ -45,8 +45,11 @@ interface Step {
  * stepper through the service's step callback). Create anos account, and
  * Retry, first ask in the confirmation box (2026-11-10, wallet spec 8.9);
  * Resubmit does not, since it makes no new account. The balances are read
- * when the page opens, by Refresh and every 5 seconds while an account is
- * not on the ledger yet or any anos are held or pending. A lost account
+ * when the page opens and by Refresh, every account; every 5 seconds
+ * while an account is not on the ledger yet or any anos are held or
+ * pending, those accounts are read again, the ones not on the ledger yet
+ * and the ones with anos held or pending, and every account once when one
+ * of them changed (balances.service's poll, 2026-11-11). A lost account
  * (its keyBlob does not open under the key blob key: the keys went with
  * an old passkey, 2026-11-08) shows the lock-off icon and "Lost with the
  * old passkey" in place of the balance and, when /list-my-break-glass-moves
@@ -185,10 +188,13 @@ export class WalletPage {
 
   constructor() {
     void this.load();
-    // The balances are read again every 5 seconds while an account is not
-    // on the ledger yet or any anos are held or pending (balances.service).
+    // Every 5 seconds while an account is not on the ledger yet or any anos
+    // are held or pending, those accounts are read again: the ones that are
+    // not on the ledger yet and the ones with anos held or pending, and every
+    // account once when one of them changed (balances.service, poll;
+    // 2026-11-11).
     const timer = setInterval(() => {
-      if (this.balances.needsPoll() && !this.busy() && !this.balances.busy()) void this.balances.refresh(true);
+      if (this.balances.needsPoll() && !this.busy() && !this.balances.busy()) void this.balances.poll();
     }, ACCOUNT_POLL_MS);
     inject(DestroyRef).onDestroy(() => clearInterval(timer));
   }

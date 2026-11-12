@@ -77,6 +77,10 @@ export const config = Object.freeze({
   distDir: process.env.DIST_DIR ?? 'dist/wallet/browser',
   /** How long a backend has to answer, in milliseconds. */
   proxyTimeoutMs: 120_000,
+  /** How long a connection kept open to a validator's doorman may sit unused before the proxy closes it, in milliseconds, and how long a new one may take to open (wallet spec 2). It has to stay under the doormen's own 15 seconds (keepalive_timeout in doormansoftware/deploy/nginx/doorman.conf), so the proxy is always the first to close and no call meets a closing connection. A validator whose machine cannot be reached answers 502 after this long. */
+  validatorIdleMs: 10_000,
+  /** How many unused connections, open and waiting for the next call, the proxy keeps per validator at most; one more that becomes free is closed at once. It is no limit on the calls under way: a call that finds no waiting connection opens a new one. */
+  validatorIdleConnections: 32,
 });
 
 if (config.defaultValidator > config.validatorUrls.length) {

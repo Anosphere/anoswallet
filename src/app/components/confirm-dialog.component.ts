@@ -12,23 +12,28 @@ export interface ConfirmLine {
   code?: boolean;
 }
 
-/** What opens the box: its title, the rows, the notes under them, and the words on the button that says yes. */
+/** What opens the box: its title, the rows, the notes under them, the words on the button that says yes and, when given, the words on the first button. */
 export interface ConfirmData {
   title: string;
   lines: ConfirmLine[];
   notes: string[];
   confirmLabel: string;
+  /** The words on the first button, which closes the box with false (2026-11-11). Left out, it reads Cancel (common.cancel); the cancel of a locked transfer gives Back, since Cancel there would read as the cancel itself. */
+  cancelLabel?: string;
 }
 
 /**
  * The confirmation box (wallet spec 8.9), the wallet's one pop-up box, opened
- * with MatDialog by askConfirm below: before a send on the account page and
- * before a new anos account on the Wallet page. The title; the lines as a
- * two-column grid, a label and its value, an id in the id font; each note as
- * a paragraph. A value wraps at a space and is cut inside a word only when
- * the word alone is too long; an id is cut anywhere, by the global rule for
- * `code`, so its 64 characters wrap on a phone. Then Cancel, which closes
- * with false, and the button the caller names, which closes with true. The
+ * with MatDialog by askConfirm below: before a send on the account page,
+ * before a new anos account on the Wallet page and, since 2026-11-11, before
+ * the cancel of a locked transfer on the account page. The title; the lines
+ * as a two-column grid, a label and its value, an id in the id font; each
+ * note as a paragraph. A value wraps at a space and is cut inside a word
+ * only when the word alone is too long; an id is cut anywhere, by the global
+ * rule for `code`, so its 64 characters wrap on a phone. Then the first
+ * button, which closes with false: Cancel, or the words the caller gives
+ * (cancelLabel; the cancel of a locked transfer gives Back); and the button
+ * the caller names, which closes with true. The
  * box closes only by those two:
  * askConfirm opens it so that a click outside it and the Escape key do
  * nothing, and with the focus on the box itself, so the Enter key answers
@@ -61,7 +66,7 @@ export interface ConfirmData {
       }
     </mat-dialog-content>
     <mat-dialog-actions align="end">
-      <button mat-button type="button" [mat-dialog-close]="false">{{ t().common.cancel }}</button>
+      <button mat-button type="button" [mat-dialog-close]="false">{{ data.cancelLabel ?? t().common.cancel }}</button>
       <button mat-flat-button type="button" [mat-dialog-close]="true" [disabled]="!armed()">{{ data.confirmLabel }}</button>
     </mat-dialog-actions>
   `,

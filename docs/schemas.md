@@ -99,10 +99,30 @@ Behaviour
 - Bodies are streamed, never parsed: no express.json in front of the
   proxy, so a 70 MB bucket request passes through as it is. Headers go
   through as received, the browser's Origin included, so the backends'
-  CORS rules see http://localhost:4200 as they do today.
+  CORS rules see http://localhost:4200 as they do today. The one
+  exception is the Connection header on a call to a validator, which
+  the proxy sets to keep-alive (2026-11-11, the point on the
+  connections below).
 - The backend's status and body come back unchanged. A backend that does
   not answer: 502 { error: "<masterpod | validator n | keyholder n |
   signing server> unavailable" }. Proxy timeout 120 seconds.
+- The connections to the validators stay open (2026-11-11, section 11).
+  A call to a validator goes to its doorman on a connection that is
+  open and waiting when there is one, so it does not open a connection
+  and set up the encryption again. The proxy closes a connection that
+  sat unused for 10 seconds (validatorIdleMs in server/config.js). The
+  doormen close one after 15 seconds, so the proxy is always first and
+  no call meets a closing connection. The proxy keeps at most 32 unused
+  connections per validator (validatorIdleConnections), in each of its
+  processes. That is no limit on the calls under way: a call that finds
+  no waiting connection opens a new one. A new connection has the same
+  10 seconds to open, so a validator whose machine cannot be reached is
+  502 { error: "validator n unavailable" } after 10 seconds, where the
+  call hung for the 120. A call that is under way still has the 120.
+  For this the proxy sends "Connection: keep-alive" to a validator in
+  place of the "close" that nginx in front of it sends with every call.
+  The masterpod, the keyholders and the signing server get a new
+  connection for every call, as before.
 - The signed envelope's path is the backend path: the browser signs
   "/complete-setup" and posts to /api/masterpod/complete-setup; the proxy
   strips its prefix and the masterpod sees /complete-setup.
@@ -501,16 +521,22 @@ fifth, /get-locked-transfer, and the date range on /list-transactions on
     POST /get-locked-transfer (account)
     body { }
     answer: 200 { transfer: { transactionId, accountId, accountIdTo, amount: string, createdAt,
-      unlocksAt: ISO 8601, stage: waiting | locked | due } | null }
+      unlocksAt: ISO 8601, stage: waiting | locked | due | cancelling } | null }
     transfer: the locked_transactions row whose account_id is the signer, a guarded or vault transfer waiting
       out its time lock, or null when there is none (2026-11-06, anossoftware spec section 18). There is at
       most one: account_id is unique there, and the validator holds one transaction per account. The sender's
       only: the receiver sees it in the history when it lands. The held transfer only, nothing from logs or
       archives: a written transfer is on the chain under the same id, and the row is deleted when written.
-      Nothing can be done with a locked transfer: no follow-up exists for it. unlocksAt is the row's
+      Since 2026-11-11 the sender can cancel a locked transfer until it is written, with the follow-up
+      lockedTransferCancel at POST /locked-transfer-cancel (anossoftware spec section 28; 8.2, Account). A
+      cancelled transfer's row moves to the validator's logs, and this read then answers null: a cancelled
+      transfer leaves no trace the wallet reads. Until that day nothing could be done with a locked
+      transfer, since no follow-up existed for it. unlocksAt is the row's
       future_date, the moment the transfer may be written. stage is named by the validator from the row by the
       database's clock, the one the ready list reads (anossoftware spec 18.2): waiting until every validator
-      accepted the transfer; locked while the unlock moment is ahead; due once it has passed, until the next
+      accepted the transfer; cancelling (2026-11-11) with the sender's cancel on it, which the validator
+      decides right after waiting, until every validator accepted the cancel and the row is gone; locked
+      while the unlock moment is ahead; due once it has passed, until the next
       leader round writes it (a round starts with the next transaction of any kind).
 
 Refusals are 400 or 401 + { error }, logged "failed: <reason>" like
@@ -943,9 +969,13 @@ and Log, with the entry's icon and label, Chat and Notifications
 carrying their unread counts at the top right, drawn from the same list
 as the side panel (navigation.service, 8.3). On open /list-anos-accounts
 (quiet) fills the session's accounts, a refusal in red, then the
-balances are read; every 5 seconds they are read again while an account
-is not on the ledger yet or any anos are held or pending, as the Wallet
-page does. Beside the accounts, /list-dao-proposals { status: 'open',
+balances are read; every 5 seconds while an account is not on the ledger
+yet or any anos are held or pending, those accounts are read again, the
+ones that are not on the ledger yet and the ones with anos held or
+pending, and every account once when one of them changed, as the Wallet
+page does (2026-11-11, section 11; until then every account was read
+again every 5 seconds). Beside the accounts, /list-dao-proposals {
+status: 'open',
 limit: 100 } (quiet) counts the proposals with yourWeight at least 1 and
 no vote of this pod for the open-votes line, and /list-fund-proposals {
 status: 'open' } (quiet) brings the open fund proposal for the fund line,
@@ -1006,10 +1036,21 @@ history lists the move, "The attestors dismissed the move". The card's
 footer: the id in short form ("a1b2c3d4…e5f6",
 the first 8 and the last 4 characters), a copy button (8.5) with the
 full id, and Resubmit on an unsubmitted account. The balances are read
-when the page opens, by the card's refresh button, by Refresh (which
-reloads the account list too) and every 5 seconds while an account is
-not on the ledger yet or any anos are held or pending; quiet in the log,
-as the polls are. Then "Open a new account": a type select (spending,
+when the page opens, by the card's refresh button and by Refresh (which
+reloads the account list too): every account. Every 5 seconds while an
+account is not on the ledger yet or any anos are held or pending, the
+watched accounts are read again, quiet in the log, as the polls are: the
+accounts that are not on the ledger yet and the ones with anos held or
+pending (2026-11-11, section 11; balances.service's poll, 8.3; until
+then every account was read again every 5 seconds). When such a round
+changed a watched account (it landed, its balance moved or its held
+amount changed), every account is read once, so a move between two of
+the person's own accounts does not leave the total short for longer than
+about one round. While something is held on one account, the other
+accounts are not read again by themselves: anos that arrive on them show
+when Home or the Wallet page is next opened, or with the card's refresh
+button, as it already is when nothing is held. Then "Open a new
+account": a type select (spending,
 guarded, vault, assisted) and Create anos account, which first asks in
 the confirmation box (8.9; 2026-11-10, section 11): the title "Open a new
 spending account?", with the type from the select, the line "The account
@@ -1147,18 +1188,68 @@ shows.
 
 Locked transfer (2026-11-06, section 11), after Escrow trades, on a
 guarded or vault account only: the transfer waiting out its time lock
-from /get-locked-transfer as one row that is not a link, since nothing
-can be done with it (no follow-up exists for a locked transfer, and it
-has no page of its own): "5 anos to <receiver>", then "Waiting out the
-lock · until <the unlock moment>" while the stage is locked, else the
-stage in words and the date it was made; "No transfer is waiting." when
-there is none; the read's refusal in red when it fails (a validator or
-doorman without the route), the rest of the page unharmed. The stage
-words, from the validator's stage (anossoftware spec 18.2,
+from /get-locked-transfer as one row that is not a link, since a locked
+transfer has no page of its own: "5 anos to <receiver>", then "Waiting
+out the lock · until <the unlock moment>" while the stage is locked,
+else the stage in words and the date it was made; "No transfer is
+waiting." when there is none; the read's refusal in red when it fails (a
+validator or doorman without the route), the rest of the page unharmed.
+The stage words, from the validator's stage (anossoftware spec 18.2,
 locked-stage.ts): waiting, "Waiting for the validators"; locked,
-"Waiting out the lock"; due, "Unlocked, being written"; a word the
-wallet does not know, "Held". On any other account type nothing is read
-and nothing shows.
+"Waiting out the lock"; due, "Unlocked, being written"; cancelling
+(2026-11-11), "Being cancelled"; a word the wallet does not know,
+"Held". On any other account type nothing is read and nothing shows.
+
+The sender can cancel the locked transfer from its row (2026-11-11,
+section 11; the plan is forclaude/locked-transfer-cancel-plan-1.md, the
+validators' part anossoftware spec sections 27 and 28, the doorman's
+doormansoftware spec section 9). Until then nothing could be done with
+it. The button: "Cancel transfer", stroked, under the row, while the
+stage is locked or due, that is from the moment every validator has
+accepted the transfer until it is written; off while the page is busy.
+It does not show while the stage is waiting, when the validators would
+refuse the cancel, nor while it is cancelling. The button asks in the
+confirmation box (8.9): the title "Cancel this transfer?"; Amount, "12
+anos"; To, the receiver's full account id; the note "The 12 anos stay in
+this account. It cannot be undone."; the buttons Back and "Yes, cancel
+the transfer". The first button reads Back in this box, where Cancel
+would read as the cancel itself. Back does nothing. Yes builds the
+follow-up lockedTransferCancel for the transfer the box showed,
+{ type: "lockedTransferCancel", transactionId, accountId } with signedAt
+added (crypto buildFollowUp, pair one from the keyBlob); /api/sign adds
+the wallet pair; /locked-transfer-cancel takes it (anos-api
+lockedTransferCancel); the page refreshes. While the cancel is on its
+way a progress bar shows under the row, with no words, as on the
+assisted transfer page, and the page's buttons are off; the bar and
+"Sending…" under the Send form are the send's and do not show then. The
+line under the row, in
+green: "Sent. The transfer is being cancelled; the anos stay in this
+account." The row then reads "Being cancelled · <the date it was made>"
+until every validator has accepted the cancel. Then the row is gone, the
+section reads "No transfer is waiting." and the account can send again.
+The wallet shows nothing more about a cancelled transfer, no line in the
+history and no notification, as for a cancelled assisted transfer. The
+line under the row stands until the next cancel or the next send starts.
+
+The wait. The validators refuse a cancel in the transfer's first
+minutes, for as long as they would still take the same signed transfer
+in again (anossoftware spec 27.2): with the wallet's dating that is the
+offset after sending, 5 minutes on the testnet. The wallet shows nothing
+about the wait ahead of time. The button is there from the start, a
+press inside the wait goes to the validators, and their refusal reads
+under the row, in red: "A transfer can be cancelled 5 minutes after it
+is sent. Try again in a few minutes.", the number being the proxy's
+lockOffsetMinutes in words (section 2). The refusals in plain words
+(`cancelRefusal`), by what the validator's reason holds: "not approved
+yet", "The validators have not all accepted this transfer yet. Try again
+in a moment."; "cannot be cancelled yet", the sentence of the wait, or,
+while the lock numbers have not loaded, the refusal as it came; "a
+cancellation is already present", "This transfer is already being
+cancelled."; "no locked_transactions transaction", "This transfer is no
+longer held: it was written or cancelled."; "not the transfer's sender",
+"This account cannot cancel this transfer." Every other refusal reads
+"/locked-transfer-cancel: HTTP <status>: <reason>": against a doorman
+without the route, "/locked-transfer-cancel: HTTP 404: Not Found".
 
 Send: recipient account id (typed, or by the paste button at the right
 end of the box, which reads the clipboard and takes the run of exactly 64
@@ -1173,7 +1264,9 @@ date the transfer the lock plus the offset ahead by the numbers
 /api/config gives (section 2: the proxy's env, the validators' numbers;
 10 + 5 and 20 + 5 minutes on the testnet, 1 + 1 and 2 + 1 locally;
 2026-11-06, section 11), with the line "A guarded transfer is dated 15
-minutes ahead and waits out its lock on the validators." under Send, the
+minutes ahead and waits out its lock on the validators. You can cancel
+it until it is written." under Send (the last sentence since 2026-11-11,
+section 11), the
 minutes in words (minutes-words.ts: "7 days and 10 minutes" in
 production); while the numbers have not loaded, Send is off and the line
 reads "The lock settings have not loaded from the proxy. Refresh to try
@@ -1229,7 +1322,8 @@ lock numbers have not loaded, with the line "An escrow trade is open.
 This account can send again when it closes.", "An assisted transfer is
 waiting. This account can send again when it is written or cancelled."
 or "A transfer is waiting out its lock. This account can send again when
-it is written." Under Send, an assisted account
+it is written or cancelled." (the last two words since 2026-11-11,
+section 11). Under Send, an assisted account
 reads "An assisted transfer waits until two attestors have checked it.
 An attestor will open a case and ask for your lookup id. You can cancel
 it until it is written." where a guarded or vault account reads its lock
@@ -1359,7 +1453,13 @@ Yes builds the escrowSuccess, escrowCancel or escrowDispute follow-up
 wallet pair, /escrow-signature takes it, then "Sent. ..." in green or
 the validator's refusal in plain words (not all accepted yet; the other
 side moved first, naming what they did; already in dispute; not this
-account's to sign), and the page refreshes. No buttons in any other
+account's to sign; and, since 2026-11-11, section 11, the wait before
+the buyer's cancel: the validators refuse it in the trade's first
+minutes, while the same signed transfer could still be sent in again,
+anossoftware spec 27.2, and the page reads "A trade can be cancelled 5
+minutes after it is made. Try again in a few minutes.", the number being
+the proxy's lockOffsetMinutes in words; while that number has not loaded
+the refusal reads as it came), and the page refreshes. No buttons in any other
 stage, nor for a stage word the wallet does not know, which reads Open.
 In dispute: who disputed it (you or the other side), the verdicts so far
 ("No verdict yet.", or "Verdicts so far: 1 to release. Waiting for one
@@ -1413,7 +1513,13 @@ buildFollowUp, pair one from the keyBlob), /api/sign adds the wallet
 pair, /assisted-transfer-cancel takes it, then "Sent. The transfer is
 being cancelled; the anos stay in this account." in green or the
 validator's refusal in plain words (not all accepted yet; already being
-cancelled; no longer held; not this account's to cancel), the rest as
+cancelled; no longer held; not this account's to cancel; and, since
+2026-11-11, section 11, the wait: the validators refuse the cancel in
+the transfer's first minutes, while the same signed transfer could still
+be sent in again, anossoftware spec 27.2, and the page reads "A transfer
+can be cancelled 5 minutes after it is sent. Try again in a few
+minutes.", the number being the proxy's lockOffsetMinutes in words;
+while that number has not loaded the refusal reads as it came), the rest as
 "/assisted-transfer-cancel: <reason>", and the page refreshes. The
 closed view, for someone on the page when the transfer leaves the
 validator: the first page of /list-transactions is read, and the id on
@@ -2101,9 +2207,11 @@ excepted, with the keyholder and anos calls included.
                             /get-fund-proposal) wait at most VALIDATOR_READ_TIMEOUT_MS, 10 seconds
                             (constants.ts), and with no answer are asked again on the next validator, each
                             validator at most once per call, the last failure returned when none answers; the
-                            eight submissions (write: /create-account, /anos-transfer, /transfer-to-fund,
-                            /fund-proposal, /attestation, /assisted-transfer-cancel, /guardian-vote,
-                            /escrow-signature) are tried once, with no time limit, and never sent again by the
+                            nine submissions (write: /create-account, /anos-transfer, /transfer-to-fund,
+                            /fund-proposal, /attestation, /assisted-transfer-cancel, /locked-transfer-cancel,
+                            /guardian-vote, /escrow-signature; eight until 2026-11-11, when
+                            lockedTransferCancel, the post of a locked transfer's cancel, was added, section
+                            11) are tried once, with no time limit, and never sent again by the
                             wallet on its own, since one that got no answer may still have been taken: the
                             session moves on, the failure is shown as before, and the person's next try goes
                             to the next validator
@@ -2134,7 +2242,21 @@ excepted, with the keyholder and anos calls included.
                             poll, isLost and usableAccounts tell the pages and the pickers, markLost tries every
                             keyBlob whenever the account list changes, and the lost accounts' break-glass moves
                             (moves, moveOf, loadMoves over /list-my-break-glass-moves and the new account's
-                            history) are read with the balances
+                            history) are read with the balances; since 2026-11-11 (section 11) two reads:
+                            refresh(quiet), the full read, every account, and poll(), one round of the 5-second
+                            read Home and the Wallet page make while needsPoll, which reads the watched accounts
+                            only (the session's accounts that are not lost and have no entry yet, an entry that
+                            is not on the ledger, or anos held or pending: needsPoll's test, per account), at
+                            the same time, quietly and under busy; a round returns at once while a read runs,
+                            reads nothing with no watched account, and is a quiet refresh for another pod than
+                            the one last read; after a round's reads a full read follows in two cases: the round
+                            changed landed, balance or held in a watched account's entry and the session has an
+                            account that is not lost and was not read in the round (a move between two of the
+                            person's own accounts), or a full read was asked for during the round: refresh
+                            leaves word when it finds a round running, where it returns when it finds another
+                            refresh running, and the round runs that read when it ends, quiet only when every
+                            refresh that left word was quiet; otherwise the round ends as refresh ends, the lost
+                            accounts' moves when an account is lost, then readAt
     balance-sheet.component not a service: the component the balance card opens with MatBottomSheet
                             (2026-11-10; components/balance-sheet.component.ts, `BalanceSheetComponent`, the
                             data { kind }: available, staked, escrow or sending), listed here because it reads
@@ -2169,7 +2291,10 @@ excepted, with the keyholder and anos calls included.
                             unwrapJson (2026-11-07); deriveKekKeys, the key blob under it and KeyBlobLostError
                             (2026-11-08); the break-glass transfer and the account envelope signed by the
                             break-glass pair (buildBreakGlassTransferTransaction, signAccountEnvelopeAsBreakGlass,
-                            2026-11-08)
+                            2026-11-08); the follow-up payloads that buildFollowUp signs, FollowUpPayload:
+                            AttestationPayload, AssistedTransferCancelPayload, LockedTransferCancelPayload
+                            (2026-11-11, section 11), GuardianVotePayload, EscrowSignaturePayload and
+                            EscrowVerdictPayload
     passkey.service         the keyholder test app's, unchanged
     shares.service          the deposit rule of section 6, one function: deposit(secret, shareType)
     account-creation.service
@@ -2396,15 +2521,17 @@ resolves true only when the box closed by its second button.
 What it is given, `ConfirmData`: `title`; `lines`, each a `ConfirmLine`
 `{ label, value, code? }`, drawn as a two-column grid, the label in the
 on-surface-variant colour and the value beside it, in the id font when
-`code` is true; `notes`, each a paragraph under the lines; and
-`confirmLabel`, the words on the second button. A value too long for its
+`code` is true; `notes`, each a paragraph under the lines;
+`confirmLabel`, the words on the second button; and, since 2026-11-11
+(section 11), `cancelLabel`, which a caller may leave out: the words on
+the first button. A value too long for its
 column wraps at a space, and is cut inside a word only when the word
 alone is too long (`overflow-wrap: anywhere`); a value in the id font is
 cut anywhere, by the global rule for `code`, so a 64-character id wraps
 on a phone (2026-11-10, section 11: at first every value was cut
-anywhere). The two buttons, at the right: Cancel
-(`common.cancel`), which closes with false, and the caller's button,
-which closes with true.
+anywhere). The two buttons, at the right: the first, which closes with
+false and reads Cancel (`common.cancel`), or the caller's `cancelLabel`
+when one is given; and the caller's button, which closes with true.
 
 The box closes only by those two buttons. A click outside it and the
 Escape key do nothing (`disableClose`), so the second click of a double
@@ -2416,9 +2543,13 @@ land on it. Nothing in the box has the focus when it opens (`autoFocus:
 nothing. The box is 480 px wide, or the screen's width less 32 px where
 that is narrower.
 
-Two places use it (8.2): the Send form of the account page, before every
-kind of send, and "Open a new account" on the Wallet page, before Create
-anos account and Retry. Each does nothing while a box is already open.
+Three places use it (8.2): the Send form of the account page, before
+every kind of send; "Open a new account" on the Wallet page, before
+Create anos account and Retry; and, since 2026-11-11 (section 11),
+"Cancel transfer" under the Locked transfer row of the account page.
+That third place is the only one that gives `cancelLabel`: Back
+(`common.back`), since Cancel there would read as the cancel itself; the
+other two keep Cancel. Each does nothing while a box is already open.
 
 ## 9. Configuration, and running it on this machine
 
@@ -2465,11 +2596,14 @@ network/testnet.env numbers (2026-11-06, section 11).
 - From the Home plan (forclaude/wallet-home-plan-1.md, 2026-11-06): a
   nickname for an account (would need a masterpod column); a QR code of
   an account id (would need a package); the Log as a tile on Home; a
-  count of waiting vouch requests on Home for a seed (needs a read); a
-  cancel for a locked transfer (none exists on the validator); the
+  count of waiting vouch requests on Home for a seed (needs a read); the
   receiver's view of an incoming assisted transfer; a username for an
   account id; a notification when a transfer is written; asking several
-  validators instead of one; "Anos" with a capital.
+  validators instead of one; "Anos" with a capital. A cancel for a
+  locked transfer stood in this list, with "none exists on the
+  validator", until 2026-11-11, when
+  forclaude/locked-transfer-cancel-plan-1.md built it on the validators,
+  the doormen and here (8.2, Account; section 11).
 - Asking a validator for its lock numbers, so that they live in one
   place, set aside 2026-11-06 (forclaude/wallet-locks-plan-1.md): the
   proxy's env carries the validators' numbers and the two files are
@@ -2530,6 +2664,11 @@ network/testnet.env numbers (2026-11-06, section 11).
   the guardians into one page; an entry of their own in the side panel
   or a Home tile (a card on the DAO page instead, since very few people
   are guardians).
+- From the locked transfer cancel plan
+  (forclaude/locked-transfer-cancel-plan-1.md, 2026-11-11): a cancel by
+  the break-glass key, for someone who lost their passkey; a line in the
+  history or a notification for a cancelled transfer; the receiver's
+  view of a locked transfer.
 - Several passkeys, push delivery, a custom theme, rate limits.
 
 ## 11. Build notes
@@ -6173,6 +6312,556 @@ server.
   at once when only the worker behind its doorman is down, status 0
   after 10 seconds when the machine cannot be reached), and from then on
   calls the next number.
+
+### The script and style files travel compressed (2026-11-11)
+
+No plan: one change on the user's word of 2026-11-11 ("Turn on
+compression for scripts and styles"), after a look at why the site is
+slow at times. Measured from outside that day: the wallet servers sent
+the build's script as it is, 2,116,082 bytes (`main-FHPDFECC.js`), 4 to
+5 seconds to download, because nginx compresses only HTML unless it is
+told the other types. The site `deploy/nginx/wallet.conf` now says so,
+inside each of the three named server blocks: `gzip on`, `gzip_vary on`,
+`gzip_comp_level 6` and
+`gzip_types text/css text/javascript application/javascript`.
+
+- On the wire: a browser that sends `Accept-Encoding: gzip` gets the
+  script and the style file with `content-encoding: gzip`; at level 6
+  the script is about 483 KB (610 KB at nginx's own level, 1). A browser
+  that does not ask gets the files as before. `gzip_vary` adds
+  `Vary: Accept-Encoding`, so a cache in between keeps the two apart.
+- The answers under `/api` are JSON and are not compressed. The user
+  asked for scripts and styles, which are public and the same for
+  everyone; answers that carry secrets are a question of their own.
+- The lines stand in the server blocks, not at the top of the file. The
+  file is read at the level of the server's `/etc/nginx/nginx.conf`,
+  which has `gzip on` already (the HTML arrived compressed before this
+  change), and a second one at that level is refused as a duplicate.
+- `application/javascript` stands beside `text/javascript`, which is
+  what the proxy's static files say today, for a version that says the
+  older name.
+- Nothing in `server/` or `src/` changed and the Angular build is the
+  same. On a wallet server the change takes effect with the install
+  script, which copies the site, runs `nginx -t` and reloads nginx
+  (README, "The wallet servers"). Not run here: this machine has no
+  nginx. The install script's `nginx -t` is the check; when it refuses
+  the file the script stops before the reload and nginx keeps the old
+  site. To see it afterwards, with the script's name from the page's
+  source:
+  `curl -s -I -H 'Accept-Encoding: gzip' https://wallet.anocloud.com/main-<name>.js | grep -i content-encoding`
+  prints `content-encoding: gzip`.
+- Spec: this note; README, "The wallet servers"; the file's own header.
+
+### The locked transfer cancel (2026-11-11)
+
+Built from `forclaude/locked-transfer-cancel-plan-1.md` (FINAL), its step
+4 of five, its section 3, one commit, on top of ab766a5. Why, in the
+user's words of 2026-11-11: "I believe at some point I wanted to add the
+feature where the user could cancel a guarded or vault transfer. But I
+don't see any button like that on the web app." And: "We need cancel
+before production." A guarded or vault transfer waits out its lock on
+the validators, a week or a month in production. One sent by mistake
+went through when the lock ended, and the account could send nothing
+else until then. The cancel had never been built: the validators had no
+route for it, and the Home plan of 2026-11-06 left it out (section 10).
+Steps 1 to 3 of the plan built the other two parts. The validators'
+(anossoftware 0f80003 and becc435, its spec sections 27 and 28): the
+time check on every transfer, the wait before a cancel, the follow-up
+kind `lockedTransferCancel` at `POST /locked-transfer-cancel`, and the
+stage `cancelling` in `/get-locked-transfer`. The doorman's
+(doormansoftware 30434d5, its spec section 9): the validator door lets
+the route through. This step is the wallet: one button, one box, one
+follow-up, and one sentence on three pages for a cancel pressed too
+early. No route of the proxy, no setting, no npm package.
+
+- `src/app/services/crypto.service.ts`: the interface
+  `LockedTransferCancelPayload` (`type: 'lockedTransferCancel'`,
+  `transactionId`, `accountId`) after `AssistedTransferCancelPayload`,
+  and in `FollowUpPayload`. `buildFollowUp` is untouched: it adds
+  `signedAt` and signs with pair one, as for every follow-up.
+- `src/app/services/anos-api.service.ts`: `LockedStage` has
+  `'cancelling'`, and its comment says what the stage is;
+  `lockedTransferCancel(followUp)` after `assistedTransferCancel`, which
+  is `this.write('/locked-transfer-cancel', followUp)`, the ninth
+  submission; the import.
+- `src/app/locked-stage.ts`: `case 'cancelling'` reads
+  `words.cancelling`. The comment says the transfer can be cancelled
+  from its row and still has no page of its own.
+- `src/app/components/confirm-dialog.component.ts`: `ConfirmData` has
+  `cancelLabel?: string`, and the first button shows
+  `data.cancelLabel ?? t().common.cancel`. The comments say so.
+  `askConfirm` and the two places that used the box are untouched and
+  keep Cancel.
+- `src/app/pages/account.page.ts`: the signal `cancelOutcome`, beside
+  `sendOutcome`. In the template's Locked transfer section, inside the
+  branch that shows the row and after the `mat-list`: a `div` of class
+  `row` with one stroked button, `assisted.cancelTransfer`, which calls
+  `askCancelLocked()`, is off while `busy()` and is drawn while the
+  stage is `locked` or `due`. After the section's `@if` chain, still
+  inside the guarded or vault block: the outcome line of
+  `cancelOutcome()` with the classes `ok` and `error`, as `sendOutcome`
+  is shown. The row's own lines are untouched: a stage that is not
+  `locked` reads its stage word and the date, so a `cancelling` row
+  reads "Being cancelled · <date>". `askCancelLocked()` does nothing
+  with no locked transfer or with a box already open. Else it opens the
+  box with `askConfirm`: the title `account.confirmCancelTitle`; the
+  lines `common.amount`, the amount through `common.anos`, and
+  `common.to`, the receiver's id with `code` true; the note
+  `account.confirmCancelNote(anos)`; `confirmLabel`
+  `assisted.yesCancel`; `cancelLabel` `common.back`. On Back nothing
+  happens. On yes, through `act(this.cancelOutcome, ...)`: pair one;
+  `buildFollowUp` with `{ type: 'lockedTransferCancel', transactionId,
+  accountId }`; `this.signing.sign(...)`, the way `send()` signs;
+  `anos.lockedTransferCancel`; a refusal thrown in the words of
+  `cancelRefusal`, else `assisted.sentCancel`; then `refresh(true)`.
+  `cancelRefusal(res)` is the body of the assisted transfer page's
+  `plainReason` for this route, the five refusals as 8.2 lists them.
+  `send()` starts with `this.cancelOutcome.set(null)`, so the line of an
+  old cancel does not stand under a new transfer; nothing else in
+  `send()` changed. The class comment says the transfer can be cancelled
+  from its row, where it said "nothing can be done with it".
+- `src/app/pages/assisted-transfer.page.ts` and
+  `src/app/pages/escrow-trade.page.ts`: one new line in each
+  `plainReason`, before its last. A reason that holds "cannot be
+  cancelled yet" reads `account.cancelNotYet` on the first page and
+  `escrow.cancelNotYet` on the second, with the proxy's
+  `lockOffsetMinutes` in words (`minutes`). While that number has not
+  loaded the line is skipped, and the refusal reads as any other does.
+  Each page injects `ConfigService` for the number; neither had it.
+  Nothing else on the two pages changed: the buttons are as they were
+  (the plan's decisions 24 and 32). The validators' waits behind the two
+  sentences are the plan's step 1 (anossoftware spec 27.2).
+- Words, English and Thai, as the plan's table 3.2 gives them. Changed:
+  `account.lockWaiting` ("... when it is written or cancelled.") and
+  `account.lockLine` (one sentence more at the end, "You can cancel it
+  until it is written."). New: `account.confirmCancelTitle`,
+  `account.confirmCancelNote(anos)`, `account.cancelNotYet(minutes)`,
+  `escrow.cancelNotYet(minutes)` and `lockedStages.cancelling`. Reused
+  as they are: `assisted.cancelTransfer`, `assisted.yesCancel`,
+  `assisted.sentCancel`, `assisted.notAllAccepted`,
+  `assisted.alreadyCancelling`, `assisted.noLongerHeldReason`,
+  `assisted.cannotCancel`, `common.back`, `common.amount`, `common.to`
+  and `common.anos`. The Thai is the planner's, built from the Thai of
+  the assisted cancel, and a Thai reader has still to check it (the
+  plan's decision 21).
+- `README.md`: the layout line of `confirm-dialog.component.ts` names
+  the cancel of a locked transfer too.
+- Unchanged: `server/`, where the proxy forwards the new path as it
+  forwards every path under `/api/anos/<n>`; `network/wallet.env`; the
+  signing service; the balances service, the Wallet page and Home, where
+  a transfer being cancelled counts as waiting out a lock until its row
+  is gone; the history page, which gets no line for a cancelled transfer
+  (the plan's decision 16).
+- Readings where the plan left a detail open. The `@if` on the stage
+  stands around the button's `div`, so no empty row is drawn in the
+  stages without the button. What is cancelled is the transfer the box
+  showed: `askCancelLocked()` takes it from `locked()` before the box
+  opens and builds the follow-up from that, since the 5-second poll goes
+  on while the box is open; when the transfer was written in the
+  meantime the validators answer that it is no longer held.
+  `cancelling` stands after `due` in `LockedStage`, in the `switch` of
+  `locked-stage.ts` and in both dictionaries, as it stands last in
+  `AssistedStage` and in `assistedStages`; the validator decides it
+  second (5.4). In `cancelRefusal` the checks stand in the order the
+  plan lists them, the wait second; in the two `plainReason` functions
+  the wait is the line before the last, as the plan says. To stay one
+  line there, the line reads the number from the configuration service
+  itself, `this.config.config()?.lockOffsetMinutes`, once to see that it
+  is a number and once to put it into words, and `cancelRefusal` has the
+  same line. The number is there by the time a refusal comes back: every
+  submission waits for `/api/config` before it posts (`write`, 8.3), so
+  the line is skipped only against a proxy that does not send the lock
+  numbers. In the file `cancelOutcome` stands after `sendOutcome`, and
+  `askCancelLocked` and `cancelRefusal` after `refusal`, before `act`.
+  The three new `account` keys stand after `waitingOutLockUntil`, in the
+  order the page uses them, `escrow.cancelNotYet` after `cannotSign`,
+  and `lockedStages.cancelling` after `due`. `LockedTransferCancelPayload`
+  has no comment of its own, as its neighbours have none. Nothing
+  differed from the plan in what the wallet does, but for the progress
+  bar of the next point.
+- Put right on the user's word of 2026-11-11 ("All three"), after the
+  first report of this build listed three places as left because the
+  plan does not name them. One: the class comment of
+  `src/app/services/anos-api.service.ts` said "The eight submissions go
+  through `write`" and says nine; one word, no code. Two: section 10
+  gained the bullet "From the locked transfer cancel plan", what the
+  plan leaves out on the wallet's side; the plan's 3.3 names only the
+  line that left the Home plan's list. Three, the one change to what
+  the page does that the plan does not have: the progress bar of a
+  cancel. As first built, the bar and "Sending…" under the Send form
+  showed while a cancel was on its way, since `act()` turns `busy` on
+  for a send and for a cancel alike and that block read `busy()`; under
+  the row nothing moved, and on a phone the Send form may be off the
+  screen by then. Asked whether the fix adds a bar or takes the other
+  one away, the user took one bar per action. In
+  `src/app/pages/account.page.ts`: the signal `cancelBusy`, which
+  `askCancelLocked()` turns on before `act(...)` and off after it; the
+  Send form's block reads `busy() && !cancelBusy()`, so it shows for a
+  send only; and after the Locked transfer section's `@if` chain, before
+  the outcome line, a `mat-progress-bar` while `cancelBusy()`, with no
+  words, as the assisted transfer page has it, so no new entry in either
+  language. The buttons stay off during a send and during a cancel, as
+  before: they still read `busy()`. `act()` is untouched; it catches
+  whatever its action throws, so `cancelBusy` always goes off again. The
+  class comment and the comment of `askCancelLocked()` say so, and 8.2
+  (Account) has the sentence.
+- Spec: 5.4 (the block of `/get-locked-transfer`: the stage list, the
+  cancel in place of "Nothing can be done with a locked transfer"), 8.2
+  (Account: the Locked transfer paragraph rewritten and two paragraphs
+  added after it, the cancel and the wait; the Send paragraph's two
+  lines; the Escrow trade and the Assisted transfer pages: the wait
+  among each cancel's refusals in words), 8.3 (the line of
+  `anos-api.service`: nine submissions, with `/locked-transfer-cancel`;
+  the line of `crypto.service`: the follow-up payloads), 8.9
+  (`cancelLabel`; three places use the box), section 10 (the cancel
+  left the Home plan's leftovers; the bullet of this plan's own
+  leftovers) and this note. The older notes above
+  stand as the record of what was built then.
+- Checked. `npx ng build` in the web_app folder: clean, 2.13 MB initial
+  (the script 2.12 MB), no warnings, and clean again with the three
+  places put right; `git status` showed this step's
+  eleven files and no others. The words: a script outside the repo read
+  the seven rows of the plan's table 3.2 and the fourteen entries in
+  `en.ts` and `th.ts`, and each entry equals the plan's cell character
+  for character. The five reasons a validator gives on this route and
+  the reason of the escrow wait were read in the validator's source at
+  becc435, and each holds the piece its line of `cancelRefusal` or
+  `plainReason` looks for. Not run in a browser here and no server was
+  started: the run-through is the user's, on the launched network (the
+  plan's section 5), and needs every validator and every doorman on the
+  new code. A guarded transfer sent from the wallet: the row reads
+  "Waiting for the validators" and has no button; once every validator
+  has accepted it the row reads "Waiting out the lock · until ..." with
+  "Cancel transfer" under it. A press at once: the box "Cancel this
+  transfer?" with Amount, To, the note and the buttons Back and "Yes,
+  cancel the transfer"; Back does nothing; yes ends in red under the
+  row, "A transfer can be cancelled 5 minutes after it is sent. Try
+  again in a few minutes." The same after the wait: a progress bar under
+  the row and none under the Send form, then "Sent. The transfer
+  is being cancelled; the anos stay in this account." in green, the row
+  reads "Being cancelled", then the row is gone, "No transfer is
+  waiting." shows and Send is free again. Against validators or doormen
+  without the route the button shows and a press ends in the refusal
+  under the row; nothing else on the page changes. The wallet goes out
+  by section 10 of `forclaude/wallet-deploy-plan-1.md`, wallet1 and then
+  wallet2, with no setting in `network/wallet.env` and no `npm ci`.
+
+### The 5-second balance read takes only the watched accounts (2026-11-11)
+
+Built from `forclaude/wallet-speed-plan-1.md` (FINAL), its step 1 of
+two, its section 1, one commit, on top of 0cfb88c. Why, in the user's
+words of 2026-11-11: "I'm also trying to figure out why sometimes the
+site starts moving soooo slow." And, of this cure: "What about keeping
+connections open and the re read only if an account has something?"
+Home and the Wallet page read the balances again every 5 seconds while
+an account is not on the ledger yet or any anos are held or pending, and
+that read took every account of the session: three signed reads per
+account, four on an assisted, a guarded or a vault one. So one open
+trade on one account made the page read every account every 5 seconds.
+With ten accounts that is 30 to 40 calls a round, each signed in the
+browser on the page's own thread: about 0.35 to 0.45 seconds of signing
+a round on the user's M4 Mac (a phone was not measured). Now a round
+reads only the watched accounts: the ones that are not on the ledger
+yet, and the ones with anos held or pending. The change is in the
+browser's code only. There is no route, no proxy change, no env
+variable, no npm package and no new word in either language, and
+nothing changes on the validators, the doormen, the masterpod, the
+keyholders or the signing server. A send never used these entries: the
+account page and the listing card read `/get-account` fresh right before
+they build a transfer. So this changes what is shown, never what is
+sent. Step 2 of the plan, the proxy's connections to the validators, is
+not built with it.
+
+- `src/app/services/balances.service.ts`: `poll()`, public and new, one
+  round of the 5-second read. It returns at once while a read runs
+  (`busy`), as `refresh` does. When the pod is not the one last read,
+  the round is `refresh(true)`. The watched accounts are the session's
+  accounts that are not lost and have no entry yet, an entry that is not
+  landed, or an entry whose `held` is above zero: the test `needsPoll`
+  makes, for one account (`isWatched`, a function under the class). With
+  no watched account nothing is read and nothing is set. Otherwise the
+  watched accounts are read at the same time with `readOne(item, true)`,
+  under `busy`, as `refresh` reads every account. After the reads a full
+  read follows, `refresh`, in two cases. One: the round changed
+  `landed`, `balance` or `held` in a watched account's entry
+  (`entryChanged`, a function under the class), and the session has an
+  account that is not lost and was not read in the round. Two: a full
+  read was asked for during the round. Otherwise the round ends as
+  `refresh` ends: `loadMoves(true)` when an account is lost, then
+  `readAt`.
+- The same file, `refresh(quiet)`: one change, its first lines. When it
+  finds a poll round running (the private field `polling`), it leaves
+  word (the private field `fullAsked`) and returns, and the round runs
+  that read when it ends. The read is quiet only when every `refresh`
+  that left word during the round was quiet. When it finds another
+  `refresh` running it returns, as before. `needsPoll`, `readOne`, the
+  totals, `usableAccounts`, `markLost` and `loadMoves` are unchanged.
+  The class comment has a second paragraph that says all this, and the
+  comment of `refresh` names the word it leaves.
+- `src/app/pages/home.page.ts` and `src/app/pages/wallet.page.ts`: in
+  the constructor's timer, `void this.balances.refresh(true)` became
+  `void this.balances.poll()`. The condition in front of it is as it
+  was, and the comment over the timer says which accounts are read
+  again. Nothing else in the two pages changed, but for their class
+  comments (the point "Put right" below).
+- Unchanged: the pages' `load`, the card's refresh button, the Wallet
+  page's Refresh and `src/app/services/account-creation.service.ts`,
+  which keep calling `refresh`, the full read; the account page, which
+  reads its one account by itself; the marketplace chat's listing card,
+  which keeps its own 5-second check (the plan's decision 4); `server/`.
+- Accepted by the plan. Its decision 7: while something is held on one
+  account, the other accounts are not read again by themselves. Anos
+  that arrive on them show when Home or the Wallet page is next opened,
+  or with the refresh button on the card. That is how it already was
+  when nothing is held. Its decision 10: an account whose creation was
+  never finished stays "not on the ledger yet", so `needsPoll` stays
+  true for good and that account is still read every 5 seconds, alone
+  now. Out of the plan: the listing card's check; a slower read of the
+  other accounts during a hold; leaving an unfinished account out of the
+  round.
+- Readings where the plan left a detail open. "Changed" compares a
+  watched account's entry before the round with its entry after it, in
+  `landed`, `balance` and `held`. An account with no entry before the
+  round counts as not landed with nothing held, so an account that is
+  still not on the ledger did not change. A watched account whose read
+  fails in a round (no validator answered) goes from landed to not
+  landed. That is a change by the plan's rule, so a full read follows,
+  and one more when the account reads well again; until this build every
+  round was a full read. The full read after a changed round is quiet,
+  as the round is. When word was left, the word decides, also when the
+  round changed something as well. The word is looked at last, after the
+  moves: a `refresh` that arrives while the round reads the lost
+  accounts' moves is not dropped either; the round has ended as a round
+  ends by then, and the full read follows. A `refresh` that leaves word
+  returns at once and does not wait for the read, as a `refresh` that
+  finds another one running returns at once; no caller needs the read to
+  be done when `refresh` returns. The round takes the session's account
+  list once, at its start, as `refresh` does: the watched accounts, "not
+  read in the round" and "an account is lost" all go by that list. An
+  account that joins the session during a round has no entry, so the
+  next round reads it; the pages' `load` and the account creation
+  service also call `refresh` right after they set the list, which
+  leaves word. Between a round and the full read that
+  follows it, `busy` goes off and on again in one go, with nothing able
+  to run in between, so the card's refresh button does not flicker.
+  During that full read no round is running, so a `refresh` that arrives
+  then returns, as during any full read. In the file `polling` and
+  `fullAsked` stand after `readPod`, `poll()` after `refresh`, and
+  `isWatched` and `entryChanged` under the class, before `stakesOf`.
+- Put right on the user's word of 2026-11-11 ("Yes, update them"),
+  after the first report of this build listed five comments as left
+  because the plan names the service's class comment and the comment
+  over each timer and no other. In `balances.service.ts` the one-line
+  comments of three fields spoke of a refresh only: `busy` is true while
+  a read runs, a refresh or a poll round; `readAt` is when the last
+  read finished, a refresh or a poll round; `moves` are read by
+  `refresh`, and by a poll round at its end, while an account is lost.
+  The class comments of `home.page.ts` and `wallet.page.ts` said that
+  the balances are read again every 5 seconds, and now say which
+  accounts are, in the words of the comment over each timer. Comments
+  only, no line of code.
+- Spec: 8.2 (Home: the sentence on the 5-second read; Wallet: the
+  sentence on when the balances are read, and the sentences after it),
+  8.3 (the line of `balances.service`) and this note. README: nothing,
+  it does not speak of this read. The older notes above stand as the
+  record of what was built then.
+- Checked. `npx ng build` in the web_app folder: clean, 2.13 MB initial
+  (the script 2.12 MB), no warnings, and clean again with the five
+  comments put right, the script the same file as before; `git status`
+  showed this step's four files and no others. The cases of a round were
+  run once outside
+  the repo and nothing of it is kept: the service's file as it is,
+  bundled with stand-ins for Angular and for the services it calls,
+  against a made-up ledger, with no server. A round read only the
+  account with a pending transfer, quietly, and set `readAt`. When that
+  transfer was written, the round was followed by one quiet read of
+  every account, the total was right and `needsPoll` went off. With one
+  account only, a change was followed by no second read. A `refresh`
+  during a round read nothing itself, and one full read followed the
+  round, loud when one of the askers was loud and quiet when all were. A
+  `refresh` during the moves at the round's end was followed by a full
+  read too. A lost account was not opened or read in a round, and its
+  moves were read at the round's end. An account not on the ledger was
+  read alone, round after round, and every account once when it landed.
+  A watched account whose read failed was followed by a full read, and
+  by one more when it read well again. Another pod than the one last
+  read made the round a full read. A round during a full read, and a
+  `refresh` during a full read, read nothing. Not run in a
+  browser here and no server was started: the run-through is the user's,
+  after the deploy (the plan's section 3; only the wallet has something
+  to deploy, wallet1 and then wallet2). With two or more accounts and an
+  open escrow trade on one of them, the browser's network list on Home
+  shows three or four calls to `/api/anos/<n>/` every 5 seconds, not
+  three or four per account. Then a send from one own account to
+  another: once it lands, the total on Home is right within two rounds.
+
+### The proxy keeps its connections to the validators open (2026-11-11)
+
+Built from `forclaude/wallet-speed-plan-1.md` (FINAL), its step 2 of
+two, its section 2, one commit, on top of 5c23551. Why, in the user's
+words of 2026-11-11: "I'm also trying to figure out why sometimes the
+site starts moving soooo slow." And, of this cure: "What about keeping
+connections open and the re read only if an account has something?"
+Until now the proxy opened a new connection to a validator's doorman
+for every call: http-proxy does that when it is given no agent, and it
+sends `Connection: close`. Measured from the user's Mac that day,
+straight to validator 1's doorman: opening the connection took about
+100 ms, setting up the encryption 110 to 185 ms, and the call itself
+110 to 170 ms. So opening and encryption were two of the three trips a
+call made. Now a call to a validator goes out on a connection that is
+open and waiting when there is one. The change is in the proxy only.
+There is no route, no env variable, no npm package, no change in the
+browser's code but for one comment (the point "Put right" below) and
+no new word in either language, and nothing changes on the validators,
+the doormen, the masterpod, the keyholders or the signing server.
+
+- `server/config.js`: two numbers beside `proxyTimeoutMs`, each with
+  its comment. `validatorIdleMs`, 10 000: how long a connection kept
+  open to a validator's doorman may sit unused before the proxy closes
+  it, and how long a new one may take to open. It has to stay under the
+  doormen's own 15 seconds (`keepalive_timeout` in
+  `doormansoftware/deploy/nginx/doorman.conf`, on both ports), so the
+  proxy is always the first to close and no call meets a closing
+  connection (the plan's decision 11). `validatorIdleConnections`, 32:
+  how many unused connections, open and waiting for the next call, the
+  proxy keeps per validator at most (decision 12). Neither is an env
+  variable; they stand in the file as `proxyTimeoutMs` does.
+- `server/app.js`: `http` and `https` are imported from Node.
+  `createApp` makes two agents once, before the forwards, one of `http`
+  and one of `https`, both with `keepAlive: true`,
+  `timeout: config.validatorIdleMs` and
+  `maxFreeSockets: config.validatorIdleConnections`. `forward` takes
+  one more argument at the end, `agent`, `null` by default. When it is
+  given, the proxy's options gain `agent` and
+  `headers: { connection: 'keep-alive' }`. The validators' loop gives
+  `forward` the agent that fits the entry's address: the `https` one
+  when it begins with `https:`, else the `http` one. On the wallet
+  servers every entry of `VALIDATOR_URLS` begins with `https:`; the
+  development list is plain http. The comment at the top of the file
+  and the comment of `forward` say what is kept open, why the header is
+  set, and the two numbers.
+- Why the header. nginx on a wallet server sends the proxy
+  `Connection: close` with every call, by its default; the site sets
+  only the Host header. http-proxy copies the incoming headers onto the
+  outgoing call. So an agent alone would change nothing: the doorman
+  would still be told to close after every call. With http-proxy's
+  `headers` option the outgoing call says `keep-alive`. It is the one
+  header that does not go through as received.
+- The 32. A connection is unused while no call is on it: it is open
+  and waiting for the next call. At most 32 such connections are kept
+  per validator, in each wallet process; one more that becomes free is
+  closed at once. The number is no limit on the calls under way. A call
+  that finds no waiting connection opens a new one, as every call did
+  until now, so with many people on at once nobody waits because of it:
+  the calls beyond the waiting connections only miss the saving. With
+  two wallet servers and three editions each, that is at most 192
+  waiting connections on one doorman, and in practice far fewer.
+- Unchanged: the masterpod's forward, the keyholders' loop and the two
+  signing forwards, which give no agent, so those backends get a new
+  connection for every call (decision 3). The text of the two signing
+  forwards is as it was and they moved down, from lines 97 and 98 to
+  lines 134 and 135; `forclaude/signing-server-plan-1.md`, which names
+  them by the old numbers, finds them by their text, the two lines that
+  begin `app.use(forward(config, config.signingServerUrl`.
+  `proxyTimeoutMs`, the proxy's two minutes, still rules a call that is
+  under way. `server/index.js`, the routes, everything under `deploy/`,
+  and everything under `src/` but for one comment (the point "Put
+  right" below).
+- Accepted by the plan. Its decision 13, accepted and wanted: a
+  validator whose machine cannot be reached now answers `502 validator
+  n unavailable` after 10 seconds, to a read and to a submission, where
+  the call hung for the proxy's two minutes. The browser already gives
+  a read 10 seconds. Its decision 14: when a validator or its doorman
+  restarts, each connection kept to it fails one call with that 502. A
+  read is asked again on the next validator; a submission shows the
+  failure and is never sent again by the wallet on its own (8.3). Out
+  of the plan: the masterpod, the keyholders and the signing server on
+  kept connections; the time each call took in the wallet's nginx log;
+  a limit per visitor on the wallet servers.
+- Readings where the plan left a detail open. `forward` gains its two
+  options by one new last line in the options it hands to
+  `createProxyMiddleware`, so no line it had changed. To reach the new
+  last argument the validators' loop passes `''` and `null` for
+  `replacement` and `method`, which are their defaults. The two agents
+  are made from one set of options, after the proxy's own two routes
+  and right before the masterpod's forward, with a short comment over
+  them. An agent keeps its waiting connections per address, host and
+  port, so every entry of `VALIDATOR_URLS` has its own 32. Seen in the
+  check below: on a call to a validator the proxy's answer to nginx now
+  carries the doorman's `Connection: keep-alive`, where it carried
+  `close`, because http-proxy hands the backend's header on, and the
+  proxy no longer closes nginx's connection itself after such a call.
+  After a call to another backend it answers `close` and closes it, as
+  before. nginx keeps no connections to the proxy (the site has no
+  `upstream` block with `keepalive`) and closes each one when the
+  answer is complete. A fine point of decision 13, not run here; it
+  follows from the two limits. A machine that goes away without
+  closing its connections, by a power or network cut, leaves the
+  connections kept to it looking open for up to 10 seconds. A call
+  sent down one of them in that time is a call under way and has the
+  proxy's two minutes, as every call to such a machine had before this
+  build. The connection goes with that call, and from then on a new
+  one fails after 10 seconds.
+- Put right on the user's word of 2026-11-11 ("Yes, update them"),
+  after the first report of this build listed three places as left
+  because the plan does not name them. In `src/app/constants.ts` the
+  comment of `VALIDATOR_READ_TIMEOUT_MS` said that without the limit a
+  validator whose machine cannot be reached would hold a page for the
+  proxy's two minutes. It now says that a read could be held for the
+  proxy's two minutes, and that since this build the proxy itself
+  answers 502 after 10 seconds for such a validator. A comment only, no
+  line of code. The other two places are beside the repos, in
+  `test_net_phase_3_production/deploy-notes.md`: its section 6 said
+  that step 2 was not built yet, and "The short of it" named 0cfb88c as
+  the wallet's newest commit.
+- Spec: 2 (Behaviour: the one exception to "Headers go through as
+  received", and the new point on the connections) and this note.
+  README, "The proxy (server/)": one sentence. The older notes above
+  stand as the record of what was built then.
+- Checked. `node --check server/app.js` and
+  `node --check server/config.js` pass; `git status` showed this step's
+  four files and no others, and `src/app/constants.ts` as the fifth
+  once its comment was put right. `npx ng build` in the web_app folder
+  after that: clean, no warnings, and the script is the same file as
+  before, `main-M3NEN2FJ.js`. The proxy was also run once outside the
+  repo, in memory, and nothing of it is kept: `server/app.js` as it is,
+  with made-up addresses, and every connection, in and out, a pair of
+  in-memory streams. No server was started and nothing went on the
+  network. Each call came in the way nginx sends it, HTTP/1.1 with
+  `Connection: close`. Five calls in a row to a validator made one
+  connection, on an `https` address through the `https` agent and on an
+  `http` address through the `http` agent, both with the two numbers.
+  The far end was told `keep-alive` every time and got its own Host
+  header, the browser's Origin and the cut path. A submission with a
+  body went down the kept connection whole. Five calls in a row to the
+  masterpod, to a keyholder and to the signing server made five
+  connections each, told `close`, as before. Forty calls at once to one
+  validator opened forty connections; 32 were kept and 8 closed at
+  once; the next forty used the 32 and opened 8. A connection had the
+  proxy's 120 seconds while a call was on it and the 10 seconds each
+  time it became free. A waiting connection that reported its time up
+  was closed, and the next call opened a new one. A waiting connection
+  that the far end closed, or that was reset, cost no call. A
+  connection dropped in the middle of a call, and one whose time ran
+  out with a call on it, were `502 validator n unavailable` with the
+  line in the log, and the next call was answered. After a validator
+  call the proxy answered nginx `Connection: keep-alive` and left that
+  connection open; after a masterpod call it answered `close` and
+  closed it. The stand-in connections have no clock and no encryption.
+  So three things were not run here: the 10 seconds themselves, a
+  machine that cannot be reached, and TLS. The plan's own tries of
+  2026-11-11, on the user's Mac against a stand-in backend, cover the
+  first two: none of 120 calls failed with the proxy closing first, and
+  a machine that cannot be reached answered 502 once the agent's number
+  had passed. Not run on a server and nothing deployed: the
+  run-through is the user's, after the deploy (the plan's section 3).
+  Only the wallet has something to deploy, wallet1 and then wallet2;
+  the step takes effect when the three units restart, which the
+  install script does, and a wallet tab needs no reload. This line,
+  from any machine, prints three times. Before this step the second
+  and the third are about equal (0.5 to 0.65 seconds from the user's
+  Mac on 2026-11-11). After it the third is clearly shorter:
+  `curl -s -o /dev/null -o /dev/null -o /dev/null -w '%{time_total}\n' https://wallet.anocloud.com/api/health https://wallet.anocloud.com/api/anos/1/health https://wallet.anocloud.com/api/anos/1/health`
 
 ## 12. Recovery and the moderator edition
 

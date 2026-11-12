@@ -34,7 +34,12 @@ how many validators and keyholders there are and the three lock numbers;
 `GET /api/sign/public-keys` are forwarded with the prefix cut, bodies
 streamed, the browser's Origin kept, the backend's answer returned
 unchanged; a backend that does not answer is `502 { error: "<who>
-unavailable" }`. Everything else is the Angular build (`dist/wallet/browser`),
+unavailable" }`. The connections to the validators stay open between
+calls: the proxy closes one that sat unused for 10 seconds and keeps at
+most 32 unused ones per validator (`validatorIdleMs` and
+`validatorIdleConnections` in `server/config.js`), while the masterpod,
+the keyholders and the signing server get a new connection for every
+call. Everything else is the Angular build (`dist/wallet/browser`),
 with `index.html` for the router's deep links. Variables, each with a
 local default (`server/config.js`): `PORT` 4300, `MASTERPOD_URL`,
 `VALIDATOR_URLS`, `KEYHOLDER_URLS`, `SIGNING_SERVER_URL`, `SHARE_THRESHOLD`
@@ -62,7 +67,7 @@ src/app/
   unlock.ts                the unlock flow, shared by the landing page and setup
   components/camera.component.ts   the camera: live preview, Take photo, a file input as the fallback
   components/note-form.component.ts   the note form under a history row: the kind, the money and the currency, the memo (spec 8.2)
-  components/confirm-dialog.component.ts   the confirmation box before a send and before a new anos account, and askConfirm (spec 8.9)
+  components/confirm-dialog.component.ts   the confirmation box before a send, before a new anos account and before the cancel of a locked transfer, and askConfirm (spec 8.9)
   pages/                   one file per route: landing, create, recover, vouching, identity, setup,
                            bucket-one, bucket-two, wallet, noted-transactions, account, account-protect, chat, marketplace, notifications, seed, log
   services/
@@ -118,6 +123,10 @@ servers from a chat. On each server:
   loopback. The certificate is the operator's, at
   `/etc/wallet/tls/fullchain.pem` and `/etc/wallet/tls/key.pem`, with a
   renewal hook that ends in `systemctl reload nginx`.
+- The site sends the build's script and style files gzip-compressed to a
+  browser that asks for it, so the 2.1 MB script travels as about 0.5 MB.
+  HTML is compressed already, by nginx's own default. The answers under
+  `/api` are not compressed.
 - The closed page, `deploy/nginx/closed.html`: nginx shows it in place of
   the wallet, on all three names, while the file `/etc/wallet/closed`
   exists, and whenever the wallet proxy does not answer. The three units
