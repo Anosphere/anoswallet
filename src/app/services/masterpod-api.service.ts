@@ -205,6 +205,9 @@ export interface RoomListing {
   owner: RoomMember;
 }
 
+/** The kind of attestor case a chat room is about, as /list-chat-rooms gives it (2026-11-12): an assisted transfer case, an escrow dispute case or a recovery case. */
+export type CaseKind = 'trade' | 'dispute' | 'recovery';
+
 export interface RoomItem {
   chatRoomId: string;
   type: 'private' | 'public' | 'marketplace';
@@ -212,6 +215,9 @@ export interface RoomItem {
   listingId: string | null;
   /** The listing the room is about (an old marketplace room, or a private room made with a listingId), null for the others. */
   listing: RoomListing | null;
+  /** The attestor case the room is about (a private room made with a caseId) and its kind, null for the others (2026-11-12). A masterpod of before sends neither field: a missing one reads as null. */
+  caseId: string | null;
+  caseKind: CaseKind | null;
   creatorAnopodId: string;
   hpkeKey: string;
   members: RoomMember[];
@@ -231,6 +237,9 @@ export interface InviteItem {
   /** The listing the room is about, null for a room without one (2026-11-06). */
   listingId: string | null;
   listing: RoomListing | null;
+  /** The attestor case the room is about and its kind, null for a room without one (2026-11-12). A masterpod of before sends neither field: a missing one reads as null. */
+  caseId: string | null;
+  caseKind: CaseKind | null;
   from: Profile;
   createdAt: string;
 }
@@ -399,7 +408,9 @@ export interface RecoveryCaseItem {
   username: string | null;
   firstName: string | null;
   lastName: string | null;
-  contactEmail: string;
+  contactEmail: string | null;
+  /** The contact phone (2026-11-12; masterpod 18). A masterpod of before sends none. */
+  contactPhone?: string | null;
   approvals: number;
   createdAt: string;
   updatedAt: string;
@@ -432,7 +443,7 @@ export interface BankerPacket {
 
 /** What /get-recovery-case answers. */
 export interface RecoveryCaseAnswer {
-  case: { caseId: string; status: CaseStatus; lookupId: string; contactEmail: string; createdAt: string; updatedAt: string };
+  case: { caseId: string; status: CaseStatus; lookupId: string; contactEmail: string | null; contactPhone?: string | null; createdAt: string; updatedAt: string };
   profile: Profile | null;
   events: CaseEvent[];
   shares: CaseShare[];
@@ -676,6 +687,8 @@ export interface MyDisputeCase {
   accountId: string;
   accountIdTo: string;
   side: 'seller' | 'buyer';
+  /** The attestors on the case, the one who opened it first (2026-11-12; masterpod 18), for the invite into the marketplace chat of the trade. A masterpod of before sends none: a missing list reads as an empty one. */
+  attestors?: RoomMember[];
   status: AttestorCaseStatus;
   createdAt: string;
   updatedAt: string;
@@ -845,10 +858,11 @@ export class MasterpodApiService {
 
   // --- level setup: chat --------------------------------------------------
 
-  /** A room; `listingId` makes a private room about that listing (2026-11-06). */
-  createChatRoom(type: 'private' | 'public', name: string | undefined, hpkeKey: string, listingId?: string): Promise<ApiResponse<{ chatRoomId: string }>> {
+  /** A room; `listingId` makes a private room about that listing (2026-11-06), `caseId` a private room about that attestor case, which only an appointed attestor can make (2026-11-12). */
+  createChatRoom(type: 'private' | 'public', name: string | undefined, hpkeKey: string, listingId?: string, caseId?: string): Promise<ApiResponse<{ chatRoomId: string }>> {
     const body: Record<string, unknown> = type === 'public' ? { type, name, hpkeKey } : { type, hpkeKey };
     if (listingId !== undefined) body['listingId'] = listingId;
+    if (caseId !== undefined) body['caseId'] = caseId;
     return this.signed('/create-chat-room', body);
   }
 
@@ -969,7 +983,7 @@ export class MasterpodApiService {
     return this.signed('/rotate-backup-code', body);
   }
 
-  /** The caller's break-glass cases, newest first, each with its moves and the events the person may see (masterpod 14.4.1): what a lost account's card reads. /store-break-glass-blob is no longer called (2026-11-08). */
+  /** The caller's break-glass cases, newest first, each with its moves and the events the person may see (masterpod 14.4.1): what a lost account's card reads, and the recovery finish; since 2026-11-12 the Cases page and My recovery case too (wallet spec 13.3). /store-break-glass-blob is no longer called (2026-11-08). */
   listMyBreakGlassMoves(quiet = false): Promise<ApiResponse<{ cases: BreakGlassCaseItem[] }>> {
     return this.signed('/list-my-break-glass-moves', {}, quiet);
   }
@@ -1095,7 +1109,7 @@ export class MasterpodApiService {
     return this.signed('/list-break-glass-case-security-records', { caseId, bucket });
   }
 
-  /** As /schedule-attestor-case; the person's wallet reads the event from /list-my-break-glass-moves, no notification is sent. */
+  /** As /schedule-attestor-case; the person's wallet reads the event from /list-my-break-glass-moves, and the masterpod writes the person one notification, recoveryCaseScheduled (masterpod 14.7, 2026-11-11). */
   scheduleBreakGlassCase(caseId: string, at: string, meetLink: string): Promise<ApiResponse<{ caseId: string; status: AttestorCaseStatus }>> {
     return this.signed('/schedule-break-glass-case', { caseId, at, meetLink });
   }

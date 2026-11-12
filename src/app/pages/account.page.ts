@@ -15,7 +15,7 @@ import { anosToMillionths, millionthsToAnos } from '../amounts';
 import { assistedStageWords } from '../assisted-stage';
 import { askConfirm } from '../components/confirm-dialog.component';
 import { CopyButtonComponent } from '../components/copy-button.component';
-import { ACCOUNT_POLL_MS } from '../constants';
+import { ACCOUNT_POLL_MS, GUARDIAN_STAKE_STEP_ANOS, MILLIONTHS_PER_ANOS } from '../constants';
 import { escrowStageWords } from '../escrow-stage';
 import { lockedStageWords } from '../locked-stage';
 import { AccountAnswer, Accepted, AnosApiService, EscrowItem, HeldAssistedTransfer, HeldLockedTransfer, PendingItem } from '../services/anos-api.service';
@@ -85,12 +85,19 @@ type SendOrder =
  * type allows; guarded and vault date the transfer lock + offset ahead by
  * the numbers /api/config gives (the proxy's env, wallet spec 2;
  * 2026-11-06, section 11), and Send waits with a line while those have
- * not loaded.
+ * not loaded. A guardian stake goes in whole thousands (2026-11-12,
+ * section 11): Send stays off for any other amount, and a line under the
+ * form says so.
  * Send first asks in the confirmation box (2026-11-10, wallet spec 8.9,
  * section 11): the amount in the title, the kind, this account, the
  * recipient's full id or the stake's purpose, and for a stake the line
- * about the fund. Cancel sends nothing and leaves the form as it was typed.
- * Send in the box empties the form at once, and the form stays empty
+ * about the fund. A stake for daoVote or guardian has a box of its own
+ * (2026-11-12, section 11): a title that names the stake, a line on what
+ * the stake gives and how long it is locked, the line about the fund, the
+ * username to type, and Stake on the button, which stays off until the
+ * username is in. Cancel sends nothing and leaves the form as it was typed.
+ * Send in the box, or Stake in the stake box, empties the form at once,
+ * and the form stays empty
  * whatever the answer is, so the same send cannot go out twice; what is
  * sent is what the box showed, and a progress bar with "Sending…" shows
  * under the form meanwhile. The amount starts empty and Stake for at
@@ -223,6 +230,9 @@ type SendOrder =
               </mat-form-field>
               <button mat-flat-button type="button" (click)="askSend()" [disabled]="busy() || pending().length > 0 || sellerEscrowOpen() || assisted() !== null || locked() !== null || minutesAhead() === null || !canSend()">{{ t().common.send }} {{ transferType() }}</button>
             </div>
+            @if (transferType() === 'transferToFund' && stakePurpose() === 'guardian') {
+              <p class="muted">{{ t().account.guardianThousands }}</p>
+            }
             @if (busy() && !cancelBusy()) {
               <mat-progress-bar mode="indeterminate"></mat-progress-bar>
               <p class="muted">{{ t().account.sending }}</p>
@@ -316,7 +326,7 @@ type SendOrder =
               </mat-list>
               @if (waiting.stage === 'locked' || waiting.stage === 'due') {
                 <div class="row">
-                  <button mat-stroked-button type="button" (click)="askCancelLocked()" [disabled]="busy()">{{ t().assisted.cancelTransfer }}</button>
+                  <button mat-stroked-button type="button" class="danger" (click)="askCancelLocked()" [disabled]="busy()">{{ t().assisted.cancelTransfer }}</button>
                 </div>
               }
             } @else {
@@ -414,7 +424,10 @@ export class AccountPage {
   });
 
   protected readonly canSend = computed(() => {
-    if (anosToMillionths(this.amount()) === null) return false;
+    const amount = anosToMillionths(this.amount());
+    if (amount === null) return false;
+    // a guardian stake goes in whole thousands (2026-11-12): a whole multiple of GUARDIAN_STAKE_STEP_ANOS, and at least one, since the amount is above zero
+    if (this.transferType() === 'transferToFund' && this.stakePurpose() === 'guardian' && amount % (BigInt(GUARDIAN_STAKE_STEP_ANOS) * MILLIONTHS_PER_ANOS) !== 0n) return false;
     return this.transferType() === 'transferToFund' || /^[0-9a-f]{64}$/i.test(this.accountIdTo().trim());
   });
 
@@ -557,7 +570,7 @@ export class AccountPage {
     this.pasteNote.set(null);
   }
 
-  /** The form's Send button (wallet spec 8.2, Account, and 8.9; 2026-11-10): the order is taken from the form and shown in the confirmation box, and nothing is sent until Send is pressed there. Cancel leaves the form as it was typed. Send in the box empties the form first and then sends the order, so what goes out is what the box showed. Nothing happens while a box is already open. */
+  /** The form's Send button (wallet spec 8.2, Account, and 8.9; 2026-11-10): the order is taken from the form and shown in the confirmation box, and nothing is sent until Send is pressed there. Cancel leaves the form as it was typed. Send in the box empties the form first and then sends the order, so what goes out is what the box showed. Nothing happens while a box is already open. A stake for daoVote or guardian has a box of its own (2026-11-12): the title names the stake ("Stake 100 anos for DAO votes?", "Stake 1000 anos as a guardian?"); the lines are the same; the notes are three, what the stake gives and how long it is locked, then the line about the fund, then that the username is to be typed; under them a text box for the username (typed); and the button reads Stake and stays off until the username is in the box. For the other four purposes (moderator, attestor, validator, masterPod) and for every transfer the box is as it was. */
   protected async askSend(): Promise<void> {
     const amount = anosToMillionths(this.amount());
     if (!this.item() || amount === null || this.dialog.openDialogs.length > 0) return;
@@ -570,8 +583,16 @@ export class AccountPage {
     // the short id with a word joiner after its ellipsis: where the From line wraps, it wraps at the space before the id, not inside it
     const short = shortId(this.accountId()).replace('…', `…${WORD_JOINER}`);
     const name = accountNames(this.session.accounts(), words.accountKinds).get(this.accountId());
+    const anos = millionthsToAnos(amount);
+    // the title and the first note of a stake for daoVote or guardian (2026-11-12); null for every other send, which keeps the box as it was
+    const stakeBox =
+      order.stakePurpose === 'daoVote'
+        ? { title: words.account.confirmStakeDaoTitle(anos), note: words.account.stakeDaoNote }
+        : order.stakePurpose === 'guardian'
+          ? { title: words.account.confirmStakeGuardianTitle(anos), note: words.account.stakeGuardianNote }
+          : null;
     const confirmed = await askConfirm(this.dialog, {
-      title: words.account.confirmSendTitle(millionthsToAnos(amount)),
+      title: stakeBox ? stakeBox.title : words.account.confirmSendTitle(anos),
       lines: [
         { label: words.common.kind, value: transactionType },
         { label: words.common.from, value: name ? `${name} · ${short}` : short },
@@ -579,15 +600,16 @@ export class AccountPage {
           ? { label: words.account.stakeFor, value: words.account.stakePurposes[order.stakePurpose] }
           : { label: words.common.to, value: order.accountIdTo, code: true },
       ],
-      notes: order.stakePurpose !== null ? [words.account.confirmStakeNote] : [],
-      confirmLabel: words.common.send,
+      notes: stakeBox ? [stakeBox.note, words.account.confirmStakeNote, words.account.stakeTypeNote] : order.stakePurpose !== null ? [words.account.confirmStakeNote] : [],
+      confirmLabel: stakeBox ? words.account.stake : words.common.send,
+      typed: stakeBox ? { label: words.common.yourUsername, expected: this.session.username() } : undefined,
     });
     if (!confirmed) return;
     this.resetForm();
     await this.send(order);
   }
 
-  /** The form as a fresh page has it: Kind plain, Stake for daoVote, the recipient and the amount empty, the paste hint gone. askSend() runs it when Send is pressed in the box, before the answer comes, and nothing fills the form again: it stays empty whether the send is accepted, refused or never answered. */
+  /** The form as a fresh page has it: Kind plain, Stake for daoVote, the recipient and the amount empty, the paste hint gone. askSend() runs it when Send is pressed in the box, or Stake in the box of a daoVote or guardian stake (2026-11-12), before the answer comes, and nothing fills the form again: it stays empty whether the send is accepted, refused or never answered. */
   private resetForm(): void {
     this.spendingKind.set('plain');
     this.stakePurpose.set('daoVote');
@@ -644,6 +666,7 @@ export class AccountPage {
       notes: [words.account.confirmCancelNote(anos)],
       confirmLabel: words.assisted.yesCancel,
       cancelLabel: words.common.back,
+      danger: true,
     });
     if (!confirmed) return;
     this.cancelBusy.set(true);

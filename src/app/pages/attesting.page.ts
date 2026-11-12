@@ -26,6 +26,7 @@ import {
   TradeCaseItem,
 } from '../services/masterpod-api.service';
 import { SessionService } from '../services/session.service';
+import { WorkBadgeService, attestingWorkIds } from '../services/work-badge.service';
 
 /** The four statuses of a trade or dispute case (masterpod 13.5), the two review ones first; the filter starts with those two. */
 export const CASE_STATUSES: AttestorCaseStatus[] = ['open', 'inReview', 'decided', 'dismissed'];
@@ -272,6 +273,7 @@ export class AttestingPage {
   private readonly masterpod = inject(MasterpodApiService);
   private readonly crypto = inject(CryptoService);
   private readonly router = inject(Router);
+  private readonly workBadge = inject(WorkBadgeService);
   protected readonly lang = inject(LanguageService);
   protected readonly t = this.lang.words;
 
@@ -355,6 +357,8 @@ export class AttestingPage {
       this.cases.set(cases.body);
       this.recoveries.set(recoveries.body.cases);
       this.error.set(null);
+      // Everything was read: the rows of the three lists are what the menu's number counts, and this device has seen them all now (wallet spec 8.1, 2026-11-12).
+      this.workBadge.seeAttesting(attestingWorkIds(this.attesting.trades(), this.attesting.disputes(), recoveries.body.cases));
     } catch (err) {
       this.error.set(err instanceof Error ? err.message : String(err));
     } finally {

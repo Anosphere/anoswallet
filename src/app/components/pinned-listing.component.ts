@@ -1,4 +1,4 @@
-import { Component, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { Component, DestroyRef, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -44,15 +44,17 @@ type Found = 'open' | 'released' | 'none' | 'unread';
 /**
  * The pinned listing card (wallet spec 8.2, Chat, and 8.7), drawn by the
  * conversation page under its header, above the thread, in a private room
- * about a listing. The first line: the listing in a few words, "Selling 100
- * anos · 35.50 THB each · 3,550 THB", Closed when it is, with the other
- * person's avatar (8.6). The buyer's "Share an account" posts one of this
- * pod's account ids into the chat; the seller's "Start the escrow trade",
- * once the other person has posted an account id, opens a small form (From,
- * To, Amount, the total at the listing's price), asks once, and builds the
- * escrowTransfer as the account page's Send does. The roles come from the
- * listing: the owner of a sell listing and the other person of a buy
- * listing are the seller.
+ * about a listing, for the room's two traders: the person who made the
+ * room by pressing Connect, and the listing's owner (2026-11-12; anyone
+ * else in the room is a guest and gets no card). The first line: the
+ * listing in a few words, "Selling 100 anos · 35.50 THB each · 3,550 THB",
+ * Closed when it is, with the other trader's avatar (8.6). The buyer's
+ * "Share an account" posts one of this pod's account ids into the chat;
+ * the seller's "Start the escrow trade", once the other trader has posted
+ * an account id, opens a small form (From, To, Amount, the total at the
+ * listing's price), asks once, and builds the escrowTransfer as the
+ * account page's Send does. The roles come from the listing: the owner of
+ * a sell listing and the other person of a buy listing are the seller.
  *
  * What the chat's trade is, the card reads from the validators (2026-11-10,
  * forclaude/wallet-finished-trade-plan-1.md), when the chat opens, every 5
@@ -74,6 +76,11 @@ type Found = 'open' | 'released' | 'none' | 'unread';
  * "Escrow trade started", or "Escrow trade released" for a trade already
  * released. Start does not post it, so an answer lost on the way, a message
  * that failed or a tab closed in between still ends with the chat told.
+ *
+ * The check also finds the open dispute case of the chat's trade
+ * (2026-11-12, forclaude/wallet-case-chats-plan-1.md), as the escrow trade
+ * page finds it, and the output disputeCase gives the page its id: with
+ * one, the conversation's menu has "Invite an attestor".
  */
 @Component({
   selector: 'app-pinned-listing',
@@ -215,6 +222,14 @@ export class PinnedListingComponent {
   readonly room = input.required<RoomItem>();
   /** The account ids found in the room's messages, newest first, from the conversation page. */
   readonly accountIds = input.required<FoundAccountId[]>();
+  /**
+   * The id of the open dispute case of the chat's trade, for the
+   * conversation page's "Invite an attestor" (wallet spec 8.2, Chat;
+   * 2026-11-12): given whenever it changes, null when the chat has no open
+   * trade, when the trade is not in dispute, and when no attestor has a case
+   * open on it.
+   */
+  readonly disputeCase = output<string | null>();
 
   protected readonly session = inject(SessionService);
   /** The account lists show the usable accounts only (wallet spec 8.2, 2026-11-08). */
@@ -225,6 +240,7 @@ export class PinnedListingComponent {
   private readonly anos = inject(AnosApiService);
   private readonly crypto = inject(CryptoService);
   private readonly signing = inject(SigningService);
+  private readonly destroyRef = inject(DestroyRef);
   protected readonly lang = inject(LanguageService);
   protected readonly t = this.lang.words;
 
@@ -238,7 +254,8 @@ export class PinnedListingComponent {
     const listing = this.listing();
     return listing ? this.market.mySide(listing) : 'buyer';
   });
-  protected readonly other = computed(() => this.chat.otherPerson(this.room()));
+  /** The other trader (2026-11-12): the other of the room's creator and the listing's owner, never a guest such as an attestor invited into the chat. */
+  protected readonly other = computed(() => this.chat.otherTrader(this.room()));
   protected readonly otherName = computed(() => this.other()?.username ?? this.t().pinned.them);
   protected readonly summary = computed(() => {
     const listing = this.listing();
@@ -250,10 +267,11 @@ export class PinnedListingComponent {
   private readonly older = signal<FoundAccountId[] | null>(null);
   /** Every account id in the chat, newest first: the card's own read of the room and the page's, which carries what arrived since. */
   private readonly ids = computed(() => [...this.accountIds(), ...(this.older() ?? [])].sort((a, b) => b.position - a.position));
-  /** The account ids the other person posted, newest first. */
+  /** The account ids the other trader posted, newest first (2026-11-12; until then the ids anyone but this pod posted), so a guest's messages never feed the trade form; with no other trader found in the room, the ids someone else posted. */
   protected readonly theirAccountIds = computed(() => {
     const me = this.session.anopodId();
-    return unique(this.ids().filter((a) => a.senderAnopodId !== me).map((a) => a.accountId));
+    const other = this.other();
+    return unique(this.ids().filter((a) => (other ? a.senderAnopodId === other.anopodId : a.senderAnopodId !== me)).map((a) => a.accountId));
   });
   /** This pod's usable accounts named in the chat (a lost account, whose keyBlob does not open, is left out; 2026-11-08). */
   private readonly myNamedAccounts = computed(() => {
@@ -302,6 +320,8 @@ export class PinnedListingComponent {
   private waiting = 0;
   /** This card asked the masterpod for the pod's accounts, once, because the tab had none. */
   private accountsAsked = false;
+  /** The open dispute case of the chat's trade as the page was last told (disputeCase); null when none is known. */
+  private disputeCaseId: string | null = null;
   private roomId: string | null = null;
 
   constructor() {
@@ -336,6 +356,7 @@ export class PinnedListingComponent {
     this.error.set(null);
     this.seen = false;
     this.told.clear();
+    this.tellDisputeCase(null);
   }
 
   protected shortId(accountId: string): string {
@@ -352,7 +373,7 @@ export class PinnedListingComponent {
     return this.run(() => this.post(this.t().pinned.shareMessage(accountId)));
   }
 
-  /** The seller's form: the first spending account, the newest account id the other person posted, the listing's quantity. */
+  /** The seller's form: the first spending account, the newest account id the other trader posted, the listing's quantity. */
   protected openForm(): void {
     const listing = this.listing();
     if (!listing) return;
@@ -477,11 +498,14 @@ export class PinnedListingComponent {
    * trade this pod sent, found open or released, gets its message posted
    * when the chat has none for it (tell). A trade found also closes the
    * Start form, so its question does not come back by itself once that
-   * trade is cancelled. A read that fails, or anything thrown (no key blob
-   * key in this tab, a keyBlob that does not open), is unread: the card
-   * keeps the trade it shows, and Share and Start wait for a check that
-   * reads everything. A check that ends after the card was given another
-   * room changes nothing.
+   * trade is cancelled. An open trade in dispute has its dispute case
+   * looked for, for the page's "Invite an attestor" (findDisputeCase,
+   * 2026-11-12); a check that finds no open trade tells the page that
+   * there is no such case. A read that fails, or anything thrown (no key
+   * blob key in this tab, a keyBlob that does not open), is unread: the
+   * card keeps the trade it shows and the dispute case it told, and Share
+   * and Start wait for a check that reads everything. A check that ends
+   * after the card was given another room changes nothing.
    */
   private async check(): Promise<Found> {
     const room = this.room();
@@ -541,9 +565,11 @@ export class PinnedListingComponent {
         if (trade.accountId === myAccount) {
           await this.tell(room, named, trade.transactionId, this.t().pinned.startedMessage(millionthsToAnos(trade.amount), trade.accountId, trade.accountIdTo, trade.transactionId));
         }
+        await this.findDisputeCase(room, trade);
         return 'open';
       }
       this.trade.set(null);
+      this.tellDisputeCase(null);
       if (link !== null && this.released() === null) {
         this.released.set({ amount: link.amount, transactionId: link.transactionId, from: link.accountId ?? '', to: link.accountIdTo ?? '', mine: link.accountId === linkAccount });
       }
@@ -594,6 +620,41 @@ export class PinnedListingComponent {
     } catch {
       // The next check posts it.
     }
+  }
+
+  /**
+   * The dispute case of the chat's trade (wallet spec 8.2, Chat;
+   * 2026-11-12), found as the escrow trade page finds it (findCase there):
+   * on a check that shows the trade in dispute while no case is known,
+   * /list-my-cases, quiet, and of its disputes the one on the trade's
+   * transaction that is open or in review. A case found stays until the
+   * trade is no longer in dispute. A trade that is not in dispute has none.
+   * A read that fails, or a dispute no attestor has a case open on, leaves
+   * none known, and the next check asks again. A check that ends after the
+   * card was given another room changes nothing.
+   */
+  private async findDisputeCase(room: RoomItem, trade: EscrowItem): Promise<void> {
+    if (this.roomId !== room.chatRoomId) return;
+    if (trade.stage !== 'disputed') {
+      this.tellDisputeCase(null);
+      return;
+    }
+    if (this.disputeCaseId !== null) return;
+    try {
+      const res = await this.masterpod.listMyCases(true);
+      if (!res.ok || this.roomId !== room.chatRoomId) return;
+      const found = res.body.disputes.find((d) => d.transactionId === trade.transactionId && (d.status === 'open' || d.status === 'inReview'));
+      if (found) this.tellDisputeCase(found.caseId);
+    } catch {
+      // The next check asks again.
+    }
+  }
+
+  /** The page is told the dispute case of the chat's trade, or null for none, when it is another than the one it was last told; a card that is gone (a check can end after the chat was left) tells nothing. */
+  private tellDisputeCase(caseId: string | null): void {
+    if (caseId === this.disputeCaseId || this.destroyRef.destroyed) return;
+    this.disputeCaseId = caseId;
+    this.disputeCase.emit(caseId);
   }
 
   /**

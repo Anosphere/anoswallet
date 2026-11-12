@@ -11,7 +11,7 @@ import { SessionService } from '../services/session.service';
 /** The five case kinds of masterpod 13.7: their reference id is a case id, and the label links to the person's case page (wallet spec 13.4). */
 const CASE_KINDS = ['tradeCaseOpened', 'disputeCaseOpened', 'caseScheduled', 'caseDecided', 'caseDismissed'];
 
-/** The notifications page (wallet spec 8.2): the list, newest first, mark read; the five case kinds link to /cases/:caseId (13.4), the chat kinds to the chat requests or the room (8.2, Chat). The shell's poll keeps it fresh. */
+/** The notifications page (wallet spec 8.2): the list, newest first, mark read; the five case kinds link to /cases/:caseId (13.4), recoveryCaseScheduled to /cases/recovery/:caseId (13.3, 2026-11-12), the chat kinds to the chat requests or the room (8.2, Chat). The shell's poll keeps it fresh. */
 @Component({
   selector: 'app-notifications-page',
   imports: [RouterLink, MatCardModule, MatButtonModule, MatListModule, MatIconModule],
@@ -59,9 +59,10 @@ export class NotificationsPage {
     void this.refresh();
   }
 
-  /** Where the label leads: a case kind to the case; chatInvite and joinRequest to the chat requests; inviteAccepted, inviteDeclined and joinApproved to the room, the reference being its id; null for the rest. */
+  /** Where the label leads: a case kind to the case; recoveryCaseScheduled to the person's recovery case, the reference being the case's id (2026-11-12); chatInvite and joinRequest to the chat requests; inviteAccepted, inviteDeclined and joinApproved to the room, the reference being its id; null for the rest. */
   protected linkOf(kind: string, referenceId: string): string[] | null {
     if (CASE_KINDS.includes(kind)) return ['/cases', referenceId];
+    if (kind === 'recoveryCaseScheduled') return ['/cases/recovery', referenceId];
     if (kind === 'chatInvite' || kind === 'joinRequest') return ['/chat/requests'];
     if (kind === 'inviteAccepted' || kind === 'inviteDeclined' || kind === 'joinApproved') return ['/chat', referenceId];
     return null;

@@ -10,6 +10,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { RouterLink } from '@angular/router';
 import { millionthsToAnos } from '../amounts';
+import { CaseChatStartComponent } from '../components/case-chat-start.component';
 import { CASES_POLL_MS } from '../constants';
 import { AnosApiService } from '../services/anos-api.service';
 import { AttestingService, attestingError } from '../services/attesting.service';
@@ -98,7 +99,8 @@ function accepted(result: SentResult): boolean {
 /**
  * Trade case (wallet spec 13.3, /attesting/trade/:caseId, the attestor
  * edition), from /get-trade-case, refreshed by a button and every 15 s: the
- * person, the trade (the amount and the receiver from the Trades list cached
+ * person, with the Start chat button under the facts (8.7, 2026-11-12),
+ * the trade (the amount and the receiver from the Trades list cached
  * in AttestingService), the timeline with the acting attestors, Schedule,
  * the lookup id once the person shared it, the two buckets (the moderation
  * case page's pull, pointed at /list-trade-case-security-records: a
@@ -112,7 +114,7 @@ function accepted(result: SentResult): boolean {
  */
 @Component({
   selector: 'app-attesting-trade-case-page',
-  imports: [FormsModule, RouterLink, MatCardModule, MatButtonModule, MatListModule, MatIconModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatProgressBarModule],
+  imports: [FormsModule, RouterLink, MatCardModule, MatButtonModule, MatListModule, MatIconModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatProgressBarModule, CaseChatStartComponent],
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
@@ -143,10 +145,13 @@ function accepted(result: SentResult): boolean {
             @if (d.profile?.selfie; as selfie) {
               <img class="selfie" [src]="'data:' + selfie.contentType + ';base64,' + selfie.image" [alt]="t().common.publicSelfie" />
             }
-            <div class="facts">
-              <div><span class="label">{{ t().common.username }}</span><span class="value">{{ d.profile?.username ?? t().common.unknownPod }}</span></div>
-              <div><span class="label">{{ t().common.name }}</span><span class="value">{{ d.profile?.firstName }} {{ d.profile?.lastName }}</span></div>
-              <div><span class="label">{{ t().common.status }}</span><span class="value">{{ t().common.statusOpened(t().caseStatus[d.case.status] ?? d.case.status, lang.dateTime(d.case.createdAt)) }}</span></div>
+            <div>
+              <div class="facts">
+                <div><span class="label">{{ t().common.username }}</span><span class="value">{{ d.profile?.username ?? t().common.unknownPod }}</span></div>
+                <div><span class="label">{{ t().common.name }}</span><span class="value">{{ d.profile?.firstName }} {{ d.profile?.lastName }}</span></div>
+                <div><span class="label">{{ t().common.status }}</span><span class="value">{{ t().common.statusOpened(t().caseStatus[d.case.status] ?? d.case.status, lang.dateTime(d.case.createdAt)) }}</span></div>
+              </div>
+              <app-case-chat-start [caseId]="caseId()" [person]="d.profile" [open]="!final()" />
             </div>
           </div>
 

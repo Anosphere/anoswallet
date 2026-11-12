@@ -67,9 +67,12 @@ src/app/
   unlock.ts                the unlock flow, shared by the landing page and setup
   components/camera.component.ts   the camera: live preview, Take photo, a file input as the fallback
   components/note-form.component.ts   the note form under a history row: the kind, the money and the currency, the memo (spec 8.2)
-  components/confirm-dialog.component.ts   the confirmation box before a send, before a new anos account and before the cancel of a locked transfer, and askConfirm (spec 8.9)
+  components/confirm-dialog.component.ts   the confirmation box before a send, before a new anos account and before the cancel of a locked transfer, with the username to type before a DAO or guardian stake and a red button for the cancel, and askConfirm (spec 8.9)
+  components/case-chat-start.component.ts   the attestor's Start chat button for the person on a case page: Start chat, Open chat, Invite again (spec 8.7, 13.3)
+  components/case-chat-list.component.ts   the person's chats with the attestors of a case, on My case and My recovery case: Accept, Decline, Open chat (spec 8.7, 13.3)
   pages/                   one file per route: landing, create, recover, vouching, identity, setup,
                            bucket-one, bucket-two, wallet, noted-transactions, account, account-protect, chat, marketplace, notifications, seed, log
+  pages/my-recovery-case.page.ts   the person's recovery case, /cases/recovery/:caseId: the status, the video call with its time and its link, the chat with the attestor, the accounts being moved, the timeline (spec 13.3)
   services/
     config.service.ts      GET /api/config once
     language.service.ts    the language on screen: Thai when the browser's first language is Thai,
@@ -83,6 +86,8 @@ src/app/
     log.service.ts         the activity log, and the HTTP plumbing every call goes through
     notes.service.ts      the noted transactions: the last list read, the blobs opened on the phone, add, update, remove (spec 8.2)
     settings.service.ts   the wallet settings on the masterpod, one encrypted object: the Protect your passkey answer (spec 8.2)
+    chat.service.ts       what the chat pages share: the room keys, a room's title, and the chats about an attestor case: the room, the invites, Start chat, Invite again (spec 8.3)
+    work-badge.service.ts the numbers on the Attesting and Moderation menu entries: the things on each page that this device has not seen yet, read every 15 seconds in that edition, the seen ids kept on the device (spec 8.1, 8.3)
 docs/                      schemas.md (the spec, build notes in section 11), public-ledger-id.md, build-plan.md
 proxy.conf.json            ng serve forwards /api to the proxy
 ```

@@ -1,6 +1,9 @@
-import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
 import { firstValueFrom } from 'rxjs';
 import { CONFIRM_ARM_MS } from '../constants';
 import { LanguageService } from '../services/language.service';
@@ -12,7 +15,7 @@ export interface ConfirmLine {
   code?: boolean;
 }
 
-/** What opens the box: its title, the rows, the notes under them, the words on the button that says yes and, when given, the words on the first button. */
+/** What opens the box: its title, the rows, the notes under them, the words on the button that says yes and, when given, the words on the first button, a text the person has to type and the red of the button that says yes. */
 export interface ConfirmData {
   title: string;
   lines: ConfirmLine[];
@@ -20,6 +23,10 @@ export interface ConfirmData {
   confirmLabel: string;
   /** The words on the first button, which closes the box with false (2026-11-11). Left out, it reads Cancel (common.cancel); the cancel of a locked transfer gives Back, since Cancel there would read as the cancel itself. */
   cancelLabel?: string;
+  /** A text the person types before the second button works (2026-11-12): the box shows one text box under the notes, with this label, and the button stays off until what is typed equals `expected`, both trimmed and in small letters. Left out, the box has no text box; a DAO or guardian stake on the account page gives the username. */
+  typed?: { label: string; expected: string };
+  /** True puts the class `danger` on the second button (2026-11-12), which the global rule in src/styles.css makes red. Left out, the button keeps the theme's colour; the cancel of a locked transfer gives true. */
+  danger?: boolean;
 }
 
 /**
@@ -40,10 +47,19 @@ export interface ConfirmData {
  * nothing. The second button cannot be pressed for the first CONFIRM_ARM_MS,
  * so the second click of a double click on the page's button never lands on
  * it.
+ * Since 2026-11-12 a caller can ask for two more things. A text to type
+ * (typed): one text box under the notes, with the caller's label, drawn
+ * with FormsModule, MatFormFieldModule and MatInputModule; the second
+ * button stays off until what is typed equals the expected text, both
+ * trimmed and in small letters, and the first CONFIRM_ARM_MS have passed.
+ * The text box stands in no form, so the Enter key in it answers nothing.
+ * And a red second button (danger): it carries the class `danger`, the
+ * global rule in src/styles.css. A caller that gives neither keeps the box
+ * as it was.
  */
 @Component({
   selector: 'app-confirm-dialog',
-  imports: [MatButtonModule, MatDialogModule],
+  imports: [FormsModule, MatButtonModule, MatDialogModule, MatFormFieldModule, MatInputModule],
   template: `
     <h2 mat-dialog-title>{{ data.title }}</h2>
     <mat-dialog-content>
@@ -64,10 +80,16 @@ export interface ConfirmData {
       @for (note of data.notes; track $index) {
         <p>{{ note }}</p>
       }
+      @if (data.typed; as typed) {
+        <mat-form-field appearance="outline" class="typed" subscriptSizing="dynamic">
+          <mat-label>{{ typed.label }}</mat-label>
+          <input matInput [ngModel]="typedText()" (ngModelChange)="typedText.set($event)" autocomplete="off" autocapitalize="none" />
+        </mat-form-field>
+      }
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button mat-button type="button" [mat-dialog-close]="false">{{ data.cancelLabel ?? t().common.cancel }}</button>
-      <button mat-flat-button type="button" [mat-dialog-close]="true" [disabled]="!armed()">{{ data.confirmLabel }}</button>
+      <button mat-flat-button type="button" [class.danger]="data.danger" [mat-dialog-close]="true" [disabled]="!armed() || !typedOk()">{{ data.confirmLabel }}</button>
     </mat-dialog-actions>
   `,
   styles: `
@@ -76,6 +98,7 @@ export interface ConfirmData {
     .label { color: var(--mat-sys-on-surface-variant); }
     .value { color: var(--mat-sys-on-surface); overflow-wrap: anywhere; }
     p { margin: 12px 0 0; }
+    .typed { width: 100%; margin-top: 12px; }
   `,
 })
 export class ConfirmDialogComponent {
@@ -85,6 +108,15 @@ export class ConfirmDialogComponent {
 
   /** False for the first CONFIRM_ARM_MS after the box was made: the second button is off until it turns true. */
   protected readonly armed = signal(false);
+
+  /** What the text box holds (2026-11-12), in a box that asks for a typed text; it stays empty in every other box. */
+  protected readonly typedText = signal('');
+
+  /** True in a box that asks for no typed text; in one that does, true once what is typed equals the expected text, both trimmed and in small letters. The second button is off until this and armed are both true. */
+  protected readonly typedOk = computed(() => {
+    const typed = this.data.typed;
+    return !typed || this.typedText().trim().toLowerCase() === typed.expected.trim().toLowerCase();
+  });
 
   constructor() {
     const timer = setTimeout(() => this.armed.set(true), CONFIRM_ARM_MS);

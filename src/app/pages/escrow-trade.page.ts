@@ -90,7 +90,7 @@ interface Outcome {
             @if (asking(); as action) {
               <p class="question">{{ question(action, open) }}</p>
               <div class="row">
-                <button mat-flat-button type="button" (click)="confirm()" [disabled]="busy()">{{ yesLabel(action) }}</button>
+                <button mat-flat-button type="button" [class.danger]="action === 'cancel'" (click)="confirm()" [disabled]="busy()">{{ yesLabel(action) }}</button>
                 <button mat-button type="button" (click)="asking.set(null)" [disabled]="busy()">{{ t().common.back }}</button>
               </div>
             } @else {
@@ -98,7 +98,7 @@ interface Outcome {
                 @if (side() === 'seller') {
                   <button mat-flat-button type="button" (click)="ask('release')" [disabled]="busy()">{{ t().escrow.release }}</button>
                 } @else {
-                  <button mat-flat-button type="button" (click)="ask('cancel')" [disabled]="busy()">{{ t().escrow.cancelTrade }}</button>
+                  <button mat-flat-button type="button" class="danger" (click)="ask('cancel')" [disabled]="busy()">{{ t().escrow.cancelTrade }}</button>
                 }
                 <button mat-stroked-button type="button" (click)="ask('dispute')" [disabled]="busy()">{{ t().escrow.dispute }}</button>
               </div>

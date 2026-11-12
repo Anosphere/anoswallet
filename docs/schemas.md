@@ -63,9 +63,9 @@ on this machine).
     DEFAULT_VALIDATOR   1                                                    until 2026-11-10 the validator the wallet posted to; it no longer picks the validator (below)
     DIST_DIR            dist/wallet/browser                                  the Angular build it serves
     RP_ID               localhost                                            the relying-party id the browser uses in both ceremonies; the masterpod's RP_ID
-    GUARDED_LOCK_MINUTES  1    the validators' time lock on a guarded account, in minutes (10 on the testnet; a week in production)
-    VAULT_LOCK_MINUTES    2    the same on a vault account (20 on the testnet; a month)
-    LOCK_OFFSET_MINUTES   1    how much more than its lock a guarded or vault transfer may be dated ahead (5 on the testnet; 10)
+    GUARDED_LOCK_MINUTES  1    the validators' time lock on a guarded account, in minutes (a week, 10080, on the network since 2026-11-12; 10 on the testnet before that)
+    VAULT_LOCK_MINUTES    2    the same on a vault account (30 days, 43200; 20 before)
+    LOCK_OFFSET_MINUTES   1    how much more than its lock a guarded or vault transfer may be dated ahead (10; 5 before)
 
 The three lock numbers are the validators' (anossoftware's
 network/testnet.env); the wallet dates a guarded or vault transfer the
@@ -731,6 +731,12 @@ dao/:proposalId would otherwise swallow dao/guardians. The Guardians have
 no entry of their own in the side panel or the Home tiles: the DAO page
 carries a card to them (8.2).
 
+The route of the person's recovery case, cases/recovery/:caseId
+(2026-11-12, section 11; the plan is
+forclaude/wallet-case-chats-plan-1.md), sits in front of cases/:caseId
+in app.routes.ts, the more specific path first. The Cases routes are not
+in the list above: they are in 13.2, and this one is there with them.
+
 A guard sends anyone without a session to /. Which pages the navigation
 shows follows the status: vouching until vouched; identity and setup
 until setup is complete; home first, then wallet, chat, marketplace, DAO
@@ -740,6 +746,20 @@ isSeed. The Chat entry carries the number of unread rooms (8.2, Chat;
 notifications (2026-11-06); the side panel and the Home tiles draw one
 list, navigation.service (8.3). The toolbar's "anoPod wallet" is a link
 to /home once setup is complete.
+
+Two more entries carry a number since 2026-11-12 (section 11; the plan
+is forclaude/wallet-case-chats-plan-1.md, its decisions 15 and 25): the
+Moderation entry of the moderator edition (12.3) and the Attesting entry
+of the attestor edition (13.3). The number is how many things on that
+page this device has not seen yet, as the Chat entry counts its unread
+rooms. A thing on the Attesting page is a row of its three lists: an
+assisted transfer the validators hold, a disputed escrow the validators
+hold, a recovery case that is open or in review. A thing on the
+Moderation page is a recovery case that is open or in review. The wallet
+reads those lists every 15 seconds, in that edition only, and the number
+clears when the page is opened (work-badge.service, 8.3). It shows at
+the right of the entry in the side panel and on the entry's Home tile,
+since both draw the one list.
 
 The next-step rule, applied after an unlock and after each step
 finishes:
@@ -966,7 +986,9 @@ to /dao/guardians; 2026-11-08, section 11); "4 unread notifications" (to
 /notifications), each singular when it is one; then the tiles, one
 square per side-panel entry except Home itself
 and Log, with the entry's icon and label, Chat and Notifications
-carrying their unread counts at the top right, drawn from the same list
+carrying their unread counts at the top right and, since 2026-11-12
+(section 11), Moderation and Attesting the number of things on their
+page that this device has not seen yet (8.1), drawn from the same list
 as the side panel (navigation.service, 8.3). On open /list-anos-accounts
 (quiet) fills the session's accounts, a refusal in red, then the
 balances are read; every 5 seconds while an account is not on the ledger
@@ -1204,7 +1226,8 @@ The sender can cancel the locked transfer from its row (2026-11-11,
 section 11; the plan is forclaude/locked-transfer-cancel-plan-1.md, the
 validators' part anossoftware spec sections 27 and 28, the doorman's
 doormansoftware spec section 9). Until then nothing could be done with
-it. The button: "Cancel transfer", stroked, under the row, while the
+it. The button: "Cancel transfer", stroked, and red since 2026-11-12
+(section 11; the class `danger`, 8.9), under the row, while the
 stage is locked or due, that is from the moment every validator has
 accepted the transfer until it is written; off while the page is busy.
 It does not show while the stage is waiting, when the validators would
@@ -1212,7 +1235,8 @@ refuse the cancel, nor while it is cancelling. The button asks in the
 confirmation box (8.9): the title "Cancel this transfer?"; Amount, "12
 anos"; To, the receiver's full account id; the note "The 12 anos stay in
 this account. It cannot be undone."; the buttons Back and "Yes, cancel
-the transfer". The first button reads Back in this box, where Cancel
+the transfer", the second one red since 2026-11-12 (the box's `danger`,
+8.9). The first button reads Back in this box, where Cancel
 would read as the cancel itself. Back does nothing. Yes builds the
 follow-up lockedTransferCancel for the transfer the box showed,
 { type: "lockedTransferCancel", transactionId, accountId } with signedAt
@@ -1283,6 +1307,15 @@ that leaves the list goes back to daoVote.
 Stake for starts at daoVote and the amount box starts empty (2026-11-10,
 section 11; they started at attestor and at 1), so the form on a fresh
 page and the form after a send are the same.
+A guardian stake goes in whole thousands (2026-11-12, section 11; the
+plan is forclaude/wallet-case-chats-plan-1.md, its step 5): while Kind
+is stake and Stake for is guardian, Send stays off unless the amount is
+a whole multiple of 1,000 anos, at least 1,000 (`GUARDIAN_STAKE_STEP_ANOS`
+in constants.ts, which is the validators' GUARDIAN_VOTE_ANOS, the anos
+staked for one guardian vote), and the line "A guardian stake goes in
+whole thousands: 1,000, 2,000, 3,000 anos and so on." shows under the
+form. So 1,500 anos cannot be sent for guardian. The stake for daoVote
+and the other four purposes take any amount, as before.
 A stake for moderator, attestor, validator or masterPod that the
 validator refuses for the appointment reads "Only an appointed attestor
 can stake for attestor.", with the stake's purpose in both places, or "The
@@ -1298,7 +1331,24 @@ short id kept whole where the line wraps); To,
 the recipient's full account id, or for a stake Stake for, the purpose;
 for a stake one more line, "A stake stays with the fund. It comes back
 only through a fund proposal that the guardians vote for."; the buttons
-Cancel and Send. Cancel sends nothing and leaves the form as it was
+Cancel and Send. A stake for daoVote or guardian has a box of its own
+(2026-11-12, section 11), so that it does not read like an ordinary
+send. Its title: "Stake 100 anos for DAO votes?" or "Stake 1000 anos as
+a guardian?". Its lines: the same three, Kind, From and Stake for. Its
+notes, three, in this order: "A DAO stake gives you one vote for each
+anos. It is locked for one month since your last vote." or "A guardian
+stake gives you one vote on fund proposals for each 1,000 anos. It is
+locked for one year since your last vote."; then the line about the
+fund, as above; then "To confirm, type your username below." Under the
+notes a text box, "Your username" (the box's `typed`, 8.9). The buttons
+are Cancel and Stake, and Stake stays off until the anoPod's username
+is in the text box, compared without regard to capital letters and to
+spaces around it. Stake does what Send does in the other boxes. The
+month and the year are the user's words (the plan's decision 11): no
+code holds a stake for that time, and a stake comes back by a fund
+proposal, as the second note says. A stake for moderator, attestor,
+validator or masterPod and every transfer keep the box described
+first. Cancel sends nothing and leaves the form as it was
 typed. Send in the box empties the form at once, before the answer
 comes: Kind back to plain, Stake for back to daoVote, the recipient and
 the amount empty, the paste hint gone. The form stays empty whatever the
@@ -1448,6 +1498,9 @@ the buyer "Cancel trade" and "Dispute". Each asks once in place
 cannot be undone."; "Cancel this trade? The seller keeps the 5 anos. It
 cannot be undone."; "Dispute this trade? Attestors will decide it, and
 neither side can release or cancel it after that."), then Yes or Back.
+The cancel is red (2026-11-12, section 11; the class `danger`, 8.9):
+"Cancel trade", and the Yes of its question, "Yes, cancel the trade".
+Release, Dispute and the Yes of each keep their colour.
 Yes builds the escrowSuccess, escrowCancel or escrowDispute follow-up
 (crypto buildFollowUp, pair one from the keyBlob), /api/sign adds the
 wallet pair, /escrow-signature takes it, then "Sent. ..." in green or
@@ -1507,7 +1560,9 @@ once per case), "another reason" when the event has none. The buttons:
 "Go to the case" (to /cases/:caseId) when there is a case, and "Cancel
 transfer" while the stage is attesting or writing, which asks once in
 place ("Cancel this transfer? The 5 anos stay in this account. It cannot
-be undone."), then "Yes, cancel the transfer" or Back. Yes builds the
+be undone."), then "Yes, cancel the transfer" or Back. Both cancel
+buttons are red (2026-11-12, section 11; the class `danger`, 8.9):
+"Cancel transfer" and "Yes, cancel the transfer". Yes builds the
 assistedTransferCancel follow-up as the removed form did (crypto
 buildFollowUp, pair one from the keyBlob), /api/sign adds the wallet
 pair, /assisted-transfer-cancel takes it, then "Sent. The transfer is
@@ -1549,7 +1604,12 @@ title. A room's title: a public room's name; an old listing room's "Sell
 50 anos for THB" from the listing summary the masterpod sends; a private
 room's other people, the invited as "mai (invited)", or "Just you", and
 for a private room about a listing (2026-11-06) the listing's words after
-them, "somchai · Selling 100 anos for THB". The
+them, "somchai · Selling 100 anos for THB". A private room about an
+attestor case (2026-11-12, section 11) has the case's kind in words after
+its people: "attestorjoy · Assisted transfer case", or "Escrow dispute
+case", or "Recovery case". The invited mark stays, "somchai (invited) ·
+Recovery case", and with one other person the row still shows that
+person's avatar. The
 rooms are the latest /list-chat-rooms answer kept in the session, which
 the shell's 5-second poll refreshes once setup is complete; the list
 refreshes it once when it opens. "No chat keys in this tab: unlock
@@ -1558,9 +1618,13 @@ again." shows without chat keys.
 One conversation, at /chat/:chatRoomId: a header with the avatar or icon,
 the title, the members (the invited marked) and a menu with Invite
 someone (the creator of a private or public room; the username search,
-the person's selfie, Invite), Members (a panel of the members and the
-invited with avatars) and Leave (a member who is not the creator; the
-room key is dropped and the list opens). The thread opens at the room's
+the person's selfie, Invite), Invite an attestor (2026-11-12, section
+11: both traders of a marketplace chat, only while its trade is in
+dispute and an attestor has a case open on it; the paragraph on the
+attestor in a marketplace chat, below), Members (a panel of the members
+and the invited with avatars) and Leave (a member who is not the
+creator; the room key is dropped and the list opens). The thread opens
+at the room's
 newest 50 messages (/list-messages with beforePosition, MESSAGES_PAGE)
 and shows "Load older messages" on top while a page came back full; the
 3-second poll reads after the newest shown position; the thread scrolls
@@ -1584,7 +1648,12 @@ new messages show. "You are not in this chat." for a room that is not in
 the list.
 
 The pinned card (2026-11-06, section 11), in a private room about a
-listing, under the header and its panels and above the thread: the
+listing, under the header and its panels and above the thread, drawn for
+the room's two traders only (2026-11-12, section 11: the person who made
+the room by pressing Connect, and the listing's owner; anyone else in
+the room is a guest and gets no card, and "the other person" in this
+paragraph and the two after it is the other trader, never a guest; 8.7,
+and the paragraph on the attestor in a marketplace chat, below): the
 listing in one line, "Selling 100 anos · 35.50 THB each · 3,550 THB",
 with the other person's avatar (8.6) and Closed when the listing is
 closed; the roles from the listing (the owner of a sell listing and the
@@ -1701,10 +1770,58 @@ that fails is tried again by the next check; two devices of the seller in
 the same chat at the same moment can post it twice. The buyer's card
 never posts about a trade.
 
+The attestor in a marketplace chat (2026-11-12, section 11; the plan is
+forclaude/wallet-case-chats-plan-1.md, its decisions 9, 26 and 27; the
+masterpod's part is its spec's section 18): an attestor on an escrow
+dispute can be brought into the marketplace chat of the trade, and then
+reads everything said there, since a room has one key and a member gets
+every message from the first. Either trader can do it, without the other
+agreeing, with the menu's "Invite an attestor". The entry shows for the
+room's two traders only, and only while the chat's trade is in dispute
+and an attestor has a case open on it: the pinned card finds that case
+(8.7: /list-my-cases, and of its disputes the one on the trade's
+transaction that is open or in review) and tells the page its id. Before
+the dispute, before an attestor opens the case, and once the trade is no
+longer in dispute there is no entry. Opening it reads /list-my-cases
+again, quiet, and takes the dispute with that case id. When that case is
+no longer open or in review the entry goes. Otherwise a panel shows
+under the header, like the invite panel: the muted line "An attestor you
+invite can read this whole chat.", then the attestors on the case, each
+with avatar (8.6), username and Invite. The attestors on the case are
+the ones the masterpod names on the dispute (`attestors`, masterpod
+13.4.5 and 18: every attestor who acted on the case, the one who opened
+it first) and, with them, the attestors who have a chat with this pod
+about the case (chat.service's `caseAttestors`, 8.3), each once, without
+those who are a member of this room or invited to it. So the attestor
+who opened the case is on the list from the start, and no other chat
+with that attestor is needed first. Invite wraps the room's key to the
+attestor's chat keys (`wrapFor`), calls /invite-to-chat-room and
+refreshes the room list; the attestor then shows as invited and leaves
+the list, and with nobody left to invite the panel reads "The attestors
+on this case are already in this chat." A refusal shows in the page's
+error line as the masterpod says it; the masterpod lets a member of a
+listing chat who did not start it invite an appointed attestor and
+nobody else. A second click on the entry closes the panel. The attestor
+gets the request on the Requests page (below) and, once in, is a guest:
+no pinned card, the two traders' card keeps going by the two traders,
+and the attestor's menu has Members and Leave. Nothing takes the
+attestor out when the case closes. "Invite someone" stays as it was, for
+the room's creator.
+
 Requests, at /chat/requests: the invites to this pod (the inviter's
 username, then `invited you to "<the public room's name>"`, `invited you
 to a private chat` or, for a room about one of this pod's listings,
-`wants to chat about your listing Selling 100 anos for THB`; 2026-11-06),
+`wants to chat about your listing Selling 100 anos for THB`; 2026-11-06;
+for a room about someone else's listing, `invited you to the chat about
+the listing Selling 100 anos for THB`, which is what an attestor reads
+whom a trader brings into a marketplace chat; 2026-11-12, section 11,
+step 6;
+for a room about an attestor case, by the case's kind, `is an attestor
+and wants to chat about your assisted transfer`, `is an attestor and
+wants to chat about your escrow dispute` or `is an attestor and wants to
+chat about your recovery`, and in the wallet of a pod that is itself an
+attestor (its role, 4.3) `invited you to a chat about a case`;
+2026-11-12, section 11),
 Accept (the room opens) and Decline; the join
 requests on the rooms this pod created (`<username> asks to join
 <title>`), Approve (the room key wrapped to the requester) and Decline;
@@ -2130,7 +2247,12 @@ runs while a session is open and updates the status (vouched, counts),
 and the chat rooms with them once setup is complete. The chat kinds
 link: chatInvite and joinRequest to /chat/requests; inviteAccepted,
 inviteDeclined and joinApproved to the room, /chat/:chatRoomId
-(2026-11-05, section 11).
+(2026-11-05, section 11). The kind recoveryCaseScheduled (2026-11-12,
+section 11; masterpod 14.7), which the masterpod writes to the person
+when an attestor sets up the video call of their recovery case, reads "A
+video call was scheduled for your recovery" and links to the person's
+recovery case page, /cases/recovery/:caseId (13.3): its reference id is
+the case id.
 
 Seed: the Vouch requests page, for a seed or super seed (2026-11-08,
 section 11). One small call, /list-vouch-requests, answers the open
@@ -2174,7 +2296,11 @@ excepted, with the keyholder and anos calls included.
                             masterpod 15 (2026-11-08): createDaoProposal, supportDaoProposal, voteDaoProposal,
                             listDaoProposals (with the quiet flag), getDaoProposal and listDaoVotes, with the
                             types DaoStatus, DaoListStatus, DaoSettings, DaoListFilters, DaoProposalItem,
-                            DaoProposal and DaoVoteItem
+                            DaoProposal and DaoVoteItem; the case chats (2026-11-12, section 11): the type
+                            CaseKind (trade, dispute or recovery), caseId and caseKind on RoomItem and on
+                            InviteItem (a masterpod of before sends neither, and a missing one reads as null),
+                            and a fifth optional parameter of createChatRoom, caseId, put into the body when
+                            given
     keyholder-api.service   the keyholder test app's, base path /api/keyholder/<n>
     anos-api.service        the anos test app's account-api.service.ts, base path /api/anos/<the session's
                             validator> (2026-11-10, below; /api/anos/<defaultValidator> until then),
@@ -2271,11 +2397,47 @@ excepted, with the keyholder and anos calls included.
     navigation.service      the one navigation list (2026-11-06): NavItem (path, label, icon, badge) and items,
                             the side panel's entries by the status and the edition, Home first once setup is
                             complete, Chat and Notifications with their unread counts; the side panel and the
-                            Home tiles both draw it; DAO after Marketplace and before Account (2026-11-08)
+                            Home tiles both draw it; DAO after Marketplace and before Account (2026-11-08);
+                            Moderation and Attesting with the counts of work-badge.service, the next line
+                            (2026-11-12, section 11)
+    work-badge.service      the numbers on the Attesting and the Moderation entries (2026-11-12, section 11; 8.1):
+                            attestingIds and moderationIds, the ids of each page's things, and seen, the ids this
+                            device has seen, { attesting, moderation }, kept in localStorage under
+                            `anopod-wallet.work-seen.<anopodId>`, each list cut to its newest 500, read when a
+                            pod opens and emptied when the session closes, empty when the browser refuses;
+                            attestingCount and moderationCount, how many of a page's ids are not seen, which
+                            navigation.service puts on the two entries; a timer of CASES_POLL_MS (15 s) and one
+                            read as soon as a session with setup complete is there, each with a session and
+                            setup complete: in the attestor edition, unless the address starts with /attesting,
+                            attesting.service's loadAccounts and, with an account picked, loadLists and
+                            /list-break-glass-cases for open and inReview, each in its own try; in the moderator
+                            edition, unless the address starts with /moderation, /list-recovery-cases for open
+                            and inReview; all quiet, and a read that fails leaves its part of the ids as it was
+                            and shows nothing; the Attesting ids are the transaction id of every
+                            assistedAnosTransfer of the trade list, the transaction id of every disputed escrow
+                            and the case id of every recovery case read, the Moderation ids the case ids;
+                            seeAttesting(ids) and seeModeration(ids), which a page's own load calls with the ids
+                            it read: they become the page's ids and are all marked seen; attestingWorkIds and
+                            openCaseIds, the rule as two functions, which the two pages share with the timer
     chat.service            what the chat pages share (2026-11-05): room keys (roomKeyOf, wrapFor), decryptMessage,
                             piecesOf, a room's title, kind, icon and other person, the order by activity, shortWhen,
                             timeOf and dayLabel, requestedRooms, refreshRooms; listingWords, a listing in a few
-                            words for a title or a request (2026-11-06)
+                            words for a title or a request (2026-11-06); the case chats (2026-11-12, section
+                            11): the title of a room about a case; caseRoomWith(caseId, anopodId), the
+                            attestor's side: the room about the case that this pod created with the person in
+                            it, a member first, else invited, and when there is none the newest room about the
+                            case that this pod created with no member but this pod and nobody invited, the
+                            room of a person who declined, else null; caseRoomsOf(caseId) and
+                            caseInvitesOf(caseId), the person's side: the rooms and the invites about the
+                            case; startCaseChat(caseId, anopodId), the Message someone flow of New chat with
+                            the case, which answers the refusal of the call that failed, else the invite's
+                            answer; inviteAgain(room, anopodId), for a person who declined: wrapFor, the
+                            invite, the rooms refreshed; the attestor in a marketplace chat (2026-11-12,
+                            section 11, step 6): isTrader(room), a private room about a listing whose creator
+                            or whose listing's owner this pod is; otherTrader(room), for such a room the other
+                            of the two, found among the members and the invited, else null;
+                            caseAttestors(caseId), the creators of this pod's rooms about the case that another
+                            pod created, each once, as the room lists its members (id and username)
     marketplace.service     what the marketplace pages share (2026-11-06): load, get, mine and close (the reads
                             and the close), sideWords, mySide and firstWords, the rooms and invites about a
                             listing out of session.chatRooms (roomsAbout, myRoomAbout, invitesAbout,
@@ -2355,9 +2517,13 @@ of the username. The profile comes from profile-cache.service (8.3), one
 header, the members panel and the chat requests; since 2026-11-06 also on
 the listing cards (24 px), the listing page (56 px), the people who
 connected and the pinned listing card (8.7), and on Home beside the
-greeting (56 px).
+greeting (56 px); since 2026-11-08 on the cards of the Vouch requests
+page (72 px) and beside the proposer on the DAO proposal page (40 px);
+since 2026-11-12 (section 11) in the person's chats about an attestor
+case on My case and My recovery case (8.7), and beside each attestor in
+the conversation's "Invite an attestor" panel (8.2, Chat; 40 px).
 
-### 8.7 The marketplace components
+### 8.7 The marketplace components and the case chat components
 
 Five small components (2026-11-06, section 11), under
 src/app/components/:
@@ -2390,8 +2556,9 @@ src/app/components/:
   disabled with the hint "Pick a currency first" while Browse has no
   currency), Apply and Clear.
 - pinned-listing.component.ts (`<app-pinned-listing [room]
-  [accountIds]>`): the pinned card of a private room about a listing (8.2,
-  Chat), drawn by chat-room.page.ts under its header, above the thread.
+  [accountIds] (disputeCase)>`): the pinned card of a private room about a
+  listing (8.2, Chat), drawn by chat-room.page.ts under its header, above
+  the thread.
   `accountIds` is the page's computed of the account ids found in the
   decrypted messages (the 64-hex pieces of `piecesOf`), each with its
   sender and position, newest first; the page changes only to draw the
@@ -2401,7 +2568,54 @@ src/app/components/:
   poll shows them. It exports `FoundAccountId`. Since 2026-11-10 the card
   also reads the room's messages itself for their account ids (8.2,
   Chat): the page's computed holds the ids of the newest 50 messages and
-  of what arrived since, which is not the whole chat.
+  of what arrived since, which is not the whole chat. Since 2026-11-12
+  (section 11, step 6) the card is drawn for the room's two traders only
+  (chat.service's `isTrader`, 8.3) and goes by the other trader: `other`,
+  whose avatar and username the card shows, is `otherTrader(room)`, the
+  other of the room's creator and the listing's owner, and the form's To
+  list takes the account ids that trader posted, so a guest's messages
+  never feed the trade form. Only when the other trader is neither a
+  member nor invited any more does the list take the ids anyone else
+  posted, as before. The card also finds the dispute case of its trade,
+  as the escrow trade page does: on a check that shows the chat's trade
+  in the stage `disputed` while no case is known, /list-my-cases, quiet,
+  and of its disputes the one with the trade's transaction id whose
+  status is open or inReview. The output `disputeCase` gives the page
+  that case's id, for "Invite an attestor" (8.2, Chat), and null when the
+  chat has no open trade, when the trade is not disputed and when no such
+  case is there; it fires when the value changes. A case found stays
+  until the trade is no longer disputed.
+
+Two more small components, for the chat on an attestor case (2026-11-12,
+section 11; the plan is forclaude/wallet-case-chats-plan-1.md), under
+src/app/components/ too:
+
+- case-chat-start.component.ts (`<app-case-chat-start [caseId] [person]
+  [open]>`): the attestor's button on the three attestor case pages
+  (13.3), under the person's facts. `person` is the profile the case page
+  has (its `anopodId` and `username`), or null, which draws nothing;
+  `open` is false on a closed case. It goes by chat.service's
+  `caseRoomWith` (8.3), live from session.chatRooms. No room: a stroked
+  Start chat, shown while `open`, which runs `startCaseChat`. A room with
+  the person invited: Open chat, a link to /chat/:chatRoomId, and the
+  muted line "somchai has not accepted the chat yet." A room with the
+  person a member: Open chat. A room the person is not in: the muted line
+  "somchai did not accept the chat." and, while `open`, Invite again,
+  which runs `inviteAgain`. Start chat and Invite again are off while one
+  of them runs and without chat keys, and then "No chat keys in this tab:
+  unlock again." shows. A refusal shows in red under the button: the
+  masterpod's `403 not an attestor` as "This anoPod is not an attestor.",
+  the rest as the masterpod says it.
+- case-chat-list.component.ts (`<app-case-chat-list [caseId]>`): the
+  person's block on My case and My recovery case (13.3), in the shape of
+  listing-people.component.ts. The invites to this pod into a room about
+  the case (`caseInvitesOf`): the attestor's avatar (8.6), "attestorjoy is
+  an attestor on this case and wants to chat with you", Accept, which
+  calls /accept-invite, refreshes the rooms and opens /chat/:chatRoomId,
+  and Decline. Then the rooms about the case (`caseRoomsOf`): the avatar
+  and username of the room's creator, who is the attestor, and Open chat.
+  "No attestor has started a chat with you about this case yet." when
+  both are empty. Live from session.chatRooms.
 
 ### 8.8 The languages
 
@@ -2522,9 +2736,10 @@ What it is given, `ConfirmData`: `title`; `lines`, each a `ConfirmLine`
 `{ label, value, code? }`, drawn as a two-column grid, the label in the
 on-surface-variant colour and the value beside it, in the id font when
 `code` is true; `notes`, each a paragraph under the lines;
-`confirmLabel`, the words on the second button; and, since 2026-11-11
+`confirmLabel`, the words on the second button; since 2026-11-11
 (section 11), `cancelLabel`, which a caller may leave out: the words on
-the first button. A value too long for its
+the first button; and, since 2026-11-12, `typed` and `danger`, which
+are described two paragraphs down. A value too long for its
 column wraps at a space, and is cut inside a word only when the word
 alone is too long (`overflow-wrap: anywhere`); a value in the id font is
 cut anywhere, by the global rule for `code`, so a 64-character id wraps
@@ -2543,13 +2758,39 @@ land on it. Nothing in the box has the focus when it opens (`autoFocus:
 nothing. The box is 480 px wide, or the screen's width less 32 px where
 that is narrower.
 
+Two more fields, each of which a caller may leave out (2026-11-12,
+section 11; the plan is forclaude/wallet-case-chats-plan-1.md, its step
+5). `typed`, `{ label, expected }`: the box shows one text box under the
+notes, an outlined field with the caller's label, as wide as the box,
+with the browser's suggestions and its capital first letter turned off
+(`autocomplete="off"`, `autocapitalize="none"`). The second button then
+stays off until what is typed equals `expected`, both trimmed and in
+small letters, and the half second has passed. The text box stands in
+no form, so the Enter key in it answers nothing. The focus still goes
+to the box itself when it opens, so the person taps the text box to
+type. `danger`, true or left out: with true the second button carries
+the class `danger`. That class is one rule in src/styles.css, the
+wallet's global style file. It sets five of Material's button variables
+to the theme's error colours: a filled button is red with the on-error
+colour for its words, an outlined button has red words and a red
+outline, a text button has red words. The rule colours a button that
+can be pressed; a button that is off keeps the theme's disabled look.
+The same class stands on the cancel buttons of three pages (8.2):
+"Cancel transfer" under the Locked transfer row of the account page,
+"Cancel transfer" and "Yes, cancel the transfer" on the assisted
+transfer page, "Cancel trade" and "Yes, cancel the trade" on the escrow
+trade page.
+
 Three places use it (8.2): the Send form of the account page, before
 every kind of send; "Open a new account" on the Wallet page, before
 Create anos account and Retry; and, since 2026-11-11 (section 11),
 "Cancel transfer" under the Locked transfer row of the account page.
 That third place is the only one that gives `cancelLabel`: Back
 (`common.back`), since Cancel there would read as the cancel itself; the
-other two keep Cancel. Each does nothing while a box is already open.
+other two keep Cancel. It is also the only one that gives `danger`. The
+Send form is the only one that gives `typed`, and only for a stake for
+daoVote or guardian: the label "Your username" and the anoPod's
+username. Each does nothing while a box is already open.
 
 ## 9. Configuration, and running it on this machine
 
@@ -6863,6 +7104,1007 @@ the doormen, the masterpod, the keyholders or the signing server.
   Mac on 2026-11-11). After it the third is clearly shorter:
   `curl -s -o /dev/null -o /dev/null -o /dev/null -w '%{time_total}\n' https://wallet.anocloud.com/api/health https://wallet.anocloud.com/api/anos/1/health https://wallet.anocloud.com/api/anos/1/health`
 
+### The case chats, step 2 (2026-11-12)
+
+Built from `forclaude/wallet-case-chats-plan-1.md` (FINAL, 2026-11-12),
+its step 2 of seven, its section 2, one commit, on top of 30b50bc. Why,
+in the user's words of 2026-11-11: "All of the cases that attestors do
+need to have a 'start chat button'. This is because at the very least,
+the attestor needs to be able to talk to the user about when to schedule
+the meeting. This button should start a private chat with that person and
+said chat should have a special name in the chat page so that the user
+knows what it's for. There should also be a button on both the case from
+the attestor's side and the user's side on the case page that can bring
+them to this chat." The masterpod's part is the plan's step 1
+(masterpodsoftware 68c35da, its spec's section 18): a private room can be
+about an attestor case, `/list-chat-rooms` says so on every room and on
+every invite, only an appointed attestor makes such a room, and it takes
+only a person on that case or an appointed attestor. This step is the
+wallet's part: the Start chat button on the three attestor case pages,
+the chat block on the person's case page, the title of such a chat and
+the wording of its request. No route, no env variable and no npm package;
+the proxy (`server/`) is not touched.
+
+- `src/app/services/masterpod-api.service.ts`: the type `CaseKind`;
+  `caseId` and `caseKind` on `RoomItem` and on `InviteItem`; the fifth
+  optional parameter `caseId` of `createChatRoom`. The two fields are
+  typed `string | null` and `CaseKind | null`. A masterpod of before
+  sends neither, and every reader compares the id with `===` or tests the
+  kind for truth, so a missing field behaves as null.
+- `src/app/services/chat.service.ts`: `title` puts the case's kind in
+  words after the people of a private room about a case; `caseRoomWith`,
+  `caseRoomsOf`, `caseInvitesOf`, `startCaseChat` and `inviteAgain`, as
+  8.3 gives them.
+- New, the two components of 8.7's last paragraph:
+  `src/app/components/case-chat-start.component.ts`
+  (`CaseChatStartComponent`) and
+  `src/app/components/case-chat-list.component.ts`
+  (`CaseChatListComponent`).
+- The pages. `attesting-trade-case.page.ts` and
+  `attesting-recovery-case.page.ts`: `<app-case-chat-start
+  [caseId]="caseId()" [person]="d.profile" [open]="!final()" />` under
+  the person's facts. `attesting-dispute-case.page.ts`: the same inside
+  each party's block, with `party.profile`. `my-case.page.ts`: the
+  heading `caseChat.title` and `<app-case-chat-list [caseId]="caseId()"
+  />`, after the kind's own part and before the timeline.
+  `chat-requests.page.ts`, `inviteText`: an invite with a `caseKind`
+  reads `chatRequests.aboutCase[caseKind]`, and `chatRequests.toCaseChat`
+  when `session.role()` is `attestor`; the rest as before. The chat list
+  and the conversation page did not change: they take the title from
+  `chat.title`.
+- The words, in both files, as the plan's table gives them:
+  `rooms.caseChat` and `chatRequests.aboutCase`, each a record by case
+  kind; `chatRequests.toCaseChat`; and a new section `caseChat` (`start`,
+  `notAccepted`, `declined`, `inviteAgain`, `title`, `wants`, `none`),
+  after `caseStatus`. Reused as they are: `common.openChat`,
+  `common.accept`, `common.decline`, `common.noChatKeysUnlock`,
+  `common.podHasNoChatKeys`, `attesting.notAttestor`. The Thai is the
+  plan's, by the glossary, for Thai readers to correct (8.8).
+- Readings where the plan left a detail open. `caseRoomWith`: the
+  masterpod does not count the chats of a case (the plan's decision 18),
+  so there can be more than one room with the person; a room with the
+  person a member then comes before one with the person invited, and
+  "newest" goes by `createdAt`. Where the button sits: on all three
+  pages the person's facts and the button are wrapped in one plain `div`
+  inside the person's block, so the button is right under the facts,
+  beside the selfie; no style of a page changed. Invite again is off
+  while a call runs and without chat keys, as Start chat is, and the "No
+  chat keys" line shows for either: the invite needs the room's key, and
+  that needs the chat keys. A refusal other than `403 not an attestor`
+  shows as `reasonOf` gives it, "HTTP 409: case closed", with no route
+  before it, since the call that failed is one of two; a thrown error
+  ("That anoPod has no chat keys (setup not complete)") shows in the same
+  red line. Start chat does not open the conversation: once the room list
+  is refreshed the button reads Open chat, with the "has not accepted"
+  line. Accept in the person's block opens the conversation, as Accept on
+  the Requests page does. A room whose invite failed after the room was
+  made holds only the attestor, so it reads as the room of a person who
+  declined, and Invite again brings the person in. In `inviteText` the
+  case is tested before the listing; a room has one or the other, never
+  both, by the masterpod's check. The component's `person` is typed
+  `Pick<Profile, 'anopodId' | 'username'> | null`, and its three inputs
+  are required. The paragraph for the two components is the last one of
+  8.7, where the small components are listed.
+- Known and left as it is. The room list comes from the shell's 5-second
+  poll (8.2). On a case page opened before the first read after an
+  unlock the list is not there yet, so Start chat shows even when a chat
+  exists, and a second chat then stands (decision 18). The plan's
+  decision 5 says the person sees the attestor's username, name and
+  selfie: the block, the request and the chat show the username and the
+  selfie (the avatar), and the first and last name are drawn nowhere in
+  the chat pages; the plan's section 2 names no place for them. New
+  chat's Message someone opens the private room that holds exactly the
+  two people when there is one (8.2); a case chat is such a room, as a
+  chat about a listing is.
+- Put right on the user's word of 2026-11-12 ("Yes, update them"), after
+  the first report of this build listed thirteen places as left because
+  the plan does not name them. Nine comments in the code and no line of
+  code: the comment of `createChatRoom` in `masterpod-api.service.ts`
+  names `caseId` too; the class comment of `ChatService` and the comment
+  of `title` in `chat.service.ts` name the chats about a case and the
+  title of one; the comment of `inviteText` in `chat-requests.page.ts`
+  gives the wording of a request about a case; the class comments of
+  `attesting-trade-case.page.ts`, `attesting-recovery-case.page.ts`,
+  `attesting-dispute-case.page.ts` and `my-case.page.ts` name the chat
+  among what the page shows; the class comment of
+  `src/app/components/avatar.component.ts` lists every place the avatar
+  is drawn, where it had named the chat's four places only. Four places
+  here: 8.6, the avatar in the person's chats about a case; the heading
+  of 8.7, which said "The marketplace components"; the summaries of the
+  four pages in 13.2; the first point of 13.6. Two of the places that 8.6
+  and the avatar's comment now name are older than this step: the Vouch
+  requests page and the DAO proposal page, both of 2026-11-08, which 8.2
+  describes and 8.6 had never listed.
+- Spec: 8.2 (Chat: the title of a room about a case; the Requests
+  wording), 8.3 (`chat.service`, `masterpod-api.service`), 8.7 (the new
+  last paragraph), 13.3 (the three attestor case pages; My case), this
+  note. README: the lines of the two components, and a line for
+  `chat.service.ts`, which had none.
+- Checked. `npx ng build` in the web_app folder: clean, no warnings
+  (2.14 MB initial). `git status` showed this step's thirteen files and
+  no others, and `src/app/components/avatar.component.ts` as the
+  fourteenth once its comment was put right. `npx ng build` after that:
+  clean, no warnings, and the script is the same file as before,
+  `main-BBMAXXTI.js`. Nothing was run in a browser and no server was
+  started.
+  Step 1 was not deployed when this was built, so nothing here was tried
+  against a masterpod that knows a case chat. The run-through is the
+  user's, on the running network (the plan's section 8): Start chat from
+  the attestor edition on a trade case, a dispute case and a recovery
+  case, the request on the person's side, Accept on the case page, the
+  title in the chat list, Open chat on both case pages. The masterpod
+  goes out first: against a masterpod of before, Start chat makes a plain
+  private chat with no case on it, which no case page finds again.
+
+### The recovery case on the Cases page, step 3 (2026-11-12)
+
+Built from `forclaude/wallet-case-chats-plan-1.md` (FINAL, 2026-11-12),
+its step 3 of seven, its section 3, one commit, on top of 98ffd03 (step
+2). Why, in the user's words of 2026-11-11: "Right now, when the
+attetestor opens a recovery case, a case doesn't show up for the user in
+the cases section. So there's no way for the user to even go to the
+meeting that the attestor scheduled." The recovery case the attestors
+work on is a break-glass case (masterpod 14), keyed by the recovery
+case's id. The masterpod has answered it to the person all along, with
+`/list-my-break-glass-moves`: the status, the sign-offs, the moves and
+the person's events, the `scheduled` one with the time and the meeting
+link among them. Until this step the wallet read that answer only for
+the line under a lost account's card (8.2, Wallet) and for the recovery
+finish (12.3), and drew the video call nowhere. The masterpod's part is
+the plan's step 1 (masterpodsoftware 68c35da, its spec's 14.4.2, 14.7
+and section 18): `/schedule-break-glass-case` now writes the recovered
+pod one notification, kind `recoveryCaseScheduled`, its reference the
+case id. This step is the wallet's part: the recovery case as a third
+kind of row on Cases, a case page of its own for the person, the
+notification's link and label, and new words for the line the attestor
+reads after scheduling. One new route. No env variable and no npm
+package; the proxy (`server/`) is not touched.
+
+- `src/app/pages/cases.page.ts`: `load()` reads
+  `/list-my-break-glass-moves` beside `/list-my-cases`, and each case of
+  it is a row of a third kind, `recovery`, sorted with the others by
+  `createdAt`: the icon `lock_reset`, the title `cases.recovery` as a
+  link to `/cases/recovery/<caseId>`, the line `cases.line(status,
+  cases.accounts(moves), when)`, the case id under it. A refused read
+  shows in the error line as `/list-my-break-glass-moves: <reason>` and
+  the trade and dispute rows still show. The class comment names the
+  third kind.
+- New, `src/app/pages/my-recovery-case.page.ts` (`MyRecoveryCasePage`),
+  as 13.3 gives it, and its route in `src/app/app.routes.ts`,
+  `cases/recovery/:caseId`, in front of `cases/:caseId`, behind
+  `sessionGuard`, title "My recovery case".
+- `src/app/pages/notifications.page.ts`, `linkOf`: the kind
+  `recoveryCaseScheduled` leads to `/cases/recovery/<referenceId>`. Its
+  label comes from the dictionary like every other.
+- `src/app/pages/attesting-recovery-case.page.ts` did not change: the
+  line after Save is `recoveryCase.scheduled`, whose words changed.
+- The words, in both files, as the plan's table gives them:
+  `cases.subtitle` (changed), `cases.recovery` and `cases.accounts`; a
+  new section `myRecoveryCase` (`title`, `notFound`, `statusOpen`,
+  `statusInReview`, `statusDecided`, `signed`, `callAt`, `joinCall`,
+  `noCall`, `accounts`, `moveLine`, `eventDecided`), after `myCase`;
+  `notifications.labels.recoveryCaseScheduled`, the sixteenth label; and
+  `recoveryCase.scheduled` (changed). Reused as they are: the words the
+  plan lists, and `copy.copied` and `common.couldNotCopyId`, which the
+  page's Copy uses as My case's does and the plan's list does not name.
+  The Thai is the plan's, by the glossary, for Thai readers to correct
+  (8.8).
+- Where the code was not what the plan says it stands on. The plan names
+  `balances.service` (`loadMoves`) as the only reader of
+  `/list-my-break-glass-moves`. The recovery finish reads it too
+  (`recover-case.page.ts`, Move your money, for the moves already
+  filed). Nothing in this step depends on it. The plan's 3.6 names 8.1
+  for the route, and 8.1 does not list the Cases routes: they are in the
+  table of 13.2. So the route's line is in 13.2, with the sentence under
+  the table now counting three Cases pages, and 8.1 got a short
+  paragraph that says where the route sits in `app.routes.ts`.
+- Readings where the plan left a detail open. On Cases the two reads run
+  at the same time. A refused `/list-my-cases` still ends the read with
+  its own line, as before, and then no row changes; the plan speaks only
+  of a refused `/list-my-break-glass-moves`. The recovery row is a type
+  of its own (`RecoveryRow`) and the template draws one list item or the
+  other, so the type and the code of a trade or dispute row stayed as
+  they were. The count in the row's line is the number of the case's
+  moves: one move per old account. On the new page: the status of a
+  dismissed case takes its reason as My case does (the dictionary's
+  words; the word as the masterpod sent it when the dictionary has none;
+  "another reason" without one). The line of the sign-offs is plain
+  text under the status, and it and the video call go by one test: the
+  case is open or in review. Join the video call is a link drawn as a
+  flat button, with `target="_blank"` and `rel="noopener"` like the
+  timeline's meeting link, and shows when the newest `scheduled` event
+  carries a `meetLink` (the masterpod always writes one); an event
+  without a time reads "a time to be confirmed". Your accounts makes no
+  read of its own: the new account's name comes from the session's
+  accounts as they stand (Home and the Wallet page read the list), else
+  the short id shows. `moveLine` is one sentence per language, and only
+  the new account is the link, so the page builds the sentence with the
+  new account's full id in the account's place and cuts it there; the
+  link then stands wherever a language puts the account. A kind the
+  dictionary does not know shows the type word. A refused read leaves
+  what the page shows. The page keeps its own copy code, as the other
+  case pages do (8.5). In `app.routes.ts` the new route has a one-line
+  comment of its own. The README's line for the page sits under the
+  `pages/` lines of the layout.
+- Known and left as it is. The page shows a case only once the person's
+  finish has filed a move: until then there is no break-glass case. Only
+  the video call notifies; a decision and a dismissal show on the page
+  (the plan's decision 20). A second schedule writes a second
+  notification and a second timeline line, and the Video call part shows
+  the newest. The Cases page reads when it opens and by Refresh, as
+  before; the new page also reads every 15 seconds. A lost account's
+  card has no link to this page (the plan's decision 29). The chat block
+  has what step 2's note says of it: the room list comes from the
+  shell's 5-second poll.
+- Put right on the user's word of 2026-11-12 ("Yes, update them"), after
+  the first report of this build listed fifteen places as left because
+  the plan does not name them. Nine comments in the code and no line of
+  code: the comment of `load()` in `cases.page.ts` names both reads; the
+  class comment of `notifications.page.ts` and the comment of `linkOf`
+  name the kind `recoveryCaseScheduled` and where it leads; in
+  `masterpod-api.service.ts` the comment of `scheduleBreakGlassCase`
+  names the notification, where it had said that none is sent, and the
+  comment of `listMyBreakGlassMoves` names every reader of the answer;
+  the comment above `routes` in `app.routes.ts` counts three Cases
+  pages; the comment of `CASES_POLL_MS` in `constants.ts` names every
+  page that refreshes on it; the class comments of
+  `src/app/components/case-chat-list.component.ts` and
+  `src/app/components/avatar.component.ts` name My recovery case beside
+  My case. Five places here: 8.6 and 8.7, My recovery case beside My
+  case; 13.1, the recovery case among what Cases shows; the line of the
+  notifications page in 13.4; the last point of 13.6, which had listed a
+  notification to the person as not built. One line of the README, that
+  of `case-chat-list.component.ts`. Two things these comments now name
+  are older than this step: the recovery finish as a reader of
+  `/list-my-break-glass-moves` (`recover-case.page.ts`), and the
+  attestors' Recovery case page of 2026-11-08 as the third attestor case
+  page that refreshes on `CASES_POLL_MS`, where the comment had counted
+  two.
+- Spec: 8.1 (where the route sits), 8.2 (Notifications: the kind), 13.2
+  (the route's line; three Cases pages), 13.3 (Cases: the third kind of
+  row; My recovery case; the attestor's line after scheduling), this
+  note. README: the line of the new page.
+- Checked. `npx ng build` in the web_app folder: clean, no warnings
+  (2.15 MB initial). Every string of the plan's table was compared with
+  the two dictionary files. `git status` showed this step's eight files
+  and no others, and twelve once the comments were put right: the four
+  that joined are `src/app/services/masterpod-api.service.ts`,
+  `src/app/constants.ts`,
+  `src/app/components/case-chat-list.component.ts` and
+  `src/app/components/avatar.component.ts`. `npx ng build` after that:
+  clean, no warnings, and the script is the same file as before,
+  `main-RWGW6332.js`. Nothing was run in a browser and no server was
+  started.
+  Step 1 was not deployed when this was built, so the notification was
+  not tried against a masterpod that writes it. The run-through is the
+  user's, on the running network (the plan's section 8): after a
+  recovery's Move your money, the row on Cases; an attestor schedules
+  the call from the Recovery case page and reads the new line; the
+  person's notification opens the recovery case page; the time and Join
+  the video call; an attestor's Start chat shows under Chat with the
+  attestor; the accounts; the timeline.
+
+### The contact phone and the two counts, step 4 (2026-11-12)
+
+Built from `forclaude/wallet-case-chats-plan-1.md` (FINAL, 2026-11-12),
+its step 4 of seven, its section 4, one commit, on top of 1a844e5 (step
+3). Two things. The contact phone, in the user's words of 2026-11-11:
+"The user should however be able to give a phone number as well as the
+email. Probably an either / or. And the moderator should be able to see
+both the email and phone number provided. This is because people in
+thailand don't use email too much." And the wait page of a recovery (the
+plan's decision 10): it shows both kinds of shares coming in, the key
+the bankers keep and the account keys, and the finish opens only when
+both are complete. Until this step the page counted the backup code's
+shares alone. The bankers send the rows they tick in their GUI, so the
+two kinds of shares can arrive at different times, and a finish started
+before an account's key was in moved the other accounts and left that
+account's money behind without a word. The masterpod's part is the
+plan's step 1 (masterpodsoftware 68c35da, its spec's 12.4.2, 12.4.3,
+12.4.4 and section 18): `/open-recovery-case` takes `contactEmail` and
+`contactPhone`, each optional, and wants at least one of the two; the
+three reads `/get-recovery-pod`, `/list-recovery-cases` and
+`/get-recovery-case` answer `contactPhone` beside `contactEmail`, each a
+string or null; and `/get-recovery-pod` answers `anosAccounts`, how many
+anos accounts the recovered pod has, in every status. This step is the
+wallet's part: the phone box of the locked-out stepper, the phone on the
+moderator's case page, and the status line and the finish of My
+recovery. No route, no env variable and no npm package; the proxy
+(`server/`) is not touched.
+
+- `src/app/pages/recover-open.page.ts`: step 2 has the line
+  `recoverOpen.contactText` above the boxes and a second box under the
+  email's, `recoverOpen.contactPhone`, `type="tel"`,
+  `autocomplete="tel"`, with the hint `recoverOpen.phoneHint`; a signal
+  `phone`; `isContactPhone(value)` beside `isContactEmail`, the
+  masterpod's check (6 to 32 characters, each a digit, a space, `+`, `-`
+  or a round bracket, with at least 6 digits); `whoDone` is true when at
+  least one box is filled in and every box that is filled in is valid;
+  `open()` puts `contactEmail` into the payload only when an email is
+  given and `contactPhone` only when a phone is given, both trimmed, and
+  keeps both in `RecoveryService`. The class comment says so.
+- `src/app/services/recovery.service.ts`: `RecoveryPodAnswer` has
+  `contactEmail: string | null`, `contactPhone?: string | null` and
+  `anosAccounts?: number`; a signal `contactPhone` beside
+  `contactEmail`, set by `applyPod` and emptied by `close()`, which is
+  the one place that empties `contactEmail`.
+  `src/app/services/masterpod-api.service.ts`: `RecoveryCaseItem` and
+  the `case` of `RecoveryCaseAnswer` have `contactEmail: string | null`
+  and `contactPhone?: string | null`. No method changed.
+- `src/app/pages/recover-case.page.ts`: `statusText` gives `statusOpen`
+  the contact, which is the email and the phone that are there, joined
+  by a comma and a space, or `recoverCase.yourEmail` when neither is.
+  Two computeds beside `backupShares`: `accountKeysComplete`, how many
+  key ids of share type `breakglasskey` have at least the threshold of
+  shares, and `accountKeysExpected`, the pod's `anosAccounts`, undefined
+  when the masterpod sent none. While the case is delivering, with
+  `accountKeysExpected` a number above 0, the line is
+  `recoverCase.statusDeliveringBoth` with the backup code's count, the
+  threshold, the complete account keys (never shown above the expected
+  number) and the expected number; otherwise
+  `recoverCase.statusDelivering`, as before. `showFinish` is true once
+  the finish has started in the tab, as before, or when the case takes
+  it and both are in: the backup code has the threshold of shares, and
+  `accountKeysComplete` is at least `accountKeysExpected`; with that
+  undefined the backup code alone decides, as before. One sentence of
+  the class comment, "When three shares of one backup code keyId are in,
+  the finish appears", is put right: the threshold of both. Combine and
+  the five steps of the finish did not change.
+- `src/app/pages/moderation-case.page.ts`: among the person's facts the
+  Email row shows when the case has an email, and a new row under it,
+  `common.phone`, shows the phone number with a copy button
+  (`moderationCase.copyPhone`, `copy('phone', …)`) when the case has
+  one.
+- The words, in both files, as the plan's table gives them:
+  `recoverOpen.contactText`, `recoverOpen.contactPhone` and
+  `recoverOpen.phoneHint`; `recoverCase.yourEmail`, changed to "the
+  contact you gave" where it said "your email";
+  `recoverCase.statusDeliveringBoth`, which takes four numbers;
+  `common.phone`; `moderationCase.copyPhone`. `recoverCase.statusOpen`
+  keeps its words; what it is given changed. Reused as they are:
+  `recoverOpen.contactEmail`, `recoverOpen.emailHint`, `common.email`,
+  `moderationCase.copyEmail`, `copy.copied`. The Thai is the plan's, by
+  the glossary, for Thai readers to correct (8.8).
+- Readings where the plan left a detail open. On the locked-out
+  stepper: the phone box sits in a `.fields` block of its own under the
+  email's block, so it stands under the email box on every screen,
+  where one block would put the two side by side on a wide one. No
+  style changed, and the phone's field has `subscriptSizing="dynamic"`
+  like the email's, so its hint pushes the buttons down (the two notes
+  of 2026-11-10 on this page, above). A box is filled in when something
+  is left after the spaces around it are dropped. `isContactPhone` is
+  the masterpod's check as it stands there: it measures `value.length`
+  and takes the digits 0 to 9 only, so a number typed in Thai digits is
+  not valid in the box, as the masterpod would refuse it. It runs on
+  the trimmed value, which is what is sent; the masterpod does not
+  trim. A contact that is not given is left out of the payload: it is
+  not sent as null, and not as an empty string, which the masterpod
+  refuses as not valid. `RecoveryService` keeps null for the one not
+  given, as the masterpod answers it, and `applyPod` reads a missing
+  `contactPhone` as null. On My recovery: the two computeds stand after
+  `threshold`, which the first one reads. The backup code's count is
+  shown as it comes, also above the threshold ("5 of 4"), as before;
+  only the account keys are capped, as the plan says. With
+  `anosAccounts` 0 the line is the one of before, by the plan's "a
+  number above 0", and the finish goes by the backup code alone, since
+  no account key is waited for. On the moderator's case page the two
+  rows are drawn through `@if (…; as email)` and `@if (…; as phone)`,
+  so a null, a missing field and an empty string all draw no row. In
+  the dictionaries `contactText` stands in front of `contactEmail`,
+  `contactPhone` and `phoneHint` after `emailHint`,
+  `statusDeliveringBoth` after `statusDelivering`, `copyPhone` after
+  `copyEmail` and `common.phone` after `common.email`. The comments and
+  this spec carry 2026-11-12, the day of the build; the masterpod's
+  carry 2026-11-11, the day of the design.
+- Known and left as it is. A break-glass key whose account was never
+  finished counts as an account key, so in that rare case the finish
+  can open one key early (the plan's 4.3): the deposit comes before the
+  account's row on the masterpod (8.2, Wallet), and a deposit that
+  stopped under its floor can still have left the threshold of shares
+  with the keyholders. The other way round, the finish stays closed for
+  as long as one account's key has fewer than the threshold of shares:
+  the bankers have to send every row, and the page offers no way past a
+  key that never comes (the plan's decision 10). The counts move with
+  the 15-second poll and with Refresh, as before; nothing tells the
+  page that a share arrived. Against a masterpod of before (the plan's
+  section 8): a recovery opened with a phone number alone is refused,
+  shown as `/open-recovery-case: HTTP 400: bad request shape`; one
+  opened with both keeps the email and loses the phone without a word;
+  and the wait page works as before, since no `anosAccounts` comes. The
+  card on `/recover` still says "You'll need your birth record and an
+  email where a moderator can reach you" (`recover.lockedOutText`): the
+  plan does not change that word. The parameter of
+  `recoverCase.statusOpen` is still named `email` in both dictionary
+  files, and the key `recoverCase.yourEmail` keeps its name.
+- Spec: 12.3 (Locked out: step 2, and the payload in step 3; My
+  recovery: the contact in the Open line, the Delivering line with its
+  two counts, when the finish shows; Case: the Phone row), 12.4
+  (`recovery.service`), this note. The README names none of these pages
+  by itself and did not change.
+- Checked. `npx ng build` in the web_app folder: clean, no warnings
+  (2.16 MB initial total, `main-UA677LVQ.js`). Every string of the
+  plan's table was compared with the two dictionary files. `git status`
+  showed this step's eight files and no others. Nothing was run in a
+  browser and no server was started.
+  Step 1 was not deployed when this was built, so nothing here was
+  tried against a masterpod that takes a phone or answers
+  `anosAccounts`. The run-through is the user's, on the running network
+  (the plan's section 8): a recovery opened with a phone number alone,
+  seen by a moderator; the wait page while the bankers send the two
+  kinds of shares one after the other, where both counts move and the
+  finish opens only when both are complete. The masterpod goes out
+  first.
+
+### The stake box, the guardian thousands and the red cancel buttons, step 5 (2026-11-12)
+
+Built from `forclaude/wallet-case-chats-plan-1.md` (FINAL, 2026-11-12),
+its step 5 of seven, its section 5, one commit, on top of d8a2de8 (step
+4). Three small things from the user's list of 2026-11-11, found while
+testing. The stake box (the plan's decisions 11, 12, 22 and 23): the box
+of a DAO stake and of a guardian stake says what the stake gives and how
+long it is locked, and the person types their username before its button
+works. The words about the lock are the user's: "just do what I said and
+tell the user that it will be locked for a month / year since your last
+vote." The guardian thousands (decision 13), in the user's words: "Just
+for guardians, it should only be in the thousands, and only for
+guardians." And the red cancel buttons (decisions 14 and 24): the three
+cancel buttons and the "Yes, cancel" of each. Wallet only: this step
+needs nothing from the masterpod's step 1. No route, no env variable
+and no npm package; the validators, the doormen, the keyholders and the
+proxy (`server/`) are not touched.
+
+- `src/app/components/confirm-dialog.component.ts`: `ConfirmData` has
+  two more fields, each optional. `typed?: { label: string; expected:
+  string }`: under the notes the template draws one `mat-form-field`
+  (outline) with the label `typed.label` and an `input matInput` with
+  `autocomplete="off"` and `autocapitalize="none"`, bound to the signal
+  `typedText`. The computed `typedOk` is true in a box without `typed`,
+  and in a box with it once `typedText()` equals `typed.expected`, both
+  through `trim().toLowerCase()`. The second button is off while
+  `!armed() || !typedOk()`. `danger?: boolean`: the second button has
+  `[class.danger]="data.danger"`. The component imports `FormsModule`,
+  `MatFormFieldModule` and `MatInputModule` beside the two it had.
+  `askConfirm` is untouched. The comments of `ConfirmData` and the class
+  comment say so. The Wallet page's box gives neither field and is as it
+  was.
+- `src/app/pages/account.page.ts`, the stake box. In `askSend()`,
+  `stakeBox` holds the title and the first note of an order whose
+  purpose is `daoVote` (`account.confirmStakeDaoTitle(anos)`,
+  `account.stakeDaoNote`) or `guardian`
+  (`account.confirmStakeGuardianTitle(anos)`,
+  `account.stakeGuardianNote`), and is null for every other order. With
+  it the box has that title; the three lines, as before; the notes
+  `stakeBox.note`, `account.confirmStakeNote` and
+  `account.stakeTypeNote`, in this order; `typed`, the label
+  `common.yourUsername` and the expected text `session.username()`; and
+  `confirmLabel` `account.stake`. Without it the title, the notes and
+  the button are those of 2026-11-10 and `typed` is undefined: the box
+  of the other four purposes and of every transfer is the box of
+  before. What comes after the box did not change: `resetForm()`, then
+  `send(order)`. The comment of `askSend` says so.
+- `src/app/constants.ts` and `src/app/pages/account.page.ts`, the
+  guardian thousands. `GUARDIAN_STAKE_STEP_ANOS = 1000`, with the
+  comment that it is the validators' `GUARDIAN_VOTE_ANOS`. `canSend`
+  takes the amount in millionths once and answers false when the
+  transfer type is `transferToFund`, the purpose is `guardian` and the
+  amount is not a whole multiple of `BigInt(GUARDIAN_STAKE_STEP_ANOS) *
+  MILLIONTHS_PER_ANOS`, which is 1,000,000,000 millionths; the rest of
+  it does what it did. In the template, right under the form:
+  the muted line `account.guardianThousands` while `transferType()` is
+  `transferToFund` and `stakePurpose()` is `guardian`. No other purpose
+  is touched.
+- The red buttons. `src/styles.css`: the rule `.danger`, the plan's five
+  lines as they stand there, at the end of the file, under a comment
+  that names the plan. `src/app/pages/account.page.ts`: `class="danger"`
+  on the stroked "Cancel transfer" under the Locked transfer row, and
+  `askCancelLocked()` gives `danger: true`, so "Yes, cancel the
+  transfer" in the box is red. `src/app/pages/assisted-transfer.page.ts`:
+  `class="danger"` on the stroked "Cancel transfer" and on the filled
+  "Yes, cancel the transfer". `src/app/pages/escrow-trade.page.ts`:
+  `class="danger"` on the filled "Cancel trade"; the confirm button of
+  the question has `[class.danger]="action === 'cancel'"`, so "Yes,
+  cancel the trade" is red and the Yes of Release and of Dispute keep
+  their colour. No page's own styles changed.
+- The words, in both files, as the plan's table 5.5 gives them, all
+  eight new: `account.confirmStakeDaoTitle(anos)`,
+  `account.confirmStakeGuardianTitle(anos)`, `account.stakeDaoNote`,
+  `account.stakeGuardianNote`, `account.stakeTypeNote`, `account.stake`,
+  `account.guardianThousands` and `common.yourUsername`. Reused as they
+  are: `account.confirmSendTitle`, `account.confirmStakeNote`,
+  `account.stakeFor`, `account.stakePurposes`, `common.kind`,
+  `common.from`, `common.to`, `common.send` and `common.cancel`; and the
+  words on the cancel buttons, `assisted.cancelTransfer`,
+  `assisted.yesCancel`, `escrow.cancelTrade` and `escrow.yes`. The Thai
+  is the plan's, by the glossary, for Thai readers to correct (8.8).
+- Readings where the plan left a detail open. The text box is as wide
+  as the box and stands 12 px under the last note, the distance the
+  notes keep (`.typed { width: 100%; margin-top: 12px; }`), and its
+  field has `subscriptSizing="dynamic"`, so no empty row for a hint
+  stands between it and the buttons. It stands in no `form` and has no
+  key handler, and that is all "the Enter key answers nothing" needs.
+  `askConfirm` still opens the box with the focus on the box itself, so
+  the text box does not take the focus by itself: a tap or a click puts
+  the cursor in it. What is typed lives in a signal of the box and goes
+  nowhere. The expected text is `session.username()`, the username the
+  masterpod answered at the unlock or at Create: an open session always
+  has one, and the page is behind the session guard. The stake box goes
+  by the order's purpose, which is what the box shows. The amount in
+  the two titles is `millionthsToAnos(amount)`, as in "Send 100 anos?":
+  "Stake 1000 anos as a guardian?", with no comma. The page's own button
+  still reads "Send transferToFund": the plan gives Stake to the box's
+  title and button (decision 23), not to the form. In the code
+  `GUARDIAN_STAKE_STEP_ANOS` is a plain number, as the plan writes it,
+  and stands last in `constants.ts`, after `MILLIONTHS_PER_ANOS`;
+  `canSend` turns it into millionths. In `canSend` the new line stands
+  in front of the old last line. It reads `transferType()` as well as
+  `stakePurpose()`, since Stake for keeps its pick while Kind is plain
+  or escrow. "At least one step" needs no line of its own:
+  `anosToMillionths` answers null for zero, and the smallest whole
+  multiple above zero is one step. The muted line has the same
+  condition as that check and stands in front of the progress bar's
+  block; the two never show together, since the form is empty while a
+  send is on its way. In the dictionaries `guardianThousands` stands
+  after `amountPlaceholder`, the two titles after `confirmSendTitle`,
+  the two notes in front of `confirmStakeNote`, `stakeTypeNote` and
+  `stake` after it, and `common.yourUsername` after `common.username`:
+  the order the page uses them. The comments and this spec carry
+  2026-11-12, the day of the build.
+- Known and left as it is. The month and the year in the two notes are
+  words only (the plan's decision 11): nothing in the wallet and no
+  rule of the validators holds a stake for a time; a stake comes back
+  by a fund proposal, and section 10 still lists the stake withdrawal
+  lock as not built. The whole thousands are the wallet's rule and
+  stand in this form alone. The validators take any guardian stake of
+  at least `STAKE_MIN_GUARDIAN_ANOS` (anossoftware
+  `src/fund/fund.service.js`, `verifyTransferToFund`) and count one
+  vote per full `GUARDIAN_VOTE_ANOS`, rounded down, so a stake of 1,500
+  anos sent another way (a wallet tab loaded before the deploy is one)
+  stands, with one vote. The step is a number in the wallet and is
+  not read from the validators: if `GUARDIAN_VOTE_ANOS` changes,
+  `GUARDIAN_STAKE_STEP_ANOS` has to follow by hand. The Guardians page
+  still says "To become a guardian, stake 1000 anos or more for
+  guardian from a spending account, on its page in the Wallet."
+  (`guardians.noGuardianAccount`): that is true, but it does not say
+  whole thousands, and the plan does not change that word. The username
+  in the box is a brake on a careless click, not a secret: the toolbar
+  shows it. A red outlined button keeps the theme's primary colour for
+  the faint tint under the pointer and at a press: Material draws those
+  from its state-layer and ripple variables, which the plan's rule does
+  not set. The class `danger` already stood on four buttons, each a
+  filled "Confirm dismissal": on the moderator's case page and on the
+  three attestor case pages (12.3, 13.3), each with a rule of its own
+  in the page's styles, which sets `background` and `color` to the same
+  two error colours. The plan does not name them and nothing in those
+  four pages changed. The global rule reaches them all the same: they
+  carry the five variables now. As read in the built files, nothing on
+  them looks different. The page's rule and Material's two rules for a
+  filled button, the one for a button that can be pressed and the one
+  for a button that is off, weigh the same, a class and one more simple
+  selector each. The page's styles come into the document after
+  Material's button styles, since a Material button is on screen before
+  any of these pages opens, and the shell keeps one, Lock, for as long
+  as the session is open. So the page's rule still decides both
+  colours, and they are the colours the variables would give. One
+  difference stays between those four and the buttons of this step: a
+  "Confirm dismissal" that is off while its page is busy stays red, as
+  before, and a button of this step that is off has the theme's
+  disabled look.
+- Put right on the user's word of 2026-11-12 ("Yes, update them"), after
+  the first report of this build listed three comments as left because
+  the plan does not name them. Three comments and no line of code. In
+  `src/app/pages/account.page.ts`: the class comment, whose Send part
+  now names the whole thousands of a guardian stake and the box of a
+  stake for daoVote or guardian, where it had known only the box of
+  2026-11-10; and the comment of `resetForm()`, which names Stake
+  beside Send as the button that runs it. In `src/app/constants.ts`:
+  the comment of `CONFIRM_ARM_MS`, which names the four words the box's
+  own button can carry, Send, Stake, Create anos account and "Yes,
+  cancel the transfer", where it had named two; the last of the four
+  had been missing since 2026-11-11. No file joined the commit: both
+  files were this step's already. Not counted and not changed, since
+  nothing in them is wrong: the class comments of the assisted transfer
+  page and of the escrow trade page and the comment of
+  `askCancelLocked()` name the cancel buttons and say nothing of how a
+  button looks.
+- Spec: 8.2 (Account: the Send paragraph in two places, the guardian
+  thousands after the Stake for list and the stake box after the box of
+  a send; the cancel of the locked transfer in two places, the red
+  button and the red "Yes, cancel the transfer"; Escrow trade and
+  Assisted transfer: the red buttons), 8.9 (the list of fields; a new
+  paragraph on `typed`, `danger` and the class; who gives which, in the
+  last paragraph) and this note. README: the line of
+  `components/confirm-dialog.component.ts` names the username to type
+  and the red button.
+- Checked. `npx ng build` in the web_app folder: clean, no warnings
+  (2.16 MB initial total, `main-UXDUZIQQ.js`, `styles-EMD3RG3N.css`).
+  The words: the eight rows of the plan's table 5.5 were read from the
+  plan file and compared with the sixteen entries in `en.ts` and
+  `th.ts`, and each entry equals its cell character for character.
+  `git status` showed this step's ten files and no others. `npx ng
+  build` after the three comments were put right: clean, no warnings,
+  and the script and the style file are the same files as before; the
+  ten files are the same ten. Read in the
+  built files: the style file holds the rule `.danger` with its five
+  lines; Material's button styles read those five variables only in
+  the rules for a button that is not disabled, and its rules for a
+  disabled button read variables of their own, so a disabled red button
+  keeps the theme's disabled look; the app sets no namespace for CSS
+  variables, so the names in the global rule are the names Material
+  reads. Nothing was run in a browser and no server was started. The
+  run-through is the user's, on the running network (the plan's section
+  8): a DAO stake and a guardian stake, with the box, the username and
+  1,500 anos refused for guardian; and the three cancel buttons. The
+  wallet goes out by section 10 of `forclaude/wallet-deploy-plan-1.md`,
+  wallet1 and then wallet2, with no setting in `network/wallet.env` and
+  no `npm ci`.
+
+### The badges and the attestor in the marketplace chat, step 6 (2026-11-12)
+
+Built from `forclaude/wallet-case-chats-plan-1.md` (FINAL, 2026-11-12),
+its step 6 of seven, its section 6, one commit, on top of 0cabe91 (step
+5). Two things. The badges (the plan's decisions 15 and 25): the
+Attesting and the Moderation entries of the menu show a number when
+there is something new on the page, as Chat does, and it clears when the
+page is opened. And the attestor in the marketplace chat (decisions 9,
+26 and 27): either trader of a marketplace chat can bring an attestor on
+the trade's dispute into that chat, where the attestor reads everything.
+The entry "Invite an attestor" shows only while the chat's trade is in
+dispute and an attestor has opened a case on it, in the user's words of
+2026-11-12: "this button should only appear is there is a dispute and an
+attestor has opened a case." And no other chat with the attestor is
+needed first; the user asked, "Does it have to be that you can only
+invite an attestor if that attestor has a different chat with you?", and
+it does not. The masterpod's part is the plan's step 1
+(masterpodsoftware 68c35da, its spec's section 18): a member of a
+listing chat who did not start it may invite an appointed attestor and
+nobody else, and a dispute case names its attestors to its two traders
+(`attestors` on `/list-my-cases` and `/get-my-case`). No route, no env
+variable and no npm package; the proxy (`server/`) is not touched.
+
+- New, `src/app/services/work-badge.service.ts` (`WorkBadgeService`,
+  provided in root), as 8.3 gives it: the signals `attestingIds`,
+  `moderationIds` and `seen`, the computeds `attestingCount` and
+  `moderationCount`, the timer of `CASES_POLL_MS` with one read as soon
+  as a session with setup complete is there, `seeAttesting(ids)` and
+  `seeModeration(ids)`. `seen` is `{ attesting, moderation }` in
+  localStorage under `anopod-wallet.work-seen.<anopodId>`, read and
+  written inside try/catch as session.service keeps the seen chat
+  positions, each list cut to its newest 500 ids. The file also exports
+  the rule as two functions: `attestingWorkIds(trades, disputes,
+  recoveries)` and `openCaseIds(cases)`.
+- `src/app/services/navigation.service.ts`: the Moderation entry has
+  `badge: workBadge.moderationCount()`, the Attesting entry `badge:
+  workBadge.attestingCount()`; the comment of `NavItem` names the two.
+  The side panel (`app.html`) and the Home tiles already draw an
+  entry's `badge` when it is not 0, so neither changed.
+- `src/app/pages/attesting.page.ts`, `load()`: after a load that read
+  everything, `workBadge.seeAttesting(attestingWorkIds(attesting.trades(),
+  attesting.disputes(), recoveries.body.cases))`.
+  `src/app/pages/moderation.page.ts`, `load()`: after a good read,
+  `workBadge.seeModeration(openCaseIds(res.body.cases))`.
+- `src/app/services/chat.service.ts`: `isTrader(room)`,
+  `otherTrader(room)` and `caseAttestors(caseId)`, as 8.3 gives them.
+- `src/app/components/pinned-listing.component.ts`: `other` is
+  `chat.otherTrader(room)`; `theirAccountIds` takes the ids the other
+  trader posted, and the ids anyone else posted only when no other
+  trader is found. `findDisputeCase(room, trade)`, called at the end of
+  a check that found the chat's trade open, and `tellDisputeCase(caseId)`
+  behind the new output `disputeCase` (8.7). A check that read
+  everything and found no open trade tells null, and so does `reset()`
+  when the card is given another room.
+- `src/app/pages/chat-room.page.ts`: the card is drawn when
+  `chat.isTrader(room)`, with `(disputeCase)="setDisputeCase($event)"`;
+  the signal `disputeCaseId`, emptied in `open(room)` when the room
+  changes; the menu entry "Invite an attestor", shown when
+  `chat.isTrader(room)` and `disputeCaseId()` is not null;
+  `toggleAttestors()`, `inviteAttestor(attestor)`, the computed
+  `attestors` and the panel, as 8.2 (Chat, the attestor in a marketplace
+  chat) gives them. The thread, the composer and "Invite someone" are
+  untouched.
+- `src/app/services/masterpod-api.service.ts`: `MyDisputeCase` has
+  `attestors?: RoomMember[]`. A masterpod of before sends none, and the
+  page reads a missing list as an empty one.
+- `src/app/pages/chat-requests.page.ts`, `inviteText`: an invite with a
+  listing whose owner is not this pod reads `chatRequests.toListingChat`
+  with the listing's words; the owner's wording stays.
+- `src/app/pages/attesting-dispute-case.page.ts`: the muted line
+  `disputeCase.marketChatHint` right under the parties, in front of the
+  line with the status. `src/app/pages/my-case.page.ts`: on a dispute,
+  the muted line `myCase.marketChatHint` right under the chat block.
+- The words, in both files, as the plan's table 6.4 gives them, all six
+  new: `chatRoom.inviteAttestor`, `chatRoom.attestorReads`,
+  `chatRoom.attestorsIn`, `chatRequests.toListingChat(words)`,
+  `disputeCase.marketChatHint` and `myCase.marketChatHint`. Reused as it
+  is: `chatRoom.invite`. The Thai is the plan's, by the glossary, for
+  Thai readers to correct (8.8).
+- Readings where the plan left a detail open, the badges. The Attesting
+  ids have two parts, so that a read that fails leaves its own part as
+  it was: the transactions come from `attesting.trades()` and
+  `attesting.disputes()`, which attesting.service leaves as they were
+  when its read fails, and the recovery cases are kept in the badge
+  service (`recoveryIds`). `seeAttesting(ids)` takes one list, as the
+  plan writes it, and keeps as recovery cases the ids that are no
+  transaction of the two lists. The rule stands once, in
+  `attestingWorkIds` and `openCaseIds`, and the two pages and the timer
+  all use it, which is how "by the same rule" is kept. The ids handed
+  over join the seen list as its newest, an id seen before included, so
+  a thing that is still on the page is never among the ones the cut to
+  500 drops; when the list would not change nothing is set and nothing
+  is written, so the Attesting page's 15-second poll does not write to
+  localStorage every time. No read starts while another runs
+  (`reading`), as the shell's poll does it, and a read that ends after
+  the pod changed writes nothing. One effect follows
+  `session.anopodId()`: for every new pod and when the session closes it
+  empties the two id lists and reads `seen` for the pod, or empties it.
+  Another effect makes the first read, for every pod that opens, once
+  the pod is set and `setupComplete()` is true. "The address" is
+  `router.url`. Every
+  read is quiet in the log. The timer's read picks the attestor's staked
+  account as the Attesting page does, through `loadAccounts`, so it is
+  picked at the unlock and no longer at the first visit of the page. On
+  the Attesting page the things are seen whatever the status filter
+  shows. On the Moderation page they are the cases of the filter's read
+  that are open or in review: with a filter that leaves both statuses
+  out the page hands over no id, the number is 0 while the page is open,
+  and the timer reads the cases again once the page is left. What is
+  read back from localStorage is checked: only the strings of a list
+  count, and anything that is no list reads as empty.
+- Readings where the plan left a detail open, the chat. The room's
+  creator is never the listing's owner: the masterpod refuses a room
+  about one's own listing (`400 your own listing`), so "the other of the
+  two" is always another pod. `caseAttestors` goes by the rooms this pod
+  is in, not by its invites: an attestor whose chat request the person
+  has not accepted yet is not in it, and the masterpod's `attestors`
+  names that attestor all the same. The card tells the page a case only
+  when it is another than the one it last told, so the page's own
+  emptying is not undone by the next check five seconds later; it tells
+  nothing once the card is gone (`DestroyRef.destroyed`), since a check
+  can end after the chat was left. The card looks for the case after
+  the chat's message about the trade is posted, so that message is not
+  held up. While the trade is in dispute and no open case is found, the
+  card asks `/list-my-cases` at every check, every 5 seconds, as the
+  escrow trade page does on its refresh; that is how the entry appears
+  by itself once an attestor opens the case. The menu entry stands
+  after "Invite someone", has the icon `fact_check`, the icon of the
+  Attesting entry, and is off while the page is busy. A second click
+  closes the panel, as the other two entries do with theirs. The panel
+  uses the classes of the members panel, a column of rows, and the
+  avatar has its default size, 40 px; no style was added. The list is a
+  computed over the room and the session's rooms, so an attestor leaves
+  it as soon as the room list shows them invited. A refused
+  `/list-my-cases` at the opening shows in the page's error line as
+  `reasonOf` gives it and the panel stays closed; an answer that comes
+  after the card told another case is dropped. Invite refreshes the
+  room list after a refusal too, so `409 invite already open` and `409
+  already a member` take the attestor off the list. The panel stays
+  open after an invite, for the second attestor of the case, and closes
+  when the card tells that there is no case any more. In the
+  dictionaries `inviteAttestor` stands after `inviteSomeone`, the two
+  panel lines after `invite`, `toListingChat` after `aboutListing`,
+  `disputeCase.marketChatHint` after `disputedTheEscrow` and
+  `myCase.marketChatHint` after `supplyAgain`: the order the pages use
+  them. The comments and this spec carry 2026-11-12, the day of the
+  build.
+- Known and left as it is. A case found stays until the trade is no
+  longer in dispute, as the plan says. So when the page finds that case
+  decided or dismissed and takes the entry away, and an attestor then
+  opens a new case on the same trade, which can happen after a
+  dismissal, the entry comes back only when the chat is opened again:
+  the card still holds the closed case and does not look again. The
+  chat's trade is still matched on every account id named in the chat,
+  whoever posted it, a guest included: the plan changes the form's To
+  list and nothing in the check. The request of an attestor who is
+  brought into a marketplace chat carries a listing, so
+  marketplace.service's `waitingCount` counts it, and until the
+  attestor answers, Browse shows them the row "Your listings" with one
+  person waiting; the same held before for anyone the room's creator
+  invited with "Invite someone". With an attestor in it the chat is a
+  group for all three: the row in the chat list has the group icon, and
+  the thread shows the senders' names. The two hint lines show on a
+  closed case too, where the entry is gone. The numbers are per device,
+  as the Chat number is: a new phone counts every open thing until the
+  page is opened once. They do not move while an attestor or a
+  moderator is on a case page, since no read is made under `/attesting`
+  or `/moderation`. In the attestor and the moderator edition the read
+  runs for every pod with setup complete, also one that holds no such
+  appointment; the refusals are quiet. Against a masterpod of before
+  step 1 the entry still shows, since `/list-my-cases` is older, but
+  the panel lists nobody and reads "The attestors on this case are
+  already in this chat.": that masterpod names no attestor on a dispute
+  and marks no room with a case, so `caseAttestors` finds none either,
+  and an invite by the trader who did not start the chat would be
+  refused, `403 only the creator invites`. The plan's section 8 says
+  the list then holds an attestor who has a chat with the person; it
+  holds nobody. The masterpod goes out first, so nobody should see it.
+- Put right on the user's word of 2026-11-12 ("Yes, update them"), after
+  the first report of this build listed fifteen places as left because
+  the plan does not name them. Nine comments in the code and no line of
+  code. In `src/app/pages/chat-room.page.ts`: the class comment, which
+  names "Invite an attestor" in the menu and says that the pinned card
+  is for the room's two traders, where it had named three menu entries
+  and a card for every private room about a listing. In
+  `src/app/components/pinned-listing.component.ts`: the class comment,
+  which says who gets the card, speaks of the other trader and has a
+  last paragraph on the dispute case and the output; the comment of
+  `theirAccountIds`, which now carries the rule in full, so the line
+  comment this build had put inside the computed is gone; the comment
+  of `openForm`, "the other trader"; and the comment of `check()`,
+  which names the look for the dispute case. In
+  `src/app/pages/chat-requests.page.ts`: the comment of `inviteText`,
+  with the two wordings of a request about a listing. In
+  `src/app/services/chat.service.ts`: the class comment, which names
+  the two traders of a marketplace chat and the attestors of a case. In
+  `src/app/constants.ts`: the comment of `CASES_POLL_MS`, which names
+  the badge service among those that read on it. In
+  `src/app/components/avatar.component.ts`: the class comment, which
+  lists the "Invite an attestor" panel among the places the avatar is
+  drawn. Six places here: 8.2, Home, the tiles of Moderation and
+  Attesting with their numbers; 8.3, the line of `navigation.service`;
+  8.6, the avatar in the "Invite an attestor" panel; 12.1 and 13.1,
+  where "What the edition changes" ended on "Nothing else" and now
+  names the read every 15 seconds; and the first point of 13.6, which
+  names the marketplace chat among the ways an attestor and a party
+  talk. Two files joined the commit, `src/app/constants.ts` and
+  `src/app/components/avatar.component.ts`: seventeen files, sixteen
+  changed and one new. Not counted and not changed, since nothing in
+  them is wrong: the class comments of `NavigationService`, of the
+  shell (`src/app/app.ts`), of the Attesting page, the Moderation page,
+  the dispute case page and My case, the comments of the two `load()`
+  functions, and the README line of `chat.service.ts`. Older than this
+  step, so not counted either: `README.md` says "nothing touches
+  browser storage", while the seen chat positions (2026-11-05) and the
+  marketplace filters (2026-11-06) are in localStorage already, and the
+  seen ids of this step join them.
+- Spec: 8.1 (a new paragraph after the one on the Chat and the
+  Notifications numbers), 8.2 (Chat: Invite an attestor in the menu of
+  One conversation; who gets the pinned card, in its first sentence; a
+  new paragraph "The attestor in a marketplace chat" in front of
+  Requests; the Requests wording), 8.3 (a new line for
+  `work-badge.service`; the line of `chat.service`), 8.7 (the pinned
+  card: the selector with its output, the other trader, the dispute
+  case), 12.3 (Moderation), 13.3 (Attesting, a new paragraph after the
+  Recoveries tab; Dispute case, the parties; My case, the chat block)
+  and this note. README: a line for `services/work-badge.service.ts`.
+- Checked. `npx ng build` in the web_app folder: clean, no warnings
+  (2.17 MB initial total, `main-6HDLIIBE.js`; the style file is the one
+  of step 5, `styles-EMD3RG3N.css`). The words: the six rows of the
+  plan's table 6.4 were read from the plan file and compared with the
+  twelve entries in `en.ts` and `th.ts`, and each entry equals its cell
+  character for character. `git status` showed this step's fifteen
+  files and no others, fourteen changed and one new. `npx ng build`
+  after the fifteen places were put right: clean, no warnings, and the
+  script and the style file are the same files as before; `git status`
+  showed the seventeen files and no others. Nothing was run in a
+  browser and no server was started. Step 1 was not deployed when this was built, so nothing
+  here was tried against a masterpod that names the attestors of a
+  dispute or lets the second trader invite. The run-through is the
+  user's, on the running network (the plan's section 8): a new case
+  while another page is open, and the number on Attesting and on
+  Moderation; and a dispute on a marketplace trade, with no "Invite an
+  attestor" in the chat's menu before the dispute and before an
+  attestor opens the case, then the entry, used by the trader who did
+  not start the chat, and the attestor reading the chat. The masterpod
+  goes out first; then the wallet, by section 10 of
+  `forclaude/wallet-deploy-plan-1.md`, wallet1 and then wallet2, with
+  no setting in `network/wallet.env` and no `npm ci`.
+
+### Both contacts, and the account count as of the case's opening (2026-11-12)
+
+Two changes the user decided on 2026-11-12, after
+`forclaude/wallet-case-chats-plan-1.md` was final and its seven steps
+were committed. Built the same day in one chat from that chat's brief,
+on top of e2fed6b (step 6), the working tree clean: one commit here and
+one in the masterpod (its spec's 12.1, 12.3, 12.4.2, 12.4.3 and 18).
+Both change what step 4 built. Its note above, "The contact phone and
+the two counts, step 4", stays as it was written: it says what was
+built then. No route, no env variable and no npm package; the proxy
+(`server/`) is not touched.
+
+Both contacts. Step 4 let a person who opens a recovery give an email
+address or a phone number, at least one of the two (the plan's decision
+8). The user, 2026-11-12: "And a phone and not just an email would be
+great. Thai people, for example, would great prefer text. However, both
+should be required, in case text isn't available." So a person gives
+both: a moderator texts first, and the email is there when a text is
+not possible. This takes the place of decision 8. The rule lives in two
+places: the masterpod's `/open-recovery-case`, which refuses a payload
+without one of the two with
+`400 contactEmail and contactPhone required`, and this form.
+
+- `src/app/pages/recover-open.page.ts`: `whoDone` is true when both
+  boxes are filled in and both are valid. It is `isContactEmail` of the
+  trimmed email and `isContactPhone` of the trimmed phone, and an empty
+  box is not valid by either. `open()` puts `contactEmail` and
+  `contactPhone` into the payload, both, always. The class comment and
+  the comment of `whoDone` say so.
+- The words, in both dictionary files. `recoverOpen.contactText`, the
+  line above the two boxes: "Give an email address and a phone number.
+  Both are needed. A moderator will text you first, and will email you
+  if a text is not possible." in place of "Give an email address, a
+  phone number, or both. A moderator uses them to reach you."; in Thai
+  "ให้อีเมลและหมายเลขโทรศัพท์ ต้องใช้ทั้งสองอย่าง
+  ผู้ดูแลจะส่งข้อความถึงคุณก่อน และจะส่งอีเมลถึงคุณหากส่งข้อความไม่ได้".
+  `recover.lockedOutText`, the card on `/recover`, its second sentence:
+  "You'll need your birth record, and an email and a phone number where
+  a moderator can reach you." in place of "You'll need your birth
+  record and an email where a moderator can reach you."; in Thai
+  "คุณจะต้องใช้บันทึกการเกิดของคุณ
+  รวมทั้งอีเมลและหมายเลขโทรศัพท์ที่ผู้ดูแลติดต่อคุณได้". The Thai is the
+  build chat's, by the glossary, for Thai readers to correct (8.8); a
+  text is "ข้อความ", the glossary's word for a message. No key is new
+  and none went.
+- Readings where the brief left a detail open. The two hints,
+  `recoverOpen.emailHint` and `recoverOpen.phoneHint`, keep their words:
+  neither says that one contact is enough. In `open()` the two lines
+  that keep the contacts in `RecoveryService` still read `contactEmail
+  || null` and `contactPhone || null`; neither is empty there now, so
+  the `|| null` does nothing, and the lines were left as they are.
+  `open()` has no check of its own for a missing contact, as before:
+  the linear stepper does not reach step 3 while step 2 is not done,
+  and a contact that went out empty all the same is refused by the
+  masterpod as not valid.
+- Not changed, because they show what the case has: My recovery (the
+  contact in the Open line) and the moderator's case page (the Email
+  and the Phone row). A case of before may hold one contact, so both
+  still take a case with one. No sentence on either page says "or".
+  `RecoveryService` and the types of the three reads did not change
+  either: the masterpod still answers each contact as a string or null,
+  and its table still takes a case with one (its `db/schema.sql` is not
+  touched).
+
+The account count. `anosAccounts` on `/get-recovery-pod` was every anos
+account the anoPod has (the plan's decision 21 with its 1.7 and 4.3: a
+mistake in the plan, not in the builds). The finish's step Move your
+money makes a new account for each old account that holds anos, so the
+number went up in the middle of the finish, while the bankers' shares
+in the case are for the old accounts only. On My recovery the
+Delivering line turned to, for instance, "2 of 4 account keys are
+complete". And after a reload between the first new account and Done
+the finish did not come back: `showFinish` wants `accountKeysComplete`
+to reach `accountKeysExpected`, and `finishActive` is lost with the
+page. The fix is the masterpod's alone, which the planning chat called
+fix 1: it counts only the accounts made up to the case's opening, an
+`anos_accounts` row whose `created_at` is not after the case's. The
+user, 2026-11-12: "I feel like fix 1 is safe to do, we don't need to
+worry about side effects because it's just changing a read." Nothing
+else on the wire changed, and no code changed here.
+
+- The two sentences that said the number is every anos account the
+  anoPod has: the comment of `accountKeysExpected`
+  (`src/app/pages/recover-case.page.ts`) and the comment of
+  `anosAccounts` on `RecoveryPodAnswer`
+  (`src/app/services/recovery.service.ts`). The page's class comment
+  says only "as many as the masterpod's anosAccounts says" and stays.
+
+For both:
+
+- Spec: 12.3 (Recover: the card's words; Locked out: step 2, and the
+  payload in step 3; My recovery: the contact in the Open line and what
+  the number in the Delivering line is; Case: the remark on the Phone
+  row) and this note. 12.4 did not change. The README names none of
+  this and did not change.
+- Deploying. The masterpod goes out first, as before. One thing is new:
+  a wallet of before step 4 sends the email alone, and the masterpod
+  with this change refuses that. The page then shows
+  `/open-recovery-case: HTTP 400: contactEmail and contactPhone required`.
+  So between the masterpod's deploy and this wallet's nobody opens a
+  recovery case. The plan's section 8 said a
+  wallet of before breaks nothing against the new masterpod; for this
+  route that no longer holds. The other way round is fine: against a
+  masterpod of before step 1 this wallet's payload is taken, the email
+  kept and the phone dropped without a word, and against the masterpod
+  of step 1 (68c35da) it is taken whole.
+- Checked. `npx ng build` in the web_app folder: clean, no warnings
+  (2.17 MB initial total, `main-5FOPGDH2.js`; the style file is the one
+  of step 5, `styles-EMD3RG3N.css`). `git status` showed this step's
+  six files and no others. Nothing was run in a browser and no server
+  was started, so the form was not seen, and nothing here was tried
+  against a masterpod. The run-through is the user's, on the running
+  network: a recovery opened with both contacts, seen by a moderator;
+  Next staying grey with one box empty; and a recovery that moves
+  money, where the Delivering line keeps its second number through the
+  finish and the finish comes back after a reload.
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`
@@ -6887,7 +8129,10 @@ live on 4200 through the same `proxy.conf.json`, one at a time.
 
 What the edition changes: the navigation shows Moderation (12.3) when the
 edition is moderator and a session is open; the landing card's title says
-Moderator wallet. Nothing else. A moderator's pod is an ordinary pod
+Moderator wallet; and, since 2026-11-12 (section 11), the wallet reads
+the recovery cases that are open or in review every 15 seconds, for the
+number on the Moderation entry (8.1; work-badge.service, 8.3). Nothing
+else. A moderator's pod is an ordinary pod
 (username starting with `moderator`, vouched by a super seed, setup
 complete, a spending account staked 1000 anos for moderator through the
 account page's Send, as today); every other page works as it does.
@@ -6910,9 +8155,11 @@ the moderator edition; a pod that is not a moderator sees the masterpod's
 
 **Recover** (`/recover`). Two cards. "I'm locked out": "If you lost the
 device with your passkey, we can get you back in. You'll need your birth
-record and an email where a moderator can reach you. A moderator will
-meet you on a video call and check your security buckets before anything
-is released." Button: Start, to `/recover/open`. "Continue
+record, and an email and a phone number where a moderator can reach you.
+A moderator will meet you on a video call and check your security
+buckets before anything is released." (the phone number in it since
+2026-11-12, section 11; until then "your birth record and an email").
+Button: Start, to `/recover/open`. "Continue
 a recovery": "Already opened a case on this device? Unlock it with the
 passkey you made then." Button: Continue, which runs `/challenge`
 (unlockCase), the passkey assertion with the PRF salt,
@@ -6941,32 +8188,95 @@ the authenticator's message shows.
    A masterpod refusal shows as `/challenge: <reason>`. Once found, with
    the form empty, a line says the account was found and the answers
    dropped, and that filling the form in again starts over.
-2. Your account: "We found your account: alice" and the contact email.
-   Next. Nobody types a username; there is no username path.
+2. Your account: "We found your account: alice", then "Give an email
+   address and a phone number. Both are needed. A moderator will text you
+   first, and will email you if a text is not possible." and two boxes,
+   the second under the first: Contact email, and Phone number with the
+   hint "With the country code, for example +66 81 234 5678." (the line
+   and the phone box since 2026-11-12, section 11; until then the email
+   alone, and it had to be given). Both are required, by the last note
+   of 2026-11-12 in section 11: as step 4 built it that day, one of the
+   two was enough and the line read "Give an email address, a phone
+   number, or both. A moderator uses them to reach you." Next works once
+   both boxes are filled in and both are valid as the masterpod takes
+   them (masterpod 12.4.2): an email of 3 to 254
+   characters with an `@` that is not first; a phone of 6 to 32
+   characters, each a digit, a space, `+`, `-` or a round bracket, with
+   at least 6 digits. The spaces around either are dropped first; a box
+   with nothing else in it counts as empty. Nobody types a username;
+   there is no username path.
 3. Open my case: one button. `/challenge` (openCase, the anoPod id) gives
    a fresh challenge and the username; the passkey registration with the
    PRF extension, that id as user handle and the username as name and
    display name; the PRF output from the registration or, when it
    returned none, one local assertion with a random challenge; `KEK_prf`;
    the recovery hybrid pair and `hybridKeyBlob`; the ephemeral keys;
-   `/open-recovery-case`, the payload without a username. On 201 the
-   recovery session is open and the page goes to `/recover/case`. The
+   `/open-recovery-case`, the payload without a username, with
+   `contactEmail` and `contactPhone`, both, each as typed less the spaces
+   around it (the last note of 2026-11-12 in section 11; as step 4 built
+   it that day each went only when it was given, and before that
+   `contactEmail` always and no phone). On 201 the recovery
+   session is open, both contacts are kept in `RecoveryService` (12.4)
+   and the page goes to `/recover/case`. The
    refusals shown: "a case is already open for this identity" (409), a
    masterpod refusal as `/challenge: <reason>` or `/open-recovery-case:
    <reason>`, the passkey messages as on Create.
 
 **My recovery** (`/recover/case`). The case id (short, with Copy), the
-status in words ("Open: a moderator will contact you at <email> and meet
-you on a video call", "In review", "Approved: the bankers are sending your
-keys", "Delivering: n of 3 key shares received", "Completed",
+status in words ("Open: a moderator will contact you at <contact> and
+meet you on a video call", "In review", "Approved: the bankers are
+sending your keys", the Delivering line below, "Completed",
 "Dismissed: <reason in words>"), the timeline from the events the person
 may see (scheduled with the meeting link as a link, approved, dismissed,
 recovered, completed), a Refresh button (`/get-recovery-pod`; also polled
 every 15 s while the page is open). "Keep this device: you unlock this case
 with the passkey you just made."
 
-When three shares of one backup code `keyId` are in, the finish appears as
-a second stepper on the same page. The person never sees a backup code,
+The contact in the Open line (2026-11-12, section 11; until then the
+email) is the email and the phone the case has, joined by a comma and a
+space, "alice@example.com, +66 81 234 5678". A case opened since both
+are required has both; a case of before may have one of the two, and
+the line then shows that one. When the page knows neither, which is the
+moment between
+Continue a recovery and the first `/get-recovery-pod` answer, it says
+"the contact you gave" (until 2026-11-12 "your email").
+
+The Delivering line counts both kinds of shares (2026-11-12, section 11;
+decision 10 of `forclaude/wallet-case-chats-plan-1.md`): "Delivering:
+the key the bankers keep has 2 of 4 shares. 1 of 3 account keys are
+complete." The first pair is the backup code: the largest group of
+`backupcode` shares of one `keyId`, and `shareThreshold` from
+`/api/config`. The second pair is the account keys. Each anos account
+has a break-glass key of its own, deposited as `breakglasskey` under a
+`keyId` of its own when the account is made (section 6; 8.2, Wallet),
+so an account key is complete when one `breakglasskey` `keyId` has at
+least `shareThreshold` shares, and the number to wait for is
+`anosAccounts` of the `/get-recovery-pod` answer: the anos accounts the
+anoPod made up to the opening of the case, sent in every status of the
+case (masterpod 12.4.3 and 18). The new accounts that Move your money
+makes are newer than the case and are not in the number, so it stays
+the same through the finish (the last note of 2026-11-12 in section 11;
+as the masterpod first built it that day the number was every anos
+account the anoPod has, and it went up in the middle of the finish).
+The count of complete keys is never shown above that
+number. When `anosAccounts` is 0, or is missing because the masterpod is
+one of before, the line is the one of before, the backup code's count
+alone: "Delivering: 2 of 4 key shares received".
+
+The finish appears as a second stepper on the same page when the case
+takes it (approved or delivering) and both are in: the backup code has
+`shareThreshold` shares of one `keyId`, and at least as many account
+keys are complete as `anosAccounts` says. Until 2026-11-12 the backup
+code's shares alone decided, and they still do when the masterpod sends
+no `anosAccounts`. Why both: the bankers send the rows they tick in
+their GUI, so the two kinds of shares can arrive at different times, and
+Move your money moves the accounts whose key came back and says nothing
+of an account whose key did not, whose money then stays behind. Once
+Combine has run in the tab the finish stays. Known and left as it is: a
+break-glass key whose account was never finished counts as an account
+key, so in that rare case the finish can open one key early.
+
+The person never sees a backup code,
 here or on Setup (2026-11-10, section 11): on these screens it is "the
 key the bankers keep", "the rebuilt key" or "the key". The steps stand in
 this order since 2026-11-10 (`forclaude/recovery-finish-order-plan-1.md`,
@@ -7098,13 +8408,21 @@ validators hold that was not filed yet, without a second new account).
 **Moderation** (`/moderation`). The cases from `/list-recovery-cases`, a
 status filter (the four open statuses by default, plus completed and
 dismissed), each row: username, names, status, approvals, opened. A row
-opens `/moderation/:caseId`.
+opens `/moderation/:caseId`. Since 2026-11-12 (section 11) a good read
+hands the ids of the cases it read that are open or in review to
+work-badge.service (8.3, `seeModeration`): they are what the number on
+the Moderation entry counts (8.1), and this device has seen them all
+then, so the number clears when the page is opened.
 
 **Case** (`/moderation/:caseId`), from `/get-recovery-case`, refreshed by a
 button and every 15 s
 
-- The person: public selfie, username, names, the contact email with
-  Copy, the lookup id with Copy, the status.
+- The person: public selfie, username, names, the Email row with Copy
+  when the case has an email, the Phone row under it with Copy when the
+  case has a phone (2026-11-12, section 11; a case opened since both are
+  required has both, a case of before has at least one of the two, and
+  until then the Email row always showed), the lookup id with Copy, the
+  status.
 - The timeline: every event, the acting moderator's username, the details
   in words (a note shown as typed).
 - Schedule: a date-time and a meeting link, Save (`/schedule-recovery-case`).
@@ -7136,7 +8454,11 @@ button and every 15 s
     recovery.service        the recovery session, apart from SessionService: caseId, the recovery session keys,
                             the PRF output and KEK_prf, the recovery hybrid private key, the last /get-recovery-pod
                             answer, the combined backup code and seeds while the finish runs; sign(path, body)
-                            builds the recovery envelope (caseId as the signer); everything in RAM
+                            builds the recovery envelope (caseId as the signer); everything in RAM; the contact
+                            email and the contact phone are two signals, each a string or null (the phone since
+                            2026-11-12), set by the locked-out stepper at the open and by every /get-recovery-pod
+                            answer (applyPod), emptied by close(); RecoveryPodAnswer carries contactPhone and
+                            anosAccounts, both optional, since a masterpod of before sends neither
     masterpod-api.service   one method per new route (masterpod 12.4); challenge() takes the three new purposes,
                             openCase with the anoPod id the keyholders named, and answers its username
                             (2026-11-08); listAnosAccounts items carry breakGlassBlob;
@@ -7480,29 +8802,35 @@ pointing at the same backends; the masterpod lists its origin in
 
 What the edition changes: the navigation shows Attesting (13.3) when the
 edition is attestor and a session is open; the toolbar's brand reads
-"Attestor wallet". Nothing else. An attestor's pod is an ordinary pod
+"Attestor wallet"; and, since 2026-11-12 (section 11), the wallet reads
+the three lists of the Attesting page every 15 seconds, for the number
+on the Attesting entry (8.1; work-badge.service, 8.3). Nothing else. An
+attestor's pod is an ordinary pod
 (username starting with `attestor`, vouched by a super seed, setup
 complete, a spending account staked 1000 anos for attestor through the
 account page's Send, as today). A pod is a moderator or an attestor by its
 username, never both.
 
 Every edition, the wallet included, gets Cases (13.3): the person's side
-of a trade or dispute case. It shows in the navigation once setup is
-complete.
+of a trade or dispute case and, since 2026-11-12 (section 11), of a
+recovery case. It shows in the navigation once setup is complete.
 
 ### 13.2 Routes and guards
 
     /attesting                    the trades and the disputes waiting for attestors (attestor edition)
-    /attesting/trade/:caseId      one trade case: the person, the trade, the buckets, the sign-off
-    /attesting/dispute/:caseId    one dispute case: the parties, the escrow, the evidence, the verdicts
-    /attesting/recovery/:caseId   one recovery's break-glass moves: the person, the recovery case, the moves, the buckets, the sign-off (2026-11-08)
+    /attesting/trade/:caseId      one trade case: the person, the chat with the person, the trade, the buckets, the sign-off
+    /attesting/dispute/:caseId    one dispute case: the parties, the chat with each, the escrow, the evidence, the verdicts
+    /attesting/recovery/:caseId   one recovery's break-glass moves: the person, the chat with the person, the recovery case, the moves, the buckets, the sign-off (2026-11-08)
     /cases                        my cases (every edition)
-    /cases/:caseId                one of my cases: share the lookup id, upload evidence, the timeline
+    /cases/recovery/:caseId       my recovery case: the status, the video call, the chat with the attestor, the accounts being moved, the timeline (2026-11-12)
+    /cases/:caseId                one of my cases: share the lookup id, upload evidence, the chat with the attestor, the timeline
 
 The four Attesting pages need a session and the attestor edition
 (`attestingGuard`, the shape of `moderationGuard`); a pod that is not an
 attestor sees the masterpod's `403 not an attestor` as "This anoPod is not
-an attestor". The two Cases pages need a session (`sessionGuard`).
+an attestor". The three Cases pages need a session (`sessionGuard`). In
+`app.routes.ts` `cases/recovery/:caseId` sits in front of `cases/:caseId`
+(8.1).
 
 ### 13.3 The screens
 
@@ -7543,10 +8871,28 @@ number of moves, "n of 2 signed", and the status in words linking to the
 recovery case page. No Open a case: the person's recovery finish files the
 case (12.3). The status filter applies to this tab too.
 
+Since 2026-11-12 (section 11) a load that read everything, the first
+one, Refresh and the poll alike, hands the ids of the page's things to
+work-badge.service (8.3, `seeAttesting`): the transaction id of every
+`assistedAnosTransfer` of the trade list, the transaction id of every
+disputed escrow, and the case id of every recovery case that is open or
+in review, whatever the status filter shows. They are what the number on
+the Attesting entry counts (8.1), and this device has seen them all
+then, so the number clears when the page is opened.
+
 **Trade case** (`/attesting/trade/:caseId`), from `/get-trade-case`,
 refreshed by a button and every 15 s. Top to bottom:
 
-- The person: public selfie, username, names, the status in words.
+- The person: public selfie, username, names, the status in words. Under
+  these facts, since 2026-11-12 (section 11), the chat with the person
+  (8.7, `<app-case-chat-start>`): Start chat while the case is open or in
+  review, which makes a private room about the case (`/create-chat-room`
+  with the `caseId`, masterpod 18) and invites the person; Open chat once
+  there is one, with "somchai has not accepted the chat yet." until the
+  person accepts; "somchai did not accept the chat." and Invite again
+  when the person declined. One chat per attestor per person. The chat
+  stays when the case closes: Open chat stays, Start chat and Invite
+  again go.
 - The trade: the amount, the receiver's account id with Copy, when it was
   made (from the Trades list, cached in the service; the case answers the
   ids), the transaction id with Copy.
@@ -7588,7 +8934,12 @@ refreshed by a button and every 15 s. Top to bottom:
 `/get-dispute-case`, the same frame:
 
 - The parties: the seller and the buyer, each with selfie, username and
-  names, and which of them disputed; the status.
+  names, and which of them disputed; the status. Each party has its own
+  Start chat button under its facts, as on the trade case (2026-11-12):
+  one chat with the seller, one with the buyer. Under the parties the
+  muted line "Either trader can invite you into their marketplace chat,
+  from that chat's menu." (2026-11-12, section 11, step 6; 8.2, Chat,
+  the attestor in a marketplace chat).
 - The escrow: the amount (from the Disputes list, cached), the
   transaction id with Copy.
 - The case key: when `myKey` is null, "You hold no key for this case; ask
@@ -7619,7 +8970,8 @@ refreshed by a button and every 15 s. Top to bottom:
 plan 1 step 6), from `/get-break-glass-case`, refreshed by a button and
 every 15 s, the trade case's frame. Top to bottom:
 
-- The person: public selfie, username, names, the status in words.
+- The person: public selfie, username, names, the status in words; the
+  Start chat button under these facts, as on the trade case (2026-11-12).
 - The recovery: the recovery case's status in words and the moderators'
   approvals, each "username · time".
 - The moves: per move the old account with its type, the new account with
@@ -7631,7 +8983,13 @@ every 15 s, the trade case's frame. Top to bottom:
 - The timeline: every event in words, as the trade case; the filing reads
   "<username> filed n moves", a sign-off "<attestor> signed n attestations
   with account …".
-- Schedule: as the trade case (`/schedule-break-glass-case`).
+- Schedule: as the trade case (`/schedule-break-glass-case`). After Save
+  the attestor reads "Scheduled for <time>; the person sees the time and
+  the link on their case page." (2026-11-12, section 11; until then "the
+  time and the link are recorded on the case."): the masterpod now writes
+  the person a `recoveryCaseScheduled` notification (masterpod 14.7), and
+  the person's recovery case page, My recovery case below, shows the
+  call. The words changed and nothing else on this page.
 - The lookup id: the recovery case's, with Copy; no sharing step.
 - Bucket one and two: the trade case's pull, pointed at
   `/list-break-glass-case-security-records`, by the recovery case's lookup
@@ -7668,6 +9026,25 @@ the transaction id, the status in words and when it was opened. A row
 opens `/cases/:caseId`. The notifications page's labels for the five
 case kinds (13.4) link here.
 
+Since 2026-11-12 (section 11) the page has a third kind of row, the
+recovery case: the case under which the money of the person's lost
+accounts is moved (masterpod 14; the attestors' Recovery case above).
+The page reads `/list-my-break-glass-moves` (masterpod 14.4.1) beside
+`/list-my-cases`, and each case of its answer is a row, sorted with the
+trades and the disputes by the date it was opened: the icon
+`lock_reset`; the title "Recovery: moving your money", a link to
+`/cases/recovery/:caseId`; under it the status in words, how many
+accounts are being moved (the case's moves) and when it was opened, "In
+review · 2 accounts · opened Nov 11, 2026, 3:50:12 PM"; then the case
+id, as the other rows have it. When `/list-my-break-glass-moves` is
+refused, the error line reads `/list-my-break-glass-moves: <reason>` and
+the trade and dispute rows still show. The subtitle names all three
+kinds: "Your side of a trade an attestor is checking, of an escrow in
+dispute, or of a recovery whose money is being moved." Until then the
+recovery case showed nowhere on the person's side but in the line under
+a lost account's card (8.2, Wallet), so the person had no way to the
+video call an attestor had scheduled.
+
 **My case** (`/cases/:caseId`), from `/get-my-case`, refreshed by a button
 and every 15 s. For a trade: "An attestor is checking your trade", the
 status in words, "See the transfer" under the transaction id, to the
@@ -7691,6 +9068,70 @@ which wraps its content key to this case's key and posts it under
 `existing`. After the decision: "The attestors' copies have been deleted;
 your copies stay."
 
+Both kinds have, since 2026-11-12 (section 11), the heading "Chat with
+the attestor" after the kind's own part (the lookup id, the evidence) and
+before the timeline, and under it the person's chats about the case (8.7,
+`<app-case-chat-list>`): an attestor who started a chat and waits for an
+answer, "attestorjoy is an attestor on this case and wants to chat with
+you", with Accept (the conversation opens) and Decline; a chat the person
+is in, the attestor's avatar and username with Open chat; "No attestor
+has started a chat with you about this case yet." when there is neither.
+Two attestors work on a case, so a person can have two chats on one case.
+The same request shows on the Requests page of Chat (8.2), and the person
+may accept it there. On a dispute, under that block, the muted line "To
+let the attestor read your marketplace chat, open that chat, then its
+menu, then Invite an attestor." (2026-11-12, section 11, step 6; 8.2,
+Chat, the attestor in a marketplace chat).
+
+**My recovery case** (`/cases/recovery/:caseId`, every edition,
+2026-11-12, section 11; the plan is
+forclaude/wallet-case-chats-plan-1.md, its section 3): the person's side
+of the recovery case, in the frame of My case. It reads
+`/list-my-break-glass-moves` when it opens, by Refresh and every 15 s
+(`CASES_POLL_MS`, quiet in the log), and takes the case with its id;
+when the answer has none: "No recovery case of yours with this id." A
+refused read shows as `/list-my-break-glass-moves: <reason>` and leaves
+what the page shows. Top to bottom:
+
+- The card's title "Your recovery: moving your money"; the case id in
+  short form with Copy; a link back to Cases; Refresh.
+- The status in words, with the status's icon: "Open: two attestors have
+  to check that it is you. Then your money moves to your new accounts.",
+  "In review: an attestor is checking your case.", "Decided: two
+  attestors signed. Your money is moving to your new accounts.", or
+  "Dismissed: <the reason in words>.", as My case words a dismissal.
+  Under it, while the case is open or in review, "1 of 2 attestors have
+  signed.", the number from the answer's `signOffs`.
+- Video call, while the case is open or in review. With a `scheduled`
+  event, the newest one: "An attestor set up a video call for <date and
+  time>." and the flat button Join the video call, which opens the
+  event's `meetLink` in a new tab. Without one, the muted line "No video
+  call is set up yet. An attestor will set one up, or start a chat with
+  you to agree on a time." A closed case shows neither the heading nor
+  the lines; the call stays in the timeline.
+- Chat with the attestor: the person's chats about the case (8.7,
+  `<app-case-chat-list>`), as on My case. The masterpod marks a recovery
+  chat with the break-glass case's id, which is the recovery case's id
+  (masterpod 18), so the block finds the chat an attestor started from
+  the Recovery case page.
+- Your accounts: one line per move, in the answer's order, "Spending
+  account: a1b2c3d4…e5f6 to Spending account 2": the account's kind in
+  words, the old account's id in short form, and the new account by its
+  name among the session's accounts (account-names.ts, as the Wallet
+  page names them), else its id in short form. The new account is a link
+  to its page, `/wallet/:accountId`.
+- The timeline, as My case draws it, with the four kinds the masterpod
+  shows the person (masterpod 14.4.1): `scheduled` reads "Video call
+  scheduled for <time>." with the meeting link, `decided` "Two attestors
+  signed", `sent` "The decision was sent to the validators", `dismissed`
+  "Dismissed: <the reason in words>"; "Nothing yet." while there is
+  none. The filing of the moves is not among the person's events, so a
+  new case has an empty timeline.
+
+No attestor is named on the page outside the chat block: the answer
+carries none. The notification `recoveryCaseScheduled` leads here (8.2,
+Notifications).
+
 ### 13.4 Services and state, new or changed
 
     attesting.service       the attestor's staked account for the session (accountId, its keyBlob opened per
@@ -7713,7 +9154,8 @@ your copies stay."
                             decrypt, encryptToHybrid, decryptFromHybrid, generateHybridKeys,
                             hybridKeysFromSecret, buildFollowUp, signAccountEnvelope)
     config.service          attestorEdition in WalletConfig's edition
-    notifications page      the five case kinds in words, each linking to /cases/:caseId by reference id
+    notifications page      the five case kinds in words, each linking to /cases/:caseId by reference id; since
+                            2026-11-12 recoveryCaseScheduled too, linking to /cases/recovery/:caseId
     constants               CASES_POLL_MS (15 s)
     shell                   Attesting in the navigation when the edition is attestor and a session is open;
                             Cases when setup is complete; the brand "Attestor wallet"
@@ -7731,14 +9173,20 @@ your copies stay."
 
 ### 13.6 Out of scope, not built
 
-- Email or any message to the parties; the app is the channel.
+- Email or any message to the parties outside the app; the app is the
+  channel: the case pages, the notifications and, since 2026-11-12
+  (section 11), the chat an attestor starts with a party from the case
+  page (13.3) and the marketplace chat of a disputed trade, which either
+  trader can bring an attestor on the dispute into (8.2, Chat).
 - A party deleting their evidence; evidence beyond the four content types.
 - Several validators asked at once; the lists come from the session's
   validator, as every anos call does.
 - A moderator who is also an attestor.
 - Notifications to attestors when a recovery's moves are filed, and to the
-  person when the case moves (2026-11-08; masterpod 14.7): the attestor
-  edition lists the cases, the person's wallet reads them.
+  person when the case is decided, sent or dismissed (2026-11-08;
+  masterpod 14.7): the attestor edition lists the cases, the person's
+  wallet reads them. Since 2026-11-12 (section 11) one thing does notify
+  the person: a scheduled video call, `recoveryCaseScheduled` (13.3).
 
 ### 13.7 Build notes
 

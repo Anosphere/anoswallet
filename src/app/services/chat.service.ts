@@ -3,7 +3,7 @@ import { millionthsToAnos } from '../amounts';
 import { CryptoService } from './crypto.service';
 import { LanguageService } from './language.service';
 import { ApiResponse } from './log.service';
-import { MasterpodApiService, RoomItem, RoomListing, RoomMember, RoomsAnswer } from './masterpod-api.service';
+import { InviteItem, MasterpodApiService, RoomItem, RoomListing, RoomMember, RoomsAnswer } from './masterpod-api.service';
 import { Bytes } from './passkey.service';
 import { SessionService } from './session.service';
 
@@ -39,7 +39,13 @@ const DAY_MS = 86_400_000;
  * and their wraps for other pods, decrypting a message, a room's title and
  * kind, the order by latest activity, the short times of the list and the
  * day labels of a conversation, the rooms this tab asked to join, and the
- * refresh of the room list into the session.
+ * refresh of the room list into the session. Since 2026-11-12 also the
+ * chats about an attestor case, for the case pages (wallet spec 13.3): the
+ * attestor's room with a person, the person's rooms and invites, Start
+ * chat and Invite again. And, for the attestor in a marketplace chat
+ * (wallet spec 8.2, Chat; 2026-11-12): whether this pod is one of the two
+ * traders of such a chat, the other trader, and the attestors who have a
+ * chat with this pod about a case.
  */
 @Injectable({ providedIn: 'root' })
 export class ChatService {
@@ -109,7 +115,8 @@ export class ChatService {
    * listing room's "Sell 50 anos for THB"; a private room's other people, the
    * invited marked, or "Just you", and for a private room about a listing
    * (2026-11-06) the listing's words after them: "somchai · Selling 100 anos
-   * for THB".
+   * for THB"; for a private room about an attestor case (2026-11-12) the
+   * case's kind in words after them: "attestorjoy · Assisted transfer case".
    */
   title(room: RoomItem): string {
     const rooms = this.lang.words().rooms;
@@ -122,6 +129,7 @@ export class ChatService {
     }
     const names = [...this.otherMembers(room).map((m) => m.username), ...room.invited.map((m) => rooms.invited(m.username))];
     const people = names.length > 0 ? names.join(', ') : rooms.justYou;
+    if (room.caseKind) return `${people} · ${rooms.caseChat[room.caseKind]}`;
     return room.listing ? `${people} · ${this.listingWords(room.listing)}` : people;
   }
 
@@ -142,6 +150,24 @@ export class ChatService {
   otherPerson(room: RoomItem): RoomMember | null {
     if (this.kind(room) !== 'direct') return null;
     return this.otherMembers(room)[0] ?? room.invited[0] ?? null;
+  }
+
+  /**
+   * Whether this pod is one of the two traders of a marketplace chat
+   * (2026-11-12): a private room about a listing, and this pod is the
+   * room's creator, the person who pressed Connect, or the listing's owner.
+   * Anyone else in such a room is a guest, as an attestor invited into it is.
+   */
+  isTrader(room: RoomItem): boolean {
+    const me = this.session.anopodId();
+    return room.type === 'private' && !!room.listing && (room.creatorAnopodId === me || room.listing.owner.anopodId === me);
+  }
+
+  /** For a trader of a marketplace chat (isTrader), the other of the two, the creator or the listing's owner, found among the room's members and its invited; null when that person is in neither, and for every other room. */
+  otherTrader(room: RoomItem): RoomMember | null {
+    if (!this.isTrader(room) || !room.listing) return null;
+    const other = room.creatorAnopodId === this.session.anopodId() ? room.listing.owner.anopodId : room.creatorAnopodId;
+    return room.members.find((m) => m.anopodId === other) ?? room.invited.find((m) => m.anopodId === other) ?? null;
   }
 
   /** The icon of a room that is not a direct chat. */
@@ -182,6 +208,88 @@ export class ChatService {
     if (days <= 0) return this.lang.words().dates.today;
     if (days === 1) return this.lang.words().dates.yesterday;
     return date.toLocaleDateString(this.lang.tag(), { day: 'numeric', month: 'long', year: sameYear(date) ? undefined : 'numeric' });
+  }
+
+  // --- the chats about a case (wallet spec 13.3, 2026-11-12) -------------------
+
+  /**
+   * The attestor's side: the room about this case that this pod created with
+   * the person in it, a member first, else invited. When there is none: the
+   * newest room about this case that this pod created with no member but
+   * this pod and nobody invited, which is the room of a person who declined.
+   * Else null. Live from session.chatRooms.
+   */
+  caseRoomWith(caseId: string, anopodId: string): RoomItem | null {
+    const me = this.session.anopodId();
+    const mine = (this.session.chatRooms()?.rooms ?? []).filter((r) => r.caseId === caseId && r.creatorAnopodId === me);
+    const joined = mine.find((r) => r.members.some((m) => m.anopodId === anopodId));
+    if (joined) return joined;
+    const invited = mine.find((r) => r.invited.some((m) => m.anopodId === anopodId));
+    if (invited) return invited;
+    const empty = mine.filter((r) => r.invited.length === 0 && r.members.every((m) => m.anopodId === me));
+    return empty.sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null;
+  }
+
+  /** The person's side: the rooms about this case that this pod is in. */
+  caseRoomsOf(caseId: string): RoomItem[] {
+    return (this.session.chatRooms()?.rooms ?? []).filter((r) => r.caseId === caseId);
+  }
+
+  /** The person's side: the invites to this pod into a room about this case. */
+  caseInvitesOf(caseId: string): InviteItem[] {
+    return (this.session.chatRooms()?.invites ?? []).filter((i) => i.caseId === caseId);
+  }
+
+  /**
+   * The person's side: the attestors who have a chat with this pod about
+   * this case (2026-11-12), for the invite into the marketplace chat of a
+   * disputed trade. From this pod's rooms about the case that another pod
+   * created, that creator as the room lists its members (id and username),
+   * each once: only an attestor makes a room about a case.
+   */
+  caseAttestors(caseId: string): RoomMember[] {
+    const me = this.session.anopodId();
+    const attestors = new Map<string, RoomMember>();
+    for (const room of this.caseRoomsOf(caseId)) {
+      if (room.creatorAnopodId === me) continue;
+      const creator = room.members.find((m) => m.anopodId === room.creatorAnopodId);
+      if (creator && !attestors.has(creator.anopodId)) attestors.set(creator.anopodId, creator);
+    }
+    return [...attestors.values()];
+  }
+
+  /**
+   * Start chat on a case, the attestor's button: the Message someone flow of
+   * New chat, with the case. The person's chat public keys (read first, so a
+   * person without them makes no room), a new room key wrapped to this pod,
+   * /create-chat-room private with the caseId, the key kept, the person
+   * invited with the key wrapped to theirs, the room list refreshed. The
+   * answer is the refusal of the call that failed, else the invite's.
+   */
+  async startCaseChat(caseId: string, anopodId: string): Promise<ApiResponse<unknown>> {
+    const chat = this.session.getChatKeys();
+    if (!chat) throw new Error(this.lang.words().common.noChatKeys);
+    const keys = await this.api.getChatPublicKeys([anopodId]);
+    const theirs = keys.ok ? keys.body.keys.find((k) => k.anopodId === anopodId) : undefined;
+    if (!theirs) throw new Error(this.lang.words().common.podHasNoChatKeys);
+    const roomKey = this.crypto.newRoomKey();
+    const ownKey = await this.crypto.wrapRoomKey(roomKey, this.crypto.toHex(chat.p256Public), this.crypto.toHex(chat.kemPublic));
+    const created = await this.api.createChatRoom('private', undefined, this.crypto.toHex(ownKey), undefined, caseId);
+    if (!created.ok) return created;
+    const chatRoomId = created.body.chatRoomId;
+    this.session.roomKeys.set(chatRoomId, roomKey);
+    const theirKey = this.crypto.toHex(await this.crypto.wrapRoomKey(roomKey, theirs.chatPublicKey, theirs.chatPublicKeyPq));
+    const invited = await this.api.inviteToChatRoom(chatRoomId, anopodId, theirKey);
+    await this.refreshRooms();
+    return invited;
+  }
+
+  /** For a person who declined: invited again into the same room, with the room's key wrapped to theirs; the room list refreshed. */
+  async inviteAgain(room: RoomItem, anopodId: string): Promise<ApiResponse<{ inviteId: string }>> {
+    const theirKey = await this.wrapFor(room.chatRoomId, anopodId);
+    const invited = await this.api.inviteToChatRoom(room.chatRoomId, anopodId, theirKey);
+    await this.refreshRooms();
+    return invited;
   }
 
   private otherMembers(room: RoomItem): RoomMember[] {

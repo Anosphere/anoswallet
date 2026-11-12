@@ -60,7 +60,10 @@ const FINISH_STATUSES = ['approved', 'delivering'];
  * My recovery (wallet spec 12.3, /recover/case): the case id with Copy, the
  * status in words, the timeline from the events the person may see, a
  * Refresh button, and a 15-second poll of /get-recovery-pod while the page
- * is open. When three shares of one backup code keyId are in, the finish
+ * is open. When the threshold of shares is in for both, the backup code
+ * (one keyId) and every account key (the breakglasskey keyIds, as many as
+ * the masterpod's anosAccounts says; a masterpod that sends no number
+ * leaves the backup code alone to decide, as until 2026-11-12), the finish
  * appears as a second stepper (Combine, Get back in, Move your money, New
  * key for the bankers, Done; the money before the new key since
  * 2026-11-10, recovery finish order plan 1, because a reload after the new
@@ -254,24 +257,47 @@ export class RecoverCasePage {
 
   protected readonly threshold = computed(() => this.config.config()?.shareThreshold ?? 3);
 
+  /** How many account keys are complete (2026-11-12): the key ids of share type breakglasskey with at least the threshold of shares. Each anos account has a break-glass key of its own, deposited under a key id of its own. */
+  protected readonly accountKeysComplete = computed(() => {
+    const counts = new Map<string, number>();
+    for (const share of this.recovery.pod()?.shares ?? []) {
+      if (share.shareType === 'breakglasskey') counts.set(share.keyId, (counts.get(share.keyId) ?? 0) + 1);
+    }
+    const threshold = this.threshold();
+    return [...counts.values()].filter((count) => count >= threshold).length;
+  });
+
+  /** How many account keys to wait for (2026-11-12): the pod's anosAccounts, the anos accounts the anoPod made up to the opening of the case, so the new accounts that Move your money makes are not in it; undefined when the masterpod sent none, one of before. */
+  protected readonly accountKeysExpected = computed(() => this.recovery.pod()?.anosAccounts);
+
   /** The finish shows once enough backup code shares are in and the case takes it, and stays once it has started here. */
   protected readonly showFinish = computed(() => {
     const status = this.recovery.status();
-    return this.finishActive() || (this.backupShares() >= this.threshold() && status !== null && FINISH_STATUSES.includes(status));
+    const expected = this.accountKeysExpected();
+    const accountKeysIn = expected === undefined || this.accountKeysComplete() >= expected;
+    return this.finishActive() || (this.backupShares() >= this.threshold() && accountKeysIn && status !== null && FINISH_STATUSES.includes(status));
   });
 
   protected readonly statusText = computed(() => {
     const words = this.t().recoverCase;
-    const email = this.recovery.contactEmail() ?? words.yourEmail;
     switch (this.recovery.status()) {
-      case 'open':
-        return words.statusOpen(email);
+      case 'open': {
+        // The email and the phone that are there; neither there (the first read has not answered yet), "the contact you gave".
+        const contact = [this.recovery.contactEmail(), this.recovery.contactPhone()].filter((value) => value).join(', ');
+        return words.statusOpen(contact || words.yourEmail);
+      }
       case 'inReview':
         return words.statusInReview;
       case 'approved':
         return words.statusApproved;
-      case 'delivering':
+      case 'delivering': {
+        // Both counts when the masterpod said how many account keys there are; else the backup code's count alone, as before.
+        const expected = this.accountKeysExpected();
+        if (expected !== undefined && expected > 0) {
+          return words.statusDeliveringBoth(this.backupShares(), this.threshold(), Math.min(this.accountKeysComplete(), expected), expected);
+        }
         return words.statusDelivering(this.backupShares(), this.threshold());
+      }
       case 'completed':
         return words.statusCompleted;
       case 'dismissed':

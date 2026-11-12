@@ -91,9 +91,14 @@ export class ChatRequestsPage {
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
 
-  /** An invite about a listing reads "wants to chat about your listing Selling 100 anos for THB" (2026-11-06); the others as before. */
+  /** An invite about an attestor case reads, by the case's kind, "is an attestor and wants to chat about your assisted transfer", or "invited you to a chat about a case" when this pod is itself an attestor (2026-11-12); an invite about one of this pod's listings reads "wants to chat about your listing Selling 100 anos for THB" (2026-11-06), and one about someone else's listing "invited you to the chat about the listing Selling 100 anos for THB", which is what an attestor reads whom a trader brings into a marketplace chat (2026-11-12); the others as before. */
   protected inviteText(invite: InviteItem): string {
-    if (invite.listing) return this.t().chatRequests.aboutListing(this.chat.listingWords(invite.listing));
+    if (invite.caseKind) return this.session.role() === 'attestor' ? this.t().chatRequests.toCaseChat : this.t().chatRequests.aboutCase[invite.caseKind];
+    if (invite.listing) {
+      // The listing's owner is asked by the person who pressed Connect; anyone else was brought into that chat by one of its two traders, as an attestor on a dispute is (2026-11-12).
+      const words = this.chat.listingWords(invite.listing);
+      return invite.listing.owner.anopodId === this.session.anopodId() ? this.t().chatRequests.aboutListing(words) : this.t().chatRequests.toListingChat(words);
+    }
     return invite.type === 'public' ? this.t().chatRequests.invitedToRoom(invite.name) : this.t().chatRequests.invitedPrivate;
   }
 

@@ -23,6 +23,11 @@ function isContactEmail(value: string): boolean {
   return chars >= 3 && chars <= 254 && value.indexOf('@') > 0;
 }
 
+/** True for a contact phone as the masterpod takes it: 6 to 32 characters, each a digit, a space, +, - or a round bracket, with at least 6 digits. */
+function isContactPhone(value: string): boolean {
+  return value.length >= 6 && value.length <= 32 && /^[0-9 +()-]+$/.test(value) && value.replace(/[^0-9]/g, '').length >= 6;
+}
+
 /**
  * The locked-out stepper (wallet spec 12.3, /recover/open). 1. Your birth
  * record: the shared identity form; Next computes the lookup id on this
@@ -32,15 +37,21 @@ function isContactEmail(value: string): boolean {
  * (/challenge openCase with the anoPod id; this challenge is never used
  * and expires), then drops the answers. A miss keeps the answers in the
  * form so one field can be fixed and Next pressed again. 2. Your account:
- * "We found your account: <username>" and a contact email. 3. Open my
- * case: /challenge (openCase, the anoPod id) gives a fresh challenge and
- * the username again; the passkey registration with the PRF extension,
- * the anoPod id as user handle and the username as its name; the PRF
- * output from the registration or, when it returned none, one local
- * assertion with a random challenge; KEK_prf; the recovery hybrid pair and
- * hybridKeyBlob; the ephemeral keys; /open-recovery-case, the payload
- * without a username. On 201 the recovery session is open and the page
- * goes to /recover/case.
+ * "We found your account: <username>", then a contact email and a contact
+ * phone, both required (2026-11-12: a moderator texts first, and the email
+ * is there when a text is not possible; as wallet case chats plan 1 had it
+ * that same day one of the two was enough, and before that there was the
+ * email alone): Next works once both boxes are filled in and both are
+ * valid as the masterpod takes them.
+ * 3. Open my case: /challenge (openCase, the anoPod id) gives a fresh
+ * challenge and the username again; the passkey registration with the PRF
+ * extension, the anoPod id as user handle and the username as its name;
+ * the PRF output from the registration or, when it returned none, one
+ * local assertion with a random challenge; KEK_prf; the recovery hybrid
+ * pair and hybridKeyBlob; the ephemeral keys; /open-recovery-case, the
+ * payload without a username, with contactEmail and contactPhone, both
+ * trimmed. On 201 the recovery session is open, both contacts are kept in
+ * RecoveryService and the page goes to /recover/case.
  */
 @Component({
   selector: 'app-recover-open-page',
@@ -71,11 +82,19 @@ function isContactEmail(value: string): boolean {
 
           <mat-step [completed]="whoDone()" [label]="t().recoverOpen.stepWho">
             <p>{{ t().recoverOpen.foundAccount(foundUsername()) }}</p>
+            <p>{{ t().recoverOpen.contactText }}</p>
             <div class="fields">
               <mat-form-field appearance="outline" subscriptSizing="dynamic">
                 <mat-label>{{ t().recoverOpen.contactEmail }}</mat-label>
                 <input matInput type="email" [ngModel]="email()" (ngModelChange)="email.set($event)" autocomplete="email" />
                 <mat-hint>{{ t().recoverOpen.emailHint }}</mat-hint>
+              </mat-form-field>
+            </div>
+            <div class="fields">
+              <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                <mat-label>{{ t().recoverOpen.contactPhone }}</mat-label>
+                <input matInput type="tel" [ngModel]="phone()" (ngModelChange)="phone.set($event)" autocomplete="tel" />
+                <mat-hint>{{ t().recoverOpen.phoneHint }}</mat-hint>
               </mat-form-field>
             </div>
             <div>
@@ -129,10 +148,12 @@ export class RecoverOpenPage {
   protected readonly computing = signal(false);
   protected readonly lookupError = signal<string | null>(null);
   protected readonly email = signal('');
+  protected readonly phone = signal('');
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
 
-  protected readonly whoDone = computed(() => isContactEmail(this.email().trim()));
+  /** Step 2 is done when both boxes are filled in and both are valid (2026-11-12; until then one of the two was enough). An empty box is not valid. */
+  protected readonly whoDone = computed(() => isContactEmail(this.email().trim()) && isContactPhone(this.phone().trim()));
 
   constructor() {
     inject(DestroyRef).onDestroy(() => this.form.reset());
@@ -191,6 +212,7 @@ export class RecoverOpenPage {
     this.error.set(null);
     try {
       const contactEmail = this.email().trim();
+      const contactPhone = this.phone().trim();
       const challenge = await this.api.challenge('openCase', anopodId);
       if (!challenge.ok) throw new Error(`/challenge: ${reasonOf(challenge)}`);
       if (!challenge.body.anopodId) throw new Error(this.t().recoverOpen.noAnopodId);
@@ -209,7 +231,9 @@ export class RecoverOpenPage {
         anopodId: challenge.body.anopodId,
         challenge: challenge.body.challenge,
         lookupId,
+        // Both contacts, always: the masterpod refuses a case that lacks one of them.
         contactEmail,
+        contactPhone,
         passkey: registration.passkey,
         hybridKey: this.crypto.hybridPublicKeyOf(hybrid),
         hybridKeyBlob: this.crypto.toHex(hybridKeyBlob),
@@ -222,7 +246,8 @@ export class RecoverOpenPage {
       }
       this.recovery.open(res.body.caseId, keys, res.body.status);
       this.recovery.username.set(username);
-      this.recovery.contactEmail.set(contactEmail);
+      this.recovery.contactEmail.set(contactEmail || null);
+      this.recovery.contactPhone.set(contactPhone || null);
       this.recovery.lookupId.set(lookupId);
       this.recovery.setPrfOutput(prf);
       this.recovery.setKekPrf(kek);
