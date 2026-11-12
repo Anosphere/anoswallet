@@ -80,7 +80,7 @@ interface Outcome {
           @if (asking()) {
             <p class="question">{{ t().assisted.askCancel(millionthsToAnos(held.amount)) }}</p>
             <div class="row">
-              <button mat-flat-button type="button" (click)="confirm()" [disabled]="busy()">{{ t().assisted.yesCancel }}</button>
+              <button mat-flat-button type="button" class="danger" (click)="confirm()" [disabled]="busy()">{{ t().assisted.yesCancel }}</button>
               <button mat-button type="button" (click)="asking.set(false)" [disabled]="busy()">{{ t().common.back }}</button>
             </div>
           } @else {
@@ -89,7 +89,7 @@ interface Outcome {
                 <a mat-flat-button [routerLink]="['/cases', c.caseId]">{{ t().assisted.goToCase }}</a>
               }
               @if (held.stage === 'attesting' || held.stage === 'writing') {
-                <button mat-stroked-button type="button" (click)="ask()" [disabled]="busy()">{{ t().assisted.cancelTransfer }}</button>
+                <button mat-stroked-button type="button" class="danger" (click)="ask()" [disabled]="busy()">{{ t().assisted.cancelTransfer }}</button>
               }
             </div>
           }

@@ -38,7 +38,7 @@ export const VALIDATOR_READ_TIMEOUT_MS = 10_000;
 /** The username check while typing. */
 export const USERNAME_DEBOUNCE_MS = 400;
 
-/** The confirmation box's own button (Send, Create anos account) cannot be pressed for this long after the box opens, so the second click of a double click on the page's button never lands on it (wallet spec 8.9). */
+/** The confirmation box's own button (Send, Stake, Create anos account, "Yes, cancel the transfer") cannot be pressed for this long after the box opens, so the second click of a double click on the page's button never lands on it (wallet spec 8.9). */
 export const CONFIRM_ARM_MS = 500;
 
 /** The activity log keeps the newest calls, polls excepted. */
@@ -52,3 +52,6 @@ export const ADVANCED_PROTECTION_URL = 'https://landing.google.com/advancedprote
 
 /** Millionths of an anos in one anos: every amount on the wire is millionths as a decimal string. */
 export const MILLIONTHS_PER_ANOS = 1_000_000n;
+
+/** A guardian stake goes in whole multiples of this many anos (wallet spec 8.2, Account; 2026-11-12): it is the validators' GUARDIAN_VOTE_ANOS, the anos staked for one guardian vote. */
+export const GUARDIAN_STAKE_STEP_ANOS = 1000;

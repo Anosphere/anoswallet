@@ -1210,7 +1210,8 @@ The sender can cancel the locked transfer from its row (2026-11-11,
 section 11; the plan is forclaude/locked-transfer-cancel-plan-1.md, the
 validators' part anossoftware spec sections 27 and 28, the doorman's
 doormansoftware spec section 9). Until then nothing could be done with
-it. The button: "Cancel transfer", stroked, under the row, while the
+it. The button: "Cancel transfer", stroked, and red since 2026-11-12
+(section 11; the class `danger`, 8.9), under the row, while the
 stage is locked or due, that is from the moment every validator has
 accepted the transfer until it is written; off while the page is busy.
 It does not show while the stage is waiting, when the validators would
@@ -1218,7 +1219,8 @@ refuse the cancel, nor while it is cancelling. The button asks in the
 confirmation box (8.9): the title "Cancel this transfer?"; Amount, "12
 anos"; To, the receiver's full account id; the note "The 12 anos stay in
 this account. It cannot be undone."; the buttons Back and "Yes, cancel
-the transfer". The first button reads Back in this box, where Cancel
+the transfer", the second one red since 2026-11-12 (the box's `danger`,
+8.9). The first button reads Back in this box, where Cancel
 would read as the cancel itself. Back does nothing. Yes builds the
 follow-up lockedTransferCancel for the transfer the box showed,
 { type: "lockedTransferCancel", transactionId, accountId } with signedAt
@@ -1289,6 +1291,15 @@ that leaves the list goes back to daoVote.
 Stake for starts at daoVote and the amount box starts empty (2026-11-10,
 section 11; they started at attestor and at 1), so the form on a fresh
 page and the form after a send are the same.
+A guardian stake goes in whole thousands (2026-11-12, section 11; the
+plan is forclaude/wallet-case-chats-plan-1.md, its step 5): while Kind
+is stake and Stake for is guardian, Send stays off unless the amount is
+a whole multiple of 1,000 anos, at least 1,000 (`GUARDIAN_STAKE_STEP_ANOS`
+in constants.ts, which is the validators' GUARDIAN_VOTE_ANOS, the anos
+staked for one guardian vote), and the line "A guardian stake goes in
+whole thousands: 1,000, 2,000, 3,000 anos and so on." shows under the
+form. So 1,500 anos cannot be sent for guardian. The stake for daoVote
+and the other four purposes take any amount, as before.
 A stake for moderator, attestor, validator or masterPod that the
 validator refuses for the appointment reads "Only an appointed attestor
 can stake for attestor.", with the stake's purpose in both places, or "The
@@ -1304,7 +1315,24 @@ short id kept whole where the line wraps); To,
 the recipient's full account id, or for a stake Stake for, the purpose;
 for a stake one more line, "A stake stays with the fund. It comes back
 only through a fund proposal that the guardians vote for."; the buttons
-Cancel and Send. Cancel sends nothing and leaves the form as it was
+Cancel and Send. A stake for daoVote or guardian has a box of its own
+(2026-11-12, section 11), so that it does not read like an ordinary
+send. Its title: "Stake 100 anos for DAO votes?" or "Stake 1000 anos as
+a guardian?". Its lines: the same three, Kind, From and Stake for. Its
+notes, three, in this order: "A DAO stake gives you one vote for each
+anos. It is locked for one month since your last vote." or "A guardian
+stake gives you one vote on fund proposals for each 1,000 anos. It is
+locked for one year since your last vote."; then the line about the
+fund, as above; then "To confirm, type your username below." Under the
+notes a text box, "Your username" (the box's `typed`, 8.9). The buttons
+are Cancel and Stake, and Stake stays off until the anoPod's username
+is in the text box, compared without regard to capital letters and to
+spaces around it. Stake does what Send does in the other boxes. The
+month and the year are the user's words (the plan's decision 11): no
+code holds a stake for that time, and a stake comes back by a fund
+proposal, as the second note says. A stake for moderator, attestor,
+validator or masterPod and every transfer keep the box described
+first. Cancel sends nothing and leaves the form as it was
 typed. Send in the box empties the form at once, before the answer
 comes: Kind back to plain, Stake for back to daoVote, the recipient and
 the amount empty, the paste hint gone. The form stays empty whatever the
@@ -1454,6 +1482,9 @@ the buyer "Cancel trade" and "Dispute". Each asks once in place
 cannot be undone."; "Cancel this trade? The seller keeps the 5 anos. It
 cannot be undone."; "Dispute this trade? Attestors will decide it, and
 neither side can release or cancel it after that."), then Yes or Back.
+The cancel is red (2026-11-12, section 11; the class `danger`, 8.9):
+"Cancel trade", and the Yes of its question, "Yes, cancel the trade".
+Release, Dispute and the Yes of each keep their colour.
 Yes builds the escrowSuccess, escrowCancel or escrowDispute follow-up
 (crypto buildFollowUp, pair one from the keyBlob), /api/sign adds the
 wallet pair, /escrow-signature takes it, then "Sent. ..." in green or
@@ -1513,7 +1544,9 @@ once per case), "another reason" when the event has none. The buttons:
 "Go to the case" (to /cases/:caseId) when there is a case, and "Cancel
 transfer" while the stage is attesting or writing, which asks once in
 place ("Cancel this transfer? The 5 anos stay in this account. It cannot
-be undone."), then "Yes, cancel the transfer" or Back. Yes builds the
+be undone."), then "Yes, cancel the transfer" or Back. Both cancel
+buttons are red (2026-11-12, section 11; the class `danger`, 8.9):
+"Cancel transfer" and "Yes, cancel the transfer". Yes builds the
 assistedTransferCancel follow-up as the removed form did (crypto
 buildFollowUp, pair one from the keyBlob), /api/sign adds the wallet
 pair, /assisted-transfer-cancel takes it, then "Sent. The transfer is
@@ -2592,9 +2625,10 @@ What it is given, `ConfirmData`: `title`; `lines`, each a `ConfirmLine`
 `{ label, value, code? }`, drawn as a two-column grid, the label in the
 on-surface-variant colour and the value beside it, in the id font when
 `code` is true; `notes`, each a paragraph under the lines;
-`confirmLabel`, the words on the second button; and, since 2026-11-11
+`confirmLabel`, the words on the second button; since 2026-11-11
 (section 11), `cancelLabel`, which a caller may leave out: the words on
-the first button. A value too long for its
+the first button; and, since 2026-11-12, `typed` and `danger`, which
+are described two paragraphs down. A value too long for its
 column wraps at a space, and is cut inside a word only when the word
 alone is too long (`overflow-wrap: anywhere`); a value in the id font is
 cut anywhere, by the global rule for `code`, so a 64-character id wraps
@@ -2613,13 +2647,39 @@ land on it. Nothing in the box has the focus when it opens (`autoFocus:
 nothing. The box is 480 px wide, or the screen's width less 32 px where
 that is narrower.
 
+Two more fields, each of which a caller may leave out (2026-11-12,
+section 11; the plan is forclaude/wallet-case-chats-plan-1.md, its step
+5). `typed`, `{ label, expected }`: the box shows one text box under the
+notes, an outlined field with the caller's label, as wide as the box,
+with the browser's suggestions and its capital first letter turned off
+(`autocomplete="off"`, `autocapitalize="none"`). The second button then
+stays off until what is typed equals `expected`, both trimmed and in
+small letters, and the half second has passed. The text box stands in
+no form, so the Enter key in it answers nothing. The focus still goes
+to the box itself when it opens, so the person taps the text box to
+type. `danger`, true or left out: with true the second button carries
+the class `danger`. That class is one rule in src/styles.css, the
+wallet's global style file. It sets five of Material's button variables
+to the theme's error colours: a filled button is red with the on-error
+colour for its words, an outlined button has red words and a red
+outline, a text button has red words. The rule colours a button that
+can be pressed; a button that is off keeps the theme's disabled look.
+The same class stands on the cancel buttons of three pages (8.2):
+"Cancel transfer" under the Locked transfer row of the account page,
+"Cancel transfer" and "Yes, cancel the transfer" on the assisted
+transfer page, "Cancel trade" and "Yes, cancel the trade" on the escrow
+trade page.
+
 Three places use it (8.2): the Send form of the account page, before
 every kind of send; "Open a new account" on the Wallet page, before
 Create anos account and Retry; and, since 2026-11-11 (section 11),
 "Cancel transfer" under the Locked transfer row of the account page.
 That third place is the only one that gives `cancelLabel`: Back
 (`common.back`), since Cancel there would read as the cancel itself; the
-other two keep Cancel. Each does nothing while a box is already open.
+other two keep Cancel. It is also the only one that gives `danger`. The
+Send form is the only one that gives `typed`, and only for a stake for
+daoVote or guardian: the label "Your username" and the anoPod's
+username. Each does nothing while a box is already open.
 
 ## 9. Configuration, and running it on this machine
 
@@ -7363,6 +7423,209 @@ recovery. No route, no env variable and no npm package; the proxy
   kinds of shares one after the other, where both counts move and the
   finish opens only when both are complete. The masterpod goes out
   first.
+
+### The stake box, the guardian thousands and the red cancel buttons, step 5 (2026-11-12)
+
+Built from `forclaude/wallet-case-chats-plan-1.md` (FINAL, 2026-11-12),
+its step 5 of seven, its section 5, one commit, on top of d8a2de8 (step
+4). Three small things from the user's list of 2026-11-11, found while
+testing. The stake box (the plan's decisions 11, 12, 22 and 23): the box
+of a DAO stake and of a guardian stake says what the stake gives and how
+long it is locked, and the person types their username before its button
+works. The words about the lock are the user's: "just do what I said and
+tell the user that it will be locked for a month / year since your last
+vote." The guardian thousands (decision 13), in the user's words: "Just
+for guardians, it should only be in the thousands, and only for
+guardians." And the red cancel buttons (decisions 14 and 24): the three
+cancel buttons and the "Yes, cancel" of each. Wallet only: this step
+needs nothing from the masterpod's step 1. No route, no env variable
+and no npm package; the validators, the doormen, the keyholders and the
+proxy (`server/`) are not touched.
+
+- `src/app/components/confirm-dialog.component.ts`: `ConfirmData` has
+  two more fields, each optional. `typed?: { label: string; expected:
+  string }`: under the notes the template draws one `mat-form-field`
+  (outline) with the label `typed.label` and an `input matInput` with
+  `autocomplete="off"` and `autocapitalize="none"`, bound to the signal
+  `typedText`. The computed `typedOk` is true in a box without `typed`,
+  and in a box with it once `typedText()` equals `typed.expected`, both
+  through `trim().toLowerCase()`. The second button is off while
+  `!armed() || !typedOk()`. `danger?: boolean`: the second button has
+  `[class.danger]="data.danger"`. The component imports `FormsModule`,
+  `MatFormFieldModule` and `MatInputModule` beside the two it had.
+  `askConfirm` is untouched. The comments of `ConfirmData` and the class
+  comment say so. The Wallet page's box gives neither field and is as it
+  was.
+- `src/app/pages/account.page.ts`, the stake box. In `askSend()`,
+  `stakeBox` holds the title and the first note of an order whose
+  purpose is `daoVote` (`account.confirmStakeDaoTitle(anos)`,
+  `account.stakeDaoNote`) or `guardian`
+  (`account.confirmStakeGuardianTitle(anos)`,
+  `account.stakeGuardianNote`), and is null for every other order. With
+  it the box has that title; the three lines, as before; the notes
+  `stakeBox.note`, `account.confirmStakeNote` and
+  `account.stakeTypeNote`, in this order; `typed`, the label
+  `common.yourUsername` and the expected text `session.username()`; and
+  `confirmLabel` `account.stake`. Without it the title, the notes and
+  the button are those of 2026-11-10 and `typed` is undefined: the box
+  of the other four purposes and of every transfer is the box of
+  before. What comes after the box did not change: `resetForm()`, then
+  `send(order)`. The comment of `askSend` says so.
+- `src/app/constants.ts` and `src/app/pages/account.page.ts`, the
+  guardian thousands. `GUARDIAN_STAKE_STEP_ANOS = 1000`, with the
+  comment that it is the validators' `GUARDIAN_VOTE_ANOS`. `canSend`
+  takes the amount in millionths once and answers false when the
+  transfer type is `transferToFund`, the purpose is `guardian` and the
+  amount is not a whole multiple of `BigInt(GUARDIAN_STAKE_STEP_ANOS) *
+  MILLIONTHS_PER_ANOS`, which is 1,000,000,000 millionths; the rest of
+  it does what it did. In the template, right under the form:
+  the muted line `account.guardianThousands` while `transferType()` is
+  `transferToFund` and `stakePurpose()` is `guardian`. No other purpose
+  is touched.
+- The red buttons. `src/styles.css`: the rule `.danger`, the plan's five
+  lines as they stand there, at the end of the file, under a comment
+  that names the plan. `src/app/pages/account.page.ts`: `class="danger"`
+  on the stroked "Cancel transfer" under the Locked transfer row, and
+  `askCancelLocked()` gives `danger: true`, so "Yes, cancel the
+  transfer" in the box is red. `src/app/pages/assisted-transfer.page.ts`:
+  `class="danger"` on the stroked "Cancel transfer" and on the filled
+  "Yes, cancel the transfer". `src/app/pages/escrow-trade.page.ts`:
+  `class="danger"` on the filled "Cancel trade"; the confirm button of
+  the question has `[class.danger]="action === 'cancel'"`, so "Yes,
+  cancel the trade" is red and the Yes of Release and of Dispute keep
+  their colour. No page's own styles changed.
+- The words, in both files, as the plan's table 5.5 gives them, all
+  eight new: `account.confirmStakeDaoTitle(anos)`,
+  `account.confirmStakeGuardianTitle(anos)`, `account.stakeDaoNote`,
+  `account.stakeGuardianNote`, `account.stakeTypeNote`, `account.stake`,
+  `account.guardianThousands` and `common.yourUsername`. Reused as they
+  are: `account.confirmSendTitle`, `account.confirmStakeNote`,
+  `account.stakeFor`, `account.stakePurposes`, `common.kind`,
+  `common.from`, `common.to`, `common.send` and `common.cancel`; and the
+  words on the cancel buttons, `assisted.cancelTransfer`,
+  `assisted.yesCancel`, `escrow.cancelTrade` and `escrow.yes`. The Thai
+  is the plan's, by the glossary, for Thai readers to correct (8.8).
+- Readings where the plan left a detail open. The text box is as wide
+  as the box and stands 12 px under the last note, the distance the
+  notes keep (`.typed { width: 100%; margin-top: 12px; }`), and its
+  field has `subscriptSizing="dynamic"`, so no empty row for a hint
+  stands between it and the buttons. It stands in no `form` and has no
+  key handler, and that is all "the Enter key answers nothing" needs.
+  `askConfirm` still opens the box with the focus on the box itself, so
+  the text box does not take the focus by itself: a tap or a click puts
+  the cursor in it. What is typed lives in a signal of the box and goes
+  nowhere. The expected text is `session.username()`, the username the
+  masterpod answered at the unlock or at Create: an open session always
+  has one, and the page is behind the session guard. The stake box goes
+  by the order's purpose, which is what the box shows. The amount in
+  the two titles is `millionthsToAnos(amount)`, as in "Send 100 anos?":
+  "Stake 1000 anos as a guardian?", with no comma. The page's own button
+  still reads "Send transferToFund": the plan gives Stake to the box's
+  title and button (decision 23), not to the form. In the code
+  `GUARDIAN_STAKE_STEP_ANOS` is a plain number, as the plan writes it,
+  and stands last in `constants.ts`, after `MILLIONTHS_PER_ANOS`;
+  `canSend` turns it into millionths. In `canSend` the new line stands
+  in front of the old last line. It reads `transferType()` as well as
+  `stakePurpose()`, since Stake for keeps its pick while Kind is plain
+  or escrow. "At least one step" needs no line of its own:
+  `anosToMillionths` answers null for zero, and the smallest whole
+  multiple above zero is one step. The muted line has the same
+  condition as that check and stands in front of the progress bar's
+  block; the two never show together, since the form is empty while a
+  send is on its way. In the dictionaries `guardianThousands` stands
+  after `amountPlaceholder`, the two titles after `confirmSendTitle`,
+  the two notes in front of `confirmStakeNote`, `stakeTypeNote` and
+  `stake` after it, and `common.yourUsername` after `common.username`:
+  the order the page uses them. The comments and this spec carry
+  2026-11-12, the day of the build.
+- Known and left as it is. The month and the year in the two notes are
+  words only (the plan's decision 11): nothing in the wallet and no
+  rule of the validators holds a stake for a time; a stake comes back
+  by a fund proposal, and section 10 still lists the stake withdrawal
+  lock as not built. The whole thousands are the wallet's rule and
+  stand in this form alone. The validators take any guardian stake of
+  at least `STAKE_MIN_GUARDIAN_ANOS` (anossoftware
+  `src/fund/fund.service.js`, `verifyTransferToFund`) and count one
+  vote per full `GUARDIAN_VOTE_ANOS`, rounded down, so a stake of 1,500
+  anos sent another way (a wallet tab loaded before the deploy is one)
+  stands, with one vote. The step is a number in the wallet and is
+  not read from the validators: if `GUARDIAN_VOTE_ANOS` changes,
+  `GUARDIAN_STAKE_STEP_ANOS` has to follow by hand. The Guardians page
+  still says "To become a guardian, stake 1000 anos or more for
+  guardian from a spending account, on its page in the Wallet."
+  (`guardians.noGuardianAccount`): that is true, but it does not say
+  whole thousands, and the plan does not change that word. The username
+  in the box is a brake on a careless click, not a secret: the toolbar
+  shows it. A red outlined button keeps the theme's primary colour for
+  the faint tint under the pointer and at a press: Material draws those
+  from its state-layer and ripple variables, which the plan's rule does
+  not set. The class `danger` already stood on four buttons, each a
+  filled "Confirm dismissal": on the moderator's case page and on the
+  three attestor case pages (12.3, 13.3), each with a rule of its own
+  in the page's styles, which sets `background` and `color` to the same
+  two error colours. The plan does not name them and nothing in those
+  four pages changed. The global rule reaches them all the same: they
+  carry the five variables now. As read in the built files, nothing on
+  them looks different. The page's rule and Material's two rules for a
+  filled button, the one for a button that can be pressed and the one
+  for a button that is off, weigh the same, a class and one more simple
+  selector each. The page's styles come into the document after
+  Material's button styles, since a Material button is on screen before
+  any of these pages opens, and the shell keeps one, Lock, for as long
+  as the session is open. So the page's rule still decides both
+  colours, and they are the colours the variables would give. One
+  difference stays between those four and the buttons of this step: a
+  "Confirm dismissal" that is off while its page is busy stays red, as
+  before, and a button of this step that is off has the theme's
+  disabled look.
+- Put right on the user's word of 2026-11-12 ("Yes, update them"), after
+  the first report of this build listed three comments as left because
+  the plan does not name them. Three comments and no line of code. In
+  `src/app/pages/account.page.ts`: the class comment, whose Send part
+  now names the whole thousands of a guardian stake and the box of a
+  stake for daoVote or guardian, where it had known only the box of
+  2026-11-10; and the comment of `resetForm()`, which names Stake
+  beside Send as the button that runs it. In `src/app/constants.ts`:
+  the comment of `CONFIRM_ARM_MS`, which names the four words the box's
+  own button can carry, Send, Stake, Create anos account and "Yes,
+  cancel the transfer", where it had named two; the last of the four
+  had been missing since 2026-11-11. No file joined the commit: both
+  files were this step's already. Not counted and not changed, since
+  nothing in them is wrong: the class comments of the assisted transfer
+  page and of the escrow trade page and the comment of
+  `askCancelLocked()` name the cancel buttons and say nothing of how a
+  button looks.
+- Spec: 8.2 (Account: the Send paragraph in two places, the guardian
+  thousands after the Stake for list and the stake box after the box of
+  a send; the cancel of the locked transfer in two places, the red
+  button and the red "Yes, cancel the transfer"; Escrow trade and
+  Assisted transfer: the red buttons), 8.9 (the list of fields; a new
+  paragraph on `typed`, `danger` and the class; who gives which, in the
+  last paragraph) and this note. README: the line of
+  `components/confirm-dialog.component.ts` names the username to type
+  and the red button.
+- Checked. `npx ng build` in the web_app folder: clean, no warnings
+  (2.16 MB initial total, `main-UXDUZIQQ.js`, `styles-EMD3RG3N.css`).
+  The words: the eight rows of the plan's table 5.5 were read from the
+  plan file and compared with the sixteen entries in `en.ts` and
+  `th.ts`, and each entry equals its cell character for character.
+  `git status` showed this step's ten files and no others. `npx ng
+  build` after the three comments were put right: clean, no warnings,
+  and the script and the style file are the same files as before; the
+  ten files are the same ten. Read in the
+  built files: the style file holds the rule `.danger` with its five
+  lines; Material's button styles read those five variables only in
+  the rules for a button that is not disabled, and its rules for a
+  disabled button read variables of their own, so a disabled red button
+  keeps the theme's disabled look; the app sets no namespace for CSS
+  variables, so the names in the global rule are the names Material
+  reads. Nothing was run in a browser and no server was started. The
+  run-through is the user's, on the running network (the plan's section
+  8): a DAO stake and a guardian stake, with the box, the username and
+  1,500 anos refused for guardian; and the three cancel buttons. The
+  wallet goes out by section 10 of `forclaude/wallet-deploy-plan-1.md`,
+  wallet1 and then wallet2, with no setting in `network/wallet.env` and
+  no `npm ci`.
 
 ## 12. Recovery and the moderator edition
 

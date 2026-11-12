@@ -67,7 +67,7 @@ src/app/
   unlock.ts                the unlock flow, shared by the landing page and setup
   components/camera.component.ts   the camera: live preview, Take photo, a file input as the fallback
   components/note-form.component.ts   the note form under a history row: the kind, the money and the currency, the memo (spec 8.2)
-  components/confirm-dialog.component.ts   the confirmation box before a send, before a new anos account and before the cancel of a locked transfer, and askConfirm (spec 8.9)
+  components/confirm-dialog.component.ts   the confirmation box before a send, before a new anos account and before the cancel of a locked transfer, with the username to type before a DAO or guardian stake and a red button for the cancel, and askConfirm (spec 8.9)
   components/case-chat-start.component.ts   the attestor's Start chat button for the person on a case page: Start chat, Open chat, Invite again (spec 8.7, 13.3)
   components/case-chat-list.component.ts   the person's chats with the attestors of a case, on My case and My recovery case: Accept, Decline, Open chat (spec 8.7, 13.3)
   pages/                   one file per route: landing, create, recover, vouching, identity, setup,
