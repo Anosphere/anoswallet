@@ -99,10 +99,30 @@ Behaviour
 - Bodies are streamed, never parsed: no express.json in front of the
   proxy, so a 70 MB bucket request passes through as it is. Headers go
   through as received, the browser's Origin included, so the backends'
-  CORS rules see http://localhost:4200 as they do today.
+  CORS rules see http://localhost:4200 as they do today. The one
+  exception is the Connection header on a call to a validator, which
+  the proxy sets to keep-alive (2026-11-11, the point on the
+  connections below).
 - The backend's status and body come back unchanged. A backend that does
   not answer: 502 { error: "<masterpod | validator n | keyholder n |
   signing server> unavailable" }. Proxy timeout 120 seconds.
+- The connections to the validators stay open (2026-11-11, section 11).
+  A call to a validator goes to its doorman on a connection that is
+  open and waiting when there is one, so it does not open a connection
+  and set up the encryption again. The proxy closes a connection that
+  sat unused for 10 seconds (validatorIdleMs in server/config.js). The
+  doormen close one after 15 seconds, so the proxy is always first and
+  no call meets a closing connection. The proxy keeps at most 32 unused
+  connections per validator (validatorIdleConnections), in each of its
+  processes. That is no limit on the calls under way: a call that finds
+  no waiting connection opens a new one. A new connection has the same
+  10 seconds to open, so a validator whose machine cannot be reached is
+  502 { error: "validator n unavailable" } after 10 seconds, where the
+  call hung for the 120. A call that is under way still has the 120.
+  For this the proxy sends "Connection: keep-alive" to a validator in
+  place of the "close" that nginx in front of it sends with every call.
+  The masterpod, the keyholders and the signing server get a new
+  connection for every call, as before.
 - The signed envelope's path is the backend path: the browser signs
   "/complete-setup" and posts to /api/masterpod/complete-setup; the proxy
   strips its prefix and the masterpod sees /complete-setup.
@@ -6674,6 +6694,174 @@ not built with it.
   shows three or four calls to `/api/anos/<n>/` every 5 seconds, not
   three or four per account. Then a send from one own account to
   another: once it lands, the total on Home is right within two rounds.
+
+### The proxy keeps its connections to the validators open (2026-11-11)
+
+Built from `forclaude/wallet-speed-plan-1.md` (FINAL), its step 2 of
+two, its section 2, one commit, on top of 5c23551. Why, in the user's
+words of 2026-11-11: "I'm also trying to figure out why sometimes the
+site starts moving soooo slow." And, of this cure: "What about keeping
+connections open and the re read only if an account has something?"
+Until now the proxy opened a new connection to a validator's doorman
+for every call: http-proxy does that when it is given no agent, and it
+sends `Connection: close`. Measured from the user's Mac that day,
+straight to validator 1's doorman: opening the connection took about
+100 ms, setting up the encryption 110 to 185 ms, and the call itself
+110 to 170 ms. So opening and encryption were two of the three trips a
+call made. Now a call to a validator goes out on a connection that is
+open and waiting when there is one. The change is in the proxy only.
+There is no route, no env variable, no npm package, no change in the
+browser's code but for one comment (the point "Put right" below) and
+no new word in either language, and nothing changes on the validators,
+the doormen, the masterpod, the keyholders or the signing server.
+
+- `server/config.js`: two numbers beside `proxyTimeoutMs`, each with
+  its comment. `validatorIdleMs`, 10 000: how long a connection kept
+  open to a validator's doorman may sit unused before the proxy closes
+  it, and how long a new one may take to open. It has to stay under the
+  doormen's own 15 seconds (`keepalive_timeout` in
+  `doormansoftware/deploy/nginx/doorman.conf`, on both ports), so the
+  proxy is always the first to close and no call meets a closing
+  connection (the plan's decision 11). `validatorIdleConnections`, 32:
+  how many unused connections, open and waiting for the next call, the
+  proxy keeps per validator at most (decision 12). Neither is an env
+  variable; they stand in the file as `proxyTimeoutMs` does.
+- `server/app.js`: `http` and `https` are imported from Node.
+  `createApp` makes two agents once, before the forwards, one of `http`
+  and one of `https`, both with `keepAlive: true`,
+  `timeout: config.validatorIdleMs` and
+  `maxFreeSockets: config.validatorIdleConnections`. `forward` takes
+  one more argument at the end, `agent`, `null` by default. When it is
+  given, the proxy's options gain `agent` and
+  `headers: { connection: 'keep-alive' }`. The validators' loop gives
+  `forward` the agent that fits the entry's address: the `https` one
+  when it begins with `https:`, else the `http` one. On the wallet
+  servers every entry of `VALIDATOR_URLS` begins with `https:`; the
+  development list is plain http. The comment at the top of the file
+  and the comment of `forward` say what is kept open, why the header is
+  set, and the two numbers.
+- Why the header. nginx on a wallet server sends the proxy
+  `Connection: close` with every call, by its default; the site sets
+  only the Host header. http-proxy copies the incoming headers onto the
+  outgoing call. So an agent alone would change nothing: the doorman
+  would still be told to close after every call. With http-proxy's
+  `headers` option the outgoing call says `keep-alive`. It is the one
+  header that does not go through as received.
+- The 32. A connection is unused while no call is on it: it is open
+  and waiting for the next call. At most 32 such connections are kept
+  per validator, in each wallet process; one more that becomes free is
+  closed at once. The number is no limit on the calls under way. A call
+  that finds no waiting connection opens a new one, as every call did
+  until now, so with many people on at once nobody waits because of it:
+  the calls beyond the waiting connections only miss the saving. With
+  two wallet servers and three editions each, that is at most 192
+  waiting connections on one doorman, and in practice far fewer.
+- Unchanged: the masterpod's forward, the keyholders' loop and the two
+  signing forwards, which give no agent, so those backends get a new
+  connection for every call (decision 3). The text of the two signing
+  forwards is as it was and they moved down, from lines 97 and 98 to
+  lines 134 and 135; `forclaude/signing-server-plan-1.md`, which names
+  them by the old numbers, finds them by their text, the two lines that
+  begin `app.use(forward(config, config.signingServerUrl`.
+  `proxyTimeoutMs`, the proxy's two minutes, still rules a call that is
+  under way. `server/index.js`, the routes, everything under `deploy/`,
+  and everything under `src/` but for one comment (the point "Put
+  right" below).
+- Accepted by the plan. Its decision 13, accepted and wanted: a
+  validator whose machine cannot be reached now answers `502 validator
+  n unavailable` after 10 seconds, to a read and to a submission, where
+  the call hung for the proxy's two minutes. The browser already gives
+  a read 10 seconds. Its decision 14: when a validator or its doorman
+  restarts, each connection kept to it fails one call with that 502. A
+  read is asked again on the next validator; a submission shows the
+  failure and is never sent again by the wallet on its own (8.3). Out
+  of the plan: the masterpod, the keyholders and the signing server on
+  kept connections; the time each call took in the wallet's nginx log;
+  a limit per visitor on the wallet servers.
+- Readings where the plan left a detail open. `forward` gains its two
+  options by one new last line in the options it hands to
+  `createProxyMiddleware`, so no line it had changed. To reach the new
+  last argument the validators' loop passes `''` and `null` for
+  `replacement` and `method`, which are their defaults. The two agents
+  are made from one set of options, after the proxy's own two routes
+  and right before the masterpod's forward, with a short comment over
+  them. An agent keeps its waiting connections per address, host and
+  port, so every entry of `VALIDATOR_URLS` has its own 32. Seen in the
+  check below: on a call to a validator the proxy's answer to nginx now
+  carries the doorman's `Connection: keep-alive`, where it carried
+  `close`, because http-proxy hands the backend's header on, and the
+  proxy no longer closes nginx's connection itself after such a call.
+  After a call to another backend it answers `close` and closes it, as
+  before. nginx keeps no connections to the proxy (the site has no
+  `upstream` block with `keepalive`) and closes each one when the
+  answer is complete. A fine point of decision 13, not run here; it
+  follows from the two limits. A machine that goes away without
+  closing its connections, by a power or network cut, leaves the
+  connections kept to it looking open for up to 10 seconds. A call
+  sent down one of them in that time is a call under way and has the
+  proxy's two minutes, as every call to such a machine had before this
+  build. The connection goes with that call, and from then on a new
+  one fails after 10 seconds.
+- Put right on the user's word of 2026-11-11 ("Yes, update them"),
+  after the first report of this build listed three places as left
+  because the plan does not name them. In `src/app/constants.ts` the
+  comment of `VALIDATOR_READ_TIMEOUT_MS` said that without the limit a
+  validator whose machine cannot be reached would hold a page for the
+  proxy's two minutes. It now says that a read could be held for the
+  proxy's two minutes, and that since this build the proxy itself
+  answers 502 after 10 seconds for such a validator. A comment only, no
+  line of code. The other two places are beside the repos, in
+  `test_net_phase_3_production/deploy-notes.md`: its section 6 said
+  that step 2 was not built yet, and "The short of it" named 0cfb88c as
+  the wallet's newest commit.
+- Spec: 2 (Behaviour: the one exception to "Headers go through as
+  received", and the new point on the connections) and this note.
+  README, "The proxy (server/)": one sentence. The older notes above
+  stand as the record of what was built then.
+- Checked. `node --check server/app.js` and
+  `node --check server/config.js` pass; `git status` showed this step's
+  four files and no others, and `src/app/constants.ts` as the fifth
+  once its comment was put right. `npx ng build` in the web_app folder
+  after that: clean, no warnings, and the script is the same file as
+  before, `main-M3NEN2FJ.js`. The proxy was also run once outside the
+  repo, in memory, and nothing of it is kept: `server/app.js` as it is,
+  with made-up addresses, and every connection, in and out, a pair of
+  in-memory streams. No server was started and nothing went on the
+  network. Each call came in the way nginx sends it, HTTP/1.1 with
+  `Connection: close`. Five calls in a row to a validator made one
+  connection, on an `https` address through the `https` agent and on an
+  `http` address through the `http` agent, both with the two numbers.
+  The far end was told `keep-alive` every time and got its own Host
+  header, the browser's Origin and the cut path. A submission with a
+  body went down the kept connection whole. Five calls in a row to the
+  masterpod, to a keyholder and to the signing server made five
+  connections each, told `close`, as before. Forty calls at once to one
+  validator opened forty connections; 32 were kept and 8 closed at
+  once; the next forty used the 32 and opened 8. A connection had the
+  proxy's 120 seconds while a call was on it and the 10 seconds each
+  time it became free. A waiting connection that reported its time up
+  was closed, and the next call opened a new one. A waiting connection
+  that the far end closed, or that was reset, cost no call. A
+  connection dropped in the middle of a call, and one whose time ran
+  out with a call on it, were `502 validator n unavailable` with the
+  line in the log, and the next call was answered. After a validator
+  call the proxy answered nginx `Connection: keep-alive` and left that
+  connection open; after a masterpod call it answered `close` and
+  closed it. The stand-in connections have no clock and no encryption.
+  So three things were not run here: the 10 seconds themselves, a
+  machine that cannot be reached, and TLS. The plan's own tries of
+  2026-11-11, on the user's Mac against a stand-in backend, cover the
+  first two: none of 120 calls failed with the proxy closing first, and
+  a machine that cannot be reached answered 502 once the agent's number
+  had passed. Not run on a server and nothing deployed: the
+  run-through is the user's, after the deploy (the plan's section 3).
+  Only the wallet has something to deploy, wallet1 and then wallet2;
+  the step takes effect when the three units restart, which the
+  install script does, and a wallet tab needs no reload. This line,
+  from any machine, prints three times. Before this step the second
+  and the third are about equal (0.5 to 0.65 seconds from the user's
+  Mac on 2026-11-11). After it the third is clearly shorter:
+  `curl -s -o /dev/null -o /dev/null -o /dev/null -w '%{time_total}\n' https://wallet.anocloud.com/api/health https://wallet.anocloud.com/api/anos/1/health https://wallet.anocloud.com/api/anos/1/health`
 
 ## 12. Recovery and the moderator edition
 

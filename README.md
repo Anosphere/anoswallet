@@ -34,7 +34,12 @@ how many validators and keyholders there are and the three lock numbers;
 `GET /api/sign/public-keys` are forwarded with the prefix cut, bodies
 streamed, the browser's Origin kept, the backend's answer returned
 unchanged; a backend that does not answer is `502 { error: "<who>
-unavailable" }`. Everything else is the Angular build (`dist/wallet/browser`),
+unavailable" }`. The connections to the validators stay open between
+calls: the proxy closes one that sat unused for 10 seconds and keeps at
+most 32 unused ones per validator (`validatorIdleMs` and
+`validatorIdleConnections` in `server/config.js`), while the masterpod,
+the keyholders and the signing server get a new connection for every
+call. Everything else is the Angular build (`dist/wallet/browser`),
 with `index.html` for the router's deep links. Variables, each with a
 local default (`server/config.js`): `PORT` 4300, `MASTERPOD_URL`,
 `VALIDATOR_URLS`, `KEYHOLDER_URLS`, `SIGNING_SERVER_URL`, `SHARE_THRESHOLD`

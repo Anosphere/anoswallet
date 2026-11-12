@@ -1,5 +1,7 @@
 import express from 'express';
 import { existsSync } from 'node:fs';
+import http from 'node:http';
+import https from 'node:https';
 import { resolve } from 'node:path';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 
@@ -16,6 +18,19 @@ import { createProxyMiddleware } from 'http-proxy-middleware';
  * Every proxy is mounted at the root with a pathFilter, so it sees the full
  * path (an app.use('/prefix') mount would strip the prefix before the
  * rewrite ran).
+ *
+ * The connections to the validators stay open (2026-11-11, wallet spec 2).
+ * A call to a validator goes to its doorman on a connection that is open
+ * and waiting when there is one, so it does not open a connection and set
+ * up the encryption again. The proxy closes a connection that sat unused
+ * for config.validatorIdleMs, 10 seconds, before the doorman closes it
+ * after its own 15, and keeps at most config.validatorIdleConnections, 32,
+ * unused ones per validator. For this one header does not go through as
+ * received: Connection, on a call to a validator, is set to keep-alive.
+ * nginx in front of this proxy sends "Connection: close" with every call,
+ * and passed on it would tell the doorman to close after its answer. The
+ * masterpod, the keyholders and the signing server get a new connection
+ * for every call.
  */
 
 /** 502 { error: "<who> unavailable" } when a backend does not answer. */
@@ -36,8 +51,21 @@ function unavailable(who) {
  * target's, so the masterpod's certificate for api.anocloud.com and the
  * doormen's certificates for their addresses verify; the browser's Origin
  * header is forwarded as received.
+ *
+ * `agent`, when given (the validators), is the agent the calls go out
+ * through, one of the two createApp makes. It keeps a connection open after
+ * a call, for the next call to the same address; it closes a connection
+ * that sat unused for config.validatorIdleMs, and gives a new one that long
+ * to open; it keeps at most config.validatorIdleConnections unused ones per
+ * address. With it the outgoing Connection header is set to keep-alive.
+ * http-proxy copies the incoming headers onto the outgoing call, and nginx
+ * in front of this proxy sends "Connection: close" with every call, so the
+ * agent alone would keep nothing open: the far end would still be told to
+ * close after its answer. Without an agent (the masterpod, the keyholders,
+ * the signing server) http-proxy opens a new connection for every call and
+ * sends "Connection: close".
  */
-function forward(config, target, who, prefix, replacement = '', method = null) {
+function forward(config, target, who, prefix, replacement = '', method = null, agent = null) {
   return createProxyMiddleware({
     target,
     changeOrigin: true,
@@ -46,6 +74,7 @@ function forward(config, target, who, prefix, replacement = '', method = null) {
     pathFilter: (path, req) => prefix.test(path) && (method === null || req.method === method),
     pathRewrite: (path) => path.replace(prefix, replacement) || '/',
     on: { error: unavailable(who) },
+    ...(agent === null ? {} : { agent, headers: { connection: 'keep-alive' } }),
   });
 }
 
@@ -85,9 +114,17 @@ export function createApp(config) {
     res.json({ status: 'ok' });
   });
 
+  // The validators' two agents (the comment of forward), one for http
+  // addresses and one for https addresses, made once and shared by every
+  // call of this process.
+  const kept = { keepAlive: true, timeout: config.validatorIdleMs, maxFreeSockets: config.validatorIdleConnections };
+  const httpAgent = new http.Agent(kept);
+  const httpsAgent = new https.Agent(kept);
+
   app.use(forward(config, config.masterpodUrl, 'masterpod', /^\/api\/masterpod(?=\/|$)/));
   config.validatorUrls.forEach((target, i) => {
-    app.use(forward(config, target, `validator ${i + 1}`, new RegExp(`^/api/anos/${i + 1}(?=/|$)`)));
+    const agent = target.startsWith('https:') ? httpsAgent : httpAgent;
+    app.use(forward(config, target, `validator ${i + 1}`, new RegExp(`^/api/anos/${i + 1}(?=/|$)`), '', null, agent));
   });
   app.use(unknownNumber('anos', 'validator', config.validatorUrls.length));
   config.keyholderUrls.forEach((target, i) => {

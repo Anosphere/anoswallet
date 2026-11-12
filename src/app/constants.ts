@@ -32,7 +32,7 @@ export const CASES_POLL_MS = 15_000;
 /** How long one keyholder has to answer a deposit call, the receiving-key fetch or the share (wallet spec 6), and since 2026-11-08 the owner lookup of a locked-out person (12.3): a stopped VM otherwise holds the deposit for the proxy's two minutes. */
 export const KEYHOLDER_DEPOSIT_TIMEOUT_MS = 15_000;
 
-/** How long a validator has to answer a read (wallet spec 8.3; decision 7 of forclaude/wallet-round-robin-plan-1.md): past it the read counts as not answered and is asked again on the next validator. Without a limit a validator whose machine cannot be reached would hold a page for the proxy's two minutes before the wallet moves on. A submission has no limit. */
+/** How long a validator has to answer a read (wallet spec 8.3; decision 7 of forclaude/wallet-round-robin-plan-1.md): past it the read counts as not answered and is asked again on the next validator. Without a limit a read could be held for the proxy's two minutes before the wallet moves on. Since 2026-11-11 the proxy itself answers 502 after 10 seconds for a validator whose machine cannot be reached (validatorIdleMs in server/config.js); a call that is under way still has the two minutes. A submission has no limit. */
 export const VALIDATOR_READ_TIMEOUT_MS = 10_000;
 
 /** The username check while typing. */
