@@ -267,7 +267,7 @@ export class RecoverCasePage {
     return [...counts.values()].filter((count) => count >= threshold).length;
   });
 
-  /** How many account keys to wait for (2026-11-12): the pod's anosAccounts, every anos account the anoPod has on the masterpod; undefined when the masterpod sent none, one of before. */
+  /** How many account keys to wait for (2026-11-12): the pod's anosAccounts, the anos accounts the anoPod made up to the opening of the case, so the new accounts that Move your money makes are not in it; undefined when the masterpod sent none, one of before. */
   protected readonly accountKeysExpected = computed(() => this.recovery.pod()?.anosAccounts);
 
   /** The finish shows once enough backup code shares are in and the case takes it, and stays once it has started here. */

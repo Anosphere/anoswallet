@@ -889,7 +889,7 @@ export const en = {
   },
   recover: {
     lockedOutText:
-      "If you lost the device with your passkey, we can get you back in. You'll need your birth record and an email where a moderator can reach you. A moderator will meet you on a video call and check your security buckets before anything is released.",
+      "If you lost the device with your passkey, we can get you back in. You'll need your birth record, and an email and a phone number where a moderator can reach you. A moderator will meet you on a video call and check your security buckets before anything is released.",
     continueTitle: 'Continue a recovery',
     continueText: 'Already opened a case on this device? Unlock it with the passkey you made then.',
     unlocking: 'Unlocking your case…',
@@ -905,7 +905,7 @@ export const en = {
     notFound: 'No account was set up with this birth record. Check each field against your birth certificate and try again.',
     keyholdersUnreachable: 'The keyholders could not be reached. Try again in a moment.',
     stepWho: 'Your account',
-    contactText: 'Give an email address, a phone number, or both. A moderator uses them to reach you.',
+    contactText: 'Give an email address and a phone number. Both are needed. A moderator will text you first, and will email you if a text is not possible.',
     contactEmail: 'Contact email',
     emailHint: 'Where a moderator can reach you. Nothing is sent by itself.',
     contactPhone: 'Phone number',

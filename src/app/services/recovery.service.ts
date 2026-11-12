@@ -31,7 +31,7 @@ export interface RecoveryPodAnswer {
   /** The contact phone (2026-11-12; masterpod 18). A masterpod of before sends none. */
   contactPhone?: string | null;
   lookupId: string;
-  /** How many anos accounts the recovered pod has, in every status of the case (2026-11-12; masterpod 18): how many account keys My recovery waits for. A masterpod of before sends none. */
+  /** How many anos accounts the recovered pod made up to the opening of the case, in every status of the case (2026-11-12; masterpod 18): how many account keys My recovery waits for. A masterpod of before sends none. */
   anosAccounts?: number;
   hybridKey: HybridPublicKey;
   hybridKeyBlob: string;

@@ -37,20 +37,21 @@ function isContactPhone(value: string): boolean {
  * (/challenge openCase with the anoPod id; this challenge is never used
  * and expires), then drops the answers. A miss keeps the answers in the
  * form so one field can be fixed and Next pressed again. 2. Your account:
- * "We found your account: <username>", then a contact email, a contact
- * phone or both (2026-11-12, wallet case chats plan 1; until then the
- * email alone): Next works once at least one of the two boxes is filled
- * in and every box that is filled in is valid as the masterpod takes it.
+ * "We found your account: <username>", then a contact email and a contact
+ * phone, both required (2026-11-12: a moderator texts first, and the email
+ * is there when a text is not possible; as wallet case chats plan 1 had it
+ * that same day one of the two was enough, and before that there was the
+ * email alone): Next works once both boxes are filled in and both are
+ * valid as the masterpod takes them.
  * 3. Open my case: /challenge (openCase, the anoPod id) gives a fresh
  * challenge and the username again; the passkey registration with the PRF
  * extension, the anoPod id as user handle and the username as its name;
  * the PRF output from the registration or, when it returned none, one
  * local assertion with a random challenge; KEK_prf; the recovery hybrid
  * pair and hybridKeyBlob; the ephemeral keys; /open-recovery-case, the
- * payload without a username, with contactEmail only when an email is
- * given and contactPhone only when a phone is given, both trimmed. On 201
- * the recovery session is open, both contacts are kept in RecoveryService
- * (null for the one not given) and the page goes to /recover/case.
+ * payload without a username, with contactEmail and contactPhone, both
+ * trimmed. On 201 the recovery session is open, both contacts are kept in
+ * RecoveryService and the page goes to /recover/case.
  */
 @Component({
   selector: 'app-recover-open-page',
@@ -151,12 +152,8 @@ export class RecoverOpenPage {
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
 
-  /** Step 2 is done when at least one of the two boxes is filled in and every box that is filled in is valid. */
-  protected readonly whoDone = computed(() => {
-    const email = this.email().trim();
-    const phone = this.phone().trim();
-    return (email !== '' || phone !== '') && (email === '' || isContactEmail(email)) && (phone === '' || isContactPhone(phone));
-  });
+  /** Step 2 is done when both boxes are filled in and both are valid (2026-11-12; until then one of the two was enough). An empty box is not valid. */
+  protected readonly whoDone = computed(() => isContactEmail(this.email().trim()) && isContactPhone(this.phone().trim()));
 
   constructor() {
     inject(DestroyRef).onDestroy(() => this.form.reset());
@@ -234,9 +231,9 @@ export class RecoverOpenPage {
         anopodId: challenge.body.anopodId,
         challenge: challenge.body.challenge,
         lookupId,
-        // Each contact only when it is given: the masterpod takes an absent one, and an empty one is refused as not valid.
-        ...(contactEmail !== '' ? { contactEmail } : {}),
-        ...(contactPhone !== '' ? { contactPhone } : {}),
+        // Both contacts, always: the masterpod refuses a case that lacks one of them.
+        contactEmail,
+        contactPhone,
         passkey: registration.passkey,
         hybridKey: this.crypto.hybridPublicKeyOf(hybrid),
         hybridKeyBlob: this.crypto.toHex(hybridKeyBlob),
