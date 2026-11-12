@@ -2490,8 +2490,12 @@ caller to encrypt or send. Since 2026-11-08 (section 11) a chosen file
 whose longer side exceeds the quality's width (1280 normal, 1920 high) is
 scaled so that side is the width, the aspect kept, and encoded as JPEG at
 the quality's factor (0.92, 0.95), the size and quality a photo from the
-live camera has, before anything else is done with it; a smaller or
-undecodable file passes unchanged.
+live camera has, before anything else is done with it. Since 2026-11-12
+(section 11) a smaller file is redrawn too, at its own size, as a JPEG at
+the same factor, so every chosen file goes out as its pixels and nothing
+else, with the type `image/jpeg`; a file the browser cannot read as a
+picture is refused with a line under the file input, and nothing is
+emitted.
 
 ### 8.5 The copy button
 
@@ -8105,6 +8109,105 @@ For both:
   money, where the Delivering line keeps its second number through the
   finish and the finish comes back after a reload.
 
+### Pictures: always redrawn, no PDFs, the wallet's own list of types (2026-11-12)
+
+No plan file: asked for and decided in chat on 2026-11-12, after a look
+at how a file that only pretends to be a picture could reach a server or
+a phone. Three changes here; the masterpod's two of the same day (no PDFs
+as evidence, the selfie check) are in the masterpod spec, section 11.
+
+- A new file, `src/app/images.ts`, with three things.
+  `IMAGE_CONTENT_TYPES`: `image/jpeg`, `image/png`, `image/webp`, the
+  wallet's own list. `imageObjectUrl(bytes, contentType)`: an object URL
+  for the bytes, or null when the type is not on the list.
+  `redrawImage(file, limit, jpeg)`: the file decoded with
+  `createImageBitmap(file, { imageOrientation: 'from-image' })`, drawn
+  onto a canvas filled white, the longer side scaled down to `limit` when
+  it is longer and never scaled up, encoded with
+  `toBlob('image/jpeg', jpeg)`; null when the browser cannot decode the
+  file, when the canvas gives no context, or when `toBlob` answers null.
+  The bitmap is closed and the canvas set to 0 by 0 in a `finally`, which
+  hands its memory back at once.
+- Why the wallet keeps its own list. A decrypted file was turned into an
+  object URL with the type the masterpod named, and shown with a link
+  that opens it in a new tab. A Blob opens as what its type says, and the
+  page it opens as has the wallet's own address: bytes named `text/html`
+  ran there as a page of the wallet (seen here, under Checked). The
+  masterpod and its database let in only the listed types, so this
+  needed a masterpod that was broken into; the wallet no longer leans on
+  that. The five places: `openFiles` in `pages/my-case.page.ts`,
+  `openRow` in `pages/attesting-dispute-case.page.ts`, and `openRows` in
+  `pages/moderation-case.page.ts`, `pages/attesting-recovery-case.page.ts`
+  and `pages/attesting-trade-case.page.ts`. A file of another type: on
+  the two case pages it gets no URL, so the lock shows, with the type in
+  the line under it; in the three bucket views it is left out, and not
+  counted as "under other keys".
+- Left as they are: the nine places that show a selfie as
+  `data:<contentType>;base64,...` in an `<img>` (the avatar component,
+  `attesting.page.ts` and seven templates). An `<img>` runs nothing,
+  whatever the type says, and a `data:` URL is not opened in a tab.
+- The camera component (8.4): `fileChosen` calls `redrawImage` with the
+  quality's width and factor for every chosen file. Its own `shrink` is
+  gone. Before, a file no larger than the limit, and a file the browser
+  could not decode, went out unchanged with the file's own type; now the
+  first is redrawn at its own size and the second is refused: a new
+  signal `fileError` holds `camera.unreadable`, shown as a line under the
+  file input, and nothing is emitted, so a photo taken before stays.
+  `emit` clears the line. `takePhoto` is unchanged. Every photo the
+  component emits is now `image/jpeg`.
+- My case (13.3): the picker's `accept` and `CONTENT_TYPES` lost
+  `application/pdf`. `upload` redraws each file with
+  `redrawImage(file, 4096, 0.92)` (`EVIDENCE_SIDE`, `EVIDENCE_JPEG`),
+  sends it as `image/jpeg`, and checks the 10 MB limit on the redrawn
+  picture. 4096 is the largest canvas every phone's browser draws, so a
+  picture keeps its size up to there; a very tall scroll screenshot gets
+  smaller. A file the browser cannot read stops the upload with
+  `myCase.unreadable` before anything is posted. The PDF link, the
+  `isPdf` field and the `.pdf` style left this page and the attestor's
+  dispute page.
+- Words, `en.ts` and `th.ts`: `camera.unreadable` and
+  `myCase.unreadable` are new; `myCase.evidenceText` and `myCase.badType`
+  lost the PDF. The Thai is unchecked.
+- What the redraw is for: what goes out is pixels only, so whatever else
+  a file carried stays behind, the place a photo was taken for one, and
+  an honest person does not pass on a bad file somebody sent them. It
+  does not stop someone who skips the wallet and posts to the masterpod
+  directly; for the selfie the masterpod checks that itself, and the
+  encrypted pictures it cannot check.
+- Comments brought in line on the user's word ("Yes, update them"): the
+  camera's class comment and `fileChosen`'s, and in `my-case.page.ts` the
+  comment of `CONTENT_TYPES`, the class comment and `upload`'s.
+- Spec: 8.4, 13.3 (the attestor's dispute page and My case) and this
+  note. The dated notes of earlier builds that name the PDF link and the
+  small file that went out unchanged stay as the record of those builds.
+  No constant in `constants.ts`, no proxy change, no package. The README
+  names none of this and did not change.
+- Deploying: no order with the masterpod. A wallet of before that sends
+  a PDF to a masterpod with the change gets `400 invalid contentType`;
+  this wallet sends JPEGs, which a masterpod of before takes.
+- Checked. `npx ng build` into a scratch folder: clean, no warnings
+  (2.17 MB initial total, `main-OS5S5P4L.js`, `styles-EMD3RG3N.css`).
+  Then in a development build served from a scratch folder, in the
+  Browser pane, with a made-up session and the page's three masterpod
+  calls answered in the browser: no server, no passkey. On the create
+  page, through the real file input: a see-through PNG of 300 by 200
+  went out as a JPEG of the same size on white; a JPEG of 3000 by 2000
+  as 1280 by 853; a small JPEG with a note in its header and bytes after
+  its end went out without either; a web page named `photo.jpg` was not
+  emitted, the line showed, and a photo held before stayed. On My case:
+  a PNG screenshot of 1290 by 2796, a JPEG of 6000 by 4500 and the small
+  JPEG were posted as `image/jpeg`, 1290 by 2796, 4096 by 3072 and 200 by
+  100, and the attestors' copy opened to the same bytes; a web page named
+  `.jpg` beside a good file posted nothing; a PDF was refused with the
+  words of `badType`. Rows the stand-in masterpod named `text/html` and
+  `application/pdf` showed the lock and no link. The same bytes in a Blob
+  of type `text/html`, as the page built it before, ran their script
+  under the wallet's address; under a picture type they opened as a
+  picture and ran nothing. Not seen on a phone and not run against a
+  masterpod; the attestor's dispute page and the three bucket views were
+  built and not opened. The pane blocks the camera, so the live camera
+  was not tried; `takePhoto` did not change.
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`
@@ -8952,9 +9055,12 @@ refreshed by a button and every 15 s. Top to bottom:
 - Evidence: two columns, the seller's and the buyer's. Each file opened
   with the case key (`decryptFromHybrid` on `keyForCase` with the case
   id as aad, then the file under the content key): images shown inline,
-  full size in a new tab on click, PDFs as a link that opens in a new tab;
-  who uploaded it and when. Without the key, the files are counted, not
-  shown. After the decision, "the attestors' copies were deleted".
+  full size in a new tab on click; who uploaded it and when. Since
+  2026-11-12 (section 11) evidence is pictures only, and a file whose
+  type is not one of the wallet's own three (`image/jpeg`, `image/png`,
+  `image/webp`) is not opened: it shows a lock, with its type in the line
+  under it. Without the key, the files are counted, not shown. After the
+  decision, "the attestors' copies were deleted".
 - Schedule, as the trade case.
 - Verdict: Success or Cancel, a note, Sign. The `escrowVerdict` follow-up
   built as the account page does (`arbitratorId` the staked account),
@@ -9056,9 +9162,12 @@ id: one button, disabled once shared, which opens the identity blob in
 session (`SessionService.getIdentity`) and runs `/share-lookup-id`;
 "Nothing but the lookup id leaves this device". For a
 dispute: the same frame with "Attestors are looking at this escrow", your
-side (seller or buyer), and Evidence: a file input (images and PDFs,
-several at once) with Upload, which for each file makes a content key,
-encrypts the file under it, wraps the key under the pod's encryption key
+side (seller or buyer), and Evidence: a file input (pictures, JPEG, PNG
+or WebP, several at once; no PDFs since 2026-11-12, section 11) with
+Upload, which redraws each file as a fresh JPEG (since 2026-11-12; a file
+the browser cannot read as a picture stops the upload), makes a content
+key for it, encrypts the picture under it, wraps the key under the pod's
+encryption key
 (`keyForMe`) and to the case key (`keyForCase`, aad the case id), and runs
 `/add-dispute-evidence`; the list of your files, each opened with
 `keyForMe` and shown as on the attestor's page; and Supply again, offered
