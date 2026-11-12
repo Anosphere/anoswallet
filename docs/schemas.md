@@ -63,9 +63,9 @@ on this machine).
     DEFAULT_VALIDATOR   1                                                    until 2026-11-10 the validator the wallet posted to; it no longer picks the validator (below)
     DIST_DIR            dist/wallet/browser                                  the Angular build it serves
     RP_ID               localhost                                            the relying-party id the browser uses in both ceremonies; the masterpod's RP_ID
-    GUARDED_LOCK_MINUTES  1    the validators' time lock on a guarded account, in minutes (10 on the testnet; a week in production)
-    VAULT_LOCK_MINUTES    2    the same on a vault account (20 on the testnet; a month)
-    LOCK_OFFSET_MINUTES   1    how much more than its lock a guarded or vault transfer may be dated ahead (5 on the testnet; 10)
+    GUARDED_LOCK_MINUTES  1    the validators' time lock on a guarded account, in minutes (a week, 10080, on the network since 2026-11-12; 10 on the testnet before that)
+    VAULT_LOCK_MINUTES    2    the same on a vault account (30 days, 43200; 20 before)
+    LOCK_OFFSET_MINUTES   1    how much more than its lock a guarded or vault transfer may be dated ahead (10; 5 before)
 
 The three lock numbers are the validators' (anossoftware's
 network/testnet.env); the wallet dates a guarded or vault transfer the
