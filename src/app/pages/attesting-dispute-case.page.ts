@@ -150,6 +150,7 @@ function accepted(result: SentResult): boolean {
               </div>
             }
           </div>
+          <p class="muted">{{ t().disputeCase.marketChatHint }}</p>
           <p class="muted">{{ t().common.statusOpened(t().caseStatus[d.case.status] ?? d.case.status, lang.dateTime(d.case.createdAt)) }}</p>
 
           <h3>{{ t().disputeCase.theEscrow }}</h3>

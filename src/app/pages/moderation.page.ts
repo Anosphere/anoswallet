@@ -12,6 +12,7 @@ import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
 import { MasterpodApiService, RecoveryCaseItem } from '../services/masterpod-api.service';
 import { CaseStatus } from '../services/recovery.service';
+import { WorkBadgeService, openCaseIds } from '../services/work-badge.service';
 
 /** The six statuses of a case (masterpod 12.5), the four in-progress ones first; the filter starts with those four. */
 export const CASE_STATUSES: CaseStatus[] = ['open', 'inReview', 'approved', 'delivering', 'completed', 'dismissed'];
@@ -94,6 +95,7 @@ export function moderationError(res: ApiResponse<unknown>, path: string, words: 
 })
 export class ModerationPage {
   private readonly api = inject(MasterpodApiService);
+  private readonly workBadge = inject(WorkBadgeService);
   protected readonly lang = inject(LanguageService);
   protected readonly t = this.lang.words;
 
@@ -118,8 +120,11 @@ export class ModerationPage {
     this.error.set(null);
     try {
       const res = await this.api.listRecoveryCases(this.statuses());
-      if (res.ok) this.cases.set(res.body.cases);
-      else this.error.set(moderationError(res, '/list-recovery-cases', this.t()));
+      if (res.ok) {
+        this.cases.set(res.body.cases);
+        // A good read: the cases read that are open or in review are what the menu's number counts, and this device has seen them all now (wallet spec 8.1, 2026-11-12).
+        this.workBadge.seeModeration(openCaseIds(res.body.cases));
+      } else this.error.set(moderationError(res, '/list-recovery-cases', this.t()));
     } finally {
       this.busy.set(false);
     }

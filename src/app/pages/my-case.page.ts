@@ -165,6 +165,9 @@ interface Outcome {
 
           <h3>{{ t().caseChat.title }}</h3>
           <app-case-chat-list [caseId]="caseId()" />
+          @if (d.kind === 'dispute') {
+            <p class="muted">{{ t().myCase.marketChatHint }}</p>
+          }
 
           <h3>{{ t().common.timeline }}</h3>
           @if (timeline().length === 0) {

@@ -42,7 +42,10 @@ const DAY_MS = 86_400_000;
  * refresh of the room list into the session. Since 2026-11-12 also the
  * chats about an attestor case, for the case pages (wallet spec 13.3): the
  * attestor's room with a person, the person's rooms and invites, Start
- * chat and Invite again.
+ * chat and Invite again. And, for the attestor in a marketplace chat
+ * (wallet spec 8.2, Chat; 2026-11-12): whether this pod is one of the two
+ * traders of such a chat, the other trader, and the attestors who have a
+ * chat with this pod about a case.
  */
 @Injectable({ providedIn: 'root' })
 export class ChatService {
@@ -149,6 +152,24 @@ export class ChatService {
     return this.otherMembers(room)[0] ?? room.invited[0] ?? null;
   }
 
+  /**
+   * Whether this pod is one of the two traders of a marketplace chat
+   * (2026-11-12): a private room about a listing, and this pod is the
+   * room's creator, the person who pressed Connect, or the listing's owner.
+   * Anyone else in such a room is a guest, as an attestor invited into it is.
+   */
+  isTrader(room: RoomItem): boolean {
+    const me = this.session.anopodId();
+    return room.type === 'private' && !!room.listing && (room.creatorAnopodId === me || room.listing.owner.anopodId === me);
+  }
+
+  /** For a trader of a marketplace chat (isTrader), the other of the two, the creator or the listing's owner, found among the room's members and its invited; null when that person is in neither, and for every other room. */
+  otherTrader(room: RoomItem): RoomMember | null {
+    if (!this.isTrader(room) || !room.listing) return null;
+    const other = room.creatorAnopodId === this.session.anopodId() ? room.listing.owner.anopodId : room.creatorAnopodId;
+    return room.members.find((m) => m.anopodId === other) ?? room.invited.find((m) => m.anopodId === other) ?? null;
+  }
+
   /** The icon of a room that is not a direct chat. */
   icon(room: RoomItem): string {
     const kind = this.kind(room);
@@ -217,6 +238,24 @@ export class ChatService {
   /** The person's side: the invites to this pod into a room about this case. */
   caseInvitesOf(caseId: string): InviteItem[] {
     return (this.session.chatRooms()?.invites ?? []).filter((i) => i.caseId === caseId);
+  }
+
+  /**
+   * The person's side: the attestors who have a chat with this pod about
+   * this case (2026-11-12), for the invite into the marketplace chat of a
+   * disputed trade. From this pod's rooms about the case that another pod
+   * created, that creator as the room lists its members (id and username),
+   * each once: only an attestor makes a room about a case.
+   */
+  caseAttestors(caseId: string): RoomMember[] {
+    const me = this.session.anopodId();
+    const attestors = new Map<string, RoomMember>();
+    for (const room of this.caseRoomsOf(caseId)) {
+      if (room.creatorAnopodId === me) continue;
+      const creator = room.members.find((m) => m.anopodId === room.creatorAnopodId);
+      if (creator && !attestors.has(creator.anopodId)) attestors.set(creator.anopodId, creator);
+    }
+    return [...attestors.values()];
   }
 
   /**

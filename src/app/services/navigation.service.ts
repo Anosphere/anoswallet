@@ -2,8 +2,9 @@ import { Injectable, computed, inject } from '@angular/core';
 import { ConfigService } from './config.service';
 import { LanguageService } from './language.service';
 import { SessionService } from './session.service';
+import { WorkBadgeService } from './work-badge.service';
 
-/** One entry of the side navigation and one Home tile; `badge` is a count drawn at its right (Chat: the unread rooms; Notifications: the unread notifications; wallet spec 8.2). */
+/** One entry of the side navigation and one Home tile; `badge` is a count drawn at its right (Chat: the unread rooms; Notifications: the unread notifications; wallet spec 8.2; since 2026-11-12 Moderation and Attesting too: the things on the page that this device has not seen yet, from work-badge.service.ts; wallet spec 8.1). */
 export interface NavItem {
   path: string;
   label: string;
@@ -27,6 +28,7 @@ export class NavigationService {
   private readonly session = inject(SessionService);
   private readonly config = inject(ConfigService);
   private readonly lang = inject(LanguageService);
+  private readonly workBadge = inject(WorkBadgeService);
 
   readonly items = computed<NavItem[]>(() => {
     const nav = this.lang.words().nav;
@@ -47,8 +49,8 @@ export class NavigationService {
         { path: '/account', label: nav.account, icon: 'manage_accounts' },
       );
     }
-    if (this.config.moderatorEdition()) items.push({ path: '/moderation', label: nav.moderation, icon: 'gavel' });
-    if (this.config.attestorEdition()) items.push({ path: '/attesting', label: nav.attesting, icon: 'fact_check' });
+    if (this.config.moderatorEdition()) items.push({ path: '/moderation', label: nav.moderation, icon: 'gavel', badge: this.workBadge.moderationCount() });
+    if (this.config.attestorEdition()) items.push({ path: '/attesting', label: nav.attesting, icon: 'fact_check', badge: this.workBadge.attestingCount() });
     items.push({ path: '/notifications', label: nav.notifications, icon: 'notifications', badge: this.session.unread().length });
     if (status?.isSeed || status?.isSuperSeed) items.push({ path: '/seed', label: nav.vouchRequests, icon: 'verified_user' });
     items.push({ path: '/log', label: nav.log, icon: 'receipt_long' });

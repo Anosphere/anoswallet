@@ -15,8 +15,9 @@ import { ChatService, Piece, piecesOf } from '../services/chat.service';
 import { CryptoService } from '../services/crypto.service';
 import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
-import { MasterpodApiService, MessageItem, Profile, RoomItem } from '../services/masterpod-api.service';
+import { MasterpodApiService, MessageItem, Profile, RoomItem, RoomMember } from '../services/masterpod-api.service';
 import { SessionService } from '../services/session.service';
+import { REVIEW_STATUSES } from './attesting.page';
 
 /** A decrypted message of the room, split into its pieces; `pending` while this pod's own message is on its way. */
 interface ShownMessage {
@@ -52,8 +53,10 @@ const FOLLOW_PX = 120;
  * One conversation (wallet spec 8.2, Chat), at /chat/:chatRoomId inside the
  * chat page's pane: a header with the back arrow (on a phone), the avatar
  * or icon, the title, the members and a menu (Invite someone for the
- * creator of a private or public room, Members, Leave for a member who is
- * not the creator); the thread, opened at the room's newest MESSAGES_PAGE
+ * creator of a private or public room, Invite an attestor for the two
+ * traders of a marketplace chat while its trade is in dispute and an
+ * attestor has a case open on it, Members, Leave for a member who is not
+ * the creator); the thread, opened at the room's newest MESSAGES_PAGE
  * messages with Load older messages on top while a page came back full,
  * polled every 3 seconds after the newest shown position, the messages
  * grouped by sender and five minutes with a day line between days; the
@@ -62,9 +65,14 @@ const FOLLOW_PX = 120;
  * marked "Sending" and gets its tick from the answer. Room keys come from
  * ChatService; an account id in a message shows in code font with a copy
  * button (8.5). The room is marked seen when it opens and when new
- * messages show. A private room about a listing shows the pinned listing
- * card (8.7) between the header and the thread, fed with the account ids
- * found in the messages (2026-11-06).
+ * messages show. A private room about a listing shows its two traders the
+ * pinned listing card (8.7) between the header and the thread, fed with
+ * the account ids found in the messages (2026-11-06); anyone else in such
+ * a room is a guest and gets no card (2026-11-12). The card tells the page
+ * the open dispute case of the chat's trade, and with one the menu has
+ * Invite an attestor: a panel with the attestors on that case, each with
+ * Invite, which brings the attestor into the chat, where they read
+ * everything (2026-11-12).
  */
 @Component({
   selector: 'app-chat-room-page',
@@ -87,6 +95,9 @@ const FOLLOW_PX = 120;
           @if (canInvite()) {
             <button mat-menu-item type="button" (click)="showInvite.set(!showInvite())"><mat-icon>person_add</mat-icon><span>{{ t().chatRoom.inviteSomeone }}</span></button>
           }
+          @if (chat.isTrader(room) && disputeCaseId() !== null) {
+            <button mat-menu-item type="button" (click)="toggleAttestors()" [disabled]="busy()"><mat-icon>fact_check</mat-icon><span>{{ t().chatRoom.inviteAttestor }}</span></button>
+          }
           <button mat-menu-item type="button" (click)="showMembers.set(!showMembers())"><mat-icon>group</mat-icon><span>{{ t().chatRoom.members }}</span></button>
           @if (!isCreator()) {
             <button mat-menu-item type="button" (click)="leave()" [disabled]="busy()"><mat-icon>logout</mat-icon><span>{{ t().chatRoom.leave }}</span></button>
@@ -106,6 +117,19 @@ const FOLLOW_PX = 120;
           }
         </div>
       }
+      @if (showAttestors()) {
+        <div class="panel members">
+          <span class="muted">{{ t().chatRoom.attestorReads }}</span>
+          @for (attestor of attestors(); track attestor.anopodId) {
+            <span class="member">
+              <app-avatar [anopodId]="attestor.anopodId" [username]="attestor.username" /> {{ attestor.username }}
+              <button mat-flat-button type="button" (click)="inviteAttestor(attestor)" [disabled]="busy()">{{ t().chatRoom.invite }}</button>
+            </span>
+          } @empty {
+            <span class="muted">{{ t().chatRoom.attestorsIn }}</span>
+          }
+        </div>
+      }
       @if (showMembers()) {
         <div class="panel members">
           @for (m of room.members; track m.anopodId) {
@@ -116,8 +140,8 @@ const FOLLOW_PX = 120;
           }
         </div>
       }
-      @if (room.type === 'private' && room.listing) {
-        <app-pinned-listing [room]="room" [accountIds]="accountIds()" />
+      @if (chat.isTrader(room)) {
+        <app-pinned-listing [room]="room" [accountIds]="accountIds()" (disputeCase)="setDisputeCase($event)" />
       }
       <div class="thread" #threadBox>
         @if (canLoadOlder()) {
@@ -255,6 +279,24 @@ export class ChatRoomPage {
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
 
+  /** The open dispute case of the chat's trade, as the pinned card tells it (2026-11-12): null when the chat's trade is not in dispute or no attestor has a case open on it, and emptied when the room changes. "Invite an attestor" shows only with one. */
+  protected readonly disputeCaseId = signal<string | null>(null);
+  protected readonly showAttestors = signal(false);
+  /** The attestors the masterpod names on the dispute case (the dispute's `attestors` of /list-my-cases), as read when the attestors panel was last opened. */
+  private readonly namedAttestors = signal<RoomMember[]>([]);
+  /** The attestors on the dispute case who can be invited: the ones the masterpod names and, with them, the ones who have a chat with this pod about the case, each once, without those who are a member of this room or invited to it. */
+  protected readonly attestors = computed<RoomMember[]>(() => {
+    const room = this.room();
+    const caseId = this.disputeCaseId();
+    if (!room || caseId === null) return [];
+    const here = new Set([...room.members, ...room.invited].map((m) => m.anopodId));
+    const found = new Map<string, RoomMember>();
+    for (const attestor of [...this.namedAttestors(), ...this.chat.caseAttestors(caseId)]) {
+      if (!here.has(attestor.anopodId) && !found.has(attestor.anopodId)) found.set(attestor.anopodId, attestor);
+    }
+    return [...found.values()];
+  });
+
   /** The messages as the thread draws them: a day line before each day, the messages of one sender within GROUP_MINUTES in one group. */
   protected readonly thread = computed<ThreadItem[]>(() => {
     const room = this.room();
@@ -345,6 +387,7 @@ export class ChatRoomPage {
     this.showInvite.set(false);
     this.showMembers.set(false);
     this.inviteTarget.set(null);
+    this.setDisputeCase(null);
     this.error.set(null);
     const res = await this.api.listMessages(room.chatRoomId, { beforePosition: room.lastPosition + 1, limit: MESSAGES_PAGE });
     if (this.openedFor !== room.chatRoomId) return;
@@ -493,6 +536,54 @@ export class ChatRoomPage {
         this.showInvite.set(false);
         await this.chat.refreshRooms();
       }
+      return res;
+    });
+  }
+
+  /** The pinned card tells the open dispute case of the chat's trade, or null for none (2026-11-12); without one "Invite an attestor" goes, and its panel closes with it. */
+  protected setDisputeCase(caseId: string | null): void {
+    this.disputeCaseId.set(caseId);
+    if (caseId === null) this.showAttestors.set(false);
+  }
+
+  /**
+   * "Invite an attestor" (wallet spec 8.2, Chat; 2026-11-12), for both
+   * traders of a marketplace chat while its trade is in dispute and an
+   * attestor has a case open on it. A click while the panel shows closes
+   * it. Opening it reads /list-my-cases, quiet, and takes the dispute with
+   * the card's case id: when that case is no longer open or in review, the
+   * case id is emptied and the entry goes; otherwise the attestors the
+   * masterpod names on the case are kept and the panel shows them. A
+   * masterpod of before names none, which reads as an empty list.
+   */
+  protected toggleAttestors(): Promise<void> {
+    if (this.showAttestors()) {
+      this.showAttestors.set(false);
+      return Promise.resolve();
+    }
+    return this.run(async () => {
+      const caseId = this.disputeCaseId();
+      const res = await this.api.listMyCases(true);
+      if (!res.ok || this.disputeCaseId() !== caseId) return res;
+      const dispute = res.body.disputes.find((d) => d.caseId === caseId);
+      if (!dispute || !REVIEW_STATUSES.includes(dispute.status)) {
+        this.setDisputeCase(null);
+        return res;
+      }
+      this.namedAttestors.set(dispute.attestors ?? []);
+      this.showAttestors.set(true);
+      return res;
+    });
+  }
+
+  /** An attestor on the dispute case is invited into this chat, where they read everything: the room's key wrapped to their chat keys, /invite-to-chat-room, and the room list refreshed, so the attestor shows as invited and leaves the panel's list. Either trader may, the one who did not start the chat too (masterpod 18). */
+  protected inviteAttestor(attestor: RoomMember): Promise<void> {
+    return this.run(async () => {
+      const room = this.room();
+      if (!room) throw new Error(this.t().chatRoom.notOpen);
+      const hpkeKey = await this.chat.wrapFor(room.chatRoomId, attestor.anopodId);
+      const res = await this.api.inviteToChatRoom(room.chatRoomId, attestor.anopodId, hpkeKey);
+      await this.chat.refreshRooms();
       return res;
     });
   }

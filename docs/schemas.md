@@ -747,6 +747,20 @@ notifications (2026-11-06); the side panel and the Home tiles draw one
 list, navigation.service (8.3). The toolbar's "anoPod wallet" is a link
 to /home once setup is complete.
 
+Two more entries carry a number since 2026-11-12 (section 11; the plan
+is forclaude/wallet-case-chats-plan-1.md, its decisions 15 and 25): the
+Moderation entry of the moderator edition (12.3) and the Attesting entry
+of the attestor edition (13.3). The number is how many things on that
+page this device has not seen yet, as the Chat entry counts its unread
+rooms. A thing on the Attesting page is a row of its three lists: an
+assisted transfer the validators hold, a disputed escrow the validators
+hold, a recovery case that is open or in review. A thing on the
+Moderation page is a recovery case that is open or in review. The wallet
+reads those lists every 15 seconds, in that edition only, and the number
+clears when the page is opened (work-badge.service, 8.3). It shows at
+the right of the entry in the side panel and on the entry's Home tile,
+since both draw the one list.
+
 The next-step rule, applied after an unlock and after each step
 finishes:
 
@@ -972,7 +986,9 @@ to /dao/guardians; 2026-11-08, section 11); "4 unread notifications" (to
 /notifications), each singular when it is one; then the tiles, one
 square per side-panel entry except Home itself
 and Log, with the entry's icon and label, Chat and Notifications
-carrying their unread counts at the top right, drawn from the same list
+carrying their unread counts at the top right and, since 2026-11-12
+(section 11), Moderation and Attesting the number of things on their
+page that this device has not seen yet (8.1), drawn from the same list
 as the side panel (navigation.service, 8.3). On open /list-anos-accounts
 (quiet) fills the session's accounts, a refusal in red, then the
 balances are read; every 5 seconds while an account is not on the ledger
@@ -1602,9 +1618,13 @@ again." shows without chat keys.
 One conversation, at /chat/:chatRoomId: a header with the avatar or icon,
 the title, the members (the invited marked) and a menu with Invite
 someone (the creator of a private or public room; the username search,
-the person's selfie, Invite), Members (a panel of the members and the
-invited with avatars) and Leave (a member who is not the creator; the
-room key is dropped and the list opens). The thread opens at the room's
+the person's selfie, Invite), Invite an attestor (2026-11-12, section
+11: both traders of a marketplace chat, only while its trade is in
+dispute and an attestor has a case open on it; the paragraph on the
+attestor in a marketplace chat, below), Members (a panel of the members
+and the invited with avatars) and Leave (a member who is not the
+creator; the room key is dropped and the list opens). The thread opens
+at the room's
 newest 50 messages (/list-messages with beforePosition, MESSAGES_PAGE)
 and shows "Load older messages" on top while a page came back full; the
 3-second poll reads after the newest shown position; the thread scrolls
@@ -1628,7 +1648,12 @@ new messages show. "You are not in this chat." for a room that is not in
 the list.
 
 The pinned card (2026-11-06, section 11), in a private room about a
-listing, under the header and its panels and above the thread: the
+listing, under the header and its panels and above the thread, drawn for
+the room's two traders only (2026-11-12, section 11: the person who made
+the room by pressing Connect, and the listing's owner; anyone else in
+the room is a guest and gets no card, and "the other person" in this
+paragraph and the two after it is the other trader, never a guest; 8.7,
+and the paragraph on the attestor in a marketplace chat, below): the
 listing in one line, "Selling 100 anos · 35.50 THB each · 3,550 THB",
 with the other person's avatar (8.6) and Closed when the listing is
 closed; the roles from the listing (the owner of a sell listing and the
@@ -1745,10 +1770,52 @@ that fails is tried again by the next check; two devices of the seller in
 the same chat at the same moment can post it twice. The buyer's card
 never posts about a trade.
 
+The attestor in a marketplace chat (2026-11-12, section 11; the plan is
+forclaude/wallet-case-chats-plan-1.md, its decisions 9, 26 and 27; the
+masterpod's part is its spec's section 18): an attestor on an escrow
+dispute can be brought into the marketplace chat of the trade, and then
+reads everything said there, since a room has one key and a member gets
+every message from the first. Either trader can do it, without the other
+agreeing, with the menu's "Invite an attestor". The entry shows for the
+room's two traders only, and only while the chat's trade is in dispute
+and an attestor has a case open on it: the pinned card finds that case
+(8.7: /list-my-cases, and of its disputes the one on the trade's
+transaction that is open or in review) and tells the page its id. Before
+the dispute, before an attestor opens the case, and once the trade is no
+longer in dispute there is no entry. Opening it reads /list-my-cases
+again, quiet, and takes the dispute with that case id. When that case is
+no longer open or in review the entry goes. Otherwise a panel shows
+under the header, like the invite panel: the muted line "An attestor you
+invite can read this whole chat.", then the attestors on the case, each
+with avatar (8.6), username and Invite. The attestors on the case are
+the ones the masterpod names on the dispute (`attestors`, masterpod
+13.4.5 and 18: every attestor who acted on the case, the one who opened
+it first) and, with them, the attestors who have a chat with this pod
+about the case (chat.service's `caseAttestors`, 8.3), each once, without
+those who are a member of this room or invited to it. So the attestor
+who opened the case is on the list from the start, and no other chat
+with that attestor is needed first. Invite wraps the room's key to the
+attestor's chat keys (`wrapFor`), calls /invite-to-chat-room and
+refreshes the room list; the attestor then shows as invited and leaves
+the list, and with nobody left to invite the panel reads "The attestors
+on this case are already in this chat." A refusal shows in the page's
+error line as the masterpod says it; the masterpod lets a member of a
+listing chat who did not start it invite an appointed attestor and
+nobody else. A second click on the entry closes the panel. The attestor
+gets the request on the Requests page (below) and, once in, is a guest:
+no pinned card, the two traders' card keeps going by the two traders,
+and the attestor's menu has Members and Leave. Nothing takes the
+attestor out when the case closes. "Invite someone" stays as it was, for
+the room's creator.
+
 Requests, at /chat/requests: the invites to this pod (the inviter's
 username, then `invited you to "<the public room's name>"`, `invited you
 to a private chat` or, for a room about one of this pod's listings,
 `wants to chat about your listing Selling 100 anos for THB`; 2026-11-06;
+for a room about someone else's listing, `invited you to the chat about
+the listing Selling 100 anos for THB`, which is what an attestor reads
+whom a trader brings into a marketplace chat; 2026-11-12, section 11,
+step 6;
 for a room about an attestor case, by the case's kind, `is an attestor
 and wants to chat about your assisted transfer`, `is an attestor and
 wants to chat about your escrow dispute` or `is an attestor and wants to
@@ -2330,7 +2397,28 @@ excepted, with the keyholder and anos calls included.
     navigation.service      the one navigation list (2026-11-06): NavItem (path, label, icon, badge) and items,
                             the side panel's entries by the status and the edition, Home first once setup is
                             complete, Chat and Notifications with their unread counts; the side panel and the
-                            Home tiles both draw it; DAO after Marketplace and before Account (2026-11-08)
+                            Home tiles both draw it; DAO after Marketplace and before Account (2026-11-08);
+                            Moderation and Attesting with the counts of work-badge.service, the next line
+                            (2026-11-12, section 11)
+    work-badge.service      the numbers on the Attesting and the Moderation entries (2026-11-12, section 11; 8.1):
+                            attestingIds and moderationIds, the ids of each page's things, and seen, the ids this
+                            device has seen, { attesting, moderation }, kept in localStorage under
+                            `anopod-wallet.work-seen.<anopodId>`, each list cut to its newest 500, read when a
+                            pod opens and emptied when the session closes, empty when the browser refuses;
+                            attestingCount and moderationCount, how many of a page's ids are not seen, which
+                            navigation.service puts on the two entries; a timer of CASES_POLL_MS (15 s) and one
+                            read as soon as a session with setup complete is there, each with a session and
+                            setup complete: in the attestor edition, unless the address starts with /attesting,
+                            attesting.service's loadAccounts and, with an account picked, loadLists and
+                            /list-break-glass-cases for open and inReview, each in its own try; in the moderator
+                            edition, unless the address starts with /moderation, /list-recovery-cases for open
+                            and inReview; all quiet, and a read that fails leaves its part of the ids as it was
+                            and shows nothing; the Attesting ids are the transaction id of every
+                            assistedAnosTransfer of the trade list, the transaction id of every disputed escrow
+                            and the case id of every recovery case read, the Moderation ids the case ids;
+                            seeAttesting(ids) and seeModeration(ids), which a page's own load calls with the ids
+                            it read: they become the page's ids and are all marked seen; attestingWorkIds and
+                            openCaseIds, the rule as two functions, which the two pages share with the timer
     chat.service            what the chat pages share (2026-11-05): room keys (roomKeyOf, wrapFor), decryptMessage,
                             piecesOf, a room's title, kind, icon and other person, the order by activity, shortWhen,
                             timeOf and dayLabel, requestedRooms, refreshRooms; listingWords, a listing in a few
@@ -2344,7 +2432,12 @@ excepted, with the keyholder and anos calls included.
                             case; startCaseChat(caseId, anopodId), the Message someone flow of New chat with
                             the case, which answers the refusal of the call that failed, else the invite's
                             answer; inviteAgain(room, anopodId), for a person who declined: wrapFor, the
-                            invite, the rooms refreshed
+                            invite, the rooms refreshed; the attestor in a marketplace chat (2026-11-12,
+                            section 11, step 6): isTrader(room), a private room about a listing whose creator
+                            or whose listing's owner this pod is; otherTrader(room), for such a room the other
+                            of the two, found among the members and the invited, else null;
+                            caseAttestors(caseId), the creators of this pod's rooms about the case that another
+                            pod created, each once, as the room lists its members (id and username)
     marketplace.service     what the marketplace pages share (2026-11-06): load, get, mine and close (the reads
                             and the close), sideWords, mySide and firstWords, the rooms and invites about a
                             listing out of session.chatRooms (roomsAbout, myRoomAbout, invitesAbout,
@@ -2427,7 +2520,8 @@ connected and the pinned listing card (8.7), and on Home beside the
 greeting (56 px); since 2026-11-08 on the cards of the Vouch requests
 page (72 px) and beside the proposer on the DAO proposal page (40 px);
 since 2026-11-12 (section 11) in the person's chats about an attestor
-case on My case and My recovery case (8.7).
+case on My case and My recovery case (8.7), and beside each attestor in
+the conversation's "Invite an attestor" panel (8.2, Chat; 40 px).
 
 ### 8.7 The marketplace components and the case chat components
 
@@ -2462,8 +2556,9 @@ src/app/components/:
   disabled with the hint "Pick a currency first" while Browse has no
   currency), Apply and Clear.
 - pinned-listing.component.ts (`<app-pinned-listing [room]
-  [accountIds]>`): the pinned card of a private room about a listing (8.2,
-  Chat), drawn by chat-room.page.ts under its header, above the thread.
+  [accountIds] (disputeCase)>`): the pinned card of a private room about a
+  listing (8.2, Chat), drawn by chat-room.page.ts under its header, above
+  the thread.
   `accountIds` is the page's computed of the account ids found in the
   decrypted messages (the 64-hex pieces of `piecesOf`), each with its
   sender and position, newest first; the page changes only to draw the
@@ -2473,7 +2568,23 @@ src/app/components/:
   poll shows them. It exports `FoundAccountId`. Since 2026-11-10 the card
   also reads the room's messages itself for their account ids (8.2,
   Chat): the page's computed holds the ids of the newest 50 messages and
-  of what arrived since, which is not the whole chat.
+  of what arrived since, which is not the whole chat. Since 2026-11-12
+  (section 11, step 6) the card is drawn for the room's two traders only
+  (chat.service's `isTrader`, 8.3) and goes by the other trader: `other`,
+  whose avatar and username the card shows, is `otherTrader(room)`, the
+  other of the room's creator and the listing's owner, and the form's To
+  list takes the account ids that trader posted, so a guest's messages
+  never feed the trade form. Only when the other trader is neither a
+  member nor invited any more does the list take the ids anyone else
+  posted, as before. The card also finds the dispute case of its trade,
+  as the escrow trade page does: on a check that shows the chat's trade
+  in the stage `disputed` while no case is known, /list-my-cases, quiet,
+  and of its disputes the one with the trade's transaction id whose
+  status is open or inReview. The output `disputeCase` gives the page
+  that case's id, for "Invite an attestor" (8.2, Chat), and null when the
+  chat has no open trade, when the trade is not disputed and when no such
+  case is there; it fires when the value changes. A case found stays
+  until the trade is no longer disputed.
 
 Two more small components, for the chat on an attestor case (2026-11-12,
 section 11; the plan is forclaude/wallet-case-chats-plan-1.md), under
@@ -7627,6 +7738,256 @@ proxy (`server/`) are not touched.
   wallet1 and then wallet2, with no setting in `network/wallet.env` and
   no `npm ci`.
 
+### The badges and the attestor in the marketplace chat, step 6 (2026-11-12)
+
+Built from `forclaude/wallet-case-chats-plan-1.md` (FINAL, 2026-11-12),
+its step 6 of seven, its section 6, one commit, on top of 0cabe91 (step
+5). Two things. The badges (the plan's decisions 15 and 25): the
+Attesting and the Moderation entries of the menu show a number when
+there is something new on the page, as Chat does, and it clears when the
+page is opened. And the attestor in the marketplace chat (decisions 9,
+26 and 27): either trader of a marketplace chat can bring an attestor on
+the trade's dispute into that chat, where the attestor reads everything.
+The entry "Invite an attestor" shows only while the chat's trade is in
+dispute and an attestor has opened a case on it, in the user's words of
+2026-11-12: "this button should only appear is there is a dispute and an
+attestor has opened a case." And no other chat with the attestor is
+needed first; the user asked, "Does it have to be that you can only
+invite an attestor if that attestor has a different chat with you?", and
+it does not. The masterpod's part is the plan's step 1
+(masterpodsoftware 68c35da, its spec's section 18): a member of a
+listing chat who did not start it may invite an appointed attestor and
+nobody else, and a dispute case names its attestors to its two traders
+(`attestors` on `/list-my-cases` and `/get-my-case`). No route, no env
+variable and no npm package; the proxy (`server/`) is not touched.
+
+- New, `src/app/services/work-badge.service.ts` (`WorkBadgeService`,
+  provided in root), as 8.3 gives it: the signals `attestingIds`,
+  `moderationIds` and `seen`, the computeds `attestingCount` and
+  `moderationCount`, the timer of `CASES_POLL_MS` with one read as soon
+  as a session with setup complete is there, `seeAttesting(ids)` and
+  `seeModeration(ids)`. `seen` is `{ attesting, moderation }` in
+  localStorage under `anopod-wallet.work-seen.<anopodId>`, read and
+  written inside try/catch as session.service keeps the seen chat
+  positions, each list cut to its newest 500 ids. The file also exports
+  the rule as two functions: `attestingWorkIds(trades, disputes,
+  recoveries)` and `openCaseIds(cases)`.
+- `src/app/services/navigation.service.ts`: the Moderation entry has
+  `badge: workBadge.moderationCount()`, the Attesting entry `badge:
+  workBadge.attestingCount()`; the comment of `NavItem` names the two.
+  The side panel (`app.html`) and the Home tiles already draw an
+  entry's `badge` when it is not 0, so neither changed.
+- `src/app/pages/attesting.page.ts`, `load()`: after a load that read
+  everything, `workBadge.seeAttesting(attestingWorkIds(attesting.trades(),
+  attesting.disputes(), recoveries.body.cases))`.
+  `src/app/pages/moderation.page.ts`, `load()`: after a good read,
+  `workBadge.seeModeration(openCaseIds(res.body.cases))`.
+- `src/app/services/chat.service.ts`: `isTrader(room)`,
+  `otherTrader(room)` and `caseAttestors(caseId)`, as 8.3 gives them.
+- `src/app/components/pinned-listing.component.ts`: `other` is
+  `chat.otherTrader(room)`; `theirAccountIds` takes the ids the other
+  trader posted, and the ids anyone else posted only when no other
+  trader is found. `findDisputeCase(room, trade)`, called at the end of
+  a check that found the chat's trade open, and `tellDisputeCase(caseId)`
+  behind the new output `disputeCase` (8.7). A check that read
+  everything and found no open trade tells null, and so does `reset()`
+  when the card is given another room.
+- `src/app/pages/chat-room.page.ts`: the card is drawn when
+  `chat.isTrader(room)`, with `(disputeCase)="setDisputeCase($event)"`;
+  the signal `disputeCaseId`, emptied in `open(room)` when the room
+  changes; the menu entry "Invite an attestor", shown when
+  `chat.isTrader(room)` and `disputeCaseId()` is not null;
+  `toggleAttestors()`, `inviteAttestor(attestor)`, the computed
+  `attestors` and the panel, as 8.2 (Chat, the attestor in a marketplace
+  chat) gives them. The thread, the composer and "Invite someone" are
+  untouched.
+- `src/app/services/masterpod-api.service.ts`: `MyDisputeCase` has
+  `attestors?: RoomMember[]`. A masterpod of before sends none, and the
+  page reads a missing list as an empty one.
+- `src/app/pages/chat-requests.page.ts`, `inviteText`: an invite with a
+  listing whose owner is not this pod reads `chatRequests.toListingChat`
+  with the listing's words; the owner's wording stays.
+- `src/app/pages/attesting-dispute-case.page.ts`: the muted line
+  `disputeCase.marketChatHint` right under the parties, in front of the
+  line with the status. `src/app/pages/my-case.page.ts`: on a dispute,
+  the muted line `myCase.marketChatHint` right under the chat block.
+- The words, in both files, as the plan's table 6.4 gives them, all six
+  new: `chatRoom.inviteAttestor`, `chatRoom.attestorReads`,
+  `chatRoom.attestorsIn`, `chatRequests.toListingChat(words)`,
+  `disputeCase.marketChatHint` and `myCase.marketChatHint`. Reused as it
+  is: `chatRoom.invite`. The Thai is the plan's, by the glossary, for
+  Thai readers to correct (8.8).
+- Readings where the plan left a detail open, the badges. The Attesting
+  ids have two parts, so that a read that fails leaves its own part as
+  it was: the transactions come from `attesting.trades()` and
+  `attesting.disputes()`, which attesting.service leaves as they were
+  when its read fails, and the recovery cases are kept in the badge
+  service (`recoveryIds`). `seeAttesting(ids)` takes one list, as the
+  plan writes it, and keeps as recovery cases the ids that are no
+  transaction of the two lists. The rule stands once, in
+  `attestingWorkIds` and `openCaseIds`, and the two pages and the timer
+  all use it, which is how "by the same rule" is kept. The ids handed
+  over join the seen list as its newest, an id seen before included, so
+  a thing that is still on the page is never among the ones the cut to
+  500 drops; when the list would not change nothing is set and nothing
+  is written, so the Attesting page's 15-second poll does not write to
+  localStorage every time. No read starts while another runs
+  (`reading`), as the shell's poll does it, and a read that ends after
+  the pod changed writes nothing. One effect follows
+  `session.anopodId()`: for every new pod and when the session closes it
+  empties the two id lists and reads `seen` for the pod, or empties it.
+  Another effect makes the first read, for every pod that opens, once
+  the pod is set and `setupComplete()` is true. "The address" is
+  `router.url`. Every
+  read is quiet in the log. The timer's read picks the attestor's staked
+  account as the Attesting page does, through `loadAccounts`, so it is
+  picked at the unlock and no longer at the first visit of the page. On
+  the Attesting page the things are seen whatever the status filter
+  shows. On the Moderation page they are the cases of the filter's read
+  that are open or in review: with a filter that leaves both statuses
+  out the page hands over no id, the number is 0 while the page is open,
+  and the timer reads the cases again once the page is left. What is
+  read back from localStorage is checked: only the strings of a list
+  count, and anything that is no list reads as empty.
+- Readings where the plan left a detail open, the chat. The room's
+  creator is never the listing's owner: the masterpod refuses a room
+  about one's own listing (`400 your own listing`), so "the other of the
+  two" is always another pod. `caseAttestors` goes by the rooms this pod
+  is in, not by its invites: an attestor whose chat request the person
+  has not accepted yet is not in it, and the masterpod's `attestors`
+  names that attestor all the same. The card tells the page a case only
+  when it is another than the one it last told, so the page's own
+  emptying is not undone by the next check five seconds later; it tells
+  nothing once the card is gone (`DestroyRef.destroyed`), since a check
+  can end after the chat was left. The card looks for the case after
+  the chat's message about the trade is posted, so that message is not
+  held up. While the trade is in dispute and no open case is found, the
+  card asks `/list-my-cases` at every check, every 5 seconds, as the
+  escrow trade page does on its refresh; that is how the entry appears
+  by itself once an attestor opens the case. The menu entry stands
+  after "Invite someone", has the icon `fact_check`, the icon of the
+  Attesting entry, and is off while the page is busy. A second click
+  closes the panel, as the other two entries do with theirs. The panel
+  uses the classes of the members panel, a column of rows, and the
+  avatar has its default size, 40 px; no style was added. The list is a
+  computed over the room and the session's rooms, so an attestor leaves
+  it as soon as the room list shows them invited. A refused
+  `/list-my-cases` at the opening shows in the page's error line as
+  `reasonOf` gives it and the panel stays closed; an answer that comes
+  after the card told another case is dropped. Invite refreshes the
+  room list after a refusal too, so `409 invite already open` and `409
+  already a member` take the attestor off the list. The panel stays
+  open after an invite, for the second attestor of the case, and closes
+  when the card tells that there is no case any more. In the
+  dictionaries `inviteAttestor` stands after `inviteSomeone`, the two
+  panel lines after `invite`, `toListingChat` after `aboutListing`,
+  `disputeCase.marketChatHint` after `disputedTheEscrow` and
+  `myCase.marketChatHint` after `supplyAgain`: the order the pages use
+  them. The comments and this spec carry 2026-11-12, the day of the
+  build.
+- Known and left as it is. A case found stays until the trade is no
+  longer in dispute, as the plan says. So when the page finds that case
+  decided or dismissed and takes the entry away, and an attestor then
+  opens a new case on the same trade, which can happen after a
+  dismissal, the entry comes back only when the chat is opened again:
+  the card still holds the closed case and does not look again. The
+  chat's trade is still matched on every account id named in the chat,
+  whoever posted it, a guest included: the plan changes the form's To
+  list and nothing in the check. The request of an attestor who is
+  brought into a marketplace chat carries a listing, so
+  marketplace.service's `waitingCount` counts it, and until the
+  attestor answers, Browse shows them the row "Your listings" with one
+  person waiting; the same held before for anyone the room's creator
+  invited with "Invite someone". With an attestor in it the chat is a
+  group for all three: the row in the chat list has the group icon, and
+  the thread shows the senders' names. The two hint lines show on a
+  closed case too, where the entry is gone. The numbers are per device,
+  as the Chat number is: a new phone counts every open thing until the
+  page is opened once. They do not move while an attestor or a
+  moderator is on a case page, since no read is made under `/attesting`
+  or `/moderation`. In the attestor and the moderator edition the read
+  runs for every pod with setup complete, also one that holds no such
+  appointment; the refusals are quiet. Against a masterpod of before
+  step 1 the entry still shows, since `/list-my-cases` is older, but
+  the panel lists nobody and reads "The attestors on this case are
+  already in this chat.": that masterpod names no attestor on a dispute
+  and marks no room with a case, so `caseAttestors` finds none either,
+  and an invite by the trader who did not start the chat would be
+  refused, `403 only the creator invites`. The plan's section 8 says
+  the list then holds an attestor who has a chat with the person; it
+  holds nobody. The masterpod goes out first, so nobody should see it.
+- Put right on the user's word of 2026-11-12 ("Yes, update them"), after
+  the first report of this build listed fifteen places as left because
+  the plan does not name them. Nine comments in the code and no line of
+  code. In `src/app/pages/chat-room.page.ts`: the class comment, which
+  names "Invite an attestor" in the menu and says that the pinned card
+  is for the room's two traders, where it had named three menu entries
+  and a card for every private room about a listing. In
+  `src/app/components/pinned-listing.component.ts`: the class comment,
+  which says who gets the card, speaks of the other trader and has a
+  last paragraph on the dispute case and the output; the comment of
+  `theirAccountIds`, which now carries the rule in full, so the line
+  comment this build had put inside the computed is gone; the comment
+  of `openForm`, "the other trader"; and the comment of `check()`,
+  which names the look for the dispute case. In
+  `src/app/pages/chat-requests.page.ts`: the comment of `inviteText`,
+  with the two wordings of a request about a listing. In
+  `src/app/services/chat.service.ts`: the class comment, which names
+  the two traders of a marketplace chat and the attestors of a case. In
+  `src/app/constants.ts`: the comment of `CASES_POLL_MS`, which names
+  the badge service among those that read on it. In
+  `src/app/components/avatar.component.ts`: the class comment, which
+  lists the "Invite an attestor" panel among the places the avatar is
+  drawn. Six places here: 8.2, Home, the tiles of Moderation and
+  Attesting with their numbers; 8.3, the line of `navigation.service`;
+  8.6, the avatar in the "Invite an attestor" panel; 12.1 and 13.1,
+  where "What the edition changes" ended on "Nothing else" and now
+  names the read every 15 seconds; and the first point of 13.6, which
+  names the marketplace chat among the ways an attestor and a party
+  talk. Two files joined the commit, `src/app/constants.ts` and
+  `src/app/components/avatar.component.ts`: seventeen files, sixteen
+  changed and one new. Not counted and not changed, since nothing in
+  them is wrong: the class comments of `NavigationService`, of the
+  shell (`src/app/app.ts`), of the Attesting page, the Moderation page,
+  the dispute case page and My case, the comments of the two `load()`
+  functions, and the README line of `chat.service.ts`. Older than this
+  step, so not counted either: `README.md` says "nothing touches
+  browser storage", while the seen chat positions (2026-11-05) and the
+  marketplace filters (2026-11-06) are in localStorage already, and the
+  seen ids of this step join them.
+- Spec: 8.1 (a new paragraph after the one on the Chat and the
+  Notifications numbers), 8.2 (Chat: Invite an attestor in the menu of
+  One conversation; who gets the pinned card, in its first sentence; a
+  new paragraph "The attestor in a marketplace chat" in front of
+  Requests; the Requests wording), 8.3 (a new line for
+  `work-badge.service`; the line of `chat.service`), 8.7 (the pinned
+  card: the selector with its output, the other trader, the dispute
+  case), 12.3 (Moderation), 13.3 (Attesting, a new paragraph after the
+  Recoveries tab; Dispute case, the parties; My case, the chat block)
+  and this note. README: a line for `services/work-badge.service.ts`.
+- Checked. `npx ng build` in the web_app folder: clean, no warnings
+  (2.17 MB initial total, `main-6HDLIIBE.js`; the style file is the one
+  of step 5, `styles-EMD3RG3N.css`). The words: the six rows of the
+  plan's table 6.4 were read from the plan file and compared with the
+  twelve entries in `en.ts` and `th.ts`, and each entry equals its cell
+  character for character. `git status` showed this step's fifteen
+  files and no others, fourteen changed and one new. `npx ng build`
+  after the fifteen places were put right: clean, no warnings, and the
+  script and the style file are the same files as before; `git status`
+  showed the seventeen files and no others. Nothing was run in a
+  browser and no server was started. Step 1 was not deployed when this was built, so nothing
+  here was tried against a masterpod that names the attestors of a
+  dispute or lets the second trader invite. The run-through is the
+  user's, on the running network (the plan's section 8): a new case
+  while another page is open, and the number on Attesting and on
+  Moderation; and a dispute on a marketplace trade, with no "Invite an
+  attestor" in the chat's menu before the dispute and before an
+  attestor opens the case, then the entry, used by the trader who did
+  not start the chat, and the attestor reading the chat. The masterpod
+  goes out first; then the wallet, by section 10 of
+  `forclaude/wallet-deploy-plan-1.md`, wallet1 and then wallet2, with
+  no setting in `network/wallet.env` and no `npm ci`.
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`
@@ -7651,7 +8012,10 @@ live on 4200 through the same `proxy.conf.json`, one at a time.
 
 What the edition changes: the navigation shows Moderation (12.3) when the
 edition is moderator and a session is open; the landing card's title says
-Moderator wallet. Nothing else. A moderator's pod is an ordinary pod
+Moderator wallet; and, since 2026-11-12 (section 11), the wallet reads
+the recovery cases that are open or in review every 15 seconds, for the
+number on the Moderation entry (8.1; work-badge.service, 8.3). Nothing
+else. A moderator's pod is an ordinary pod
 (username starting with `moderator`, vouched by a super seed, setup
 complete, a spending account staked 1000 anos for moderator through the
 account page's Send, as today); every other page works as it does.
@@ -7913,7 +8277,11 @@ validators hold that was not filed yet, without a second new account).
 **Moderation** (`/moderation`). The cases from `/list-recovery-cases`, a
 status filter (the four open statuses by default, plus completed and
 dismissed), each row: username, names, status, approvals, opened. A row
-opens `/moderation/:caseId`.
+opens `/moderation/:caseId`. Since 2026-11-12 (section 11) a good read
+hands the ids of the cases it read that are open or in review to
+work-badge.service (8.3, `seeModeration`): they are what the number on
+the Moderation entry counts (8.1), and this device has seen them all
+then, so the number clears when the page is opened.
 
 **Case** (`/moderation/:caseId`), from `/get-recovery-case`, refreshed by a
 button and every 15 s
@@ -8302,7 +8670,10 @@ pointing at the same backends; the masterpod lists its origin in
 
 What the edition changes: the navigation shows Attesting (13.3) when the
 edition is attestor and a session is open; the toolbar's brand reads
-"Attestor wallet". Nothing else. An attestor's pod is an ordinary pod
+"Attestor wallet"; and, since 2026-11-12 (section 11), the wallet reads
+the three lists of the Attesting page every 15 seconds, for the number
+on the Attesting entry (8.1; work-badge.service, 8.3). Nothing else. An
+attestor's pod is an ordinary pod
 (username starting with `attestor`, vouched by a super seed, setup
 complete, a spending account staked 1000 anos for attestor through the
 account page's Send, as today). A pod is a moderator or an attestor by its
@@ -8368,6 +8739,15 @@ number of moves, "n of 2 signed", and the status in words linking to the
 recovery case page. No Open a case: the person's recovery finish files the
 case (12.3). The status filter applies to this tab too.
 
+Since 2026-11-12 (section 11) a load that read everything, the first
+one, Refresh and the poll alike, hands the ids of the page's things to
+work-badge.service (8.3, `seeAttesting`): the transaction id of every
+`assistedAnosTransfer` of the trade list, the transaction id of every
+disputed escrow, and the case id of every recovery case that is open or
+in review, whatever the status filter shows. They are what the number on
+the Attesting entry counts (8.1), and this device has seen them all
+then, so the number clears when the page is opened.
+
 **Trade case** (`/attesting/trade/:caseId`), from `/get-trade-case`,
 refreshed by a button and every 15 s. Top to bottom:
 
@@ -8424,7 +8804,10 @@ refreshed by a button and every 15 s. Top to bottom:
 - The parties: the seller and the buyer, each with selfie, username and
   names, and which of them disputed; the status. Each party has its own
   Start chat button under its facts, as on the trade case (2026-11-12):
-  one chat with the seller, one with the buyer.
+  one chat with the seller, one with the buyer. Under the parties the
+  muted line "Either trader can invite you into their marketplace chat,
+  from that chat's menu." (2026-11-12, section 11, step 6; 8.2, Chat,
+  the attestor in a marketplace chat).
 - The escrow: the amount (from the Disputes list, cached), the
   transaction id with Copy.
 - The case key: when `myKey` is null, "You hold no key for this case; ask
@@ -8563,7 +8946,10 @@ is in, the attestor's avatar and username with Open chat; "No attestor
 has started a chat with you about this case yet." when there is neither.
 Two attestors work on a case, so a person can have two chats on one case.
 The same request shows on the Requests page of Chat (8.2), and the person
-may accept it there.
+may accept it there. On a dispute, under that block, the muted line "To
+let the attestor read your marketplace chat, open that chat, then its
+menu, then Invite an attestor." (2026-11-12, section 11, step 6; 8.2,
+Chat, the attestor in a marketplace chat).
 
 **My recovery case** (`/cases/recovery/:caseId`, every edition,
 2026-11-12, section 11; the plan is
@@ -8658,7 +9044,8 @@ Notifications).
 - Email or any message to the parties outside the app; the app is the
   channel: the case pages, the notifications and, since 2026-11-12
   (section 11), the chat an attestor starts with a party from the case
-  page (13.3).
+  page (13.3) and the marketplace chat of a disputed trade, which either
+  trader can bring an attestor on the dispute into (8.2, Chat).
 - A party deleting their evidence; evidence beyond the four content types.
 - Several validators asked at once; the lists come from the session's
   validator, as every anos call does.

@@ -26,7 +26,7 @@ export const CARD_MESSAGES_PAGE = 200;
 /** The pinned listing card reads an account's transactions since the chat was made this many at a time, the most /list-transactions answers (wallet spec 8.2, Chat). */
 export const CARD_TRANSACTIONS_PAGE = 200;
 
-/** The attesting lists, the three attestor case pages, My case and My recovery case refresh this often while open (wallet spec 13.3). */
+/** The attesting lists, the three attestor case pages, My case and My recovery case refresh this often while open (wallet spec 13.3). Since 2026-11-12 work-badge.service also reads the lists behind the numbers on the Attesting and the Moderation entries this often, in that edition, on every page but the entry's own (wallet spec 8.1, 8.3). */
 export const CASES_POLL_MS = 15_000;
 
 /** How long one keyholder has to answer a deposit call, the receiving-key fetch or the share (wallet spec 6), and since 2026-11-08 the owner lookup of a locked-out person (12.3): a stopped VM otherwise holds the deposit for the proxy's two minutes. */

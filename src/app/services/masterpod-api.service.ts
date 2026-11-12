@@ -687,6 +687,8 @@ export interface MyDisputeCase {
   accountId: string;
   accountIdTo: string;
   side: 'seller' | 'buyer';
+  /** The attestors on the case, the one who opened it first (2026-11-12; masterpod 18), for the invite into the marketplace chat of the trade. A masterpod of before sends none: a missing list reads as an empty one. */
+  attestors?: RoomMember[];
   status: AttestorCaseStatus;
   createdAt: string;
   updatedAt: string;
