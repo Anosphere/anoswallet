@@ -45,7 +45,7 @@ export const LANDING_WAIT_MS = 90_000;
  * Move your money). 1. pair one, pair two, the break-glass seed and its
  * keys, the creation signed by the six keys here, the key blob under the
  * session's key blob key; 2. the seed deposited with the keyholders as
- * breakglasskey, then wiped; 3. /api/sign adds the wallet pair; 4.
+ * breakglasskey, then wiped; 3. /api/sign/<n> adds the wallet pair; 4.
  * /create-anos-account; 5. /create-account (a 400 saying the creation is
  * already there counts as submitted); 6. /mark-anos-account-submitted;
  * then a wait of up to 90 seconds, /get-account with the new pair one

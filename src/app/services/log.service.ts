@@ -30,9 +30,10 @@ export interface LogEntry {
  * call of the wallet goes through so it can be logged: the newest 40 calls,
  * path, status and answer, polls excepted (they pass `quiet`). Every path is
  * on the wallet's own origin: /api/masterpod/..., /api/anos/<n>/...,
- * /api/keyholder/<n>/..., /api/sign. A post may carry a time limit
- * (`timeoutMs`, the keyholder deposit does): past it the call answers like
- * a network error, status 0, with api.noAnswer as its reason.
+ * /api/keyholder/<n>/..., /api/sign/<n>. A post or a get may carry a time
+ * limit (`timeoutMs`; the keyholder deposit does, a read from a validator
+ * and both signing calls): past it the call answers like a network error,
+ * status 0, with api.noAnswer as its reason.
  */
 @Injectable({ providedIn: 'root' })
 export class LogService {
@@ -63,9 +64,12 @@ export class LogService {
     return result;
   }
 
-  /** GET `path` on this origin. */
-  async get<T>(path: string, quiet = false): Promise<ApiResponse<T>> {
-    const result = await this.request<T>(() => this.http.get<T>(path, { observe: 'response' }));
+  /** GET `path` on this origin. `timeoutMs`, when given, caps the wait as it does for a post: a call that has not answered by then is `{ ok: false, status: 0 }` with api.noAnswer as its reason. */
+  async get<T>(path: string, quiet = false, timeoutMs?: number): Promise<ApiResponse<T>> {
+    const result = await this.request<T>(() => {
+      const call = this.http.get<T>(path, { observe: 'response' });
+      return timeoutMs === undefined ? call : call.pipe(timeout(timeoutMs));
+    }, timeoutMs);
     if (!quiet) this.record('GET', path, result);
     return result;
   }

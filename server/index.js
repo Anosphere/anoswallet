@@ -12,7 +12,7 @@ const server = createApp(config).listen(config.port, () => {
   console.log(`  masterpod       ${config.masterpodUrl}`);
   console.log(`  validators      ${config.validatorUrls.join(', ')} (default ${config.defaultValidator})`);
   console.log(`  keyholders      ${config.keyholderUrls.join(', ')} (threshold ${config.shareThreshold})`);
-  console.log(`  signing server  ${config.signingServerUrl}`);
+  console.log(`  signing servers ${config.signingServerUrls.join(', ')}`);
   console.log(`  build           ${config.distDir}`);
   console.log(`  edition         ${config.edition}`);
   console.log(`  rp id           ${config.rpId}`);

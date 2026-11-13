@@ -634,8 +634,8 @@ export class AttestingTradeCasePage {
    * The attestation follow-up (wallet spec 13.3), built as the account page
    * builds one: pair one of the staked account, attestorId the account,
    * accountId the sender, transactionId the trade's, the wallet pair from
-   * /api/sign; then /sign-off-trade-case. When the answer says decided this
-   * signature decided the case and the sending runs at once.
+   * /api/sign/<n>; then /sign-off-trade-case. When the answer says decided
+   * this signature decided the case and the sending runs at once.
    */
   protected async attest(): Promise<void> {
     let decided = false;
@@ -644,7 +644,7 @@ export class AttestingTradeCasePage {
       if (!d) throw new Error(this.t().common.caseNotLoaded);
       const { account, pairOne } = await this.attesting.pairOne();
       const followUp = this.crypto.buildFollowUp(pairOne, { type: 'attestation', transactionId: d.case.transactionId, accountId: d.case.accountId, attestorId: account.accountId });
-      const signed = await this.signing.sign(followUp);
+      const signed = await this.signing.sign(followUp, account.accountId);
       const res = await this.masterpod.signOffTradeCase(this.caseId(), signed);
       if (!res.ok) throw new Error(this.refusal(res, '/sign-off-trade-case'));
       decided = res.body.status === 'decided';

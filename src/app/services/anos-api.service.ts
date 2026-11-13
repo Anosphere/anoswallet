@@ -410,7 +410,7 @@ export class AnosApiService {
   }
 }
 
-/** True when a validator call got no answer (decision 4 of forclaude/wallet-round-robin-plan-1.md): status 0, nothing came back, because the network failed or a read ran into its time limit; 502, the wallet's proxy could not reach the validator's doorman, or the doorman its worker; 503, a validator that has just booted and is not counted yet; 504, the doorman got nothing from its worker in time. Every other status is an answer, a refusal and a 500 included. */
-function noAnswer(res: ApiResponse<unknown>): boolean {
+/** True when a validator call got no answer (decision 4 of forclaude/wallet-round-robin-plan-1.md): status 0, nothing came back, because the network failed or a read ran into its time limit; 502, the wallet's proxy could not reach the validator's doorman, or the doorman its worker; 503, a validator that has just booted and is not counted yet; 504, the doorman got nothing from its worker in time. Every other status is an answer, a refusal and a 500 included. Since 2026-11-13 the signing service takes the same four for no answer from a signing server (decision 18 of forclaude/signing-server-plan-1.md), which is why this is exported: there 502 is the wallet's proxy not reaching the signing server and 503 the signing server's "kms unavailable". */
+export function noAnswer(res: ApiResponse<unknown>): boolean {
   return res.status === 0 || res.status === 502 || res.status === 503 || res.status === 504;
 }

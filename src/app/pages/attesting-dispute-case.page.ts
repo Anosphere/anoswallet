@@ -654,7 +654,7 @@ export class AttestingDisputeCasePage {
   /**
    * The escrowVerdict follow-up (wallet spec 13.3), built as the account
    * page builds one: pair one of the staked account, arbitratorId the
-   * account, the wallet pair from /api/sign; then /sign-off-dispute-case.
+   * account, the wallet pair from /api/sign/<n>; then /sign-off-dispute-case.
    * When the answer says decided this signature decided the case and the
    * sending runs at once.
    */
@@ -665,7 +665,7 @@ export class AttestingDisputeCasePage {
       if (!d) throw new Error(this.t().common.caseNotLoaded);
       const { account, pairOne } = await this.attesting.pairOne();
       const followUp = this.crypto.buildFollowUp(pairOne, { type: 'escrowVerdict', transactionId: d.case.transactionId, arbitratorId: account.accountId, verdict: this.verdict() });
-      const signed = await this.signing.sign(followUp);
+      const signed = await this.signing.sign(followUp, account.accountId);
       const res = await this.masterpod.signOffDisputeCase(this.caseId(), signed);
       if (!res.ok) throw new Error(this.refusal(res, '/sign-off-dispute-case'));
       decided = res.body.status === 'decided';

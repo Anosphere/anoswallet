@@ -104,7 +104,7 @@ type SendOrder =
  * daoVote, so a fresh page and the form after a send are the same.
  * previousTransactionId is /get-account's latestTransactionId, fetched
  * right before building. The payload is signed by pair one (keyBlob opened
- * for the signature and dropped), /api/sign adds the wallet pair, the
+ * for the signature and dropped), /api/sign/<n> adds the wallet pair, the
  * validator gets it, the page refreshes. Send is disabled while the account
  * has a pending transaction, is the seller of an open escrow trade or holds
  * an assisted transfer (one held transaction per account). Escrow trades
@@ -126,7 +126,7 @@ type SendOrder =
  * section 11): a Cancel transfer button under the row while the stage is
  * locked or due asks in the confirmation box, whose first button reads
  * Back there; on yes the lockedTransferCancel follow-up is built with
- * pair one, signed by /api/sign and posted to /locked-transfer-cancel,
+ * pair one, signed by /api/sign/<n> and posted to /locked-transfer-cancel,
  * and the sent line or the refusal in plain words shows under the row. A
  * cancel pressed in the transfer's first minutes is refused by the
  * validators, and the line says when it can be cancelled. The row reads
@@ -618,7 +618,7 @@ export class AccountPage {
     this.amount.set('');
   }
 
-  /** Builds, signs (pair one here, the wallet pair at /api/sign) and posts the order the confirmation box showed (2026-11-10). It never reads the form, which is empty by now: a transferToFund when the order has a purpose, else a transfer of the order's type to the order's recipient. minutesAhead() and the date of a guarded or vault transfer are worked out here, after the box, so the time spent reading the box does not use up the lock's offset. */
+  /** Builds, signs (pair one here, the wallet pair at /api/sign/<n>) and posts the order the confirmation box showed (2026-11-10). It never reads the form, which is empty by now: a transferToFund when the order has a purpose, else a transfer of the order's type to the order's recipient. minutesAhead() and the date of a guarded or vault transfer are worked out here, after the box, so the time spent reading the box does not use up the lock's offset. */
   private async send(order: SendOrder): Promise<void> {
     this.cancelOutcome.set(null);
     await this.act(this.sendOutcome, async () => {
@@ -628,13 +628,13 @@ export class AccountPage {
       const previous = latest.body.latestTransactionId;
       let res: ApiResponse<Accepted>;
       if (order.stakePurpose !== null) {
-        const tx = await this.signing.sign(this.crypto.buildTransferToFund(pairOne, this.accountId(), previous, order.amount, order.stakePurpose));
+        const tx = await this.signing.sign(this.crypto.buildTransferToFund(pairOne, this.accountId(), previous, order.amount, order.stakePurpose), this.accountId());
         res = await this.anos.transferToFund(tx);
       } else {
         const ahead = this.minutesAhead();
         if (ahead === null) throw new Error(this.t().account.lockNotLoaded);
         const createdAt = new Date(Date.now() + ahead * 60_000);
-        const tx = await this.signing.sign(this.crypto.buildAnosTransferTransaction(pairOne, this.accountId(), previous, order.accountIdTo, order.amount, order.transactionType as TransferType, createdAt));
+        const tx = await this.signing.sign(this.crypto.buildAnosTransferTransaction(pairOne, this.accountId(), previous, order.accountIdTo, order.amount, order.transactionType as TransferType, createdAt), this.accountId());
         res = await this.anos.anosTransfer(tx);
       }
       if (!res.ok) throw new Error(this.refusal(res, order));
@@ -651,7 +651,7 @@ export class AccountPage {
     return reason;
   }
 
-  /** The Cancel transfer button under the Locked transfer row (wallet spec 8.2, Account, and 8.9; 2026-11-11): the sender's cancel of the guarded or vault transfer waiting out its lock. It asks in the confirmation box, whose first button reads Back here, and nothing is sent until "Yes, cancel the transfer" is pressed there. Then the lockedTransferCancel follow-up for the transfer the box showed is built with pair one, /api/sign adds the wallet pair and /locked-transfer-cancel takes it, with a progress bar under the row meanwhile (cancelBusy); the line under the row is the sent line or the refusal in the words of cancelRefusal, and the page refreshes. Nothing happens with no locked transfer or while a box is already open. */
+  /** The Cancel transfer button under the Locked transfer row (wallet spec 8.2, Account, and 8.9; 2026-11-11): the sender's cancel of the guarded or vault transfer waiting out its lock. It asks in the confirmation box, whose first button reads Back here, and nothing is sent until "Yes, cancel the transfer" is pressed there. Then the lockedTransferCancel follow-up for the transfer the box showed is built with pair one, /api/sign/<n> adds the wallet pair and /locked-transfer-cancel takes it, with a progress bar under the row meanwhile (cancelBusy); the line under the row is the sent line or the refusal in the words of cancelRefusal, and the page refreshes. Nothing happens with no locked transfer or while a box is already open. */
   protected async askCancelLocked(): Promise<void> {
     const waiting = this.locked();
     if (!waiting || this.dialog.openDialogs.length > 0) return;
@@ -672,7 +672,7 @@ export class AccountPage {
     this.cancelBusy.set(true);
     await this.act(this.cancelOutcome, async () => {
       const pairOne = await this.pairOne();
-      const signed = await this.signing.sign(this.crypto.buildFollowUp(pairOne, { type: 'lockedTransferCancel', transactionId: waiting.transactionId, accountId: this.accountId() }));
+      const signed = await this.signing.sign(this.crypto.buildFollowUp(pairOne, { type: 'lockedTransferCancel', transactionId: waiting.transactionId, accountId: this.accountId() }), this.accountId());
       const res = await this.anos.lockedTransferCancel(signed);
       if (!res.ok) throw new Error(this.cancelRefusal(res));
       return this.t().assisted.sentCancel;

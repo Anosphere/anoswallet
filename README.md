@@ -28,21 +28,21 @@ the build from 4300 as well.
 ## The proxy (server/)
 
 The one origin the browser talks to. `GET /api/config` tells the browser
-how many validators and keyholders there are and the three lock numbers;
-`/api/masterpod/<path>`, `/api/anos/<n>/<path>`,
-`/api/keyholder/<n>/<path>`, `POST /api/sign` and
-`GET /api/sign/public-keys` are forwarded with the prefix cut, bodies
+how many validators, keyholders and signing servers there are and the
+three lock numbers; `/api/masterpod/<path>`, `/api/anos/<n>/<path>`,
+`/api/keyholder/<n>/<path>`, `POST /api/sign/<n>` and
+`GET /api/sign/<n>/public-keys` are forwarded with the prefix cut, bodies
 streamed, the browser's Origin kept, the backend's answer returned
 unchanged; a backend that does not answer is `502 { error: "<who>
 unavailable" }`. The connections to the validators stay open between
 calls: the proxy closes one that sat unused for 10 seconds and keeps at
 most 32 unused ones per validator (`validatorIdleMs` and
 `validatorIdleConnections` in `server/config.js`), while the masterpod,
-the keyholders and the signing server get a new connection for every
+the keyholders and the signing servers get a new connection for every
 call. Everything else is the Angular build (`dist/wallet/browser`),
 with `index.html` for the router's deep links. Variables, each with a
 local default (`server/config.js`): `PORT` 4300, `MASTERPOD_URL`,
-`VALIDATOR_URLS`, `KEYHOLDER_URLS`, `SIGNING_SERVER_URL`, `SHARE_THRESHOLD`
+`VALIDATOR_URLS`, `KEYHOLDER_URLS`, `SIGNING_SERVER_URLS`, `SHARE_THRESHOLD`
 3, `DEPOSIT_FLOOR_PERCENT` 80, `DEFAULT_VALIDATOR` 1 (it no longer picks
 the validator: the browser picks one per session, at random, and moves to
 the next one when it does not answer; the variable stays for tabs loaded
@@ -117,7 +117,7 @@ servers from a chat. On each server:
   `node --env-file=network/wallet.env server/index.js` as `wallet`.
 - The environment is the committed `network/wallet.env`: the masterpod,
   the validators and the keyholders in registry order, the signing
-  server, the threshold, the default validator, RP_ID and the three lock
+  servers, the threshold, the default validator, RP_ID and the three lock
   numbers, equal to the validators'. Nothing in it is secret and both
   servers hold it byte for byte; EDITION and PORT come from the unit. No
   `.env` exists on the servers.

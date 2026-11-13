@@ -48,7 +48,7 @@ const CLOSED = /has closed/;
  * open and the account neither proposed nor voted, For and Against, the
  * DAO page's pair, asking in place; Yes opens pair one of the account for
  * the signature and drops it, builds the guardianVote follow-up, has
- * /api/sign add the wallet pair and posts /guardian-vote; the green line
+ * /api/sign/<n> add the wallet pair and posts /guardian-vote; the green line
  * says the vote is sent, the proposal is read again (the vote shows as
  * waiting for approval until every validator accepted it) and the select
  * moves to the next account that can still vote. The refusals in words,
@@ -315,12 +315,12 @@ export class GuardianProposalPage {
 
   /**
    * Yes, after the ask: pair one of the picked account for the signature
-   * and dropped, the guardianVote follow-up (crypto.buildFollowUp), /api/sign,
-   * /guardian-vote. The ask closes; the green line says the vote is sent and
-   * the proposal is read again (the vote shows as waiting for approval until
-   * every validator accepted it), then the select moves to the next account
-   * that can still vote; a refusal in words, and one that means the vote is
-   * over reads again too.
+   * and dropped, the guardianVote follow-up (crypto.buildFollowUp),
+   * /api/sign/<n>, /guardian-vote. The ask closes; the green line says the
+   * vote is sent and the proposal is read again (the vote shows as waiting
+   * for approval until every validator accepted it), then the select moves
+   * to the next account that can still vote; a refusal in words, and one
+   * that means the vote is over reads again too.
    */
   protected async confirm(): Promise<void> {
     const side = this.asking();
@@ -332,7 +332,7 @@ export class GuardianProposalPage {
     try {
       const payload: GuardianVotePayload = { type: 'guardianVote', transactionId: this.transactionId(), guardianId: account.accountId, vote: side };
       const pairOne = await this.guardians.pairOne(account.accountId);
-      const followUp = await this.signing.sign(this.crypto.buildFollowUp(pairOne, payload));
+      const followUp = await this.signing.sign(this.crypto.buildFollowUp(pairOne, payload), account.accountId);
       const res = await this.anos.guardianVote(followUp);
       this.asking.set(null);
       if (res.ok) {

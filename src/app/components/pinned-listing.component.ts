@@ -392,7 +392,7 @@ export class PinnedListingComponent {
    * the escrowTransfer the way the account page's Send builds it: pair one
    * from the account's keyBlob and the encryption key, /get-account for the
    * latest transaction id, buildAnosTransferTransaction with type
-   * escrowTransfer, /api/sign, /anos-transfer. A 4xx answer is a refusal
+   * escrowTransfer, /api/sign/<n>, /anos-transfer. A 4xx answer is a refusal
    * (refusal). After any other answer, accepted or lost on the way (no
    * network, a 502 or 504: the validator stores the trade before it
    * answers), one more check shows the trade and posts its message (tell);
@@ -415,7 +415,7 @@ export class PinnedListingComponent {
       const pairOne = await this.pairOne(from);
       const latest = await this.anos.getAccount(pairOne, from, true);
       if (!latest.ok || !latest.body.latestTransactionId) throw new Error(this.t().common.noLatest);
-      const tx = await this.signing.sign(this.crypto.buildAnosTransferTransaction(pairOne, from, latest.body.latestTransactionId, to, amount, 'escrowTransfer', new Date()));
+      const tx = await this.signing.sign(this.crypto.buildAnosTransferTransaction(pairOne, from, latest.body.latestTransactionId, to, amount, 'escrowTransfer', new Date()), from);
       const res = await this.anos.anosTransfer(tx);
       if (!res.ok && res.status >= 400 && res.status < 500) throw new Error(this.refusal(res));
       const after = await this.poll();
