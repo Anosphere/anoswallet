@@ -7,10 +7,10 @@ import { createProxyMiddleware } from 'http-proxy-middleware';
 
 /**
  * The wallet's proxy (wallet spec section 2): the one origin the browser
- * talks to. /api/config tells the browser how many validators and
- * keyholders there are, which edition this is (12.1), the relying-party
- * id, the three lock numbers and the deposit floor (wallet spec 2);
- * everything else under
+ * talks to. /api/config tells the browser how many validators, keyholders
+ * and signing servers there are, which edition this is (12.1), the
+ * relying-party id, the three lock numbers and the deposit floor (wallet
+ * spec 2); everything else under
  * /api is forwarded to a backend with its prefix stripped, bodies
  * streamed, headers as received, the backend's status and body returned
  * unchanged; the rest is the Angular build. Nothing is logged but 502s.
@@ -29,7 +29,7 @@ import { createProxyMiddleware } from 'http-proxy-middleware';
  * received: Connection, on a call to a validator, is set to keep-alive.
  * nginx in front of this proxy sends "Connection: close" with every call,
  * and passed on it would tell the doorman to close after its answer. The
- * masterpod, the keyholders and the signing server get a new connection
+ * masterpod, the keyholders and the signing servers get a new connection
  * for every call.
  */
 
@@ -62,7 +62,7 @@ function unavailable(who) {
  * in front of this proxy sends "Connection: close" with every call, so the
  * agent alone would keep nothing open: the far end would still be told to
  * close after its answer. Without an agent (the masterpod, the keyholders,
- * the signing server) http-proxy opens a new connection for every call and
+ * the signing servers) http-proxy opens a new connection for every call and
  * sends "Connection: close".
  */
 function forward(config, target, who, prefix, replacement = '', method = null, agent = null) {
@@ -100,6 +100,7 @@ export function createApp(config) {
     res.json({
       validators: config.validatorUrls.length,
       keyholders: config.keyholderUrls.length,
+      signingServers: config.signingServerUrls.length,
       shareThreshold: config.shareThreshold,
       depositFloorPercent: config.depositFloorPercent,
       defaultValidator: config.defaultValidator,
@@ -131,8 +132,11 @@ export function createApp(config) {
     app.use(forward(config, target, `keyholder ${i + 1}`, new RegExp(`^/api/keyholder/${i + 1}(?=/|$)`)));
   });
   app.use(unknownNumber('keyholder', 'keyholder', config.keyholderUrls.length));
-  app.use(forward(config, config.signingServerUrl, 'signing server', /^\/api\/sign\/public-keys$/, '/public-keys', 'GET'));
-  app.use(forward(config, config.signingServerUrl, 'signing server', /^\/api\/sign$/, '/sign', 'POST'));
+  config.signingServerUrls.forEach((target, i) => {
+    app.use(forward(config, target, `signing server ${i + 1}`, new RegExp(`^/api/sign/${i + 1}/public-keys$`), '/public-keys', 'GET'));
+    app.use(forward(config, target, `signing server ${i + 1}`, new RegExp(`^/api/sign/${i + 1}$`), '/sign', 'POST'));
+  });
+  app.use(unknownNumber('sign', 'signing server', config.signingServerUrls.length));
 
   app.use('/api', (req, res) => {
     res.status(404).json({ error: 'Not Found', path: req.originalUrl });

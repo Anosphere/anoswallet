@@ -38,7 +38,7 @@ interface Outcome {
  * /get-my-case, asked once per case). Two buttons: Go to the case when
  * there is one, and Cancel transfer while the stage is attesting or
  * writing, which asks once before the assistedTransferCancel follow-up is
- * built with pair one, signed by /api/sign and posted to
+ * built with pair one, signed by /api/sign/<n> and posted to
  * /assisted-transfer-cancel, the path the old paste form took. The page
  * refreshes every 5 seconds while the transfer is held. A transfer seen
  * held and then gone is closed: its id on the first page of
@@ -298,7 +298,7 @@ export class AssistedTransferPage {
     this.outcome.set(null);
     try {
       const pairOne = await this.pairOne();
-      const signed = await this.signing.sign(this.crypto.buildFollowUp(pairOne, { type: 'assistedTransferCancel', transactionId: transfer.transactionId, accountId: this.accountId() }));
+      const signed = await this.signing.sign(this.crypto.buildFollowUp(pairOne, { type: 'assistedTransferCancel', transactionId: transfer.transactionId, accountId: this.accountId() }), this.accountId());
       const res = await this.anos.assistedTransferCancel(signed);
       if (!res.ok) throw new Error(this.plainReason(res));
       this.outcome.set({ ok: true, text: this.t().assisted.sentCancel });

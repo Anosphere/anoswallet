@@ -35,6 +35,9 @@ export const KEYHOLDER_DEPOSIT_TIMEOUT_MS = 15_000;
 /** How long a validator has to answer a read (wallet spec 8.3; decision 7 of forclaude/wallet-round-robin-plan-1.md): past it the read counts as not answered and is asked again on the next validator. Without a limit a read could be held for the proxy's two minutes before the wallet moves on. Since 2026-11-11 the proxy itself answers 502 after 10 seconds for a validator whose machine cannot be reached (validatorIdleMs in server/config.js); a call that is under way still has the two minutes. A submission has no limit. */
 export const VALIDATOR_READ_TIMEOUT_MS = 10_000;
 
+/** How long a signing server has to answer, the public keys or a signature (wallet spec 8.3; decision 18 of forclaude/signing-server-plan-1.md): past it the call counts as not answered and is made again on the other signing server. Without a limit a call could be held for the proxy's two minutes before the wallet moves on. */
+export const SIGNING_TIMEOUT_MS = 15_000;
+
 /** The username check while typing. */
 export const USERNAME_DEBOUNCE_MS = 400;
 

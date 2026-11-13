@@ -45,8 +45,8 @@ const emptyRow = (): PayoutRow => ({ accountIdTo: '', amount: '', reason: '', st
  * tells whether a proposal is open; Post proposal, disabled while busy,
  * without a guardian account, or while a proposal is open (the reason
  * shown). Post checks each row, opens pair one of the chosen account,
- * builds the fundProposal (crypto.buildFundProposal), has /api/sign add the
- * wallet pair and posts /fund-proposal; a 202 opens the proposal's page.
+ * builds the fundProposal (crypto.buildFundProposal), has /api/sign/<n> add
+ * the wallet pair and posts /fund-proposal; a 202 opens the proposal's page.
  * The refusals in words: a proposal already open, no guardian vote (the
  * proposer's weight check too); the rest "/fund-proposal: <reason>".
  */
@@ -204,7 +204,7 @@ export class GuardianNewPage {
     this.payouts.update((rows) => rows.map((row, i) => (i === index ? { ...row, accountIdTo: found[0].toLowerCase(), note: null } : row)));
   }
 
-  /** Post: the rows checked, pair one of the chosen account opened for the signature and dropped, /api/sign, /fund-proposal; a 202 opens the proposal's page, a refusal shows in words. */
+  /** Post: the rows checked, pair one of the chosen account opened for the signature and dropped, /api/sign/<n>, /fund-proposal; a 202 opens the proposal's page, a refusal shows in words. */
   protected async post(): Promise<void> {
     const proposer = this.proposer();
     if (this.busy() || !proposer || this.openAlready()) return;
@@ -213,7 +213,7 @@ export class GuardianNewPage {
     try {
       const payouts = this.checkedPayouts();
       const pairOne = await this.guardians.pairOne(proposer);
-      const tx = await this.signing.sign(this.crypto.buildFundProposal(pairOne, proposer, payouts));
+      const tx = await this.signing.sign(this.crypto.buildFundProposal(pairOne, proposer, payouts), proposer);
       const res = await this.api.fundProposal(tx);
       if (!res.ok) throw new Error(this.refusal(res));
       await this.router.navigate(['/dao/guardians', res.body.transactionId]);

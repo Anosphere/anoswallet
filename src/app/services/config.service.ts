@@ -4,10 +4,12 @@ import { LogService, reasonOf } from './log.service';
 /** The three editions of the app (wallet spec 12.1, 13.1): the wallet, or the same app with the moderator or the attestor section switched on. */
 export type Edition = 'wallet' | 'moderator' | 'attestor';
 
-/** What GET /api/config answers: the two counts, the threshold, the deposit floor, the edition, the relying-party id and the three lock numbers; the browser never sees an address. */
+/** What GET /api/config answers: the three counts, the threshold, the deposit floor, the edition, the relying-party id and the three lock numbers; the browser never sees an address. */
 export interface WalletConfig {
   validators: number;
   keyholders: number;
+  /** How many signing servers the proxy lists (2026-11-13, wallet spec 2 and 8.3): the signing service picks one per session and asks the other when it does not answer. Optional: a proxy that does not send it has one. */
+  signingServers?: number;
   shareThreshold: number;
   /** How many of the keyholders must store a share for a deposit to go through, in percent (wallet spec 6). Optional: a proxy that does not send it means every keyholder must. */
   depositFloorPercent?: number;

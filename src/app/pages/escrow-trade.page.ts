@@ -41,7 +41,7 @@ interface Outcome {
  * stage is held, the buttons for this side, the seller Release the anos
  * and Dispute, the buyer Cancel trade and Dispute, each asking once before
  * the escrowSuccess, escrowCancel or escrowDispute follow-up is built with
- * pair one, signed by /api/sign and posted to /escrow-signature, the path
+ * pair one, signed by /api/sign/<n> and posted to /escrow-signature, the path
  * the old paste form took. In dispute: who disputed it, the verdicts so
  * far and a link to the case under Cases when there is one. The page
  * refreshes every 5 seconds while the trade is open. A trade seen open and
@@ -328,7 +328,7 @@ export class EscrowTradePage {
     this.outcome.set(null);
     try {
       const pairOne = await this.pairOne();
-      const signed = await this.signing.sign(this.crypto.buildFollowUp(pairOne, { type: FOLLOW_UPS[action], transactionId: trade.transactionId, accountId: this.accountId() }));
+      const signed = await this.signing.sign(this.crypto.buildFollowUp(pairOne, { type: FOLLOW_UPS[action], transactionId: trade.transactionId, accountId: this.accountId() }), this.accountId());
       const res = await this.anos.escrowSignature(signed);
       if (!res.ok) throw new Error(this.plainReason(res));
       this.outcome.set({ ok: true, text: this.t().escrow.sent[action] });

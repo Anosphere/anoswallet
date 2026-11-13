@@ -701,7 +701,7 @@ export class AttestingRecoveryCasePage {
    * Sign all attestations (wallet spec 13.3): one attestation follow-up per
    * move, built as the account page builds one: pair one of the staked
    * account, attestorId the account, accountId the move's old account,
-   * transactionId the move's, the wallet pair from /api/sign; then
+   * transactionId the move's, the wallet pair from /api/sign/<n>; then
    * /sign-off-break-glass-case with every move once. When the answer says
    * decided this sign-off decided the case and the sending runs at once.
    */
@@ -715,7 +715,7 @@ export class AttestingRecoveryCasePage {
       const attestations: BreakGlassAttestation[] = [];
       for (const move of d.moves) {
         const followUp = this.crypto.buildFollowUp(pairOne, { type: 'attestation', transactionId: move.transactionId, accountId: move.accountId, attestorId: account.accountId });
-        attestations.push({ transactionId: move.transactionId, attestation: await this.signing.sign(followUp) });
+        attestations.push({ transactionId: move.transactionId, attestation: await this.signing.sign(followUp, account.accountId) });
       }
       const res = await this.masterpod.signOffBreakGlassCase(this.caseId(), attestations);
       if (!res.ok) throw new Error(this.refusal(res, '/sign-off-break-glass-case'));

@@ -1,5 +1,5 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { ChatKeys, CryptoService, Envelope, HybridPublicKey, SessionKeys, WalletPublicKeys } from './crypto.service';
+import { ChatKeys, CryptoService, Envelope, HybridPublicKey, SessionKeys } from './crypto.service';
 import type { RoomsAnswer } from './masterpod-api.service';
 import { Bytes } from './passkey.service';
 
@@ -86,8 +86,6 @@ export class SessionService {
   readonly hasEncryptionKey = signal(false);
   readonly hasChatKeys = signal(false);
   readonly hasIdentity = signal(false);
-  /** The wallet pair's public keys, fetched once per session from /api/sign/public-keys. */
-  readonly walletKeys = signal<WalletPublicKeys | null>(null);
   /** The pod's anos accounts from /list-anos-accounts. */
   readonly accounts = signal<AnosAccountItem[]>([]);
   /** The notifications, newest first, refreshed by the shell's 5-second poll. */
@@ -148,7 +146,6 @@ export class SessionService {
     this.hasEncryptionKey.set(false);
     this.hasChatKeys.set(false);
     this.hasIdentity.set(false);
-    this.walletKeys.set(null);
     this.accounts.set([]);
     this.notifications.set([]);
     this.chatRooms.set(null);

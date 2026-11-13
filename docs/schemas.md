@@ -5,8 +5,9 @@ day and on this machine now, that does everything the three test apps do
 (test-web-app for anos, masterpod-test-web-app, keyholder-test-web-app) in
 one flow: create an anoPod, get vouched, give the identity record, set up,
 fill the security buckets, make anos accounts, send anos, chat, trade.
-Beside it, a stand-in signing server, and the changes to masterpodsoftware
-and anossoftware the wallet needs. keyholdersoftware does not change.
+Beside it, a signing server (a stand-in until 2026-11-13, section 3), and
+the changes to masterpodsoftware and anossoftware the wallet needs.
+keyholdersoftware does not change.
 
 Every shape not written here is exactly as the three architecture record
 folders describe it (~/Desktop/Z/masterpod_software_architecture,
@@ -27,12 +28,12 @@ validators' new "account" level (section 5.3).
                                 POST /api/masterpod/<route>
                                 POST /api/anos/<n>/<route>
                                 POST /api/keyholder/<n>/<route>
-                                POST /api/sign, GET /api/sign/public-keys
+                                POST /api/sign/<n>, GET /api/sign/<n>/public-keys
     the proxy (server/)         masterpod :3100, validators :3001 to :3005, keyholders :3201 to :3205,
-                                the signing server :3300
+                                the signing server :3300 (two signing servers on the network, section 3)
     a validator                 the masterpod, POST /get-anos-account (new); the other validators, as today
     a keyholder                 the masterpod, POST /get-anopod-session-keys, as today
-    the signing server          nobody
+    a signing server            nobody on this machine; on the network Google Cloud KMS, which holds its wallet pairs
 
 Ports on this machine: 4200 ng serve (the user runs it), 4300 the proxy,
 3300 the signing server, the rest as they are.
@@ -40,7 +41,7 @@ Ports on this machine: 4200 ng serve (the user runs it), 4300 the proxy,
 Folders
 
     ~/Desktop/Z/web_app           the Angular workspace, project "wallet": src/, server/, docs/, proxy.conf.json
-    ~/Desktop/Z/signingserver     the stand-in signing server, its own project
+    ~/Desktop/Z/signingserver     the signing server, its own project (the stand-in until 2026-11-13)
 
 Both are new and not git repositories yet; the user runs git init and
 commits.
@@ -57,7 +58,7 @@ on this machine).
     MASTERPOD_URL       http://localhost:3100                                the masterpod API
     VALIDATOR_URLS      http://localhost:3001,...,http://localhost:3005      comma separated, in validator order
     KEYHOLDER_URLS      http://localhost:3201,...,http://localhost:3205      comma separated, in keyholder order
-    SIGNING_SERVER_URL  http://localhost:3300                                the signing server
+    SIGNING_SERVER_URLS http://localhost:3300                                comma separated, the signing servers in order (2026-11-13, below)
     SHARE_THRESHOLD     3                                                    how many shares rebuild a secret
     DEPOSIT_FLOOR_PERCENT  80    how many of the keyholders must store a share for a deposit to go through, in percent, 1 to 100 (section 6; 2026-11-07)
     DEFAULT_VALIDATOR   1                                                    until 2026-11-10 the validator the wallet posted to; it no longer picks the validator (below)
@@ -80,19 +81,30 @@ stays, with its boot check that it is not larger than the list, and
 loaded before that change and still posts to it. The browser's code no
 longer reads defaultValidator. Taking both out is a later clean-up.
 
+SIGNING_SERVER_URLS is a list (2026-11-13, section 11): the signing
+servers, in order. /api/config answers how many there are as
+signingServers, and the browser picks one per session, at random, and
+asks the other when it does not answer (8.3). An empty list is refused
+at boot, "SIGNING_SERVER_URLS must list at least one signing server".
+Until 2026-11-13 the variable was SIGNING_SERVER_URL, one address; that
+name is no longer read.
+
 Routes
 
-    GET  /api/config                  200 { validators, keyholders, shareThreshold, depositFloorPercent, defaultValidator, edition,
-                                      rpId, guardedLockMinutes, vaultLockMinutes, lockOffsetMinutes }: the two counts are the
-                                      list lengths; the browser never sees an address; defaultValidator is DEFAULT_VALIDATOR,
+    GET  /api/config                  200 { validators, keyholders, signingServers, shareThreshold, depositFloorPercent,
+                                      defaultValidator, edition, rpId, guardedLockMinutes, vaultLockMinutes, lockOffsetMinutes }:
+                                      the three counts are the list lengths (signingServers since 2026-11-13); the browser
+                                      never sees an address; defaultValidator is DEFAULT_VALIDATOR,
                                       still answered and no longer read by the browser (2026-11-10, above)
     GET  /api/health                  200 { status: "ok" }
     ANY  /api/masterpod/<path>        forwarded to MASTERPOD_URL/<path>
     ANY  /api/anos/<n>/<path>         forwarded to VALIDATOR_URLS[n - 1]/<path>; n not 1..count: 404 { error: "unknown validator" }
     ANY  /api/keyholder/<n>/<path>    forwarded to KEYHOLDER_URLS[n - 1]/<path>; likewise 404 { error: "unknown keyholder" }
-    POST /api/sign                    forwarded to SIGNING_SERVER_URL/sign
-    GET  /api/sign/public-keys        forwarded to SIGNING_SERVER_URL/public-keys
-    anything else under /api          404 { error: "Not Found", path }
+    POST /api/sign/<n>                forwarded to SIGNING_SERVER_URLS[n - 1]/sign; n not 1..count: 404 { error: "unknown signing server" }
+    GET  /api/sign/<n>/public-keys    forwarded to SIGNING_SERVER_URLS[n - 1]/public-keys; likewise
+    anything else under /api          404 { error: "Not Found", path }; since 2026-11-13 that is also the answer to
+                                      POST /api/sign and GET /api/sign/public-keys, the two signing routes until then,
+                                      so a tab loaded before the change cannot sign until it is reloaded
     everything else                   the files of DIST_DIR; index.html for a path that is not a file (the router's deep links)
 
 Behaviour
@@ -105,7 +117,7 @@ Behaviour
   connections below).
 - The backend's status and body come back unchanged. A backend that does
   not answer: 502 { error: "<masterpod | validator n | keyholder n |
-  signing server> unavailable" }. Proxy timeout 120 seconds.
+  signing server n> unavailable" }. Proxy timeout 120 seconds.
 - The connections to the validators stay open (2026-11-11, section 11).
   A call to a validator goes to its doorman on a connection that is
   open and waiting when there is one, so it does not open a connection
@@ -121,7 +133,7 @@ Behaviour
   call hung for the 120. A call that is under way still has the 120.
   For this the proxy sends "Connection: keep-alive" to a validator in
   place of the "close" that nginx in front of it sends with every call.
-  The masterpod, the keyholders and the signing server get a new
+  The masterpod, the keyholders and the signing servers get a new
   connection for every call, as before.
 - The signed envelope's path is the backend path: the browser signs
   "/complete-setup" and posts to /api/masterpod/complete-setup; the proxy
@@ -133,33 +145,62 @@ serve on 4200 goes through the real proxy. `npm run server` starts the
 proxy; `npm run build` then `npm run server` serves the built app on 4300
 for a production-like check.
 
-## 3. The signing server (~/Desktop/Z/signingserver)
+## 3. The signing server: the contract
 
-The stand-in for the serversigner software: it signs whatever the wallet
-hands it with the wallet pair and hands it back. Express 5, ESM, no
-database, no auth. Files: src/server.js, src/app.js, src/keys.js,
-src/sign.js, src/crypto/canonical.js and src/crypto/signatures.js (copies
-of anossoftware's, the latter with an ML-DSA-87 sign added:
-nodeSign(null, message, privateKey)).
+Rewritten 2026-11-13 (section 11; the plan is
+forclaude/signing-server-plan-1.md, its decision 42). The signing server
+is a project of its own, the folder signingserver beside this one, and
+from that plan on its own README.md is its spec: its two key stores, the
+checks it makes before it signs with every reason, the kinds it signs,
+its settings, its log lines. This section keeps what the wallet needs to
+know: the two routes, the request and the answers. Until 2026-11-13 it
+described the stand-in, one server with one wallet pair that signed
+whatever the wallet handed it; the notes of section 11 keep that record.
 
-Keys: keys.json in the project root, git-ignored, made at first boot when
-missing: a P-256 pair and an ML-DSA-87 pair from node:crypto
-generateKeyPairSync, private keys as PKCS#8 DER hex, public keys raw (the
-SPKI prefix cut, as keyholdersoftware's make-keys does): 33 bytes
-compressed and 2592 bytes. Every boot logs the two public keys.
+On the network there are two signing servers, the same software on both,
+holding the same wallet pairs, 100 of them; on this machine there is
+one, with one pair. Only the proxy calls a signing server: it lists them
+in SIGNING_SERVER_URLS and forwards /api/sign/<n> and
+/api/sign/<n>/public-keys to the nth (section 2). The browser uses one
+per session and asks the other when it does not answer (8.3).
 
-    GET  /                  the text "signingserver"
-    GET  /health            200 { status: "ok", uptime }
-    GET  /public-keys       200 { walletKey: hex (33), walletPostQuantumKey: hex (2592) }
-    POST /sign              body { transaction: { payload: object, signatures: object } }
-                            200 { transaction } with signatures.walletKey (64 bytes r||s over the SHA-256 of
-                            the RFC 8785 canonical bytes of payload) and signatures.walletPostQuantumKey
-                            (4627 bytes, pure ML-DSA-87, empty context, over the canonical bytes) set,
-                            replacing any present; everything else untouched
-                            400 { error: "bad request shape" } when transaction, payload or signatures is not an object
+    GET  /public-keys       200 { walletKey: hex (33), walletPostQuantumKey: hex (2592) }: the public keys of
+                            one of the server's wallet pairs, picked at random for every call. The wallet asks
+                            for every new account and puts the two keys into the creation, so an account names
+                            one wallet pair for life (section 7).
+    POST /sign              body { transaction: { payload: object, signatures: object },
+                                   creation: { payload: object } }
+                            transaction: what the browser built and signed with its own keys: a creation, a
+                            transfer, a transferToFund, a fundProposal or a follow-up.
+                            creation: the creation of the signer's account, its payload alone (about 21 KB),
+                            without its eight signatures, which the server does not read. It goes with every
+                            request but a creation's own: there the transaction is the creation, and the
+                            body is { transaction }.
+                            200 { transaction }: the transaction with signatures.walletKey (64 bytes r||s
+                            over the SHA-256 of the RFC 8785 canonical bytes of payload) and
+                            signatures.walletPostQuantumKey (4627 bytes, pure ML-DSA-87, empty context, over
+                            the canonical bytes) set, replacing any present; everything else untouched
+                            400 { error: reason }: the server does not sign, and the reason says why
+                            503 { error: "kms unavailable" }: the server could not get the two signatures
+                            from its key store; the wallet counts it as no answer and asks the other server
 
-PORT 3300 by default. JSON limit 1 MB (a creation is about 60 KB). No
-CORS (only the proxy calls it). `npm start`.
+Before it signs, the server checks four things without asking anyone.
+The signer's account id is the SHA-256 of pair one's two public keys in
+the creation sent along. The wallet pair that creation names is one of
+the server's own, which is also the pair it signs with. The person's
+signatures on the transaction verify: pair one's two, or on a creation
+the six the browser makes. And the transaction is a kind the server
+knows, with the right shape and the right id. It does not check a
+balance or the previous transaction id; the validators do. So a signing
+server signs only what the holder of an account's pair one has already
+signed. A break-glass move and its cancel are signed by the break-glass
+pair alone and are never sent to a signing server, which would refuse
+them.
+
+The signer is not always the account in accountId: on a fundProposal and
+a guardianVote it is guardianId, on an attestation attestorId, on an
+escrowVerdict arbitratorId. The page passes the signer's account id to
+signing.service, which sends that account's creation (8.3).
 
 ## 4. Masterpod changes
 
@@ -656,10 +697,13 @@ flows/how_a_wallet_builds_a_transaction.md). New or changed:
                         ML-DSA-87 keys come back from their seeds (the test wallet's generateMlDsaKey(seed)), P-256
                         public keys from the scalars. Opened only to sign, then dropped; the ciphertext stays in
                         RAM for the session. Before 2026-11-08 the blob was under the encryption key.
-    the wallet pair     fetched once per session from /api/sign/public-keys; a creation payload carries them as
+    the wallet pair     asked for every new account from /api/sign/<n>/public-keys (2026-11-13, section 11; fetched
+                        once per session until then): a signing server answers one of its pairs, picked at random,
+                        and the account names that pair for life; a creation payload carries them as
                         walletKey and walletPostQuantumKey; the browser makes the other six signatures and
-                        /api/sign adds the two. Every transfer, fund proposal and follow-up is signed by pair one
-                        in the browser and by the wallet pair through /api/sign, then posted to the validator.
+                        /api/sign/<n> adds the two. Every transfer, fund proposal and follow-up is signed by pair one
+                        in the browser and by the wallet pair through /api/sign/<n>, the signer account's creation
+                        payload sent along (section 3), then posted to the validator.
     the account envelope for reads
                         { payload: { accountId, path, timestamp, nonce, body }, signatures: { ecdsa, mldsa } }:
                         the pod envelope with accountId as the signer field, signed by pair one (P-256 r||s over
@@ -1087,11 +1131,11 @@ live there, so the recovery's finish opens accounts the same way, 12.3)
 with the type the box showed, the select keeping its value,
 and shows its steps as a progress list:
 1. pair one, pair two, the break-glass seed and its two keys; the
-   wallet public keys from /api/sign/public-keys; accountId; the
+   wallet public keys from /api/sign/<n>/public-keys; accountId; the
    creation payload (the test wallet's buildCreateAccountTransaction,
    with the wallet keys from the server) signed by the six keys here;
 2. the break-glass seed deposited (section 6, breakglasskey);
-3. /api/sign: the two wallet signatures added;
+3. /api/sign/<n>: the two wallet signatures added;
 4. /create-anos-account with keyBlob (under the key blob key, section 7;
    2026-11-08) and the signed creation; when the masterpod answers 403
    account limit reached (4.4; 2026-11-10) the error under the steps is
@@ -1240,7 +1284,7 @@ the transfer", the second one red since 2026-11-12 (the box's `danger`,
 would read as the cancel itself. Back does nothing. Yes builds the
 follow-up lockedTransferCancel for the transfer the box showed,
 { type: "lockedTransferCancel", transactionId, accountId } with signedAt
-added (crypto buildFollowUp, pair one from the keyBlob); /api/sign adds
+added (crypto buildFollowUp, pair one from the keyBlob); /api/sign/<n> adds
 the wallet pair; /locked-transfer-cancel takes it (anos-api
 lockedTransferCancel); the page refreshes. While the cancel is on its
 way a progress bar shows under the row, with no words, as on the
@@ -1363,7 +1407,7 @@ latestTransactionId, fetched right before building, after the box, and
 the date of a guarded or vault transfer is worked out there too, so the
 time spent reading the box does not use up the lock's offset. The payload is
 signed by pair one (keyBlob opened for the signature and dropped),
-/api/sign adds the wallet pair, the validator gets it, the page
+/api/sign/<n> adds the wallet pair, the validator gets it, the page
 refreshes. Send is disabled while the account has a pending transaction,
 is the seller of an open escrow trade, holds an assisted transfer or has
 a transfer waiting out its lock (one held transaction per account; the
@@ -1502,7 +1546,7 @@ The cancel is red (2026-11-12, section 11; the class `danger`, 8.9):
 "Cancel trade", and the Yes of its question, "Yes, cancel the trade".
 Release, Dispute and the Yes of each keep their colour.
 Yes builds the escrowSuccess, escrowCancel or escrowDispute follow-up
-(crypto buildFollowUp, pair one from the keyBlob), /api/sign adds the
+(crypto buildFollowUp, pair one from the keyBlob), /api/sign/<n> adds the
 wallet pair, /escrow-signature takes it, then "Sent. ..." in green or
 the validator's refusal in plain words (not all accepted yet; the other
 side moved first, naming what they did; already in dispute; not this
@@ -1564,7 +1608,7 @@ be undone."), then "Yes, cancel the transfer" or Back. Both cancel
 buttons are red (2026-11-12, section 11; the class `danger`, 8.9):
 "Cancel transfer" and "Yes, cancel the transfer". Yes builds the
 assistedTransferCancel follow-up as the removed form did (crypto
-buildFollowUp, pair one from the keyBlob), /api/sign adds the wallet
+buildFollowUp, pair one from the keyBlob), /api/sign/<n> adds the wallet
 pair, /assisted-transfer-cancel takes it, then "Sent. The transfer is
 being cancelled; the anos stay in this account." in green or the
 validator's refusal in plain words (not all accepted yet; already being
@@ -1673,7 +1717,7 @@ Only the buyer can cancel; either side can dispute.", Yes or Back), and
 Yes builds the escrowTransfer as the account page's Send does (pair one
 from the account's keyBlob and the encryption key, /get-account for the
 latest transaction id, buildAnosTransferTransaction with type
-escrowTransfer, /api/sign, /anos-transfer). What follows the answer
+escrowTransfer, /api/sign/<n>, /anos-transfer). What follows the answer
 (rewritten 2026-11-10, section 11, from
 forclaude/wallet-trade-message-plan-1.md): an answer with a 4xx status is
 a refusal and shows the validator's reason as the account page shows it,
@@ -2161,7 +2205,7 @@ amount must be anos with up to six decimals"; the recipient lower-cased,
 the amount as millionths, the reason trimmed, stakeFor only when picked),
 opens pair one of the chosen account for the signature and drops it,
 builds the fundProposal (crypto.buildFundProposal: the fund as accountId,
-the chosen account as guardianId, no previousTransactionId), has /api/sign
+the chosen account as guardianId, no previousTransactionId), has /api/sign/<n>
 add the wallet pair and posts /fund-proposal; a 202 opens
 /dao/guardians/<transactionId>. The refusals in words: "a fund proposal is
 already open" (the validator's held check), the sentence above; "the
@@ -2214,7 +2258,7 @@ vote for" and Back (a new pick in the select closes the question, which
 named the account). Yes opens pair one of the selected account from its
 keyBlob for the signature and drops it, builds the guardianVote
 follow-up (crypto.buildFollowUp: type guardianVote, the proposal's
-transactionId, the account as guardianId, the vote), has /api/sign add
+transactionId, the account as guardianId, the vote), has /api/sign/<n> add
 the wallet pair and posts /guardian-vote; a 202 shows "Your vote for is
 sent to the validators." in green (the thumb green, #2e7d32) and reads
 the proposal again, where the vote shows as waiting for approval until
@@ -2283,7 +2327,7 @@ excepted, with the keyholder and anos calls included.
     session.service         signals: anopodId, username, firstName, lastName, the session keys, the PRF output
                             while needed and the key blob key derived from it (2026-11-08), the encryption key,
                             the chat keys, the PLID and lookup id, the status
-                            from /check-anopod-status, the keyholder receiving keys, the wallet public keys, the
+                            from /check-anopod-status, the keyholder receiving keys, the
                             accounts (keyBlob ciphertext and creation, never open keys), the chat rooms (the
                             latest /list-chat-rooms answer), the seen positions with markSeen and the unread
                             rooms (2026-11-05); the next-step rule
@@ -2447,7 +2491,31 @@ excepted, with the keyholder and anos calls included.
                             null when there is no such pod (2026-11-05); at most PROFILE_READS_AT_ONCE (5) reads
                             in flight, the other ids queued, so a page with many faces gets them a few at a time
                             (2026-11-08)
-    signing.service         /api/sign/public-keys and /api/sign
+    signing.service         the signing servers through the proxy (2026-11-13, section 11; until then
+                            /api/sign/public-keys and /api/sign on one server): publicKeys(), GET
+                            /api/sign/<n>/public-keys, and sign(transaction, signerAccountId), POST /api/sign/<n>, n
+                            being the session's signing server; the wallet uses one signing server per session, a
+                            session being one load of the wallet in a tab, so a reload picks again; the first
+                            call picks it at random (Math.random) from 1 to the signingServers of /api/config, a
+                            proxy that sends no count having one, and every call goes to it; each call waits at
+                            most SIGNING_TIMEOUT_MS, 15 seconds (constants.ts), which LogService.get can carry
+                            now as LogService.post could; no answer is what it is for a validator, noAnswer of
+                            anos-api.service: status 0 (the network failed, or the call ran into its time
+                            limit), 502 (the proxy's "signing server n unavailable"), 503 (a signing server's
+                            "kms unavailable") or 504, and every other status is an answer, a refusal included;
+                            with no answer the session moves to the next signing server in the list, the first
+                            after the last, and stays there, by one place however many calls got no answer from
+                            that server at the same moment, and the call is made again by itself, since signing
+                            the same thing twice does no harm, each signing server at most once per call, the
+                            last failure returned when none answers; the creation sent along: with an id the
+                            body of sign is { transaction, creation: { payload } }, the payload being the
+                            creation payload of that account in the session's account list, without its
+                            signatures, and an id that is not in the list throws common.notMyAccount with
+                            nothing sent; without an id the body is { transaction }, the way only a creation is
+                            sent; no kept public keys: every call of publicKeys() asks, since a signing server
+                            answers one of its wallet pairs, picked at random, and the session keeps none; a
+                            failure is thrown in the words signing.publicKeys(reason) and signing.sign(reason),
+                            as before
     crypto.service          the keyholder test app's crypto.service.ts plus the anos test app's (keys, the
                             builders, signing), plus section 7 and the public ledger id; wrapJson and
                             unwrapJson (2026-11-07); deriveKekKeys, the key blob under it and KeyBlobLostError
@@ -2820,14 +2888,24 @@ The three lock numbers come from the proxy: on this machine its defaults
 testnet network/wallet.env says 10, 20 and 5, the validators'
 network/testnet.env numbers (2026-11-06, section 11).
 
+The signing servers come from the proxy's SIGNING_SERVER_URLS, a list
+(2026-11-13, section 11; SIGNING_SERVER_URL, one address, until then):
+on this machine its default is the one signing server on 3300 and no env
+file is needed; on the network network/wallet.env lists the two Google
+Cloud machines.
+
 ## 10. Out of scope, not built
 
 - Recover account: the locked-out flow and the case view are built
   (section 12, build 1, 2026-10-26); the moderator section is build 2 and
   the finish build 3.
 - Sending anos to a username: the recipient is a typed account id.
-- The real signing server (the serversigner software, tomorrow): no
-  checks of what it signs, no auth.
+- The real signing server: no longer out of scope. Since 2026-11-13 the
+  signing server checks a request before it signs
+  (forclaude/signing-server-plan-1.md, its step 2; section 3 here, and
+  the signing server's own README, which is its spec). It still has no
+  auth of its own: on the network only the two wallet servers can reach
+  it.
 - Keyholder discovery and ceremonies: the proxy's list is the truth.
 - A retry of a failed keyholder deposit: the step restarts with a new
   secret. A catch-up that gives a keyholder the shares it missed while
@@ -8208,6 +8286,197 @@ as evidence, the selfie check) are in the masterpod spec, section 11.
   built and not opened. The pane blocks the camera, so the live camera
   was not tried; `takePhoto` did not change.
 
+### Two signing servers, and the signer's creation with every sign request (2026-11-13)
+
+Built from `forclaude/signing-server-plan-1.md` (FINAL since 2026-11-10),
+its step 1, the wallet's side: its section 1, points 1.1 to 1.13, one
+commit, on top of f2b565f. Why, from the user's four items of 2026-11-09
+(section 2 of the phase 3 build list): two signing servers, with the
+wallet trying the second when the first is down, and a signing server
+that checks a transaction itself before it signs. For that check the
+wallet sends the creation of the signer's account with every sign
+request (the plan's decision 2). A signing server also holds many wallet
+pairs and answers one of them per call, so the wallet asks for the
+public keys for every new account (decision 18). The signing server's
+own software is step 2 of the plan, in its own folder; the two go out
+together at the phase 3 launch (decision 33). Nothing changes on the
+validators, the doormen, the masterpod or the keyholders. No new
+package, no new word in either language, no change to a page's
+template, no test code.
+
+- `server/config.js`: `signingServerUrls`, the list from
+  `SIGNING_SERVER_URLS`, default `http://localhost:3300`, in place of
+  `signingServerUrl` from `SIGNING_SERVER_URL`, which is no longer read.
+  An empty list is refused at boot, beside the `DEFAULT_VALIDATOR`
+  check: `SIGNING_SERVER_URLS must list at least one signing server`.
+  The comment at the top names the signing servers among the list
+  variables.
+- `server/app.js`: `/api/config` also answers `signingServers`, the
+  length of the list. The two forwards became a loop over the list, as
+  the validators' loop is. For entry n, counted from 1,
+  `GET /api/sign/<n>/public-keys` goes to that server's `/public-keys`
+  and `POST /api/sign/<n>` to its `/sign`; a server that does not answer
+  is `502 { error: "signing server <n> unavailable" }`. After the loop,
+  `unknownNumber('sign', 'signing server', count)`: a number the list
+  does not have is `404 { error: "unknown signing server" }`.
+  `/api/sign` and `/api/sign/public-keys` are gone and fall to the
+  `/api` catch-all, `404 { error: "Not Found", path }`, so a tab loaded
+  before the change cannot sign until it is reloaded (decision 30).
+- `server/index.js`: the boot line reads `signing servers` and prints
+  the list.
+- `network/wallet.env`: `SIGNING_SERVER_URLS` in place of
+  `SIGNING_SERVER_URL`, with a comment that says what the list is: the
+  signing servers in order, the two Google Cloud machines. The one entry
+  is still signing1's address, because the two machines do not exist
+  yet; the user puts their two addresses in before the wallet goes out
+  (stage 4 of the how-to,
+  `test_net_phase_3_production/signing-server-go-live.md`). Until then
+  the comment is ahead of the value under it.
+- `src/app/constants.ts`: `SIGNING_TIMEOUT_MS`, 15 000 (decision 18).
+- `src/app/services/log.service.ts`: `get(path, quiet, timeoutMs)` takes
+  the time limit the way `post` does.
+- `src/app/services/config.service.ts`: `signingServers?: number` in
+  `WalletConfig`; a proxy that does not send it has one.
+- `src/app/services/anos-api.service.ts`: `noAnswer` is exported.
+  Nothing else changed in that file.
+- `src/app/services/signing.service.ts`, written anew (8.3 has it
+  whole). The private field `sessionServer`. `ask`, private: it makes a
+  call on the session's signing server and, with no answer, moves the
+  session on and makes the call again, each server at most once.
+  `publicKeys()`, which keeps nothing. `sign(transaction,
+  signerAccountId?)`, which sends the creation payload of the signer's
+  account along. `ConfigService` is injected for the count. The comment
+  of the class says all this.
+- `src/app/services/session.service.ts`: the `walletKeys` signal is
+  gone, with its line in `close()` and the `WalletPublicKeys` import,
+  which it alone used.
+- The eleven calls that pass the signer's account id as the second
+  argument. `pages/account.page.ts`, the two in `send()` and the one in
+  `askCancelLocked()`: `this.accountId()`.
+  `components/pinned-listing.component.ts`: `from`.
+  `pages/escrow-trade.page.ts` and `pages/assisted-transfer.page.ts`:
+  `this.accountId()`. `pages/guardian-new.page.ts`: `proposer`.
+  `pages/guardian-proposal.page.ts`: `account.accountId`.
+  `pages/attesting-trade-case.page.ts`,
+  `pages/attesting-recovery-case.page.ts` and
+  `pages/attesting-dispute-case.page.ts`: `account.accountId`. The
+  twelfth call, the creation's in
+  `services/account-creation.service.ts`, passes none. Each of the
+  eleven opens pair one from the same account in the session's list
+  just before it signs, so the account is in the list when
+  `signing.sign` looks for it.
+- Readings where the plan left a detail open. Calls that get no answer
+  from the same signing server at the same moment move the session on
+  by one place, not by one each, as the validator service does it:
+  `ask` changes the session's server only while it is still the one
+  that did not answer. With two servers, a second call would otherwise
+  put the session back on the dead one and give up without asking the
+  other. A repeated call goes to the server the session is on at that
+  moment. The time limit holds for each try, so a call waits at most 15
+  seconds per listed server before it fails. A refusal, a 400, is an
+  answer and is shown; the other server is not asked. A 503, `kms
+  unavailable`, is no answer, so the other server is asked, though both
+  ask the same Google service. An id that is not in the session's list
+  throws before anything is sent. `ask` takes the call as a function of
+  the server's number, so `publicKeys` and `sign` share the loop.
+  `signingServers` stands after `keyholders` in the answer of
+  `/api/config` and in `WalletConfig`. Every try is a line of the Log,
+  with the server's number in the path.
+- The signing server of before, the stand-in at c614b21, reads only
+  `transaction` from the body and ignores the `creation` sent along.
+  So this wallet also works with the one old entry that
+  `network/wallet.env` still holds, and on this machine with the old
+  server on 3300.
+- Put right on the user's word of 2026-11-13 ("Yes, fix them"), after
+  the first report of this build listed them as left because the plan
+  does not name them. Words only, no line of code. The comments that
+  said `/api/sign` for the signing step say `/api/sign/<n>`: in
+  `pinned-listing.component.ts`, `account.page.ts` (four),
+  `assisted-transfer.page.ts`, the three attestor case pages,
+  `escrow-trade.page.ts`, `guardian-new.page.ts` (two),
+  `guardian-proposal.page.ts` (two), `account-creation.service.ts` and
+  `crypto.service.ts` (seven, one of them the path of the public
+  keys). The class comment of `log.service.ts` names `/api/sign/<n>`
+  and says that a post or a get may carry a time limit. The comment
+  over `noAnswer` in `anos-api.service.ts` says that the signing
+  service takes the same four for no answer. The comment over
+  `WalletConfig` says "the three counts". In `server/app.js` the top
+  comment names the signing servers among what `/api/config` counts,
+  and the two comments on the connections say "the signing servers".
+  In `README.md`: the signing servers among what `/api/config` counts,
+  and "the signing servers" in two places. In this spec: the opening
+  lines (the signing server was a stand-in until 2026-11-13); section 1
+  (two signing servers on the network, a signing server asking Google
+  Cloud KMS there, the folder's line); the sentence on the connections
+  in section 2; `/api/sign/<n>` in 8.2 (nine lines) and in 13.3 (two);
+  and the line of section 10, which now says that the signing server
+  checks a request before it signs.
+- Left as they are. The dated notes of earlier builds, in section 11
+  and in 13.7, still say `/api/sign`: they are the record of what was
+  built then. Three lines that the first report listed are still true
+  and did not change. "The signing server on 3300" stays in the
+  README's lines on this machine and in the table of section 9: this
+  machine has one signing server. The comment in `server/index.js`
+  stays: with the local defaults the proxy still has thirteen forwards,
+  and its listener limit is out of the plan by name. The words on the
+  screen stay: the step "The signing server adds the two wallet
+  signatures".
+- Spec: 1 (the browser's two paths), 2 (the row of
+  `SIGNING_SERVER_URLS` and a paragraph on it, `signingServers` in the
+  line of `/api/config`, the two routes, the old two under "anything
+  else", the 502 words), 3 (written anew as the contract with the
+  signing server, whose own README is its spec from now on), 7 (the
+  line on the wallet pair), 8.3 (the line of `signing.service`, and
+  "the wallet public keys" out of the line of `session.service`), 9
+  (one paragraph that names the variable: section 9 never named the
+  old one) and this note; then, on the user's word, the places the
+  "Put right" bullet above names. `README.md`: the two paths and the
+  variable's name, then the three lines put right. The older notes
+  above stand as the record of what was built then.
+- Deploying: with the phase 3 launch, stage 4 of the how-to. The two
+  addresses go into `network/wallet.env` first; then the wallet's usual
+  update, wallet1 and then wallet2. The lines of that stage hold as
+  they are written: `"signingServers":2` in the answer of `/api/config`,
+  and `/api/sign/1/public-keys` and `/api/sign/2/public-keys` each
+  answering a wallet pair.
+- Checked. `npx ng build` from the web_app folder: clean, no warnings
+  (2.17 MB initial total, `main-YZHRETYA.js`, `styles-EMD3RG3N.css`).
+  `node --check` on `server/config.js`, `server/app.js` and
+  `server/index.js` passes. Then, with throwaway code in the scratchpad
+  that is not kept (the plan's decision 50): the real `server/app.js`
+  and `server/config.js` on spare local ports in front of two and of
+  three made-up signing servers on 127.0.0.1, and the real
+  `SigningService`, `LogService` and `ConfigService`, bundled for Node
+  with the Angular imports stubbed, a made-up session and the calls
+  made with `fetch`. Seen at the proxy: `signingServers` in
+  `/api/config`; both routes reaching the right server as
+  `/public-keys` and `/sign` with the body unchanged; `unknown signing
+  server` for 0, 3 and 9; `Not Found` with the path for `/api/sign`,
+  `/api/sign/public-keys`, a wrong method and a longer path; `signing
+  server 1 unavailable` for a stopped one; the boot refused for an
+  empty list and for commas alone; the old variable no longer read;
+  `network/wallet.env` loading as one entry; the boot line. Seen in the
+  service: 40 fresh sessions picked both servers; `publicKeys()` twice
+  asked twice; a creation went as `{ transaction }` alone; a transfer
+  went with its signer's creation payload and none of the creation's
+  signatures; an id not in the list threw `common.notMyAccount` and
+  sent nothing; a stopped server, a 503 and a server that never
+  answered (15.0 seconds, for a get and for a post) each sent the call
+  to the other server, where the session stayed; a 400 was shown and
+  not asked again; with both stopped each was asked once and the last
+  failure came back in the old words; with one listed server there was
+  one try; a proxy answer without `signingServers` kept every session
+  on server 1; with three listed, two calls at once on a stopped server
+  were both answered by the next one and the session moved by one
+  place. Not run in a browser, not against a signing server of step 2,
+  and not against any server but this Mac's own made-up ones: the first
+  run of the new signing code in a browser is the user's, at the
+  launch, with the user's first account. After the comments and the
+  lines above were put right: `npx ng build` clean again, with the
+  same script file, `main-YZHRETYA.js`, since only comments changed in
+  the wallet's code, and `node --check` on the three server files
+  passes.
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`
@@ -9017,7 +9286,7 @@ refreshed by a button and every 15 s. Top to bottom:
 - Attest: a note, Sign. The page builds the `attestation` follow-up as the
   account page does (`buildFollowUp` with the staked account's pair one,
   `attestorId` the account, `accountId` the sender, `transactionId` the
-  trade's; the wallet pair from `/api/sign`), then
+  trade's; the wallet pair from `/api/sign/<n>`), then
   `/sign-off-trade-case`. The page shows who has signed.
 - When the answer says decided and no `sent` event exists: Send to the
   validators, which posts both stored attestations (from the
@@ -9103,7 +9372,7 @@ every 15 s, the trade case's frame. Top to bottom:
 - Attest: "Signed by n of 2" and who; Sign all attestations builds one
   `attestation` follow-up per move (`attestorId` the staked account,
   `accountId` the move's old account, `transactionId` the move's; the
-  wallet pair from `/api/sign`) and runs `/sign-off-break-glass-case` with
+  wallet pair from `/api/sign/<n>`) and runs `/sign-off-break-glass-case` with
   every move once.
 - When the answer says decided: Send to the validators posts the stored
   attestations the session's validator (8.3; the default validator until

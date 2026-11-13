@@ -1,11 +1,11 @@
 /**
  * The proxy's settings (wallet spec section 2), every one with a local
  * default so no env file is needed on this machine. Read once at boot. The
- * list variables are comma separated, in validator and keyholder order;
- * the browser only ever learns the two counts. EDITION (12.1, 13.1) picks
- * the wallet, the moderator or the attestor edition of the same app; RP_ID
- * is the relying-party id of the browser's two passkey ceremonies. The
- * three lock numbers are the validators' (anossoftware's
+ * list variables are comma separated, in validator, keyholder and signing
+ * server order; the browser only ever learns the three counts. EDITION
+ * (12.1, 13.1) picks the wallet, the moderator or the attestor edition of
+ * the same app; RP_ID is the relying-party id of the browser's two passkey
+ * ceremonies. The three lock numbers are the validators' (anossoftware's
  * network/testnet.env on the testnet) and reach the browser through
  * /api/config.
  */
@@ -64,7 +64,7 @@ export const config = Object.freeze({
   masterpodUrl: url('MASTERPOD_URL', 'http://localhost:3100'),
   validatorUrls: list('VALIDATOR_URLS', ports(3001, 5)),
   keyholderUrls: list('KEYHOLDER_URLS', ports(3201, 5)),
-  signingServerUrl: url('SIGNING_SERVER_URL', 'http://localhost:3300'),
+  signingServerUrls: list('SIGNING_SERVER_URLS', 'http://localhost:3300'),
   shareThreshold: integer('SHARE_THRESHOLD', 3),
   /** How many of the listed keyholders must store a share for a deposit to go through, in percent (wallet spec 6); the browser rounds up and never goes below shareThreshold. */
   depositFloorPercent: percent('DEPOSIT_FLOOR_PERCENT', 80),
@@ -85,4 +85,8 @@ export const config = Object.freeze({
 
 if (config.defaultValidator > config.validatorUrls.length) {
   throw new Error(`DEFAULT_VALIDATOR ${config.defaultValidator} but only ${config.validatorUrls.length} validators are listed`);
+}
+
+if (config.signingServerUrls.length === 0) {
+  throw new Error('SIGNING_SERVER_URLS must list at least one signing server');
 }

@@ -104,7 +104,7 @@ export type BrowserKeyRole = Exclude<KeyRole, 'walletKey' | 'walletPostQuantumKe
 /** One signing key per browser-held role. Secret material stays in memory only. */
 export type BrowserAccountKeys = Record<BrowserKeyRole, SigningKey>;
 
-/** The wallet pair's public keys as /api/sign/public-keys answers them, hex. */
+/** The wallet pair's public keys as /api/sign/<n>/public-keys answers them, hex. */
 export interface WalletPublicKeys {
   walletKey: string;
   walletPostQuantumKey: string;
@@ -124,7 +124,7 @@ export interface CreateAccountPayload {
   publicKeys: Record<KeyRole, string>;
 }
 
-/** A creation as the browser builds it (six signatures) and as /api/sign returns it (eight). */
+/** A creation as the browser builds it (six signatures) and as /api/sign/<n> returns it (eight). */
 export interface CreateAccountTransaction {
   payload: CreateAccountPayload;
   signatures: Partial<Record<KeyRole, string>>;
@@ -168,7 +168,7 @@ export type BreakGlassKeys = Pick<BrowserAccountKeys, 'breakGlassKey' | 'breakGl
 /** The roles the browser signs a transfer or a follow-up with: pair one. The signing server adds the wallet pair. */
 export const PAIR_ONE_ROLES = ['key1', 'postQuantumKey1'] as const;
 
-/** Signatures over a payload's canonical bytes: pair one from the browser and the wallet pair from /api/sign; or, on a breakGlassTransfer (2026-11-08), the break-glass pair alone, nothing else beside it. */
+/** Signatures over a payload's canonical bytes: pair one from the browser and the wallet pair from /api/sign/<n>; or, on a breakGlassTransfer (2026-11-08), the break-glass pair alone, nothing else beside it. */
 export type TransferSignatures = Partial<Record<'key1' | 'postQuantumKey1' | 'breakGlassKey' | 'breakGlassPostQuantumKey' | 'walletKey' | 'walletPostQuantumKey', string>>;
 
 /** The six transfer types; breakGlassTransfer (2026-11-08, anossoftware spec 4.5) moves a lost account's whole balance to a new account of the same type, signed by the break-glass pair alone. */
@@ -285,13 +285,13 @@ export type FollowUpPayload =
   | EscrowSignaturePayload
   | EscrowVerdictPayload;
 
-/** A follow-up as sent: its payload with signedAt added, signed by pair one here and the wallet pair at /api/sign. */
+/** A follow-up as sent: its payload with signedAt added, signed by pair one here and the wallet pair at /api/sign/<n>. */
 export interface FollowUp<T extends FollowUpPayload = FollowUpPayload> {
   payload: T & { signedAt: string };
   signatures: TransferSignatures;
 }
 
-/** Anything /api/sign takes and gives back: a payload and a signatures object. */
+/** Anything /api/sign/<n> takes as its transaction and gives back: a payload and a signatures object. */
 export interface SignedObject {
   payload: object;
   signatures: Record<string, string | undefined>;
@@ -878,8 +878,8 @@ export class CryptoService {
    * with the wallet keys from the signing server: the eight public keys in
    * schema order, accountId the SHA-256 of key1 + postQuantumKey1 (the hex
    * strings joined), transactionId the SHA-256 of all eight joined, signed by
-   * the six keys here over the RFC 8785 canonical bytes; /api/sign adds the
-   * two wallet signatures.
+   * the six keys here over the RFC 8785 canonical bytes; /api/sign/<n> adds
+   * the two wallet signatures.
    */
   buildCreateAccountTransaction(keys: BrowserAccountKeys, walletKeys: WalletPublicKeys, accountType: AccountType): CreateAccountTransaction {
     const publicKeys = Object.fromEntries(
@@ -904,7 +904,7 @@ export class CryptoService {
    * /get-account), dated `createdAt`: now for a plain, escrow or assisted
    * transfer, the lock plus the offset ahead for a guarded or vault one. The
    * transactionId is the SHA-256 of the canonical payload without it; the
-   * payload with it is signed by pair one; /api/sign adds the wallet pair.
+   * payload with it is signed by pair one; /api/sign/<n> adds the wallet pair.
    */
   buildAnosTransferTransaction(
     pairOne: PairOne,
