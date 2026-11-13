@@ -12,6 +12,7 @@ import { RouterLink } from '@angular/router';
 import { millionthsToAnos } from '../amounts';
 import { CaseChatStartComponent } from '../components/case-chat-start.component';
 import { CASES_POLL_MS } from '../constants';
+import { imageObjectUrl } from '../images';
 import { AnosApiService, AssistedTransferItem } from '../services/anos-api.service';
 import { AttestingService, attestingError } from '../services/attesting.service';
 import { BalancesService } from '../services/balances.service';
@@ -671,7 +672,8 @@ export class AttestingRecoveryCasePage {
         continue;
       }
       const bytes = await this.crypto.decrypt(key, this.crypto.fromBase64(image.image));
-      view.images.push({ url: URL.createObjectURL(new Blob([bytes as BlobPart], { type: image.contentType })), keyId: image.keyId, createdAt: image.createdAt });
+      const url = imageObjectUrl(bytes, image.contentType);
+      if (url) view.images.push({ url, keyId: image.keyId, createdAt: image.createdAt });
     }
     for (const info of records.info) {
       const key = keys.get(info.keyId);

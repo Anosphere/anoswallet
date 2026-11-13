@@ -7,6 +7,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { RouterLink } from '@angular/router';
 import { CaseChatListComponent } from '../components/case-chat-list.component';
 import { CASES_POLL_MS } from '../constants';
+import { imageObjectUrl, redrawImage } from '../images';
 import { CryptoService } from '../services/crypto.service';
 import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
@@ -14,12 +15,16 @@ import { EvidenceFile, ExistingEvidence, MasterpodApiService, MyCaseAnswer, MyCa
 import { SessionService } from '../services/session.service';
 import { REVIEW_STATUSES, STATUS_ICONS } from './attesting.page';
 
-/** The four content types the masterpod takes as evidence (masterpod 13.3). */
-const CONTENT_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+/** The three content types the masterpod takes as evidence (masterpod 13.3): pictures only, no PDF since 2026-11-12. */
+const CONTENT_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 /** The masterpod's MAX_IMAGES_PER_REQUEST (5) and MAX_IMAGE_BYTES (10 MB, the ciphertext: 28 bytes over the plaintext). */
 const FILES_PER_REQUEST = 5;
 const MAX_FILE_BYTES = 10_485_760 - 28;
+
+/** A picked picture is redrawn before it is encrypted (2026-11-12): its longer side at most this many pixels, the largest canvas every phone's browser draws, as a JPEG at this factor. */
+const EVIDENCE_SIDE = 4096;
+const EVIDENCE_JPEG = 0.92;
 
 /** One line of the timeline. */
 interface TimelineItem {
@@ -35,7 +40,6 @@ interface FileView {
   evidenceId: string;
   caseId: string;
   contentType: string;
-  isPdf: boolean;
   url: string | null;
   when: string;
 }
@@ -50,11 +54,13 @@ interface Outcome {
  * /get-my-case, refreshed by a button and every 15 s. A trade: the status in
  * words, the timeline the person may see, and Share my lookup id, which
  * opens the identity blob in session and runs /share-lookup-id. A dispute:
- * the same frame with the person's side and Evidence: files (images and
- * PDFs) encrypted under a fresh content key each, the key under the pod's
- * encryption key (keyForMe) and to the case key (keyForCase, the case id as
- * aad), posted to /add-dispute-evidence; the person's files opened with
- * keyForMe; Supply again on a file of theirs from another case (the other
+ * the same frame with the person's side and Evidence: pictures (no PDFs
+ * since 2026-11-12), each redrawn as a fresh JPEG and encrypted under a
+ * fresh content key, the key under the pod's encryption key (keyForMe) and
+ * to the case key (keyForCase, the case id as aad), posted to
+ * /add-dispute-evidence; the person's files opened with keyForMe and shown
+ * when their type is one of the wallet's three (imageObjectUrl in
+ * ../images); Supply again on a file of theirs from another case (the other
  * cases' /get-my-case answers, cached for the page), which wraps its
  * content key to this case's key and posts it under existing. Both kinds,
  * since 2026-11-12: "Chat with the attestor" and the person's chats about
@@ -112,7 +118,7 @@ interface Outcome {
             } @else {
               <p>{{ t().myCase.evidenceText }}</p>
               <div class="row">
-                <input #picker type="file" multiple accept="image/jpeg,image/png,image/webp,application/pdf" (change)="picked.set(filesOf($event))" />
+                <input #picker type="file" multiple accept="image/jpeg,image/png,image/webp" (change)="picked.set(filesOf($event))" />
                 <button mat-flat-button type="button" (click)="upload(picker)" [disabled]="uploadBusy() || picked().length === 0">{{ t().myCase.upload(picked().length) }}</button>
               </div>
               @if (uploadBusy()) {
@@ -126,11 +132,7 @@ interface Outcome {
               @for (f of mine(); track f.evidenceId) {
                 <div class="file">
                   @if (f.url) {
-                    @if (f.isPdf) {
-                      <a [href]="f.url" target="_blank" rel="noopener" class="pdf"><mat-icon>picture_as_pdf</mat-icon> PDF</a>
-                    } @else {
-                      <a [href]="f.url" target="_blank" rel="noopener"><img [src]="f.url" [alt]="t().myCase.yourEvidence" /></a>
-                    }
+                    <a [href]="f.url" target="_blank" rel="noopener"><img [src]="f.url" [alt]="t().myCase.yourEvidence" /></a>
                   } @else {
                     <mat-icon class="locked">lock</mat-icon>
                   }
@@ -147,11 +149,7 @@ interface Outcome {
                 @for (f of others(); track f.evidenceId) {
                   <div class="file">
                     @if (f.url) {
-                      @if (f.isPdf) {
-                        <a [href]="f.url" target="_blank" rel="noopener" class="pdf"><mat-icon>picture_as_pdf</mat-icon> PDF</a>
-                      } @else {
-                        <a [href]="f.url" target="_blank" rel="noopener"><img [src]="f.url" [alt]="t().myCase.yourEvidence" /></a>
-                      }
+                      <a [href]="f.url" target="_blank" rel="noopener"><img [src]="f.url" [alt]="t().myCase.yourEvidence" /></a>
                     } @else {
                       <mat-icon class="locked">lock</mat-icon>
                     }
@@ -199,7 +197,6 @@ interface Outcome {
     .files { display: flex; flex-wrap: wrap; gap: 16px; margin: 8px 0; }
     .file { display: grid; gap: 4px; max-width: 220px; }
     .file img { width: 200px; max-height: 160px; object-fit: cover; border-radius: 8px; display: block; }
-    .pdf { display: inline-flex; align-items: center; gap: 4px; }
     .locked { color: var(--mat-sys-on-surface-variant); }
     .muted { color: var(--mat-sys-on-surface-variant); }
     .error { color: var(--mat-sys-error); }
@@ -348,13 +345,13 @@ export class MyCasePage {
         views.push(seen);
         continue;
       }
-      const view: FileView = { evidenceId: row.evidenceId, caseId, contentType: row.contentType, isPdf: row.contentType === 'application/pdf', url: null, when: this.lang.dateTime(row.createdAt) };
+      const view: FileView = { evidenceId: row.evidenceId, caseId, contentType: row.contentType, url: null, when: this.lang.dateTime(row.createdAt) };
       if (encryptionKey) {
         try {
           const contentKey = await this.crypto.decrypt(encryptionKey, this.crypto.fromHex(row.keyForMe));
           const bytes = await this.crypto.decrypt(contentKey, this.crypto.fromBase64(row.file));
           contentKey.fill(0);
-          view.url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: row.contentType }));
+          view.url = imageObjectUrl(bytes, row.contentType);
         } catch {
           // A key that does not open: the lock shows.
         }
@@ -399,9 +396,11 @@ export class MyCasePage {
   }
 
   /**
-   * Upload (wallet spec 13.3): for each file a content key, the file under it,
-   * the key under the pod's encryption key (keyForMe) and to the case key
-   * (keyForCase, encryptToHybrid with the case id as aad), posted to
+   * Upload (wallet spec 13.3): each file redrawn as a fresh JPEG (2026-11-12;
+   * one the browser cannot read is refused and nothing is posted), then for
+   * each a content key, the picture under it, the key under the pod's
+   * encryption key (keyForMe) and to the case key (keyForCase,
+   * encryptToHybrid with the case id as aad), posted to
    * /add-dispute-evidence five files at a time.
    */
   protected async upload(picker: HTMLInputElement): Promise<void> {
@@ -416,12 +415,14 @@ export class MyCasePage {
       const entries: EvidenceFile[] = [];
       for (const file of this.picked()) {
         if (!CONTENT_TYPES.includes(file.type)) throw new Error(this.t().myCase.badType(file.name));
-        if (file.size > MAX_FILE_BYTES) throw new Error(this.t().myCase.tooLarge(file.name));
         this.uploadStep.set(this.t().myCase.encrypting(file.name));
+        const picture = await redrawImage(file, EVIDENCE_SIDE, EVIDENCE_JPEG);
+        if (!picture) throw new Error(this.t().myCase.unreadable(file.name));
+        if (picture.size > MAX_FILE_BYTES) throw new Error(this.t().myCase.tooLarge(file.name));
         const contentKey = this.crypto.newContentKey();
         entries.push({
-          contentType: file.type,
-          file: await this.crypto.encryptToBase64(contentKey, new Uint8Array(await file.arrayBuffer())),
+          contentType: 'image/jpeg',
+          file: await this.crypto.encryptToBase64(contentKey, new Uint8Array(await picture.arrayBuffer())),
           keyForMe: this.crypto.toHex(await this.crypto.encrypt(encryptionKey, contentKey)),
           keyForCase: this.crypto.toHex(await this.crypto.encryptToHybrid(d.case.caseKey, contentKey, aad)),
         });

@@ -1,6 +1,7 @@
 import { Component, ElementRef, OnDestroy, afterNextRender, inject, input, output, signal, viewChild } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { redrawImage } from '../images';
 import { LanguageService } from '../services/language.service';
 
 /** What the camera hands over: the image's type and bytes, for the caller to encrypt or send. */
@@ -29,7 +30,10 @@ const SIZES: Record<CameraQuality, { width: number; height: number; jpeg: number
  * camera is refused or absent. Every photo taken or file chosen is emitted as
  * `photo`; Retake emits `cleared`. A chosen file larger than the quality's
  * size is scaled down to it first (2026-11-08), so a phone's photo weighs
- * what a photo from the live camera weighs.
+ * what a photo from the live camera weighs. Since 2026-11-12 every chosen
+ * file is redrawn as a fresh JPEG (redrawImage in ../images), whatever its
+ * size, so nothing but its pixels is sent; a file the browser cannot read
+ * as a picture is refused with a line under the input and emits nothing.
  */
 @Component({
   selector: 'app-camera',
@@ -57,6 +61,9 @@ const SIZES: Record<CameraQuality, { width: number; height: number; jpeg: number
         <span class="muted">{{ t().camera.orPick }}</span>
         <input type="file" accept="image/*" [attr.capture]="facing()" (change)="fileChosen($event)" />
       </label>
+      @if (fileError(); as text) {
+        <p class="error">{{ text }}</p>
+      }
     </div>
   `,
   styles: `
@@ -65,6 +72,7 @@ const SIZES: Record<CameraQuality, { width: number; height: number; jpeg: number
     .row { display: flex; gap: 8px; }
     .file { display: flex; flex-direction: column; gap: 4px; }
     .muted { color: var(--mat-sys-on-surface-variant); font-size: 13px; margin: 0; }
+    .error { color: var(--mat-sys-error); font-size: 13px; margin: 0; }
   `,
 })
 export class CameraComponent implements OnDestroy {
@@ -76,6 +84,8 @@ export class CameraComponent implements OnDestroy {
   protected readonly preview = signal<string | null>(null);
   protected readonly ready = signal(false);
   protected readonly cameraError = signal<string | null>(null);
+  /** Set when a chosen file was refused: the browser could not read it as a picture (2026-11-12). Cleared by the next photo. */
+  protected readonly fileError = signal<string | null>(null);
 
   private readonly video = viewChild<ElementRef<HTMLVideoElement>>('video');
   private stream: MediaStream | null = null;
@@ -135,47 +145,20 @@ export class CameraComponent implements OnDestroy {
     this.stop();
   }
 
-  /** A file from the input: a phone's camera or a picked image, scaled to the quality's size when it is larger. */
+  /** A file from the input: a phone's camera or a picked image, redrawn as a JPEG (2026-11-12) and scaled to the quality's size when it is larger; a file the browser cannot read as a picture is refused. */
   protected async fileChosen(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     input.value = '';
     if (!file) return;
-    const shrunk = await this.shrink(file);
-    if (shrunk) await this.emit(shrunk, 'image/jpeg');
-    else await this.emit(file, file.type || 'image/jpeg');
+    const { width, jpeg } = SIZES[this.quality()];
+    const redrawn = await redrawImage(file, width, jpeg);
+    if (!redrawn) {
+      this.fileError.set(this.t().camera.unreadable);
+      return;
+    }
+    await this.emit(redrawn, 'image/jpeg');
     this.stop();
-  }
-
-  /**
-   * A picked photo whose longer side exceeds the quality's width, scaled so
-   * that side is the width, the aspect kept, and encoded as JPEG at the
-   * quality's factor: the size and quality a photo from the live camera has.
-   * Null when the file is already small enough, when the browser cannot
-   * decode it, or when the canvas cannot encode it; the file then goes out
-   * unchanged, as it did before 2026-11-08. The bitmap is decoded with the
-   * orientation from the file, so a phone photo keeps the way it was held.
-   */
-  private async shrink(file: File): Promise<Blob | null> {
-    const { width: limit, jpeg } = SIZES[this.quality()];
-    let bitmap: ImageBitmap;
-    try {
-      bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
-    } catch {
-      return null;
-    }
-    try {
-      const longer = Math.max(bitmap.width, bitmap.height);
-      if (longer <= limit) return null;
-      const scale = limit / longer;
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.round(bitmap.width * scale);
-      canvas.height = Math.round(bitmap.height * scale);
-      canvas.getContext('2d')?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-      return await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', jpeg));
-    } finally {
-      bitmap.close();
-    }
   }
 
   protected retake(): void {
@@ -185,6 +168,7 @@ export class CameraComponent implements OnDestroy {
   }
 
   private async emit(blob: Blob, contentType: string): Promise<void> {
+    this.fileError.set(null);
     this.dropPreview();
     this.preview.set(URL.createObjectURL(blob));
     this.photo.emit({ contentType, bytes: new Uint8Array(await blob.arrayBuffer()) });

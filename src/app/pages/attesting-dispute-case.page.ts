@@ -12,6 +12,7 @@ import { RouterLink } from '@angular/router';
 import { millionthsToAnos } from '../amounts';
 import { CaseChatStartComponent } from '../components/case-chat-start.component';
 import { CASES_POLL_MS } from '../constants';
+import { imageObjectUrl } from '../images';
 import { AnosApiService } from '../services/anos-api.service';
 import { AttestingService, attestingError } from '../services/attesting.service';
 import { BalancesService } from '../services/balances.service';
@@ -55,7 +56,6 @@ interface EvidenceView {
   who: string;
   when: string;
   contentType: string;
-  isPdf: boolean;
   url: string | null;
   deleted: boolean;
 }
@@ -227,11 +227,7 @@ function accepted(result: SentResult): boolean {
                 @for (e of evidenceOf(side); track e.evidenceId) {
                   <div class="file">
                     @if (e.url) {
-                      @if (e.isPdf) {
-                        <a [href]="e.url" target="_blank" rel="noopener" class="pdf"><mat-icon>picture_as_pdf</mat-icon> PDF</a>
-                      } @else {
-                        <a [href]="e.url" target="_blank" rel="noopener"><img [src]="e.url" [alt]="t().disputeCase.evidenceAlt" /></a>
-                      }
+                      <a [href]="e.url" target="_blank" rel="noopener"><img [src]="e.url" [alt]="t().disputeCase.evidenceAlt" /></a>
                     } @else {
                       <mat-icon class="locked">{{ e.deleted ? 'delete' : 'lock' }}</mat-icon>
                     }
@@ -362,7 +358,6 @@ function accepted(result: SentResult): boolean {
     .column { flex: 1; min-width: 280px; }
     .file { margin: 8px 0; }
     .file img { width: 200px; max-height: 160px; object-fit: cover; border-radius: 8px; display: block; }
-    .pdf { display: inline-flex; align-items: center; gap: 4px; }
     .locked { color: var(--mat-sys-on-surface-variant); }
     .texts { margin: 4px 0; padding-left: 20px; }
     .danger { background: var(--mat-sys-error); color: var(--mat-sys-on-error); }
@@ -596,7 +591,6 @@ export class AttestingDisputeCasePage {
       who: row.username ?? this.t().common.podShort(row.anopodId.slice(0, 8)),
       when: this.lang.dateTime(row.createdAt),
       contentType: row.contentType,
-      isPdf: row.contentType === 'application/pdf',
       url: null,
       deleted: row.keyForCase === null,
     };
@@ -605,7 +599,7 @@ export class AttestingDisputeCasePage {
       const contentKey = await this.crypto.decryptFromHybrid(pair, this.crypto.fromHex(row.keyForCase), aad);
       const bytes = await this.crypto.decrypt(contentKey, this.crypto.fromBase64(row.file));
       contentKey.fill(0);
-      view.url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: row.contentType }));
+      view.url = imageObjectUrl(bytes, row.contentType);
     } catch {
       view.who += this.t().disputeCase.didNotOpen;
     }

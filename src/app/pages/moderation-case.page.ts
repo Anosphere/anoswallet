@@ -9,6 +9,7 @@ import { MatListModule } from '@angular/material/list';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { RouterLink } from '@angular/router';
+import { imageObjectUrl } from '../images';
 import { BalancesService } from '../services/balances.service';
 import { ConfigService } from '../services/config.service';
 import { CryptoService, PairOne } from '../services/crypto.service';
@@ -556,7 +557,8 @@ export class ModerationCasePage {
         continue;
       }
       const bytes = await this.crypto.decrypt(key, this.crypto.fromBase64(image.image));
-      view.images.push({ url: URL.createObjectURL(new Blob([bytes as BlobPart], { type: image.contentType })), keyId: image.keyId, createdAt: image.createdAt });
+      const url = imageObjectUrl(bytes, image.contentType);
+      if (url) view.images.push({ url, keyId: image.keyId, createdAt: image.createdAt });
     }
     for (const info of records.info) {
       const key = keys.get(info.keyId);
