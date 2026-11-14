@@ -31,13 +31,13 @@ export const en = {
     log: 'Log',
   },
   landing: {
-    noticeHeadline: 'This is just a test site.',
     title: 'Your anoPod',
-    subtitle: 'Unlock with your passkey, or create a new anoPod',
-    unlocking: 'Unlocking…',
+    subtitle: 'Log in with your passkey, or create a new anoPod',
+    unlocking: 'Logging in…',
     noPasskey: 'No passkey for this site on this device? Create an anoPod instead.',
-    unlock: 'Unlock',
+    unlock: 'Log in',
     create: 'Create account',
+    lostPasskey: 'Lost your passkey?',
   },
   material: {
     optional: 'Optional',
@@ -78,7 +78,7 @@ export const en = {
     what3: 'Check the photo. It should be the person you know. The tag under the name shows whether they can vouch for you.',
     what4: 'Press Send request. They will see your name and your photo, and they approve you.',
     waitTitle: 'While you wait',
-    wait: 'This page checks every few seconds and changes by itself once you are vouched. You can close the site and come back later. Unlock brings you back here until you are vouched. If someone declines, it shows under Notifications. Ask someone else.',
+    wait: 'This page checks every few seconds and changes by itself once you are vouched. You can close the site and come back later. Log in brings you back here until you are vouched. If someone declines, it shows under Notifications. Ask someone else.',
     findTitle: 'Find a seed',
     superSeed: 'super seed',
     seed: 'seed',
@@ -894,7 +894,7 @@ export const en = {
     continueTitle: 'Continue a recovery',
     continueText: 'Already opened a case on this device? Unlock it with the passkey you made then.',
     unlocking: 'Unlocking your case…',
-    noCase: "This passkey belongs to no recovery case. If it is your anoPod's own passkey you are not locked out: unlock from the start page.",
+    noCase: "This passkey belongs to no recovery case. If it is your anoPod's own passkey you are not locked out: log in from the start page.",
   },
   recoverOpen: {
     subtitle: 'Open a recovery case',
@@ -926,7 +926,7 @@ export const en = {
     combineText: "The shares the bankers sent are opened with this case's key and put back together: the key the bankers keep for your anoPod, and your break-glass seeds.",
     getBackIn: 'Get back in',
     backInText:
-      "The key the bankers keep opens your encryption key and proves itself to the masterpod, which makes this case's passkey your anoPod's passkey. Then you unlock as usual, here, with that passkey: pick it when asked.",
+      "The key the bankers keep opens your encryption key and proves itself to the masterpod, which makes this case's passkey your anoPod's passkey. Then you log in as usual, here, with that passkey: pick it when asked.",
     stepNewCode: 'New key for the bankers',
     newCodeText: 'The key the bankers keep has now been used: a new one is made. It replaces the old one on the masterpod and is deposited with the keyholders.',
     retryDeposit: 'Retry the deposit',
@@ -959,9 +959,9 @@ export const en = {
     noBlob2: 'The masterpod has not handed over your second key blob yet; refresh once the case is approved.',
     combineFirst: 'Combine first.',
     codeNoOpen:
-      'The rebuilt key does not open your key blob. If you already made a new one in an earlier attempt, you are not locked out any more: unlock from the start page with this passkey.',
+      'The rebuilt key does not open your key blob. If you already made a new one in an earlier attempt, you are not locked out any more: log in from the start page with this passkey.',
     codeNotAccepted:
-      "The masterpod does not accept the rebuilt key as this anoPod's current one. If you already made a new one in an earlier attempt, unlock from the start page with this passkey.",
+      "The masterpod does not accept the rebuilt key as this anoPod's current one. If you already made a new one in an earlier attempt, log in from the start page with this passkey.",
     notTakingFinish: (reason: string) => `The case does not take the finish right now (${reason}); refresh and try again.`,
     noKeyInTab: 'Your encryption key is not in this tab: get back in first.',
     makeCodeFirst: 'Make the new key first.',
