@@ -8588,6 +8588,161 @@ it was; the point on it is below.
   site is closed until the launch, and nothing in this build touches
   that code.
 
+### The launch show in the closed page (2026-11-14)
+
+Built by `forclaude/launch-show-plan-1.md` beside the repos, its three
+steps in one chat on the user's word. This spec does not describe the
+closed page (`deploy/nginx/closed.html`): the plan does, and the README's
+point "The closed page" names the show. Changed: `closed.html`,
+`deploy/nginx/wallet.conf` (the block `location /launch/` in each of the
+three server blocks, and its header comment), the README's point, this
+note. The photos are in no repo. Step 4, the music, came the same day;
+its part is at the end of this note, and it changed the show's times.
+
+What the build chose where the plan was silent:
+
+- The river is three tenths of the screen's height (`30svh`). Its top
+  seventh is haze over the far bank, and the water begins under that.
+  The far bank has one light for every 60 pixels of width or so, between
+  6 and 14. There are seven candle lights.
+- The first words fade in over 1.2 seconds once the white is gone, and
+  take their place as the title over one second.
+- The words become the small title when the first photo is on screen.
+  That is the 258th second before the hour (the 272nd before the music
+  came) unless the first photo is late, and when no photo ever arrives
+  the words stay large, as with `PHOTOS` at 0.
+- A photo that has not come within 20 seconds is given up and not asked
+  for again. At most two travel at a time, so two stuck ones would hold
+  back all the others.
+- A person who has just arrived, with no photo on screen yet, gets the
+  photo of the moment as soon as it is there, not at the next turn.
+- When the quiet begins, what is left of the fireworks is taken off the
+  sky. On a slow phone the fireworks run slow, and their last stars
+  would stand over the river. It happens under the white.
+- The 20 seconds at the hour hold back the first look for the wallet
+  only on a page that was counting down when the hour came. A page
+  opened after the hour looks at once, within those 20 seconds too. So
+  does a hidden page that is shown again: `check()` and the page's
+  `visibilitychange` lines did not change.
+- A page opened more than 20 seconds after the hour has the slow
+  fireworks only. Before, every page opened after the hour began with
+  12 seconds of dense ones.
+- Safari gives its word to keep the screen on only at a tap: WebKit
+  lists `navigator.wakeLock.request()` among the calls that need a
+  user's gesture. So in the show's time the page asks at every
+  `touchend` and `mousedown` as well. After a no it asks by itself
+  again 30 seconds later. It asks from 360 seconds on, whether or not
+  the show has photos.
+- A file that is the copy of another, byte for byte, counts once: the
+  59 files gave 57 photos. Their order is Finder's order of the file
+  names.
+
+Checked, steps 1 to 3, with the times the show had before the music
+(the fireworks until 285, the white from 285 to 281, the words at 281,
+the photos from 272):
+
+- `node --check` on the page's script: clean. nginx is not on the Mac,
+  so `wallet.conf` was read, not run: the three new blocks are equal,
+  one in each wallet name's server block, and the braces balance.
+  `nginx -t` on the server is its test.
+- Seen through a small server in the build's scratchpad that answers as
+  nginx does on a closed wallet: every address with a copy of the page
+  and the status 503, `/launch/` from the folder of the 57 photos. The
+  copy differs from the real file in one line, the launch hour, which
+  is so many seconds after the page is opened. In the Browser pane at
+  375 by 812 and at 320 by 568:
+  - opened 304 seconds before the hour: photos 001 to 006 fetched two
+    at a time, then one more with every turn; the fireworks from 300;
+    the white from 285, the river scene under it at 283.5; the words at
+    281; photo 001 at 272 and each next one at its turn;
+  - opened at 150 seconds: the river at once, photo 026 as soon as it
+    was there, 027 at its turn;
+  - photo 045 answered with 404: 044 stayed through that turn and 046
+    came at its own. Nothing on screen said so;
+  - the end: photo 057 went at 2 seconds, the last words and the footer
+    stood above the river at the hour. The server had answered as an
+    open wallet since 13 seconds before the hour: the page asked for
+    `/` 20 seconds after the hour and loaded the wallet then;
+  - opened 30 seconds after the hour: the last scene, `/` asked in the
+    same second, the wallet loaded at the next look 15 seconds later;
+  - `PHOTOS` at 0, in a copy: the words stayed large and no photo was
+    asked for;
+  - less motion, in a copy: no white, no fade, the sky's canvas never
+    set up, the river drawn once;
+  - made to throw at 270 seconds, in a copy: the show left the page,
+    the countdown and the fireworks went on, the console had no error;
+  - no sideways scroll at either size. At 320 pixels the first words
+    are on one line, in Kanit and in the Mac's own Thai font (271 of
+    284 pixels).
+- The Browser pane draws about 1.5 frames a second while the app is not
+  in front, so the motion was looked at in the iPhone simulator's
+  Safari (iPhone 17, iOS 27.0), where the copy noted every frame: 60
+  frames a second through the fireworks, the white, the words and the
+  photos, the longest gap 43 ms; the white's value rose and fell with
+  no step back; no error. That Safari refused to keep the screen on
+  without a tap (`NotAllowedError`), and so did the Browser pane, which
+  allows it to no page. No tap was given in the simulator at that
+  point. It was in step 4, below.
+- Not run on a phone and not against the servers. At the end the real
+  file holds `Date.UTC(2026, 10, 16, 3, 0, 0)` and `PHOTOS = 57`, and
+  no line of the rehearsal.
+
+Step 4, the music (the same day, on the user's five files and words;
+the plan's section 7 and decisions 23 to 30):
+
+- Changed in `closed.html`: the constant `MUSIC`; the times, as the
+  opening is now 30 seconds long (the white from 271.5 to 267.5, the
+  words at 267.5, the photos from 258 to 2, which is 256 seconds); the
+  big fireworks from 10 seconds before the hour (`light()`); the `audio`
+  element, the speaker button `#sound` and the sound's functions
+  (`sound`, `begin`, `hush`, `mute`, `mark`, `press`); `onUp` takes
+  every tap, for the sound as well as for the screen. The header comment
+  of `wallet.conf` and the README's point name the music. The music file
+  is in no repo.
+- What the build chose where the user's words and the plan were silent:
+  - the music is one file, mixed on this Mac, AAC at 96 kbit/s,
+    3,956,136 bytes. Its joins and its loudness are in the plan's 7.1
+    and decision 30;
+  - the sound is put back on the clock when it is more than 1.2 seconds
+    behind it or 0.8 ahead, at most once in six seconds, and once when
+    it begins, if it begins more than 0.3 seconds late;
+  - Safari frees an `audio` element for later when it is loaded inside a
+    tap. The page does that at the first tap, whenever it comes;
+  - a sound that is paused from outside the page, by the phone or its
+    owner, waits for the next tap;
+  - the speaker lies under the white layer, and is hidden once the music
+    is over, 24 seconds after the hour;
+  - the mouse event a phone sends after a touch is passed over, or one
+    tap on the speaker would switch twice.
+- Checked. `node --check`: clean. In the Browser pane at 375 by 812,
+  through the rehearsal server, which sends the music in parts (206) as
+  nginx does. Opened 305 seconds before the hour and not tapped: the
+  speaker showed crossed out from 300, and nothing played. A tap on the
+  page began the sound at the second of the moment. A tap on the speaker
+  stopped it, and another began it again on the clock. Opened at 17
+  seconds and tapped: the sound stayed on the clock to the tenth of a
+  second, the big fireworks were back between 10 and 8 seconds before
+  the hour, photos 054 to 057 had 4.5 seconds each, the last words came
+  at the hour, and the sound and the speaker went 24 seconds after it.
+  With a sound file that is not there, in a copy: the speaker went away
+  at the first tap and the show went on. Made to throw, in a copy: the
+  sound stopped and the speaker went with the show. The console had no
+  error in any of these.
+- In the iPhone simulator's Safari (iPhone 17, iOS 27.0), with taps
+  given through the simulator. One tap 9 seconds before the show: the
+  sound began by itself at 300 seconds and ran 0.2 seconds behind the
+  clock, and that tap got the screen lock granted. Opened 8 seconds
+  into the show and not tapped: a crossed-out speaker and no sound; a
+  tap on the page began the sound 0.1 seconds behind the clock; the
+  speaker stopped it and began it again; after about two seconds in
+  another app it played on the clock again. The new times were seen
+  there: the river under the white at 270, the words at 267.5, photo
+  001 at 258 and the next ones 4.5 seconds apart. No error.
+- Less motion and the 320-pixel width were not run again after the
+  times changed: the same lines set their scenes. The build cannot
+  hear, so the mix was judged by its measured loudness only. Not run on
+  a phone.
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`

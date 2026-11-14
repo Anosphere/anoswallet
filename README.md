@@ -139,8 +139,15 @@ servers from a chat. On each server:
   through, so both servers stay in the rotation. Closing the wallet is
   `touch /etc/wallet/closed` as root on each server, opening it is
   `rm /etc/wallet/closed`; neither needs a restart or a reload. The page
-  reloads itself every two minutes, so a phone left on it shows the
-  wallet once it opens.
+  asks every two minutes whether the wallet is open, every 15 seconds
+  once the launch hour has passed, and loads the wallet as soon as it
+  answers, so a phone left on it shows the wallet once it opens. In its
+  last five minutes before the launch hour the page plays a show, by
+  `forclaude/launch-show-plan-1.md` beside the repos. Its pictures and
+  its music are the one thing nginx serves while the wallet is closed,
+  from `/var/www/wallet/launch` under `/launch/` on all three names.
+  The folder is copied onto each server by hand, is removed after the
+  launch, and is in no repository.
 - `scripts/install-system-files.sh`, run as root from the repo root, puts
   the deploy files in place (the TLS folder, the nginx site, the closed
   page, the three units) and restarts the three units. It runs twice at setup: before the

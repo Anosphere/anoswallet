@@ -41,8 +41,10 @@
       user-select: none;
     }
 
-    /* The sky: a night gradient, two layers of stars, the fireworks canvas. */
-    .backdrop, .stars, #sky { position: fixed; left: 0; top: 0; width: 100%; height: 100vh; height: 100lvh; pointer-events: none; }
+    /* The sky: a night gradient, two layers of stars, the fireworks canvas. Over them, in the
+       show of the last five minutes: the river along the bottom of the screen, and the white
+       layer that covers everything for a moment. Taps go through all of them. */
+    .backdrop, .stars, #sky, #white { position: fixed; left: 0; top: 0; width: 100%; height: 100vh; height: 100lvh; pointer-events: none; }
     .backdrop {
       z-index: 0;
       background:
@@ -62,6 +64,8 @@
     }
     .stars.far { background-size: 370px 370px; background-position: 120px 60px; animation-duration: 4.6s; animation-delay: -2s; }
     #sky { z-index: 1; opacity: .92; }
+    #river { position: fixed; left: 0; bottom: 0; z-index: 1; width: 100%; height: 30vh; height: 30svh; pointer-events: none; }
+    #white { z-index: 5; background: #fff; opacity: 0; }
 
     main {
       position: relative;
@@ -140,6 +144,7 @@
 
     /* What shows in place of the countdown once the time has come. */
     .now-big { margin-top: 14px; font-weight: 800; font-size: clamp(2.3rem, 11.5vw, 4rem); line-height: 1.4; }
+    .now-en { margin: -4px 0 8px; font-size: clamp(1.05rem, 4.8vw, 1.35rem); line-height: 1.5; color: var(--muted); text-shadow: 0 2px 10px rgba(8, 4, 40, .9); }
     .now-wait { font-size: clamp(1.05rem, 4.8vw, 1.35rem); line-height: 1.6; text-shadow: 0 2px 10px rgba(8, 4, 40, .9); }
     .dots i { display: inline-block; width: .3em; height: .3em; margin-left: .22em; border-radius: 50%; background: var(--gold-2); animation: blink 1.2s ease-in-out infinite both; }
     .dots i:nth-child(2) { animation-delay: .2s; }
@@ -163,6 +168,46 @@
 
     footer { width: 100%; max-width: 430px; margin-top: 20px; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, .13); font-size: .82rem; line-height: 1.55; color: var(--faint); }
     footer strong { font-weight: 600; color: var(--muted); }
+
+    /* The show of the last five minutes. While the river scene is up, the page ends above the
+       water and holds the word anoPod, a small clock, the words and the photos; the
+       headline, the date, the numbers, the "closed" lines, the hint and the footer are away.
+       Once the time has come, the last words and the footer stand above the water. */
+    .river main { justify-content: flex-start; height: 100vh; height: 100svh; padding-bottom: calc(30vh + 4px); padding-bottom: calc(30svh + 4px); }
+    .river #kicker, .river h1, .river .date, .river .time, .river #count, .river #closed, .river #back, .river .hint, .river footer { display: none; }
+    .river.live #now { margin-top: auto; }
+    .river.live footer { display: block; margin-bottom: auto; }
+    #show { flex: 1 1 0; min-height: 0; width: 100%; display: flex; flex-direction: column; align-items: center; }
+    .clock { font-weight: 800; font-size: clamp(1.45rem, 6.6vw, 2rem); line-height: 1.35; color: #fff; text-shadow: 0 0 18px rgba(255, 190, 90, .45); }
+    .clock i { margin: 0 .05em; font-style: normal; color: var(--gold-2); }
+    /* The words stand large in the middle at first, then small above the photos: the two gaps
+       close and the place of the photos opens. */
+    .gap { flex: 1 1 0; transition: flex-grow 1s ease; }
+    .say { font-weight: 800; font-size: clamp(1.7rem, 8.2vw, 3rem); line-height: 1.45; transition: font-size 1s ease, opacity 1.2s ease; }
+    .say .gold { display: block; }
+    .say .en { display: block; font-weight: 400; font-size: clamp(1.05rem, 4.8vw, 1.35rem); line-height: 1.5; color: var(--muted); text-shadow: 0 2px 10px rgba(8, 4, 40, .9); transition: font-size 1s ease; }
+    .stage { position: relative; flex: 0 1 0; min-height: 0; width: min(92vw, 644px); transition: flex-grow 1s ease; }
+    #show.veil .say { opacity: 0; }
+    #show.photos .gap { flex-grow: 0; }
+    #show.photos .say { font-size: clamp(1.1rem, 5vw, 1.45rem); }
+    #show.photos .say .en { font-size: .8rem; }
+    #show.photos .stage { flex-grow: 1; margin: 8px 0 2px; }
+    /* A photo keeps its own shape and is as large as its place allows. It fades in, and it
+       grows a little for as long as it shows. */
+    .shot { position: absolute; left: 0; top: 0; right: 0; bottom: 0; margin: auto; max-width: 100%; max-height: 100%; border-radius: 14px; border: 1px solid rgba(255, 209, 102, .7); box-shadow: 0 12px 30px rgba(3, 2, 20, .6), 0 0 24px rgba(255, 170, 60, .14); opacity: 0; transform: scale(.965); transition: opacity 1s ease, transform 6s linear; }
+    .shot.on { opacity: 1; transform: none; }
+    .shot.off { transform: none; }
+    @media (prefers-reduced-motion: reduce) {
+      .gap, .say, .say .en, .stage, .shot { transition: none; }
+      .shot { transform: none; }
+    }
+    /* The show's sound: a small round speaker in the top right corner while the music is due,
+       crossed out while it does not play. It lies under the white layer. */
+    #sound { position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); right: 12px; z-index: 4; width: 40px; height: 40px; margin: 0; padding: 9px; border-radius: 50%; border: 1px solid rgba(255, 209, 102, .45); background: rgba(14, 10, 48, .62); color: var(--gold-1); cursor: pointer; -webkit-appearance: none; appearance: none; }
+    #sound svg { display: block; width: 100%; height: 100%; }
+    #sound .waves { display: none; }
+    #sound.on .waves { display: inline; }
+    #sound.on .cross { display: none; }
 
     .rise { animation: rise .8s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--i, 0) * 80ms + 300ms); }
 
@@ -198,9 +243,17 @@
   <div class="stars" aria-hidden="true"></div>
   <div class="stars far" aria-hidden="true"></div>
   <canvas id="sky" aria-hidden="true"></canvas>
+  <canvas id="river" aria-hidden="true" hidden></canvas>
 
   <main>
     <p class="brand rise" style="--i:0">anoPod</p>
+    <div id="show" hidden>
+      <p class="clock" id="clock" role="timer" aria-label="นับถอยหลังสู่การเปิดตัว"><span class="dg">0</span><span class="dg">0</span><i>:</i><span class="dg">0</span><span class="dg">0</span></p>
+      <span class="gap"></span>
+      <p class="say"><span class="gold">เราสร้างมันขึ้นมาด้วยกัน</span><span class="en" lang="en">We built it together.</span></p>
+      <div class="stage" id="stage"></div>
+      <span class="gap"></span>
+    </div>
     <p class="kicker rise" id="kicker" style="--i:1">เรากำลังจะ</p>
     <h1>
       <span class="rays" aria-hidden="true"></span>
@@ -239,7 +292,8 @@
     </div>
 
     <div id="now" hidden>
-      <p class="now-big"><span class="gold">ถึงเวลาแล้ว!</span></p>
+      <p class="now-big"><span class="gold">เราทำสำเร็จแล้ว!</span></p>
+      <p class="now-en" lang="en">We did it!</p>
       <p class="now-wait">กำลังเปิดเว็บไซต์ กรุณารอสักครู่<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span></p>
     </div>
 
@@ -256,6 +310,15 @@
       <p id="en-now" hidden>It is time! The site is opening. One moment, please.</p>
     </footer>
   </main>
+  <div id="white" aria-hidden="true" hidden></div>
+  <button id="sound" type="button" aria-label="เสียง" hidden>
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M3 9v6h4l5 4V5L7 9H3z" fill="currentColor"/>
+      <path class="waves" d="M15.5 8.5a5 5 0 0 1 0 7M18.2 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      <path class="cross" d="M16 9.5l5 5M21 9.5l-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    </svg>
+  </button>
+  <audio id="tune" preload="none"></audio>
 
   <script>
   (function () {
@@ -263,6 +326,16 @@
 
     // The launch: Monday 16 November 2026 at 10:00 in Thailand (UTC+7), which is 03:00 UTC.
     var LAUNCH = Date.UTC(2026, 10, 16, 3, 0, 0);
+    // The show of the last five minutes: how many photos it has. With 0 it has its words and
+    // no photo.
+    var PHOTOS = 57;
+    // Where the photos are: 001.jpg, 002.jpg and so on, up to the number above. While the
+    // wallet is closed this folder is the one address that does not answer with this page.
+    var FOLDER = '/launch/';
+    // The show's sound: one file in that folder, mixed on the show's clock. Its second 0 is the
+    // 300th second before the launch and it ends 24.5 seconds after it. With '' the show is
+    // silent.
+    var MUSIC = 'music.m4a';
     // These words stand in this page and not in the wallet: an answer without them is the wallet.
     var MARK = 'anopod-closed-page';
 
@@ -298,6 +371,7 @@
 
     function tick() {
       var left = LAUNCH - Date.now();
+      show(left);
       if (left <= 0) {
         if (!live) goLive();
         return;
@@ -310,8 +384,13 @@
       $('count').hidden = false;
     }
 
-    // The time has come: the countdown gives way to "opening", the rocket leaves, the sky fills.
+    // The time has come: the countdown gives way to "opening", the rocket leaves, the sky fills
+    // for the 20 seconds that follow the hour, with fireworks as big as the show's. A page that
+    // was counting down when the time came looks for the wallet at the end of those 20 seconds,
+    // not at once, so that the last words and the fireworks are seen even when the wallet opens
+    // on the dot. A page opened after the hour looks at once.
     function goLive() {
+      var rest = LAUNCH + 20000 - Date.now();
       live = true;
       document.body.classList.add('live');
       $('kicker').hidden = true;
@@ -322,15 +401,24 @@
       $('en-local').hidden = true;
       $('now').hidden = false;
       $('en-now').hidden = false;
-      if (fx) fx.finale();
-      check();
+      if (fx && rest > 0) fx.finale(rest / 1000, 1.5);
+      // The countdown has shown a number only on a page that was open before the hour.
+      if (rest > 0 && shown.s !== undefined) {
+        clearTimeout(checkTimer);
+        checkTimer = setTimeout(check, rest);
+      } else {
+        check();
+      }
     }
 
     // ---- Is the wallet open yet? ----
 
     // While the wallet is closed every address answers with this page and the status 503. The
-    // page asks every two minutes, and every 15 seconds once the time has come, and loads the
-    // wallet as soon as the answer is the wallet. Nothing reloads before that.
+    // one address that does not is the folder of the show's photos (FOLDER), which answers
+    // with its files. The page asks every two minutes, and every 15 seconds once the time has
+    // come, and loads the wallet as soon as the answer is the wallet. A page that was counting
+    // down when the time came asks for the first time 20 seconds after it (goLive). Nothing
+    // reloads before that.
     var checkTimer = 0;
     var lastCheck = 0;
 
@@ -367,7 +455,7 @@
       var glow = [];
       var W = 0, H = 0, scale = 1, most = 520, thin = 0.7;
       var stars = [], shells = [];
-      var raf = 0, last = 0, next = 0, opening = 3, finaleEnd = 0, lastTap = 0;
+      var raf = 0, last = 0, next = 0, opening = 3, finaleEnd = 0, lastTap = 0, wide = 1, hush = false;
       var i;
 
       // One glowing dot per colour, drawn once and stamped for every star; a soft one is the
@@ -415,15 +503,16 @@
 
       function colour() { return Math.floor(Math.random() * 6); }
 
-      // One firework at x, y: a heart, a ring, a gold willow or a round one.
-      function burst(x, y, tapped) {
+      // One firework at x, y: a heart, a ring, a gold willow or a round one. Its size is 1, or
+      // more for one that is so many times as wide.
+      function burst(x, y, tapped, size) {
         if (stars.length > (tapped ? most * 1.6 : most)) return;
-        var reach = (100 + Math.random() * 60) * scale;
+        var reach = (100 + Math.random() * 60) * scale * size;
         var roll = Math.random();
         var c1 = colour(), c2 = Math.random() < 0.4 ? colour() : c1;
         var tw = Math.random() < 0.35;
         var n, j, a, v;
-        star(x, y, 0, 0, FLASH, 1, 0, 0.2, 60 * scale, false);
+        star(x, y, 0, 0, FLASH, 1, 0, 0.2, 60 * scale * size, false);
         if (roll < 0.14) {
           n = Math.round(70 * thin);
           v = reach * 2.7 / 17;
@@ -462,12 +551,13 @@
         }
       }
 
-      // A shell that climbs from the bottom edge and bursts at the top of its flight.
-      function launch(tx, ty) {
+      // A shell that climbs from the bottom edge and bursts at the top of its flight, at the
+      // size it was sent up with.
+      function launch(tx, ty, size) {
         var g = 1100;
         var x0 = tx + (Math.random() - 0.5) * 100 * scale;
         var vy = -Math.sqrt(2 * g * Math.max(80, H - ty));
-        shells.push({ x: x0, y: H + 6, vx: (tx - x0) / (-vy / g), vy: vy, g: g });
+        shells.push({ x: x0, y: H + 6, vx: (tx - x0) / (-vy / g), vy: vy, g: g, size: size });
       }
 
       function frame(now) {
@@ -486,10 +576,10 @@
         ctx.fillRect(0, 0, W, H);
         ctx.globalCompositeOperation = 'lighter';
 
-        if (now >= next) {
+        if (!hush && now >= next) {
           big = now < finaleEnd;
-          launch(W * (0.12 + Math.random() * 0.76), H * (0.1 + Math.random() * (big ? 0.46 : 0.32)));
-          if (Math.random() < (big ? 0.6 : 0.2)) launch(W * (0.12 + Math.random() * 0.76), H * (0.1 + Math.random() * 0.32));
+          launch(W * (0.12 + Math.random() * 0.76), H * (0.1 + Math.random() * (big ? 0.46 : 0.32)), big ? wide : 1);
+          if (Math.random() < (big ? 0.6 : 0.2)) launch(W * (0.12 + Math.random() * 0.76), H * (0.1 + Math.random() * 0.32), big ? wide : 1);
           if (opening > 0) {
             opening--;
             next = now + 240;
@@ -509,7 +599,7 @@
           if (Math.random() < 0.3) star(s.x, s.y, (Math.random() - 0.5) * 30, 20 + Math.random() * 50, AMBER, 0.92, 120, 0.3, 4, true);
           if (s.vy > -40) {
             shells.splice(j, 1);
-            burst(s.x, s.y, false);
+            burst(s.x, s.y, false, s.size);
           }
         }
 
@@ -567,11 +657,642 @@
           var now = performance.now();
           if (now - lastTap < 60) return;
           lastTap = now;
-          burst(x, y, true);
+          burst(x, y, true, 1);
         },
-        finale: function () {
-          finaleEnd = performance.now() + 12000;
+        // Dense fireworks for so many seconds, every burst so many times as wide.
+        finale: function (seconds, size) {
+          finaleEnd = performance.now() + seconds * 1000;
+          wide = size;
           next = 0;
+        },
+        // While it is quiet no firework goes up by itself. What is in the sky when the quiet
+        // begins is taken away, so that it begins with a clear sky on a slow phone too. A tap
+        // still sets one off.
+        quiet: function (on) {
+          if (on === hush) return;
+          hush = on;
+          if (on) {
+            shells.length = 0;
+            stars.length = 0;
+            finaleEnd = 0;
+            ctx.clearRect(0, 0, W, H);
+          }
+        }
+      };
+    }
+
+    // ---- The show ----
+
+    // The last five minutes before the launch. By the seconds that are left:
+    //   360            the first photos are fetched; the phone is asked to keep its screen on
+    //   300 to 271.5   big fireworks over the page as it is, to the finale of the music; the
+    //                  numbers keep counting
+    //   271.5 to 270   the screen fades to white, and is white when the finale stops
+    //   270 to 267.5   under the white the page becomes the river scene; the white fades away
+    //   267.5 to 258   the first words alone, large
+    //   258 to 2       the first words small, and under them the photos, one after another
+    //   10             the big fireworks again, as the finale begins again
+    //   2 to 0         the last photo fades out
+    //   0              the last words (goLive); the fireworks and the finale end 20 seconds on
+    // What shows depends on the time alone, so every phone shows the same moment, and a
+    // person who comes late lands in the middle. The countdown and the way to the wallet do
+    // not need the show: when a part of it throws, drop() takes it off the page for the rest
+    // of the visit.
+    var scene = '';       // what is on the page: '', 'fire', 'veil', 'words', 'photos' or 'end'
+    var sky = '';         // what the fireworks do: '' (as ever), 'open', 'quiet' or 'close'
+    var gone = false;     // the show failed in this visit
+    var flow = null;      // the river
+    var shade = 0;        // how white the white layer is, 0 to 1
+    var veiling = 0;      // the frame at which the white is set next
+    var clockText = '';
+    var held = {};        // the photos in hand, by their place in the row, counted from 0
+    var coming = 0;       // how many of them are still on their way
+    var turn = -1;        // the photo whose turn it is
+    var up = null;        // the photo on screen
+    var lock = null;      // the phone's word that its screen stays on
+    var asking = false;   // the phone is being asked for it
+    var askAfter = 0;     // after a no: when it is asked again without a tap
+
+    function show(left) {
+      if (gone) return;
+      try {
+        play(left);
+      } catch (err) {
+        drop();
+      }
+    }
+
+    function play(left) {
+      var s = left / 1000;
+      var name = s > 300 ? '' : s > 270 ? 'fire' : s > 267.5 ? 'veil' : s <= 0 ? 'end' : s > 258 || !PHOTOS ? 'words' : 'photos';
+      var above = s > 300 ? '' : s > 271.5 ? 'open' : s > 270 ? '' : s > 10 ? 'quiet' : 'close';
+      var white = calm || s > 271.5 || s <= 267.5 ? 0 : s > 270 ? (271.5 - s) / 1.5 : s > 269 ? 1 : (s - 267.5) / 1.5;
+      var i;
+      if (name !== scene) change(name);
+      if (above !== sky) light(above, s);
+      if (white !== shade) {
+        shade = white;
+        $('white').style.opacity = white;
+        $('white').hidden = !white;
+      }
+      // While the white comes and goes it is set at every frame, so that it fades without
+      // steps.
+      if (!calm && !veiling && !document.hidden && s > 267 && s < 272) veiling = requestAnimationFrame(veil);
+      // The sound is not needed for the show: when it throws, the show goes on without it.
+      try {
+        sound(s);
+      } catch (err) {
+        mute();
+      }
+      if (s > 360) return;
+      awake();
+      if (s <= 0) return;
+      if (name === 'veil' || name === 'words' || name === 'photos') clock(s);
+      if (!PHOTOS) return;
+      i = s > 258 ? 0 : Math.min(PHOTOS - 1, Math.floor((258 - s) / (256 / PHOTOS)));
+      fetchFrom(i);
+      if (name !== 'photos') return;
+      if (s > 2) {
+        showTurn(i);
+      } else if (up) {
+        leave(up);
+        up = null;
+      }
+    }
+
+    function veil() {
+      veiling = 0;
+      show(LAUNCH - Date.now());
+    }
+
+    // The page is set for a scene.
+    function change(name) {
+      var river = name !== '' && name !== 'fire';
+      scene = name;
+      document.body.classList[river ? 'add' : 'remove']('river');
+      $('river').hidden = !river;
+      if (river && !flow) flow = water();
+      if (flow) flow[river ? 'start' : 'stop']();
+      $('show').hidden = !river || name === 'end';
+      // The words stay large until the first photo is on screen (put).
+      $('show').className = name === 'photos' ? 'words' : name;
+      if (name !== 'photos') clear();
+    }
+
+    // The sky over the show. Big fireworks while the music's finale plays: from 300 seconds
+    // on, and again from 10 seconds before the hour until 20 seconds after it. Quiet while
+    // the words and the photos show, from the moment the screen is white.
+    function light(above, s) {
+      sky = above;
+      if (!fx) return;
+      fx.quiet(above === 'quiet');
+      if (above === 'open') fx.finale(s - 271.5, 1.5);
+      if (above === 'close' && s > -20) fx.finale(s + 20, 1.5);
+    }
+
+    // The small clock of the river scene: the minutes and the seconds that are left.
+    function clock(s) {
+      var n = Math.floor(s);
+      var text = (n < 600 ? '0' : '') + Math.floor(n / 60) + (n % 60 < 10 ? '0' : '') + n % 60;
+      var digits, i;
+      if (text === clockText) return;
+      clockText = text;
+      digits = $('clock').getElementsByTagName('span');
+      for (i = 0; i < 4; i++) digits[i].textContent = text.charAt(i);
+    }
+
+    // The photo whose turn it is and the five after it are kept in hand, and at most two are
+    // on their way at the same time. A photo that has had its turn is let go. One that has not
+    // come within 20 seconds is given up, so that it does not hold back the ones after it.
+    function fetchFrom(first) {
+      var now = Date.now();
+      var i, p;
+      for (i in held) {
+        p = held[i];
+        if (i < first && p.img !== up) {
+          settle(p, 'gone');
+          delete held[i];
+        } else if (p.state === 'wait' && now - p.at > 20000) {
+          settle(p, 'bad');
+        }
+      }
+      for (i = first; i < PHOTOS && i <= first + 5 && coming < 2; i++) {
+        if (!held[i]) fetchOne(i);
+      }
+    }
+
+    function fetchOne(i) {
+      var n = String(i + 1);
+      var p = { img: new Image(), state: 'wait', at: Date.now() };
+      while (n.length < 3) n = '0' + n;
+      held[i] = p;
+      coming++;
+      p.img.onload = function () { settle(p, 'ok'); };
+      p.img.onerror = function () { settle(p, 'bad'); };
+      p.img.alt = '';
+      p.img.draggable = false;
+      p.img.src = FOLDER + n + '.jpg';
+    }
+
+    function settle(p, state) {
+      if (p.state !== 'wait') return;
+      p.state = state;
+      coming--;
+      if (state !== 'ok') {
+        p.img.onload = p.img.onerror = null;
+        p.img.removeAttribute('src');
+      }
+    }
+
+    // A photo goes on screen when its turn begins. When it has not come by then, or cannot be
+    // read, the photo before it stays until the next turn: no empty frame, no error. A person
+    // who has just arrived gets the photo of the moment as soon as it is there.
+    function showTurn(i) {
+      var p = held[i];
+      var ready = p && p.state === 'ok';
+      if (i !== turn) {
+        turn = i;
+        if (ready) put(p.img);
+      } else if (!up && ready) {
+        put(p.img);
+      }
+    }
+
+    // The photo fades in over a second, on top of the one before it, which fades out. It
+    // grows a little for as long as it shows.
+    function put(img) {
+      var old = up;
+      up = img;
+      img.className = 'shot';
+      $('stage').appendChild(img);
+      if (!calm) {
+        void img.offsetWidth;
+        img.style.transitionDuration = '1s, ' + Math.round(256 / PHOTOS + 1) + 's';
+      }
+      img.className = 'shot on';
+      $('show').className = 'photos';
+      if (old) leave(old);
+    }
+
+    function leave(img) {
+      img.className = 'shot off';
+      setTimeout(function () {
+        if (img.parentNode) img.parentNode.removeChild(img);
+      }, calm ? 0 : 1100);
+    }
+
+    function clear() {
+      var stage = $('stage');
+      while (stage.firstChild) stage.removeChild(stage.firstChild);
+      up = null;
+      turn = -1;
+    }
+
+    // From a minute before the show until the wallet opens, the phone is asked to keep its
+    // screen on, so that it does not go dark in the middle of the photos. A phone takes its
+    // word back whenever the page is hidden, so it is asked again when the page is back.
+    // Where a phone does not allow it the screen dims as usual, and a tap keeps it awake.
+    // Safari gives its word only at a tap, so in that time the phone is asked at every tap
+    // too (onUp): a person who taps once after the photos have begun to arrive keeps the
+    // screen on.
+    function awake(tapped) {
+      if (lock || asking || document.hidden || !navigator.wakeLock) return;
+      if (!tapped && Date.now() < askAfter) return;
+      asking = true;
+      navigator.wakeLock.request('screen').then(function (got) {
+        asking = false;
+        if (gone) {
+          got.release();
+          return;
+        }
+        lock = got;
+        got.addEventListener('release', function () {
+          if (lock === got) lock = null;
+        });
+      }, function () {
+        // Refused: without a tap it is asked again in half a minute, not four times a second.
+        asking = false;
+        askAfter = Date.now() + 30000;
+      });
+    }
+
+    // A tap. It frees the sound, and while the sound is due it begins it or, on the speaker,
+    // switches it off or on (press). In the last six minutes it also asks the phone to keep
+    // its screen on. A phone sends a mouse event after a touch: that one is passed over.
+    function onUp(e) {
+      var now = Date.now();
+      var t = 300 - (LAUNCH - now) / 1000;
+      if (e.type === 'touchend') lastTouch = now; else if (now - lastTouch < 1000) return;
+      if (gone) return;
+      try {
+        if (MUSIC && !silent) press(e, t);
+      } catch (err) {
+        mute();
+      }
+      if (t < -60) return;
+      try {
+        awake(true);
+      } catch (err) {
+        drop();
+      }
+    }
+    document.addEventListener('touchend', onUp, { passive: true });
+    document.addEventListener('mousedown', onUp);
+
+    // ---- The show's sound ----
+
+    // One file plays through the whole show and is kept on the clock like everything else:
+    // second t of the file belongs to the moment 300 - t seconds before the hour. Every fade
+    // and every join is in the file itself, because an iPhone lets no page change the volume.
+    //
+    // No browser lets a page begin sound by itself. A tap anywhere on the page frees it. On a
+    // phone that was tapped at any time since the page was opened, the sound begins by itself
+    // when it is due. On a phone that was not, it begins at the first tap while it is due. The
+    // small speaker in the corner shows whether it plays, and a tap on it switches it off, or
+    // on again. The sound stops while the page is hidden. When it fails, the show goes on
+    // without it.
+    var freed = false;      // a tap has freed the sound
+    var wanted = true;      // the person has not switched it off
+    var sounding = false;   // it plays, or is about to
+    var fresh = false;      // it has just been begun and has not been put on the clock yet
+    var silent = false;     // it failed in this visit, or the show did
+    var lastSeek = 0;
+    var lastTouch = 0;
+
+    function sound(s) {
+      var t = 300 - s;
+      var due = t >= 0 && t < 324;
+      var el;
+      if (!MUSIC || silent) return;
+      $('sound').hidden = !due;
+      if (!due || !wanted || document.hidden) {
+        if (sounding) hush();
+        return;
+      }
+      if (!sounding) {
+        if (freed) begin(t);
+        return;
+      }
+      // It is put back on the clock when it has fallen behind or run ahead, at most once in
+      // six seconds, so that a slow line does not make it jump again and again.
+      el = $('tune');
+      if (el.readyState > 0 && !el.paused && !el.seeking && Date.now() - lastSeek > 6000 && (el.currentTime < t - 1.2 || el.currentTime > t + 0.8)) {
+        lastSeek = Date.now();
+        el.currentTime = t + 0.2;
+      }
+    }
+
+    function begin(t) {
+      var el = $('tune');
+      var going;
+      sounding = true;
+      fresh = true;
+      lastSeek = Date.now();
+      if (el.readyState > 0) el.currentTime = t; else el.src = FOLDER + MUSIC + '#t=' + t.toFixed(1);
+      going = el.play();
+      if (going && going.then) {
+        going.then(null, function (err) {
+          // AbortError: it was stopped before it began. NotAllowedError: this phone wants a
+          // tap first, and the next tap begins it. Anything else: the file cannot be played.
+          if (err && err.name === 'AbortError') return;
+          sounding = false;
+          if (err && err.name === 'NotAllowedError') freed = false; else mute();
+          mark();
+        });
+      }
+      mark();
+    }
+
+    function hush() {
+      sounding = false;
+      $('tune').pause();
+      mark();
+    }
+
+    // The sound failed, or the show did: no sound and no speaker for the rest of the visit.
+    function mute() {
+      silent = true;
+      sounding = false;
+      try {
+        $('tune').pause();
+        $('sound').hidden = true;
+      } catch (err) {}
+    }
+
+    function mark() {
+      $('sound').className = sounding ? 'on' : '';
+    }
+
+    function press(e, t) {
+      var speaker = e.target && e.target.closest && e.target.closest('#sound');
+      if (speaker && sounding) {
+        wanted = false;
+        hush();
+        return;
+      }
+      if (speaker) wanted = true;
+      if (!freed) {
+        freed = true;
+        // Safari frees an audio element for later when it is loaded inside a tap.
+        if (!$('tune').getAttribute('src')) $('tune').load();
+      }
+      if (wanted && !sounding && !document.hidden && t >= 0 && t < 324) begin(t);
+    }
+
+    // When it begins to play it may be a moment late: it is put on the clock, once.
+    $('tune').addEventListener('playing', function () {
+      var el = $('tune');
+      var t = 300 - (LAUNCH - Date.now()) / 1000;
+      if (!fresh) return;
+      fresh = false;
+      if (sounding && el.currentTime < t - 0.3) {
+        lastSeek = Date.now();
+        el.currentTime = t + 0.1;
+      }
+    });
+    // Paused from outside the page, by the phone or by its owner: the next tap begins it again.
+    $('tune').addEventListener('pause', function () {
+      if (!sounding || document.hidden || $('tune').ended) return;
+      sounding = false;
+      freed = false;
+      mark();
+    });
+    $('tune').addEventListener('ended', function () {
+      sounding = false;
+      mark();
+    });
+    $('tune').addEventListener('error', mute);
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden && sounding && !silent) hush();
+    });
+
+    // A part of the show failed on this phone. Every trace of it leaves the page, which is
+    // then the page without a show, and it is not tried again in this visit.
+    function drop() {
+      gone = true;
+      mute();
+      try {
+        $('white').hidden = true;
+        document.body.classList.remove('river');
+        $('river').hidden = true;
+        $('show').hidden = true;
+        clear();
+        held = {};
+        if (flow) flow.stop();
+        if (fx) fx.quiet(false);
+        if (lock) lock.release();
+        lock = null;
+      } catch (err) {}
+    }
+
+    // ---- The river ----
+
+    // The water along the bottom of the screen in the show. At its top edge a far bank with a
+    // few warm lights, under a little haze. On the water, broken streaks of gold and pale
+    // light that slide to the right, the lower ones bigger and faster, and seven small candle
+    // lights that drift the same way, each with a short reflection under it. It is drawn about
+    // 30 times a second and not at all while the page is hidden. A phone that asks for less
+    // motion gets it drawn once, standing still.
+    function water() {
+      var cv = $('river');
+      var ctx = cv.getContext ? cv.getContext('2d') : null;
+      if (!ctx) return null;
+
+      var TAU = Math.PI * 2;
+      var W = 0, H = 0, bank = 0, grow = 1, dpr = 1, raf = 0, last = 0, on = false;
+      var still = document.createElement('canvas');
+      var glow = document.createElement('canvas');
+      var streaks = [], candles = [], lamps = [];
+      var i, g;
+
+      function rnd(a, b) { return a + Math.random() * (b - a); }
+
+      // One soft warm dot, drawn once and stamped for every light.
+      glow.width = glow.height = 64;
+      g = glow.getContext('2d');
+      i = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+      i.addColorStop(0, 'rgba(255,246,220,1)');
+      i.addColorStop(0.16, 'rgba(255,204,116,.9)');
+      i.addColorStop(0.5, 'rgba(255,150,70,.2)');
+      i.addColorStop(1, 'rgba(255,150,70,0)');
+      g.fillStyle = i;
+      g.fillRect(0, 0, 64, 64);
+
+      // Where everything is, once: d is how near a thing is, from 0 at the far bank to 1 at
+      // the bottom edge, and x its place across, from 0 to 1 (for a light of the bank, within
+      // its own stretch).
+      for (i = 0; i < 110; i++) streaks.push({ d: Math.pow(Math.random(), 1.5), x: Math.random(), len: rnd(0.6, 1.4), a: rnd(0.45, 1), f: rnd(0.5, 1.5), ph: rnd(0, TAU), pale: Math.random() < 0.4 });
+      for (i = 0; i < 7; i++) candles.push({ d: 0.18 + 0.74 * (i + rnd(0.1, 0.9)) / 7, x: Math.random(), f: rnd(0.9, 1.5), ph: rnd(0, TAU) });
+      for (i = 0; i < 14; i++) lamps.push({ x: rnd(0.2, 0.8), r: rnd(0.8, 1.4), f: rnd(0.3, 0.9), ph: rnd(0, TAU), len: rnd(0.12, 0.3) });
+
+      function fit() {
+        var w = cv.clientWidth, h = cv.clientHeight;
+        if (!w || !h || (w === W && h === H)) return;
+        W = w;
+        H = h;
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+        cv.width = still.width = Math.round(W * dpr);
+        cv.height = still.height = Math.round(H * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        bank = Math.round(Math.max(20, H * 0.14));
+        grow = Math.max(0.85, Math.min(1.7, W / 400));
+        paint();
+      }
+
+      // What does not move, drawn once for a size: the haze, the water, the far bank.
+      function paint() {
+        var b = still.getContext('2d');
+        var x, grad;
+        b.setTransform(dpr, 0, 0, dpr, 0, 0);
+        b.clearRect(0, 0, W, H);
+        grad = b.createLinearGradient(0, 0, 0, bank);
+        grad.addColorStop(0, 'rgba(255,138,76,0)');
+        grad.addColorStop(1, 'rgba(255,138,76,.28)');
+        b.fillStyle = grad;
+        b.fillRect(0, 0, W, bank);
+        grad = b.createLinearGradient(0, bank, 0, H);
+        grad.addColorStop(0, '#32205c');
+        grad.addColorStop(0.16, '#17114b');
+        grad.addColorStop(0.6, '#0a0830');
+        grad.addColorStop(1, '#050418');
+        b.fillStyle = grad;
+        b.fillRect(0, bank, W, H - bank);
+        b.fillStyle = '#060419';
+        b.beginPath();
+        b.moveTo(0, bank + 1);
+        for (x = 0; x <= W + 4; x += 4) {
+          b.lineTo(x, bank - 3 - 3.5 * (1 + Math.sin(x * 0.013 + 0.7)) - 2 * (1 + Math.sin(x * 0.051 + 2.1)) - (1 + Math.sin(x * 0.17 + 5)));
+        }
+        b.lineTo(W + 4, bank + 1);
+        b.closePath();
+        b.fill();
+      }
+
+      function dash(x, y, half) {
+        ctx.beginPath();
+        ctx.moveTo(x - half, y);
+        ctx.lineTo(x + half, y);
+        ctx.stroke();
+      }
+
+      function draw(t) {
+        var n, j, k, p, x, y, r, a, len, span;
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+        ctx.clearRect(0, 0, W, H);
+        ctx.drawImage(still, 0, 0, W, H);
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.lineCap = 'round';
+
+        // The lights of the far bank, one for every 60 pixels or so, each in a stretch of its
+        // own and each with a reflection that the water breaks.
+        n = Math.max(6, Math.min(lamps.length, Math.round(W / 60)));
+        ctx.strokeStyle = 'rgb(255,196,120)';
+        ctx.lineWidth = 1.2;
+        for (j = 0; j < n; j++) {
+          p = lamps[j];
+          x = (j + p.x) / n * W;
+          a = 0.75 + 0.25 * Math.sin(t * p.f + p.ph);
+          r = 7 * p.r;
+          ctx.globalAlpha = a;
+          ctx.drawImage(glow, x - r, bank - 2 - r, r * 2, r * 2);
+          len = p.len * (H - bank);
+          for (k = 0; k < 6; k++) {
+            ctx.globalAlpha = a * 0.34 * (1 - k / 6.5);
+            dash(x + Math.sin(t * 1.7 + k * 1.3 + p.ph) * 1.5, bank + 3 + (k + 0.5) * len / 6, 1.5 + k * 0.5 + Math.sin(t * 2.3 + k + p.ph) * 0.7);
+          }
+        }
+
+        // The streaks of light on the water.
+        n = Math.max(40, Math.min(streaks.length, Math.round(W / 7)));
+        for (j = 0; j < n; j++) {
+          p = streaks[j];
+          len = (10 + 46 * p.d) * p.len * grow;
+          span = W + len;
+          x = (p.x * span + (5 + 24 * p.d) * grow * t) % span - len / 2;
+          ctx.globalAlpha = (0.1 + 0.3 * p.d) * p.a * (0.55 + 0.45 * Math.sin(t * p.f + p.ph));
+          ctx.strokeStyle = p.pale ? 'rgb(214,222,255)' : 'rgb(255,205,110)';
+          ctx.lineWidth = 0.7 + 2 * p.d;
+          dash(x, bank + 5 + (H - bank - 8) * p.d, len / 2);
+        }
+
+        // The candle lights, the far ones first: a small dark float, the light's reflection
+        // under it, then the light.
+        for (j = 0; j < candles.length; j++) {
+          p = candles[j];
+          r = (2.2 + 3.8 * p.d) * grow;
+          span = W + r * 12;
+          x = (p.x * span + (4 + 15 * p.d) * grow * t) % span - r * 6;
+          y = bank + (H - bank) * (0.1 + 0.78 * p.d) + Math.sin(t * p.f + p.ph) * (0.5 + 1.2 * p.d);
+          a = 0.82 + 0.18 * Math.sin(t * 7.3 * p.f + p.ph * 3);
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.globalAlpha = 0.9;
+          ctx.fillStyle = '#120b26';
+          ctx.beginPath();
+          ctx.ellipse(x, y + r * 0.5, r * 1.7, r * 0.5, 0, 0, TAU);
+          ctx.fill();
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.strokeStyle = 'rgb(255,190,96)';
+          ctx.lineWidth = Math.max(1, r * 0.32);
+          for (k = 0; k < 5; k++) {
+            ctx.globalAlpha = 0.5 * a * (1 - k / 5.4);
+            dash(x + Math.sin(t * 1.9 + k * 1.3 + p.ph) * r * 0.4, y + r * 1.25 + k * r * 0.8, r * (1.15 - 0.15 * k) + Math.sin(t * 2.6 + k * 1.7 + p.ph) * r * 0.3);
+          }
+          ctx.globalAlpha = a;
+          ctx.drawImage(glow, x - r * 4.2, y - r * 4.7, r * 8.4, r * 8.4);
+        }
+      }
+
+      function frame(now) {
+        raf = requestAnimationFrame(frame);
+        if (now - last < 30) return;
+        last = now;
+        try {
+          draw(now / 1000);
+        } catch (err) {
+          drop();
+        }
+      }
+
+      function start() {
+        on = true;
+        if (raf || document.hidden) return;
+        fit();
+        if (calm) draw(0); else raf = requestAnimationFrame(frame);
+      }
+
+      function pause() {
+        cancelAnimationFrame(raf);
+        raf = 0;
+      }
+
+      document.addEventListener('visibilitychange', function () {
+        if (document.hidden) {
+          pause();
+          return;
+        }
+        if (!on || gone) return;
+        try {
+          start();
+        } catch (err) {
+          drop();
+        }
+      });
+      window.addEventListener('resize', function () {
+        if (!on || gone) return;
+        try {
+          fit();
+          if (calm) draw(0);
+        } catch (err) {
+          drop();
+        }
+      });
+
+      return {
+        start: start,
+        stop: function () {
+          on = false;
+          pause();
         }
       };
     }
