@@ -731,7 +731,7 @@ as in the test apps; a new tab unlocks again.
 
 ### 8.1 Shell, routes, guards
 
-    /                        landing: Unlock, Create account, Recover account
+    /                        landing: Log in, Create account, Recover account
     /create                  the create stepper
     /recover                 "Coming soon: under construction during Test Net"
     /vouching                find seeds, send requests, wait
@@ -826,18 +826,26 @@ dictionary and follow the language (8.8; 2026-11-06, section 11).
 
 ### 8.2 The screens
 
-Landing. Above the card, in every edition, the test-site notice: a wide
-red-tinted box (the theme's error-container colours) with a warning
-icon, "This is just a test site." in large bold letters, then "There are
-no real Anos here, do not pay money to anyone in order to buy Anos. This
-is for testing purposes only.", then the same in Thai. Then the card.
-The headline follows the language; under the card, while the app is in
-Thai, the button "Switch to English" (8.8). Unlock: /challenge (unlock),
-the passkey assertion with the PRF salt, /unlock; opens blob1,
-chatPrivateKeyBlob and identityBlob; then /check-anopod-status and the
-next-step rule. The platform's passkey picker is what says whether a
-passkey exists; with none, the authenticator's own message shows and
-the page suggests Create. Create goes to /create, Recover to /recover.
+Landing. One outlined card, at most 560 px wide, centred on the page,
+its content centred, the same in every edition; nothing stands above it
+(the test-site notice is gone; 2026-11-13, section 11). From the top of
+the card: the logo, the picture public/logo.png in a box 72 px high
+(alt text "anoPod"); the headline "Your anoPod" at 1.75 rem, weight
+500; the subtitle "Log in with your passkey, or create a new anoPod" in
+the muted colour; two buttons, stacked, each as wide as the card's content
+and 48 px high, "Log in" (filled, a fingerprint icon before the word)
+and "Create account" (outlined); then one small line, "Lost your
+passkey?" and the text link "Recover account" in the primary colour.
+While a log-in runs, a progress bar and "Logging in…" show above the
+buttons; after a failure, the error in red and "No passkey for this
+site on this device? Create an anoPod instead." Every word follows the
+language; under the card, while the app is in Thai, the button "Switch
+to English" (8.8). Log in: /challenge (unlock), the passkey assertion
+with the PRF salt, /unlock; opens blob1, chatPrivateKeyBlob and
+identityBlob; then /check-anopod-status and the next-step rule. The
+platform's passkey picker is what says whether a passkey exists; with
+none, the authenticator's own message shows and the page suggests
+Create. Create goes to /create, Recover to /recover.
 
 Create, a linear Material stepper
 1. "Step 1 of creating your anoPod is to become vouched. We do this to
@@ -859,7 +867,7 @@ vouched for by a real person who already has one; two vouches from seeds
 or one from a super seed, which also makes the pod a seed), "What to do"
 (ask a couple of people in the anoSphere for their username, search each
 one, check the photo and the tag, Send request) and "While you wait" (the
-page changes by itself, Unlock brings the pod back here until vouched, a
+page changes by itself, Log in brings the pod back here until vouched, a
 decline shows under Notifications); then a username search
 (/search-usernames) showing the profile card with the selfie and the seed
 flags, a Send request button (/send-vouch-request), and the requests sent
@@ -2731,9 +2739,7 @@ word, id, code, path, field name and key ("Send guardedAnosTransfer",
 "Fund proposal transactionId"); the product names, in Latin letters
 (anoPod, anos, anoSphere, masterpod, seed, super seed, PRF); the
 browser tab's titles; Material's screen-reader labels ("Open calendar"
-and the like); the developer-worded errors of crypto.service.ts; the
-test-site notice's two paragraphs, English and Thai, whatever the
-language on screen (only its headline follows it). Every edition
+and the like); the developer-worded errors of crypto.service.ts. Every edition
 speaks both languages, the staff pages of the moderator and attestor
 editions too. The Thai was written by the build chat from the plan's
 style and glossary, for Thai readers to correct; a correction is an
@@ -8476,6 +8482,111 @@ template, no test code.
   same script file, `main-YZHRETYA.js`, since only comments changed in
   the wallet's code, and `node --check` on the three server files
   passes.
+
+### The landing page for production: Log in, no test-site notice (2026-11-13)
+
+The look and the words were settled with the user in a planning chat on
+2026-11-13, for the production launch of 2026-11-16: the test-site
+notice goes, the landing card is tidied, and the button that opens a
+session reads "Log in". Words and layout only: `src/app/unlock.ts` and
+the page's `unlock()` did not change, and the entries keep their names
+(`landing.unlock`, `landing.unlocking`). The top bar's "Lock" stays as
+it was; the point on it is below.
+
+- `src/app/pages/landing.page.ts`, template and styles. The
+  `div.notice` and its five style lines are gone, and the class comment
+  no longer names the notice. The card is still `mat-card
+  appearance="outlined"`, at most 560 px wide, centred; its
+  `mat-card-content` is one centred block with 40 px of room at the
+  top. From the top: the logo, `<img src="logo.png">` with `width` and
+  `height` 72 and the alt text "anoPod", drawn whole inside that box
+  (`object-fit: contain`); the headline as an `h1` at 1.75 rem, weight
+  500; the subtitle at 1 rem in `--mat-sys-on-surface-variant`; the
+  busy bar with its line, or the error with the no-passkey sentence, as
+  they were; the two buttons in a column, 12 px apart, each as wide as
+  the card's content and 48 px high, the label at 1 rem: Log in
+  (`mat-flat-button`, a 20 px `fingerprint` icon before the label, the
+  same `(click)="unlock()"` and `[disabled]="busy()"`), then Create
+  account (`mat-stroked-button`, the same `routerLink="/create"` and
+  `[class.disabled]="busy()"`); then one line at 0.875 rem in the muted
+  colour, `landing.lostPasskey` and `common.recoverAccount`, the second
+  a plain `<a routerLink="/recover">` in `--mat-sys-primary`,
+  underlined on hover and on keyboard focus. The old `mat-button` for
+  Recover account is gone. The Switch to English button did not change.
+- The logo and the tab icon, both from the one picture the user gave
+  (a black triangle with a white line inside, 284 x 281 px, clear
+  background). `public/logo.png` is that picture, byte for byte. The
+  relative `src` finds it on every route, since the page's base is
+  "/". `public/favicon.ico` replaces the Angular default that the
+  browser tab showed until now: the same picture, padded to a square
+  and drawn at 16, 32 and 48 px, as a real .ico (the file the user
+  gave under that name was the PNG again). `src/index.html` did not
+  change. On a dark browser tab the black triangle hardly stands out;
+  the white line does.
+- The subtitle's line break on a phone. `text-wrap: balance` gives "Log
+  in with your passkey," over "or create a new anoPod". Balanced, the
+  Thai broke inside "ของคุณ", so in Thai (`:lang(th)`, from the page's
+  `lang` attribute, 8.8) the rule is `text-wrap: pretty`, and the first
+  line ends at the space before "anoPod". A browser that knows neither
+  value wraps as it always did.
+- `src/app/i18n/en.ts` and `th.ts`. Gone: `landing.noticeHeadline`.
+  New: `landing.lostPasskey`, "Lost your passkey?" / "พาสคีย์หายใช่ไหม".
+  Changed: `landing.unlock`, "Log in" / "เข้าสู่ระบบ";
+  `landing.unlocking`, "Logging in…" / "กำลังเข้าสู่ระบบ…";
+  `landing.subtitle`, "Log in with your passkey, or create a new
+  anoPod" / "เข้าสู่ระบบด้วยพาสคีย์ของคุณ หรือสร้าง anoPod ใหม่".
+  Five sentences that send a person to the Log in button follow the
+  word, and only that phrase in them changed: `vouching.wait`,
+  `recover.noCase`, `recoverCase.backInText`, `recoverCase.codeNoOpen`
+  and `recoverCase.codeNotAccepted`. Every other sentence that says
+  unlock stays as it is, by the user's word: the error lines such as
+  "unlock again", and the lines about unlocking a recovery case.
+- The new Thai words are the planning chat's. No Thai reader has read
+  them.
+- Not in this build, by the user's word: terms of use and a privacy
+  policy.
+- Spec: the routes list in 8.1, Landing and Vouching in 8.2, 8.8, this
+  note. The older notes of this section keep the name Unlock, as
+  history.
+- Checked. `npx ng build` from the web_app folder: clean, no warnings
+  (2.17 MB initial total, `main-7GTCSICQ.js`, `styles-EMD3RG3N.css`);
+  `dist/wallet/browser` holds `logo.png` and the new `favicon.ico`.
+  Seen here in a development build served from a scratch folder, in the
+  Browser pane, with no server behind it: the landing page at 360, 375,
+  390 and 430 px wide and at the desktop size (1024 px), in English and
+  in Thai, idle, busy and with an error (the page's `busy` and `error`
+  signals set with the `ng` debug tools; the errors tried were the two
+  passkey refusals the browsers give, one of which carries a long web
+  address). At every size: nothing wider than the card's content and no
+  sideways scroll, both buttons the same width and 48 px high, each
+  button's label and the recover line on one line. Create account and
+  Recover account opened /create and /recover. A click on Log in
+  reached `unlock()`: the scratch folder's file server refused the
+  /challenge call and the page showed "/challenge: HTTP 501" in red.
+  "Lock" and "ล็อก" seen in the top bar, after a made-up session. With
+  the logo in, seen again in English at 390 px and at the desktop size
+  and in Thai at 360 px: the picture comes from /logo.png, sits centred
+  in its 72 px box and is sharp, and the page's console shows nothing
+  new. `favicon.ico` is answered, and the browser reads it as a
+  picture; `file` names it an icon resource with three pictures; the
+  three sizes were looked at enlarged, and on light and dark tab
+  colours. The browser's tab strip itself cannot be seen in the Browser
+  pane.
+- The top bar's word stays "Lock" / "ล็อก": `shell.lock`, the shell's
+  `lock()` and the bar's layout did not change. The plan had the word
+  read "Log out" / "ออกจากระบบ", and it was built so first. Seen then,
+  in the top bar after a made-up session: the bar keeps the menu
+  button, the brand, the username and this button on one row, and the
+  Thai word is 79 px wide where "ล็อก" is 25, so on a phone 360 px wide,
+  in Thai, the word was whole on the screen only for a username of up
+  to 5 letters (with "ล็อก", 10). The user took the word back the same
+  day, to be put right later. As the bar is, with "Lock" and "ล็อก", a
+  long username makes the page scroll sideways on a phone: at 360 px
+  wide, in Thai from 8 letters on, in English from 14. Measured with a
+  lower-case username, on this Mac's fonts.
+- Not seen on a phone. The passkey log-in itself was not run: the live
+  site is closed until the launch, and nothing in this build touches
+  that code.
 
 ## 12. Recovery and the moderator edition
 
