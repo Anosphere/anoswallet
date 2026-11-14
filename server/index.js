@@ -19,9 +19,12 @@ const server = createApp(config).listen(config.port, () => {
   console.log(`  locks           guarded ${config.guardedLockMinutes} min, vault ${config.vaultLockMinutes} min, offset ${config.lockOffsetMinutes} min`);
 });
 
-// Each of the thirteen proxies listens for the server closing; Node warns
-// above ten listeners, so the limit is raised.
-server.setMaxListeners(32);
+// Each proxy listens for the server closing; Node warns above ten
+// listeners, so the limit is raised. The local defaults make thirteen
+// proxies. network/wallet.env makes 55 on the wallet servers: the masterpod,
+// 25 validators, 25 keyholders, and two routes for each of the two signing
+// servers.
+server.setMaxListeners(64);
 
 function shutdown(signal) {
   console.log(`\n${signal} received, shutting down...`);
