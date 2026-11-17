@@ -1604,7 +1604,17 @@ seller.", "Only cancel when you have not sent any money. If you have
 paid, do not cancel.", "It cannot be undone." and the note about the
 username, the text box, Back and "Yes, cancel the trade", which is not
 red. Back in any box sends nothing, and a button of the page does
-nothing while a box is open or a send is on its way. The Yes of the
+nothing while a box is open or a send is on its way. A box that closes
+without one of its two buttons, which a step back or forward in the
+browser's history does (8.9), answers nothing (2026-11-17, section 11,
+the note on the marketplace chat's trade guide): for four of the boxes
+that is what Back does, and when the question before a cancel closes
+that way no further box opens and nothing is sent, since the page opens
+that question with `askChoice`; until then such a close was read as "No,
+I have not paid" and the box "Cancel this trade?" opened next. And a
+"Sent. ..." or a refusal from before goes from the page when a button
+opens its box (the same day; until then it stayed until a Yes started
+the next send). The Yes of the
 Release, the Dispute or the Cancel box is sent by escrow-actions.service
 (8.3), as the page itself sent it until then.
 Yes builds the escrowSuccess, escrowCancel or escrowDispute follow-up
@@ -1763,13 +1773,50 @@ and the paragraph on the attestor in a marketplace chat, below): the
 listing in one line, "Selling 100 anos · 35.50 THB each · 3,550 THB",
 with the other person's avatar (8.6) and Closed when the listing is
 closed; the roles from the listing (the owner of a sell listing and the
-other person of a buy listing are the seller). The buyer's "Share an
-account": a menu of this pod's accounts (the id shortened, the type); one
-tap posts "Please send the anos to this account: <the account id>" into
-the chat, encrypted like any message, so the thread shows the id in code
-font with its copy button (8.5). The seller's "Start the escrow trade",
-disabled with the hint "Ask them to share an account first" until the
-other person has posted an account id: a small form in the card, From
+other person of a buy listing are the seller). Under that line the card
+is the trade guide (rewritten 2026-11-17, section 11; the plan is
+forclaude/wallet-trade-guide-plan-1.md): it walks both sides through the
+four steps of a trade, the same list for both, one button at a time. The
+steps: the buyer sends an account, the seller puts the anos in escrow,
+the buyer pays the seller, the seller releases the anos. First the
+status box (`app-escrow-strip`, 8.7), the box of the escrow trade page,
+here with the other person's username in its sentences: whether the anos
+are in escrow, "Step 2 of 4", and the one thing to do and the one thing
+not to do. With no trade it reads "Not in escrow", amber to the buyer
+and grey to the seller. Step 1, while no account is in the chat (for the
+buyer none of this pod's own, for the seller none that the other person
+posted): to the buyer "Send somchai the account the anos should go to.
+Do not pay yet.", to the seller "Ask somchai to send the account the
+anos should go to." Step 2, once one is there: to the buyer "Wait for
+somchai to put the anos in escrow. Do not pay until this box says In
+escrow. A message in the chat is not proof.", to the seller "Put the
+anos in escrow for somchai. You release them after you have been paid."
+What the box and the card say once there is a trade is in the next
+paragraph. Under the box stands a row of buttons. At its right end the
+text button "How a trade works" opens and closes a panel in the card,
+under the buttons: the four steps as a numbered list, the step the box
+is at in bold, and four lines, "Buyer: do not pay until the anos are in
+escrow.", "Seller: do not release the anos until the money is in your
+own bank account.", "Buyer: if you paid and the seller does not release
+the anos, dispute the trade. Do not cancel." and "Seller: if the buyer
+does not pay, ask them to cancel, or dispute the trade." The button is
+there whenever the box shows, but for two states: once the trade is
+released, and while the seller's form is open. The panel is drawn only
+where its button is drawn, so it is not drawn in those two states
+either (the plan's decision 27, the same day); a panel that was open
+when the seller's form opened is there again when the form closes, and
+the button closes it. The buyer's button, with no trade: "Send my
+account" (filled), which reads "Send another account" (a text button)
+once one of this pod's accounts is in the chat; until 2026-11-17 it was
+"Share an account". It opens a menu of this pod's accounts (the id
+shortened, the type); one tap posts "Please send the anos to this
+account: <the account id>" into the chat, encrypted like any message, so
+the thread shows the id in code font with its copy button (8.5). The
+seller's button, with no trade: "Put the anos in escrow" (filled), shown
+once the other person has posted an account id; until 2026-11-17 it was
+"Start the escrow trade", shown from the first and disabled with the
+hint "Ask them to share an account first", which the box says now. It
+opens a small form in the card, From
 (this pod's spending accounts; one is fixed, more is a select), To (the
 other person's account ids in the chat, newest first; one is fixed),
 Amount in anos (the listing's quantity at first), the total at the
@@ -1801,24 +1848,55 @@ once that trade is cancelled.
 The chat's trade (rewritten 2026-11-10, section 11, from
 forclaude/wallet-finished-trade-plan-1.md): the card reads it from the
 validators when the conversation opens, every 5 seconds while it is open,
-and once more when the seller says Yes to Start. Until the first check
-ends the card says "Checking for a trade…" where Share and Start go. The
+once more when the seller says Yes to Start and, since 2026-11-17, once
+after the Yes of the card's Release (below). Until the first check
+ends the box reads "Checking for a trade…", grey, and the row under it
+has "How a trade works" only (2026-11-17, section 11; until then the
+card said it in a line of its own where its two buttons go). The
 chat's account ids: the page holds the room's newest 50 messages only, so
 the card reads every message of the room itself, once (/list-messages
 from the first position, 200 at a time, CARD_MESSAGES_PAGE, decrypted
 with the room key), and adds the ids the page feeds it, which carry what
-arrived since; the form's To list and the "Ask them to share an account
-first" hint follow all of them. The accounts it reads: this pod's usable
+arrived since; the form's To list and the step the box is at with no
+trade (step 1 until an account is in the chat, then step 2) follow all
+of them. The accounts it reads: this pod's usable
 spending accounts when it is the seller, and this pod's usable accounts
 named in the chat (an id in the messages that is one of
 session.accounts), pair one from each keyBlob; with no account id in the
 chat nothing is read. A trade is the chat's when it is between one of
 those accounts and an account named in the chat, whoever posted the id.
 First /list-escrows on each account: the newest open trade of the chat
-shows as "Escrow trade: 100 anos · Waiting for the seller to release the
-anos" (escrow-stage.ts, by this pod's side) with "See the trade" to
-/wallet/<my account>/escrow/<transactionId>; Release, Cancel and Dispute
-stay on that page. With none open, /list-transactions on each account
+shows as the box (2026-11-17, section 11; until then as the line "Escrow
+trade: 100 anos · Waiting for the seller to release the anos"), by the
+trade's stage and this pod's side in it, the seller being the pod whose
+account sent the trade. Its words are those of the escrow trade page's
+box (the Escrow trade paragraph, above), with the other person's
+username where that page says "the seller" or "the buyer": waiting, "Not
+in escrow yet", step 2; held, "In escrow: 100 anos", step 3, green to
+the buyer ("The anos are held for you. The seller cannot take them back.
+Pay somchai now and keep your payment slip.") and amber to the seller;
+releasing, "Being released", step 4; cancelling, "Being cancelled";
+disputed, "In dispute"; a stage word the wallet does not know, "Open".
+While the anos are held the card adds, under the box, "At the listing's
+price that is 3,550 THB.", the trade's amount at the listing's price,
+and for the buyer, when the trade holds fewer anos than the listing's
+quantity, "The listing says 100 anos, but only 40 are in escrow. Pay
+only for those." Then the row of buttons. For the seller of a held
+trade, "I have been paid: release the anos" (filled): it opens the
+Release box of the escrow trade page (8.9; `releaseBox` of
+src/app/escrow-boxes.ts) with the buyer's account id and the username to
+type, Back sends nothing, and Yes sends the release through
+escrow-actions.service (8.3). The card then checks the chat's trade
+once. An answer that failed shows in the card's error line, as the
+refusal in plain words of the Escrow trade paragraph, only when after
+that check the card still shows this trade as held: an answer lost on
+the way whose release landed shows no error, as at Start. The button
+does nothing while the box is open or a send is on its way. Then, for
+both sides, a link to /wallet/<my account>/escrow/<transactionId>, a
+text button that reads "Something wrong?" while the anos are held and
+"See the trade" in any other stage; then "How a trade works". Cancel and
+Dispute stay on that page; until 2026-11-17 Release was there only. An
+open trade shows this way whatever the listing's status. With none open, /list-transactions on each account
 with `from` the room's createdAt, 200 rows at a time
 (CARD_TRANSACTIONS_PAGE), paging back with beforePosition while a page
 comes back full: an escrowTransfer of the chat is its released trade, the
@@ -1826,20 +1904,28 @@ newest when there are several. The open list is read first because the
 validators write the link before the trade leaves /list-escrows
 (anossoftware src/accounts/accounts.service.js, writeApproved), so a
 released trade is never missing from both reads. A released trade ends
-the chat's trading: both sides read "Released: 100 anos went to the
-buyer." and "This trade is finished. To trade again, start a new chat.",
-Share and Start do not come back in this chat, on this visit or a later
+the chat's trading: both sides read the box's "Released: 100 anos",
+green, step 4 (to the buyer "The anos are in your account.", to the
+seller, the pod whose account sent the trade, "The anos went to
+somchai."; until 2026-11-17 the line "Released: 100 anos went to the
+buyer.") and "This trade is finished. To trade again, start a new chat.",
+the guide's buttons do not come back in this chat, on this visit or a later
 one, and the owner of an open listing gets "Close the listing", which
 asks once and calls /close-listing; the card reads Closed once the room
 list is refreshed. A new trade between the same two people needs a new
 chat, and so another listing, since the masterpod allows one chat per
 person per listing. A trade seen open here and then gone with nothing
 released reads "Cancelled: the seller kept the anos.", from the card's
-memory of this visit, and Share and Start come back. A read that fails,
+memory of this visit, in a line above the box, and the guide is back at
+step 2 with its buttons. A read that fails,
 on the validators or the masterpod, is never taken as "no trade": the
-card keeps the trade or the Released lines it shows, and where Share and
-Start go it says "Could not check for a trade. Trying again." until a
-check has read everything. The Yes of Start runs one fresh check before
+card keeps the trade or the Released box it shows, and with neither the
+box reads "Cannot check right now" until a check has read everything,
+with "How a trade works" as the row's only button: to the buyer, amber,
+"The wallet could not reach the validators. It is trying again. Do not
+pay until this box says In escrow.", to the seller, grey, the first two
+of those sentences (until 2026-11-17 the card said "Could not check for
+a trade. Trying again." where its two buttons go). The Yes of Start runs one fresh check before
 anything is built or signed: when it cannot be read, nothing is sent and
 the card says "Could not check for an earlier trade, so nothing was sent.
 Try again."; when it finds a trade open or released, nothing is sent and
@@ -1850,10 +1936,12 @@ message about the trade (the next paragraph) puts there the first time
 the seller has the chat open after the trade started; two chats at once
 between the same two people on the same accounts both read Released after
 one release; a seller who recovered the account after a lost passkey
-cannot read the old account, so a release sent from it is not seen. Share
-and Start show until a trade has started, and again after a cancelled
-one; a closed listing's card shows only the stage of a trade when there
-is one. A room whose listing the masterpod does not give shows no card.
+cannot read the old account, so a release sent from it is not seen. "Send
+my account", "Send another account" and "Put the anos in escrow" show
+until a trade has started, and again after a cancelled
+one; a closed listing's card shows the box and what goes with it only
+for a trade, open or released, and with no trade neither the box nor a
+button. A room whose listing the masterpod does not give shows no card.
 
 The chat's message about its trade (2026-11-10, section 11, from
 forclaude/wallet-trade-message-plan-1.md): whenever the check finds the
@@ -2609,7 +2697,8 @@ excepted, with the keyholder and anos calls included.
                             /api/sign/<n> add the wallet pair, posts it to /escrow-signature and resolves to
                             that answer, deciding nothing about it; plainReason(res), the validator's refusal
                             in plain words (8.2, Escrow trade), which the page had as its own until then; the
-                            escrow trade page sends through it
+                            escrow trade page sends through it, and so does the Release of the pinned card of
+                            a marketplace chat (8.2, Chat)
     log.service             the activity log
 
 Keys are regenerated from blobs at each unlock; nothing secret touches
@@ -2706,9 +2795,11 @@ src/app/components/:
   `accountIds` is the page's computed of the account ids found in the
   decrypted messages (the 64-hex pieces of `piecesOf`), each with its
   sender and position, newest first; the page changes only to draw the
-  card and feed it. The card posts its own messages (Share an account,
-  Escrow trade started and, since 2026-11-10, Escrow trade released, the
-  last two from its check) encrypted with the room key, and the thread's
+  card and feed it. The card posts its own messages (the buyer's account
+  id, from "Send my account" and "Send another account", which were
+  "Share an account" until 2026-11-17; Escrow trade started and, since
+  2026-11-10, Escrow trade released, the last two from its check)
+  encrypted with the room key, and the thread's
   poll shows them. It exports `FoundAccountId`. Since 2026-11-10 the card
   also reads the room's messages itself for their account ids (8.2,
   Chat): the page's computed holds the ids of the newest 50 messages and
@@ -2728,7 +2819,14 @@ src/app/components/:
   that case's id, for "Invite an attestor" (8.2, Chat), and null when the
   chat has no open trade, when the trade is not disputed and when no such
   case is there; it fires when the value changes. A case found stays
-  until the trade is no longer disputed.
+  until the trade is no longer disputed. Since 2026-11-17 (section 11;
+  the plan is forclaude/wallet-trade-guide-plan-1.md) the card is the
+  trade guide (8.2, Chat): it draws the status box (`app-escrow-strip`,
+  below) from `escrowGuide` (src/app/escrow-stage.ts), for the seller of
+  a held trade it opens the Release box (`releaseBox` of
+  src/app/escrow-boxes.ts, with `askConfirm`, 8.9) and sends the release
+  through `EscrowActionsService` (8.3), and it calls `escrowStageWords`
+  no more.
 
 Two more small components, for the chat on an attestor case (2026-11-12,
 section 11; the plan is forclaude/wallet-case-chats-plan-1.md), under
@@ -2767,7 +2865,9 @@ src/app/components/ too:
 
 - escrow-strip.component.ts (`<app-escrow-strip [guide]>`): the status
   box, drawn by the escrow trade page first under its Back link while
-  the trade is open (8.2, Escrow trade). `guide` is an `EscrowGuide`
+  the trade is open (8.2, Escrow trade) and by the pinned card of a
+  marketplace chat under the listing's line, with and without a trade
+  (8.2, Chat). `guide` is an `EscrowGuide`
   `{ tone, icon, headline, text, step }` and the box draws what it is
   given: a Material icon (hidden from screen readers), the headline at
   16 px, "Step 3 of 4" at the right of the headline's line when `step`
@@ -2788,8 +2888,9 @@ releasing, cancelling and disputed, `open` for any other word) and
 of a state for a side, one case per state, with its colour, its icon,
 its step and the words of the dictionary's `escrowGuide` section (8.2,
 Escrow trade, gives them for an open trade; the states checking,
-unread, noAccount, noTrade and released are no stage of an open trade,
-and the escrow trade page never gives them), while escrow-boxes.ts
+unread, noAccount, noTrade and released are no stage of an open trade:
+the escrow trade page never gives them, and the pinned card of a
+marketplace chat gives all five, 8.2, Chat), while escrow-boxes.ts
 holds the five boxes as five functions, `releaseBox`, `disputeBox`,
 `paidQuestionBox`, `doNotCancelBox` and `cancelBox`, each answering the
 `ConfirmData` that `askConfirm` takes (8.9), so every page that opens
@@ -2905,13 +3006,20 @@ read it.
 ### 8.9 The confirmation box
 
 One small component, src/app/components/confirm-dialog.component.ts
-(`ConfirmDialogComponent`, `app-confirm-dialog`), and one function in the
-same file, `askConfirm(dialog, data)` (2026-11-10, section 11; the plan
-is forclaude/wallet-confirm-box-plan-1.md): the wallet's one pop-up box,
+(`ConfirmDialogComponent`, `app-confirm-dialog`), and two functions in
+the same file, `askConfirm(dialog, data)` (2026-11-10, section 11; the
+plan is forclaude/wallet-confirm-box-plan-1.md) and, since 2026-11-17
+(section 11; decision 25 of forclaude/wallet-trade-guide-plan-1.md),
+`askChoice(dialog, data)`: the wallet's one pop-up box,
 a Material dialog (`@angular/material/dialog`) in the middle of the
 screen, for what nobody should start by accident. A page injects
 `MatDialog` and calls `askConfirm`, which opens the component and
-resolves true only when the box closed by its second button.
+resolves true only when the box closed by its second button. `askChoice`
+opens the same box in the same way and tells its three ways of closing
+apart: it resolves true when the box closed by its second button, false
+when it closed by its first, and null when it closed by neither (the
+paragraph after the next). It is for a box whose first button is an
+answer of its own.
 
 What it is given, `ConfirmData`: `title`; `lines`, each a `ConfirmLine`
 `{ label, value, code? }`, drawn as a two-column grid, the label in the
@@ -2929,9 +3037,16 @@ anywhere). The two buttons, at the right: the first, which closes with
 false and reads Cancel (`common.cancel`), or the caller's `cancelLabel`
 when one is given; and the caller's button, which closes with true.
 
-The box closes only by those two buttons. A click outside it and the
+The box closes by those two buttons. A click outside it and the
 Escape key do nothing (`disableClose`), so the second click of a double
-click on the page's button cannot close the box or answer it. The second
+click on the page's button cannot close the box or answer it. One more
+thing closes it (put right on 2026-11-17, section 11; until then this
+paragraph said that the box closes only by its two buttons): a step back
+or forward in the browser's history, the Back of a phone among them,
+since Angular Material closes every dialog on such a step
+(`closeOnNavigation`, on by default). The box then closes with no
+answer: `askConfirm` answers false, as for the first button, and
+`askChoice` answers null. The second
 button cannot be pressed for the first half second after the box opens
 (`CONFIRM_ARM_MS`, 500, in constants.ts), so that second click can never
 land on it. Nothing in the box has the focus when it opens (`autoFocus:
@@ -2965,23 +3080,31 @@ stands there on "Something is wrong: dispute", the page's button for
 both sides, and the page's cancel is a text button in the theme's
 colour: on that page red is Dispute's alone.
 
-Four places use it (8.2): the Send form of the account page, before
+Five places use it (8.2): the Send form of the account page, before
 every kind of send; "Open a new account" on the Wallet page, before
 Create anos account and Retry; since 2026-11-11 (section 11), "Cancel
-transfer" under the Locked transfer row of the account page; and, since
+transfer" under the Locked transfer row of the account page; since
 2026-11-17 (section 11), the escrow trade page, with the five boxes of
 src/app/escrow-boxes.ts (8.7): Release, Dispute, the question before a
-cancel, "Do not cancel this trade" and Cancel. The third and the fourth
+cancel, "Do not cancel this trade" and Cancel; and, since the same day
+(section 11), the pinned card of a marketplace chat (8.2, Chat), whose
+"I have been paid: release the anos" opens the Release box of that
+file. All of them open it with `askConfirm`, but for one box: the
+escrow trade page opens its question before a cancel with `askChoice`,
+since that box's first button, "No, I have not paid", is an answer of
+its own, and a box closed without a button must not be read as it. The
+third, the fourth and the fifth
 place give `cancelLabel`, the first two keep Cancel: the cancel of a
 locked transfer gives Back (`common.back`), since Cancel there would
 read as the cancel itself, and so do four of the escrow trade's boxes,
+the card's Release among them,
 while its question before a cancel gives "No, I have not paid". The
-same two places give `danger`: the cancel of a locked transfer, and of
+third and the fourth place give `danger`: the cancel of a locked transfer, and of
 the escrow trade's boxes the two whose second button disputes, Dispute
 ("Yes, dispute") and "Do not cancel this trade" ("Something is wrong:
 dispute"). `typed` comes from the Send form, only for a stake for
 daoVote or guardian, and from the Release, Dispute and Cancel boxes of
-the escrow trade page: the label "Your username" and the anoPod's
+the escrow trade page and the card's Release: the label "Your username" and the anoPod's
 username. Each does nothing while a box is already open.
 
 ## 9. Configuration, and running it on this machine
@@ -9032,6 +9155,310 @@ proxy (`server/`) are not touched.
   2. The deploy is section 10 of `forclaude/wallet-deploy-plan-1.md`,
   wallet1 and then wallet2, with no setting in `network/wallet.env` and
   no `npm ci`.
+
+### The marketplace chat's trade guide (2026-11-17)
+
+Built from `forclaude/wallet-trade-guide-plan-1.md` (FINAL, 2026-11-17),
+its step 2 of two, its sections 10 to 13 and 15, one commit, on top of
+0cdfe5b (step 1, the note before this one) and 2e91375 (the heading of
+8.7). Step 1 made the escrow trade page say what to do. This step puts
+the same guide where the two traders are while they talk about the
+payment: the pinned card of the marketplace chat. Until now the card
+showed one button, "Share an account" for the buyer and "Start the
+escrow trade" for the seller, and nothing on it said what comes next or
+what not to do yet. The user: "I want to make the market place clearer
+and more idiot proof", "do not send the money until the coins are in
+escrow". The step also carries two small changes to the escrow trade
+page, which step 1's build turned up and the user had added to the plan
+the same day (its decisions 25 and 26 and its section 15): "Let's add
+the browser back case to the plan.", "if you can add the other things
+to step 2 then go ahead." And it carries the plan's decision 27 and
+section 16, which were added to the plan after this step's first
+build, on the user's word, and built before the commit (the bullet
+"Put right on the user's word", further down). Wallet only: no route, no env variable and no
+npm package; the validators, the doormen, the masterpod, the keyholders
+and the proxy (`server/`) are not touched, and
+`src/app/pages/chat-room.page.ts` draws the card and feeds it as before.
+
+- `src/app/components/pinned-listing.component.ts`, the class. New:
+  `dialog` (`MatDialog`), `actions` (`EscrowActionsService`), the signal
+  `showSteps`, which `reset()` sets false, the plain field `boxOpen`,
+  and `EscrowStripComponent` among the component's imports.
+  `myNamedAccounts` is `protected` now, since the template reads it.
+  `tradeSide`: the seller when the open trade's `accountId` is
+  `tradeAccount()`, else the buyer, the rule `stageWords()` had.
+  `guide`, the `EscrowGuide` of the box or null, with `otherName()` as
+  the name: an open trade gives `stateOfStage(trade.stage)`,
+  `tradeSide()` and the trade's amount; else a released trade gives
+  `released`, as the seller when `released().mine` and as the buyer
+  otherwise, with its amount; else a closed listing gives null; else
+  `read()` null gives `checking` and `read()` false gives `unread`,
+  both by `side()`; else the buyer gets `noAccount` while
+  `myNamedAccounts()` is empty and `noTrade` after, and the seller
+  `noAccount` while `theirAccountIds()` is empty and `noTrade` after.
+  `priceLine`: for a held trade, `pinned.priceLine` of
+  `formatPrice(totalOf(trade.amount, listing.price), listing.currency,
+  0)`; null otherwise. `lessLine`: for a held trade read as the buyer
+  whose amount is smaller than the listing's quantity,
+  `pinned.lessLine` of the listing's anos and the trade's; null
+  otherwise. `release(open)`: nothing while `boxOpen` or `busy()`; then
+  `askConfirm` with `releaseBox(...)`, given `open.accountIdTo` and
+  `session.username()`, `boxOpen` true while the box is open; on true,
+  inside `run()`, `actions.send('release', tradeAccount(),
+  open.transactionId)` and one `poll()`; an answer that failed goes to
+  the error line as `actions.plainReason(res)` only when after that
+  check the card still shows this trade as held. Gone: `stageWords()`
+  and the import of `escrowStageWords`. `check()`, `poll()`, `tell()`,
+  `readIds()`, `releasedLink()`, `start()`, `refusal()`, `openForm()`,
+  `share()`, `closeListing()`, `post()`, `pairOne()`, `run()`,
+  `unread()`, `findDisputeCase()`, `tellDisputeCase()`, `shortId()` and
+  `unique()` have the bodies they had.
+- The same file, the template. The first line and the error line are as
+  they were. Between them: the line `pinned.cancelled` when
+  `cancelled()` and there is neither an open nor a released trade; then
+  `<app-escrow-strip>` when `guide()` is not null. Then, with an open
+  trade, whatever the listing's status: the price line and the less
+  line when they are not null, and the row of buttons, which holds, for
+  the seller of a held trade, the filled `pinned.releaseNow`, then the
+  link to the trade page, now a text button, reading
+  `pinned.somethingWrong` for a held trade and `pinned.seeTrade`
+  otherwise, then "How a trade works". Else, with a released trade:
+  `pinned.finished` and the "Close the listing" block, both as they
+  were. Else, for a listing that is not closed, the first of these that
+  holds: `read() !== true`, a row with "How a trade works" only; the
+  buyer, a row with the filled `pinned.sendAccount` while
+  `myNamedAccounts()` is empty and the text button `pinned.sendAnother`
+  after, both opening the accounts menu, which is as it was, both off
+  while `busy()` or while the pod has no usable account, with the hint
+  `pinned.noAccounts`, then "How a trade works"; the seller while
+  `starting()`, the form, no line of it changed; the seller otherwise,
+  a row with the filled `pinned.startTrade`, only when
+  `theirAccountIds()` is not empty, then "How a trade works". Last,
+  when `showSteps()`, a row with that button is drawn (the plan's
+  decision 27, further down) and `guide()` is not null, the panel `<div
+  class="steps">`: an `<ol>` of `pinned.steps`, the item whose number is
+  the box's `step` in the class `now`, and four paragraphs,
+  `ruleBuyer`, `ruleSeller`, `wrongBuyer` and `wrongSeller`. Gone: the
+  paragraphs with `pinned.tradeLine`, `pinned.released`,
+  `pinned.checking` and `pinned.cannotCheck`, and the disabled Start
+  with its hint `pinned.askShare`. New style rules: the plan's four for
+  `.steps`, and `.how { margin-left: auto; }`.
+- `src/app/i18n/en.ts` and `th.ts`, section `pinned`: twelve new
+  entries, `sendAccount`, `sendAnother`, `releaseNow`,
+  `somethingWrong`, `priceLine`, `lessLine`, `howItWorks`, `steps`,
+  `ruleBuyer`, `ruleSeller`, `wrongBuyer` and `wrongSeller`;
+  `startTrade` has its new words, "Put the anos in escrow"; gone from
+  both files: `shareAccount`, `askShare`, `tradeLine`, `released`,
+  `checking` and `cannotCheck`. The Thai is the plan's, character for
+  character. It is the planning chat's, and no Thai reader has read it.
+- The escrow trade page, the plan's decision 25: a box that closes
+  without one of its two buttons answers nothing.
+  `src/app/components/confirm-dialog.component.ts` has one new function
+  under `askConfirm`, `askChoice(dialog, data)`, a copy of its body
+  with another last line: it resolves true when the box closed with
+  true, false when it closed with false, and null when it closed with
+  neither. `askConfirm`, the component and `ConfirmData` have the code
+  they had. `src/app/pages/escrow-trade.page.ts` has `choice(data)`,
+  under `box(data)` and like it, on `askChoice`, and `cancel(t)` opens
+  its question with `choice()`: on null it returns, so no further box
+  opens and nothing is sent; on true and on false it goes on as before.
+  `box()`, `release()`, `dispute()`, `act()` and the other four boxes
+  keep `askConfirm`, since their first button is Back, and so does the
+  card's Release box. Until this step a step back in the browser's
+  history while "Have you sent any money to the seller?" was open was
+  read as "No, I have not paid", and the box "Cancel this trade?"
+  opened next, over the page the browser went back to (step 1's note,
+  under "Known and left as it is").
+- The escrow trade page, the plan's decision 26: a "Sent. ..." or a
+  refusal from before goes when a button opens a box. In
+  `escrow-trade.page.ts`, `release(t)`, `dispute(t)` and `cancel(t)`
+  each have one new line, `this.outcome.set(null);`, right after the
+  check of `boxOpen` and `busy()` and before a box opens. `act()` keeps
+  its own. Until this step the line stayed on the page until a Yes
+  started the next send (step 1's note, the same place). The card needs
+  none of it: its error line is cleared when the send starts, by
+  `run()`.
+- The comments the plan names (its sections 12, 15.3 and 15.4), and no
+  line of code with them. In the card: the class comment, rewritten to
+  the guide, and the comments of `check()` and `unread()`, which said
+  Share and Start. In `src/app/escrow-stage.ts`: the comment of
+  `escrowStageWords`, which named the card among its users, and the
+  last sentence of the comment of `EscrowGuideState`. In
+  `confirm-dialog.component.ts`: the class comment's list of where the
+  box opens, its sentence on how the box closes, and the comment of
+  `askConfirm`. In `escrow-trade.page.ts`: the class comment's
+  sentences on the cancel, and the comments of `release()`, `dispute()`
+  and `cancel()`. In `src/app/escrow-boxes.ts`: the comment of
+  `paidQuestionBox`. In
+  `src/app/components/escrow-strip.component.ts` and
+  `src/app/services/escrow-actions.service.ts`: the one sentence of
+  each class comment that spoke of the escrow trade page alone.
+- Named by the plan, found true as they stood, and so not changed. In
+  the card, the comments of `read`, `share()` and `openForm()`: the
+  plan says they name Share and Start, and they name neither. In
+  `confirm-dialog.component.ts`, the comments of `cancelLabel`, `typed`
+  and `danger`: step 1 worded them by the box ("the Release, Dispute
+  and Cancel boxes of an escrow trade"), not by the page, and the card
+  opens one of those boxes. In `src/app/constants.ts`, the comment of
+  `CONFIRM_ARM_MS`: it lists the box's buttons by name, and "Yes,
+  release the anos" is among them. So `src/app/constants.ts` is not in
+  this step's diff.
+- Readings where the plan left a detail open. The template draws the
+  box through an alias (`@if (guide(); as box)`), since the box's input
+  takes an `EscrowGuide` and `guide()` can be null; the panel does the
+  same. "How a trade works" carries the class `how`, and the rule `.how
+  { margin-left: auto; }` is a fifth new style rule: the plan gives the
+  declaration and no place for it, and the wallet's templates have no
+  inline style. The button is written out in each of the four rows that
+  carry it. A state with no trade gives the box an empty amount, which
+  no sentence of those states uses. The twelve new entries stand at the
+  end of the section `pinned`, in the order of the plan's table, and
+  `steps` is a list of four strings, as `setup.steps` and
+  `wallet.steps` are. `release()` is protected, since the template
+  calls it, and puts `boxOpen` back to false in a `finally`; it reads
+  `tradeAccount()` inside `run()`, when the send starts, as the plan
+  writes it. "The card still shows this trade as held" is read as:
+  `trade()` is not null, carries this transaction id and has the stage
+  `held`; after a check that could not be read the card keeps the trade
+  it showed, so a failed answer shows then too. The seller's "Put the
+  anos in escrow" is off while `busy()`, the half of the old condition
+  that the `@if` around it does not cover. The released branch reads
+  `released()` with no alias, since nothing in it uses the trade any
+  more. The template keeps `@else {` and `@if (!closed()) {` as two
+  blocks, as they were, so the form's lines are not in the diff. In
+  8.2, Chat, the paragraph "The chat's trade" has every sentence that
+  names the card's old buttons brought in line, three of them without
+  an old line in quotes ("Share and Start do not come back", "Share and
+  Start come back", "Share and Start show until a trade has started"),
+  since the card has no buttons of those names any more; the rules of
+  the paragraph are the same.
+- Known and left as it is. The card goes on checking the trade every 5
+  seconds while the Release box is open, and the box stays open when
+  the trade changes under it: its Yes then gets the validators'
+  refusal, which shows only when the card still shows the trade as
+  held; in any other case the box above the buttons says where the
+  trade is. Should the card show another trade by then (a second open
+  trade of the same chat, started from the account page), the release
+  is sent as that trade's account and the validators refuse it. On a
+  closed listing an open trade has the whole row, the seller's Release
+  included, as the plan says ("whatever the listing's status"). Until
+  the first check ends and after a read that failed, the row has "How a
+  trade works" only, and a seller's open form is not drawn for that
+  time and comes back with the next check that reads, as before this
+  step. The plan's known limits that touch this step: the buyer's box
+  says "Not in escrow" until the seller's wallet has posted its "Escrow
+  trade started" message, which errs on the safe side; the card is
+  taller than before, by the box, so on a small phone the thread has
+  that much less room; the username check does nothing in a session
+  that holds no username; a wallet tab opened before the deploy keeps
+  the old card until it is reloaded.
+- Brought in line on the user's word of 2026-11-17 ("Yes, update
+  them"), before this step was committed and in its commit: five places
+  that the step made stale and the plan does not name. The build's
+  first report had listed them as left. In this spec: the
+  pinned-listing bullet of 8.7 called the card's first message "Share
+  an account" and now names the two buttons that post it; the first
+  sentence of "The chat's trade" in 8.2 lists when the card reads the
+  trade and now names the check after a release. In the code: the same
+  list in the card's class comment; the comment of the card's
+  `tradeAccount`, which said "for the stage's side and the link" and
+  now names the side, the link and the account a release is sent as;
+  the first comment of `src/app/escrow-boxes.ts`, which said "what
+  askConfirm is given" and now names `askChoice` for the question
+  before a cancel; and one line of code, the card's field
+  `millionthsToAnos`, which only the template read and which went with
+  the lines that read it. The function `millionthsToAnos` is imported
+  and called by the class as before.
+- Put right on the user's word of 2026-11-17 ("Yes, fix it"), before
+  this step was committed and in its commit, as the plan's decision 27
+  and section 16, which the build chat added to the plan on that word:
+  the "How a trade works" panel is drawn only where its button is
+  drawn. As first built, the panel was drawn whenever `showSteps()` was
+  true and the box showed. So a panel that was open stayed open, with
+  no button to close it, in the two states that have no such button:
+  once the trade is released, and while the seller's form is open. The
+  build's first report had listed it as a thing the plan did not cover.
+  The fix is one line of the card's template. The panel's first
+  condition is now `showSteps() && (trade() || (!released() && (read()
+  !== true || side() === 'buyer' || !starting())))`, and the part after
+  `showSteps() &&` is true exactly where the template draws a row with
+  the button: with an open trade, and with no open trade and none
+  released in every case but the seller's form. No new words and no
+  change in the class. `showSteps` is not set by it, so a panel that
+  was open when the form opened is drawn again when the form closes,
+  and the button closes it. With it, on the same word, the comment of
+  `escrowStageWords` in `src/app/escrow-stage.ts` names a caller it
+  never named, the balance card's In escrow sheet
+  (`src/app/components/balance-sheet.component.ts`); that gap is older
+  than this step. The other thing the first report listed as not
+  covered, the Release box that stays open while the trade changes
+  under it, stays as it is (the bullet "Known and left as it is"): the
+  build chat advised leaving it, since the validators refuse a release
+  that no longer fits and the box shows where the trade is, and the
+  user's word was for the panel.
+- Spec: 8.2, Chat (the paragraph "The pinned card", from the buyer's
+  button to the form's Start and Cancel, and the paragraph "The chat's
+  trade"), 8.2, Escrow trade (the sentence on Back, for decisions 25
+  and 26), 8.3 (the line of `escrow-actions.service`), 8.7 (in the
+  pinned-listing bullet the name of the card's first message and one
+  sentence at its end, the bullet of
+  `escrow-strip.component.ts` and the sentence after it), 8.9 (two
+  functions, how the box closes, and the five places that use it) and
+  this note. README: the layout line of
+  `components/confirm-dialog.component.ts` names the card's Release box
+  and `askChoice`. Step 1's note stays as it is, as history, and so do
+  the older notes of this section, which keep "Share an account",
+  "Start the escrow trade" and the card's old lines.
+- Checked. `npx ng build` from the web_app folder: clean, no warnings
+  (2.19 MB initial total, `main-67MCKDZR.js`, `styles-EMD3RG3N.css`,
+  the style file of step 1, since no global style changed; the build
+  and the two checks below were run again after the five places were
+  brought in line, and once more after the panel's fix, with the same
+  results). The words:
+  the 13 rows of the two tables of the plan's section 11 were read from
+  the plan file and compared with what `en.ts` and `th.ts` export, the
+  two functions called with a value and the list joined; all 26 entries
+  equal their cell character for character, the six entries that leave
+  are gone from both files, and the two files have the same keys in the
+  same order. The logic: the card's class and the escrow trade page's
+  class were bundled as they are, with the Angular packages replaced by
+  small stand-ins and the services by made-up answers, and run in Node:
+  the box for every state and both sides against the plan's table "The
+  status box", in English and for one state in Thai; the price line and
+  the less line; a closed listing; a cancelled trade; the card's
+  Release with Back, with a box closed without a button, with a Yes
+  that is accepted, refused, lost on the way and thrown; `askConfirm`
+  and `askChoice` for the three ways a box closes; and on the escrow
+  trade page the cancel's four paths, the question closed without a
+  button, and the result line going when a box opens: 92 comparisons,
+  all right. For the panel's fix, 30 more: the panel's condition was
+  read from the template's own text and run on the real class in every
+  state, which are before the first check ends, after a read that
+  failed, the buyer and the seller with no trade, the seller's form
+  open, the form hidden by a failed read, back again and cancelled, a
+  trade found while the form was open, the six open stages, a released
+  trade, a cancelled trade, and a closed listing with and without a
+  trade; all right, 122 comparisons in all. Those checks ran from the
+  build's scratchpad and were not kept; nothing was added to the repo
+  for them. The stand-ins draw nothing, so the template's other
+  conditions were read and not run. What
+  the build proves about the template was tried in a scratch copy: a
+  word that is not in the dictionary, a wrong value for the box and a
+  template that still reads the field `millionthsToAnos` each fail it,
+  so the clean build shows that nothing in the template reads that
+  field. `git
+  status` showed this step's eleven files and no others. Nothing was
+  run in a browser and no server was started. The run-through is the
+  user's, with two anoPods, on a phone (the plan's section 14): the
+  four steps on both sides, Release from the chat, "Something wrong?",
+  "How a trade works", a trade for fewer anos than the listing says,
+  the network off for a moment, a cancelled trade, the same in Thai,
+  on the escrow trade page the step back while the question is open
+  and the old line that goes, and in the chat the panel that goes with
+  the seller's form and after a release. The user deploys the wallet servers
+  after this step, by section 10 of `forclaude/wallet-deploy-plan-1.md`,
+  wallet1 and then wallet2, with no setting in `network/wallet.env`
+  and no `npm ci`.
 
 ## 12. Recovery and the moderator edition
 

@@ -4,7 +4,8 @@ import type { Words } from './i18n/en';
 /**
  * The five boxes of an escrow trade (wallet spec 8.2, Escrow trade, and
  * 8.9; 2026-11-17, forclaude/wallet-trade-guide-plan-1.md): what askConfirm
- * is given before a release, a dispute and a cancel, built from the
+ * is given before a release, a dispute and a cancel, and askChoice for the
+ * question before a cancel, built from the
  * dictionary, `words` (wallet spec 8.8), in one place so that every page
  * that opens one opens the same box. Release, Dispute and Cancel each ask
  * for the username before their button works (`typed`). The first button
@@ -41,7 +42,7 @@ export function disputeBox(words: Words, username: string): ConfirmData {
   };
 }
 
-/** The question before a cancel, the buyer's: "Have you sent any money to the seller?". The first button, which closes with false, is "No, I have not paid"; the second, which closes with true, is "Yes, I have paid". */
+/** The question before a cancel, the buyer's: "Have you sent any money to the seller?". The first button, which closes with false, is "No, I have not paid"; the second, which closes with true, is "Yes, I have paid". The caller opens it with askChoice, not askConfirm, since the first button is an answer here: a box closed without a button, by a step back or forward in the browser's history, is then no answer (2026-11-17, decision 25 of the plan). */
 export function paidQuestionBox(words: Words): ConfirmData {
   return {
     title: words.escrowBoxes.paidTitle,

@@ -5,7 +5,10 @@ import type { Words } from './i18n/en';
  * validator's stage word (anossoftware spec 16.2) and which side of the
  * trade this account is on; the words come from the dictionary, `words`
  * (wallet spec 8.8). Shared by the Escrow trades list on the account page,
- * the trade page and the pinned listing card, so they cannot drift apart. A
+ * the trade page and the balance card's In escrow sheet
+ * (balance-sheet.component.ts), so they cannot drift apart; until
+ * 2026-11-17 the pinned listing card used it too, and it now shows the
+ * status box (escrowGuide, below). A
  * word the wallet does not know reads Open, and the pages offer nothing to
  * do with such a trade.
  */
@@ -34,7 +37,9 @@ export function escrowStageWords(stage: string, side: 'seller' | 'buyer', words:
  * check is still running), `unread` (a read failed and nothing is known),
  * `noAccount` (no trade, and no account in the chat yet), `noTrade` (no
  * trade, an account is in the chat) and `released`. The escrow trade page
- * shows an open trade only, so it uses the stage words and `open`.
+ * shows an open trade only, so it uses the stage words and `open`; the
+ * pinned card of a marketplace chat (pinned-listing.component.ts) gives
+ * the other five too.
  */
 export type EscrowGuideState = 'checking' | 'unread' | 'noAccount' | 'noTrade' | 'waiting' | 'held' | 'releasing' | 'cancelling' | 'disputed' | 'released' | 'open';
 

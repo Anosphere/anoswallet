@@ -14,7 +14,9 @@ import { LanguageService } from '../services/language.service';
  * (`warn`) or grey; the words carry the meaning as well, so the colour is
  * never alone. The box reads the dictionary itself for the step label
  * only. On the escrow trade page it stands first, under the Back link,
- * while the trade is open.
+ * while the trade is open; the pinned card of a marketplace chat
+ * (pinned-listing.component.ts) draws it too, under the listing's line,
+ * with and without a trade.
  */
 @Component({
   selector: 'app-escrow-strip',

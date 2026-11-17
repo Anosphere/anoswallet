@@ -18,7 +18,9 @@ const FOLLOW_UPS: Record<EscrowAction, EscrowSignatureType> = { release: 'escrow
  * Escrow trade, and 8.3; 2026-11-17,
  * forclaude/wallet-trade-guide-plan-1.md): the follow-up is built, signed
  * and posted by one piece of code, whichever page sends it. It came out of
- * the escrow trade page, which sends through it. The service asks nothing
+ * the escrow trade page, which sends through it; the Release of the pinned
+ * card of a marketplace chat (pinned-listing.component.ts) sends through
+ * it too. The service asks nothing
  * and shows nothing: the page asks in the confirmation box first and shows
  * what came back.
  */

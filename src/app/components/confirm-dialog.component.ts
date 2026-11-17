@@ -31,11 +31,13 @@ export interface ConfirmData {
 
 /**
  * The confirmation box (wallet spec 8.9), the wallet's one pop-up box, opened
- * with MatDialog by askConfirm below: before a send on the account page,
- * before a new anos account on the Wallet page, since 2026-11-11 before
- * the cancel of a locked transfer on the account page and, since
- * 2026-11-17, before a release, a dispute and a cancel on the escrow trade
- * page, with the five boxes of escrow-boxes.ts. The title; the lines
+ * with MatDialog by askConfirm or askChoice below: before a send on the
+ * account page, before a new anos account on the Wallet page, since
+ * 2026-11-11 before the cancel of a locked transfer on the account page
+ * and, since 2026-11-17, before a release, a dispute and a cancel on the
+ * escrow trade page, with the five boxes of escrow-boxes.ts, and before a
+ * release in the pinned card of a marketplace chat, with the Release box
+ * of the same file. The title; the lines
  * as a two-column grid, a label and its value, an id in the id font; each
  * note as a paragraph. A value wraps at a space and is cut inside a word
  * only when the word alone is too long; an id is cut anywhere, by the global
@@ -43,10 +45,15 @@ export interface ConfirmData {
  * button, which closes with false: Cancel, or the words the caller gives
  * (cancelLabel; the cancel of a locked transfer gives Back); and the button
  * the caller names, which closes with true. The
- * box closes only by those two:
- * askConfirm opens it so that a click outside it and the Escape key do
- * nothing, and with the focus on the box itself, so the Enter key answers
- * nothing. The second button cannot be pressed for the first CONFIRM_ARM_MS,
+ * box closes by those two:
+ * askConfirm and askChoice open it so that a click outside it and the
+ * Escape key do nothing, and with the focus on the box itself, so the
+ * Enter key answers nothing. One more thing closes it (put right on
+ * 2026-11-17): a step back or forward in the browser's history, the Back
+ * of a phone among them, as Angular Material closes every dialog then.
+ * The box then closes with no answer: askConfirm answers false for it, as
+ * for the first button, and askChoice answers null.
+ * The second button cannot be pressed for the first CONFIRM_ARM_MS,
  * so the second click of a double click on the page's button never lands on
  * it.
  * Since 2026-11-12 a caller can ask for two more things. A text to type
@@ -126,7 +133,7 @@ export class ConfirmDialogComponent {
   }
 }
 
-/** Opens the box and waits for its answer: true only when it closed with true, by its second button. A click outside the box and the Escape key do nothing (disableClose), and the focus goes to the box itself, not to a button (autoFocus). */
+/** Opens the box and waits for its answer: true only when it closed with true, by its second button. A click outside the box and the Escape key do nothing (disableClose), and the focus goes to the box itself, not to a button (autoFocus). A step back or forward in the browser's history closes the box too, with no answer (Angular Material's closeOnNavigation, on by default), and askConfirm then answers false, as for the first button; askChoice below answers null for it. */
 export function askConfirm(dialog: MatDialog, data: ConfirmData): Promise<boolean> {
   const ref = dialog.open<ConfirmDialogComponent, ConfirmData, boolean>(ConfirmDialogComponent, {
     data,
@@ -136,4 +143,16 @@ export function askConfirm(dialog: MatDialog, data: ConfirmData): Promise<boolea
     maxWidth: 'calc(100vw - 32px)',
   });
   return firstValueFrom(ref.afterClosed()).then((answer) => answer === true);
+}
+
+/** Opens the box as askConfirm does and tells its three ways of closing apart (2026-11-17, forclaude/wallet-trade-guide-plan-1.md, decision 25): true when it closed with true, by its second button; false when it closed with false, by its first button; null when it closed with neither, which a step back or forward in the browser's history does. For a box whose first button is an answer of its own, as in the question before the cancel of an escrow trade ("No, I have not paid"): the caller stops on null, so a close without a button is never read as that answer. */
+export function askChoice(dialog: MatDialog, data: ConfirmData): Promise<boolean | null> {
+  const ref = dialog.open<ConfirmDialogComponent, ConfirmData, boolean>(ConfirmDialogComponent, {
+    data,
+    disableClose: true,
+    autoFocus: 'dialog',
+    width: '480px',
+    maxWidth: 'calc(100vw - 32px)',
+  });
+  return firstValueFrom(ref.afterClosed()).then((answer) => (answer === true ? true : answer === false ? false : null));
 }
