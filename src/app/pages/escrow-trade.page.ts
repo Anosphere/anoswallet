@@ -1,25 +1,23 @@
 import { Component, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
+import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { RouterLink } from '@angular/router';
 import { millionthsToAnos } from '../amounts';
+import { ConfirmData, askConfirm } from '../components/confirm-dialog.component';
+import { EscrowStripComponent } from '../components/escrow-strip.component';
 import { ACCOUNT_POLL_MS } from '../constants';
-import { escrowStageWords } from '../escrow-stage';
+import { cancelBox, disputeBox, doNotCancelBox, paidQuestionBox, releaseBox } from '../escrow-boxes';
+import { EscrowGuide, escrowGuide, escrowStageWords, stateOfStage } from '../escrow-stage';
 import { AnosApiService, EscrowItem } from '../services/anos-api.service';
-import { ConfigService } from '../services/config.service';
-import { CryptoService, EscrowSignatureType, KeyBlobLostError, PairOne } from '../services/crypto.service';
+import { CryptoService, KeyBlobLostError, PairOne } from '../services/crypto.service';
+import { EscrowAction, EscrowActionsService } from '../services/escrow-actions.service';
 import { LanguageService } from '../services/language.service';
-import { ApiResponse, reasonOf } from '../services/log.service';
+import { reasonOf } from '../services/log.service';
 import { MasterpodApiService } from '../services/masterpod-api.service';
 import { SessionService } from '../services/session.service';
-import { SigningService } from '../services/signing.service';
-
-/** The three things a party can do with a held trade, each the follow-up it sends. */
-type Action = 'release' | 'cancel' | 'dispute';
-
-const FOLLOW_UPS: Record<Action, EscrowSignatureType> = { release: 'escrowSuccess', cancel: 'escrowCancel', dispute: 'escrowDispute' };
 
 /** How the trade ended, for someone on the page when it left the list; released null when the transactions could not be read. */
 interface Closed {
@@ -38,11 +36,25 @@ interface Outcome {
  * /list-escrows by its id (there is no read for one trade, and the list is
  * short by the validator's rule): the amount, the other side, when it was
  * made, the stage in words and what it means for this side. While the
- * stage is held, the buttons for this side, the seller Release the anos
- * and Dispute, the buyer Cancel trade and Dispute, each asking once before
- * the escrowSuccess, escrowCancel or escrowDispute follow-up is built with
- * pair one, signed by /api/sign/<n> and posted to /escrow-signature, the path
- * the old paste form took. In dispute: who disputed it, the verdicts so
+ * trade is open the status box (escrow-strip.component.ts) stands first,
+ * under the Back link: whether the anos are in escrow, the step of the
+ * four and the one thing to do or not to do, by stage and side
+ * (escrowGuide in escrow-stage.ts; 2026-11-17,
+ * forclaude/wallet-trade-guide-plan-1.md). While the stage is held, the
+ * buttons for this side: the seller Release the anos and the red
+ * "Something is wrong: dispute", the buyer the same red dispute and under
+ * it the text button "I have not paid: cancel the trade"; on this page
+ * red is the dispute's alone. Nothing is asked in place: each button
+ * opens the confirmation box (wallet spec 8.9) with one of the five boxes
+ * of escrow-boxes.ts, and Release, Dispute and Cancel each ask for the
+ * username there before their button works. The cancel asks a question
+ * first, "Have you sent any money to the seller?": after "Yes, I have
+ * paid" a box says not to cancel and offers the dispute, and nothing is
+ * cancelled on that path; after "No, I have not paid" comes the cancel
+ * box. After a Yes, escrow-actions.service.ts builds the escrowSuccess,
+ * escrowCancel or escrowDispute follow-up with pair one, has it signed by
+ * /api/sign/<n> and posts it to /escrow-signature, the path the old paste
+ * form took. In dispute: who disputed it, the verdicts so
  * far and a link to the case under Cases when there is one. The page
  * refreshes every 5 seconds while the trade is open. A trade seen open and
  * then missing from the list is closed: its id on the first page of
@@ -51,7 +63,7 @@ interface Outcome {
  */
 @Component({
   selector: 'app-escrow-trade-page',
-  imports: [RouterLink, MatCardModule, MatButtonModule, MatIconModule, MatProgressBarModule],
+  imports: [RouterLink, MatCardModule, MatButtonModule, MatIconModule, MatProgressBarModule, EscrowStripComponent],
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
@@ -70,6 +82,7 @@ interface Outcome {
         }
 
         @if (trade(); as open) {
+          <app-escrow-strip [guide]="guide(open)" />
           <div class="summary">
             <div><span class="label">{{ t().common.amount }}</span><span class="value">{{ t().common.anos(millionthsToAnos(open.amount)) }}</span></div>
             <div><span class="label">{{ side() === 'seller' ? t().common.buyer : t().common.seller }}</span><code class="value">{{ side() === 'seller' ? open.accountIdTo : open.accountId }}</code></div>
@@ -77,7 +90,6 @@ interface Outcome {
             <div><span class="label">{{ t().common.stage }}</span><span class="value">{{ words(open) }}</span></div>
             <div><span class="label">{{ t().common.transaction }}</span><code class="value">{{ open.transactionId }}</code></div>
           </div>
-          <p>{{ explain(open) }}</p>
 
           @if (open.stage === 'disputed') {
             <p>{{ open.disputedBy === accountId() ? t().escrow.youDisputed : t().escrow.otherDisputed }} {{ verdictsText(open) }}</p>
@@ -87,20 +99,15 @@ interface Outcome {
           }
 
           @if (open.stage === 'held') {
-            @if (asking(); as action) {
-              <p class="question">{{ question(action, open) }}</p>
+            <div class="row">
+              @if (side() === 'seller') {
+                <button mat-flat-button type="button" (click)="release(open)" [disabled]="busy()">{{ t().escrow.release }}</button>
+              }
+              <button mat-flat-button type="button" class="danger" (click)="dispute(open)" [disabled]="busy()">{{ t().escrow.dispute }}</button>
+            </div>
+            @if (side() === 'buyer') {
               <div class="row">
-                <button mat-flat-button type="button" [class.danger]="action === 'cancel'" (click)="confirm()" [disabled]="busy()">{{ yesLabel(action) }}</button>
-                <button mat-button type="button" (click)="asking.set(null)" [disabled]="busy()">{{ t().common.back }}</button>
-              </div>
-            } @else {
-              <div class="row">
-                @if (side() === 'seller') {
-                  <button mat-flat-button type="button" (click)="ask('release')" [disabled]="busy()">{{ t().escrow.release }}</button>
-                } @else {
-                  <button mat-flat-button type="button" class="danger" (click)="ask('cancel')" [disabled]="busy()">{{ t().escrow.cancelTrade }}</button>
-                }
-                <button mat-stroked-button type="button" (click)="ask('dispute')" [disabled]="busy()">{{ t().escrow.dispute }}</button>
+                <button mat-button type="button" (click)="cancel(open)" [disabled]="busy()">{{ t().escrow.cancelTrade }}</button>
               </div>
             }
           }
@@ -129,7 +136,6 @@ interface Outcome {
     .label { color: var(--mat-sys-on-surface-variant); }
     .value { word-break: break-all; }
     .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
-    .question { font-weight: 500; }
     .muted { color: var(--mat-sys-on-surface-variant); }
     .error { color: var(--mat-sys-error); }
     .ok { color: var(--mat-sys-primary); }
@@ -144,8 +150,8 @@ export class EscrowTradePage {
   private readonly masterpod = inject(MasterpodApiService);
   private readonly anos = inject(AnosApiService);
   private readonly crypto = inject(CryptoService);
-  private readonly signing = inject(SigningService);
-  private readonly config = inject(ConfigService);
+  private readonly actions = inject(EscrowActionsService);
+  private readonly dialog = inject(MatDialog);
   protected readonly lang = inject(LanguageService);
   protected readonly t = this.lang.words;
 
@@ -156,13 +162,15 @@ export class EscrowTradePage {
   protected readonly closed = signal<Closed | null>(null);
   protected readonly readError = signal<string | null>(null);
   protected readonly caseId = signal<string | null>(null);
-  protected readonly asking = signal<Action | null>(null);
   protected readonly busy = signal(false);
   protected readonly outcome = signal<Outcome | null>(null);
 
   /** Whether this page has seen the trade open, and the stage it last saw: what the closed view is built from. */
   private seenOpen = false;
   private lastStage: string | null = null;
+
+  /** True while a confirmation box is open: the page's three buttons do nothing meanwhile. */
+  private boxOpen = false;
 
   /** Which side of the trade this account is on: the seller sent the anos, the buyer receives them. */
   protected readonly side = computed<'seller' | 'buyer'>(() => (this.trade()?.accountId === this.accountId() ? 'seller' : 'buyer'));
@@ -188,7 +196,6 @@ export class EscrowTradePage {
     this.closed.set(null);
     this.readError.set(null);
     this.caseId.set(null);
-    this.asking.set(null);
     this.outcome.set(null);
     this.seenOpen = false;
     this.lastStage = null;
@@ -198,24 +205,10 @@ export class EscrowTradePage {
     return escrowStageWords(t.stage, this.side(), this.t().escrowStages);
   }
 
-  /** One sentence of what the stage means for this side. */
-  protected explain(t: EscrowItem): string {
-    const words = this.t().escrow;
-    const seller = this.side() === 'seller';
-    switch (t.stage) {
-      case 'waiting':
-        return words.explainWaiting;
-      case 'held':
-        return seller ? words.explainHeldSeller : words.explainHeldBuyer;
-      case 'releasing':
-        return words.explainReleasing;
-      case 'cancelling':
-        return words.explainCancelling;
-      case 'disputed':
-        return words.explainDisputed;
-      default:
-        return words.explainUnknown;
-    }
+  /** The status box of the open trade for this side (escrow-stage.ts, 2026-11-17): whether the anos are in escrow, the step, and what to do and not to do. The other side is named "the buyer" to the seller and "the seller" to the buyer. */
+  protected guide(t: EscrowItem): EscrowGuide {
+    const words = this.t().escrowGuide;
+    return escrowGuide(stateOfStage(t.stage), this.side(), this.side() === 'seller' ? words.theBuyer : words.theSeller, millionthsToAnos(t.amount), words);
   }
 
   /** The verdicts on a disputed trade in words: how many say what, and what comes next. */
@@ -239,25 +232,37 @@ export class EscrowTradePage {
     return words.verdictsSoFar(parts.join(', '), next);
   }
 
-  protected question(action: Action, t: EscrowItem): string {
-    const amount = millionthsToAnos(t.amount);
-    switch (action) {
-      case 'release':
-        return this.t().escrow.askRelease(amount);
-      case 'cancel':
-        return this.t().escrow.askCancel(amount);
-      case 'dispute':
-        return this.t().escrow.askDispute;
+  /** Opens the confirmation box (wallet spec 8.9) with `data` and resolves to its answer: true only by its second button. boxOpen is true while the box is open and false again whatever happens. */
+  private async box(data: ConfirmData): Promise<boolean> {
+    this.boxOpen = true;
+    try {
+      return await askConfirm(this.dialog, data);
+    } finally {
+      this.boxOpen = false;
     }
   }
 
-  protected yesLabel(action: Action): string {
-    return this.t().escrow.yes[action];
+  /** The seller's "Release the anos" (2026-11-17): the Release box, with the buyer's account id and the username to type; on its Yes the release is sent. Nothing happens while a box is open or a send is on its way. */
+  protected async release(t: EscrowItem): Promise<void> {
+    if (this.boxOpen || this.busy()) return;
+    if (await this.box(releaseBox(this.t(), millionthsToAnos(t.amount), t.accountIdTo, this.session.username()))) await this.act('release', t);
   }
 
-  protected ask(action: Action): void {
-    this.outcome.set(null);
-    this.asking.set(action);
+  /** "Something is wrong: dispute", either side's (2026-11-17): the Dispute box, with the username to type; on its Yes the dispute is sent. Nothing happens while a box is open or a send is on its way. */
+  protected async dispute(t: EscrowItem): Promise<void> {
+    if (this.boxOpen || this.busy()) return;
+    if (await this.box(disputeBox(this.t(), this.session.username()))) await this.act('dispute', t);
+  }
+
+  /** The buyer's "I have not paid: cancel the trade" (2026-11-17). First the question "Have you sent any money to the seller?". After "Yes, I have paid": the box "Do not cancel this trade", whose red button opens the Dispute box, and on that box's Yes the dispute is sent; nothing is cancelled on this path. After "No, I have not paid": the cancel box, with the username to type, and on its Yes the cancel is sent. Nothing happens while a box is open or a send is on its way. */
+  protected async cancel(t: EscrowItem): Promise<void> {
+    if (this.boxOpen || this.busy()) return;
+    if (await this.box(paidQuestionBox(this.t()))) {
+      if (!(await this.box(doNotCancelBox(this.t())))) return;
+      if (await this.box(disputeBox(this.t(), this.session.username()))) await this.act('dispute', t);
+      return;
+    }
+    if (await this.box(cancelBox(this.t(), millionthsToAnos(t.amount), this.session.username()))) await this.act('cancel', t);
   }
 
   protected closedText(c: Closed): string {
@@ -319,38 +324,19 @@ export class EscrowTradePage {
     if (found) this.caseId.set(found.caseId);
   }
 
-  /** Builds, signs and posts the follow-up the asked action stands for, then refreshes. */
-  protected async confirm(): Promise<void> {
-    const action = this.asking();
-    const trade = this.trade();
-    if (!action || !trade) return;
+  /** Sends the follow-up of the action a box said Yes to, through escrow-actions.service.ts (2026-11-17), shows "Sent. ..." or the validator's refusal in plain words, then refreshes. */
+  private async act(action: EscrowAction, t: EscrowItem): Promise<void> {
     this.busy.set(true);
     this.outcome.set(null);
     try {
-      const pairOne = await this.pairOne();
-      const signed = await this.signing.sign(this.crypto.buildFollowUp(pairOne, { type: FOLLOW_UPS[action], transactionId: trade.transactionId, accountId: this.accountId() }), this.accountId());
-      const res = await this.anos.escrowSignature(signed);
-      if (!res.ok) throw new Error(this.plainReason(res));
+      const res = await this.actions.send(action, this.accountId(), t.transactionId);
+      if (!res.ok) throw new Error(this.actions.plainReason(res));
       this.outcome.set({ ok: true, text: this.t().escrow.sent[action] });
-      this.asking.set(null);
     } catch (err) {
       this.outcome.set({ ok: false, text: err instanceof Error ? err.message : String(err) });
     } finally {
       this.busy.set(false);
     }
     await this.refresh(true);
-  }
-
-  /** The validator's refusal in plain words where the reason is a known one. */
-  private plainReason(res: ApiResponse<unknown>): string {
-    const reason = reasonOf(res);
-    const words = this.t().escrow;
-    if (/not approved yet/.test(reason)) return words.notAllAccepted;
-    if (/success signature is already present/.test(reason)) return words.alreadyReleased;
-    if (/cancel signature is already present/.test(reason)) return words.alreadyCancelled;
-    if (/dispute signature is already present/.test(reason)) return words.alreadyDisputed;
-    if (/not the seller|not the buyer|neither the seller/.test(reason)) return words.cannotSign;
-    if (/cannot be cancelled yet/.test(reason) && typeof this.config.config()?.lockOffsetMinutes === 'number') return words.cancelNotYet(this.t().minutes(this.config.config()!.lockOffsetMinutes!));
-    return `/escrow-signature: ${reason}`;
   }
 }

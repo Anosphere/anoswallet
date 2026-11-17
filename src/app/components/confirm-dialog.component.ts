@@ -21,19 +21,21 @@ export interface ConfirmData {
   lines: ConfirmLine[];
   notes: string[];
   confirmLabel: string;
-  /** The words on the first button, which closes the box with false (2026-11-11). Left out, it reads Cancel (common.cancel); the cancel of a locked transfer gives Back, since Cancel there would read as the cancel itself. */
+  /** The words on the first button, which closes the box with false (2026-11-11). Left out, it reads Cancel (common.cancel); the cancel of a locked transfer gives Back, since Cancel there would read as the cancel itself. So do four of the escrow trade's five boxes (escrow-boxes.ts, 2026-11-17); the fifth, the question before a cancel, gives "No, I have not paid". */
   cancelLabel?: string;
-  /** A text the person types before the second button works (2026-11-12): the box shows one text box under the notes, with this label, and the button stays off until what is typed equals `expected`, both trimmed and in small letters. Left out, the box has no text box; a DAO or guardian stake on the account page gives the username. */
+  /** A text the person types before the second button works (2026-11-12): the box shows one text box under the notes, with this label, and the button stays off until what is typed equals `expected`, both trimmed and in small letters. Left out, the box has no text box; a DAO or guardian stake on the account page gives the username, and so do the Release, Dispute and Cancel boxes of an escrow trade (escrow-boxes.ts, 2026-11-17). */
   typed?: { label: string; expected: string };
-  /** True puts the class `danger` on the second button (2026-11-12), which the global rule in src/styles.css makes red. Left out, the button keeps the theme's colour; the cancel of a locked transfer gives true. */
+  /** True puts the class `danger` on the second button (2026-11-12), which the global rule in src/styles.css makes red. Left out, the button keeps the theme's colour; the cancel of a locked transfer gives true, and so do the two boxes of an escrow trade whose second button disputes, the Dispute box and "Do not cancel this trade" (escrow-boxes.ts, 2026-11-17). */
   danger?: boolean;
 }
 
 /**
  * The confirmation box (wallet spec 8.9), the wallet's one pop-up box, opened
  * with MatDialog by askConfirm below: before a send on the account page,
- * before a new anos account on the Wallet page and, since 2026-11-11, before
- * the cancel of a locked transfer on the account page. The title; the lines
+ * before a new anos account on the Wallet page, since 2026-11-11 before
+ * the cancel of a locked transfer on the account page and, since
+ * 2026-11-17, before a release, a dispute and a cancel on the escrow trade
+ * page, with the five boxes of escrow-boxes.ts. The title; the lines
  * as a two-column grid, a label and its value, an id in the id font; each
  * note as a paragraph. A value wraps at a space and is cut inside a word
  * only when the word alone is too long; an id is cut anywhere, by the global

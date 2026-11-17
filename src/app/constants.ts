@@ -41,7 +41,7 @@ export const SIGNING_TIMEOUT_MS = 15_000;
 /** The username check while typing. */
 export const USERNAME_DEBOUNCE_MS = 400;
 
-/** The confirmation box's own button (Send, Stake, Create anos account, "Yes, cancel the transfer") cannot be pressed for this long after the box opens, so the second click of a double click on the page's button never lands on it (wallet spec 8.9). */
+/** The confirmation box's own button (Send, Stake, Create anos account, "Yes, cancel the transfer" and, since 2026-11-17, the second button of the escrow trade's five boxes: "Yes, release the anos", "Yes, dispute", "Yes, I have paid", "Something is wrong: dispute" and "Yes, cancel the trade") cannot be pressed for this long after the box opens, so the second click of a double click on the page's button never lands on it (wallet spec 8.9). */
 export const CONFIRM_ARM_MS = 500;
 
 /** The activity log keeps the newest calls, polls excepted. */

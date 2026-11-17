@@ -1540,19 +1540,73 @@ to the account. The trade is picked out of /list-escrows by its id
 (there is no read for one trade, and the list is short by the
 validator's rule): the amount, the other side's account id (Buyer to the
 seller, Seller to the buyer), when it was made, the stage in the words
-of the Account paragraph, the transaction id, and one sentence of what
-the stage means for this side (the buyer pays outside the system; when
-paid, the seller releases; the buyer can cancel and the seller keeps the
-anos; either can dispute and attestors decide). While the stage is held,
-the buttons for this side: the seller "Release the anos" and "Dispute",
-the buyer "Cancel trade" and "Dispute". Each asks once in place
-("Release 5 anos to the buyer? Do this once you have been paid. It
-cannot be undone."; "Cancel this trade? The seller keeps the 5 anos. It
-cannot be undone."; "Dispute this trade? Attestors will decide it, and
-neither side can release or cancel it after that."), then Yes or Back.
-The cancel is red (2026-11-12, section 11; the class `danger`, 8.9):
-"Cancel trade", and the Yes of its question, "Yes, cancel the trade".
-Release, Dispute and the Yes of each keep their colour.
+of the Account paragraph, the transaction id, and, first under Back and
+above all of these, the status box (2026-11-17, section 11; the plan is
+forclaude/wallet-trade-guide-plan-1.md), which took the place of the one
+sentence of what the stage means for this side. The box is the component
+`app-escrow-strip` (8.7): an icon, a headline that says whether the anos
+are in escrow, "Step 3 of 4" where the stage is one of the four steps
+(the buyer sends an account, the seller puts the anos in escrow, the
+buyer pays the seller, the seller releases the anos), and one sentence
+of what to do and what not to do. Its words and its colour go by the
+stage and this side (`escrowGuide` in escrow-stage.ts), and a sentence
+that names the other side says "the seller" or "the buyer" here. Green
+when the anos are in escrow for the buyer and while they are being
+released; amber where a person must hold back; grey otherwise; the
+words carry the meaning as well, so the colour is never alone. Waiting,
+step 2, "Not in escrow yet": to the buyer, amber, "The validators are
+checking the trade. Do not pay yet."; to the seller, grey, "The
+validators are checking the trade." Held, step 3, "In escrow: 5 anos":
+to the buyer, green, "The anos are held for you. The seller cannot take
+them back. Pay the seller now and keep your payment slip."; to the
+seller, amber, "Look in your own bank account for the money. Release
+the anos only when it is there. A picture of a payment slip is not
+proof." Releasing, step 4, "Being released", green: to the buyer "The
+anos were released. They will be in your account in a moment.", to the
+seller "You released the anos. They will reach the buyer in a moment."
+Cancelling, no step, "Being cancelled": to the buyer, amber, "The trade
+is being cancelled and the anos go back to the seller. Do not pay."; to
+the seller, grey, "The trade is being cancelled and the anos come back
+to you." Disputed, no step, amber for both, "In dispute": "Attestors
+are deciding this trade." A stage word the wallet does not know, grey,
+"Open": "This trade is open. This wallet does not know this stage, so
+it offers nothing to do with it." While the stage is held, the buttons
+for this side: the seller "Release the anos" (filled, the theme's
+colour) and "Something is wrong: dispute" (filled, red: the class
+`danger`, 8.9); the buyer the same red "Something is wrong: dispute"
+and under it, on a line of its own, the text button "I have not paid:
+cancel the trade". On this page red is Dispute's alone; until
+2026-11-17 the buyer's "Cancel trade" was the filled red button, with
+an outlined "Dispute" beside it, and each button asked once in place.
+Nothing is asked in place any more: each button opens the confirmation
+box (8.9) with one of the five boxes of src/app/escrow-boxes.ts, and
+Release, Dispute and Cancel each ask for the username there before
+their button works. Release: "Release 5 anos to the buyer?", the lines
+Amount and Buyer (the buyer's account id), the notes "Do this only when
+the money is in your own bank account. A picture of a payment slip is
+not proof.", "It cannot be undone." and "To confirm, type your username
+below.", the text box "Your username", Back and "Yes, release the
+anos". Dispute: "Dispute this trade?", the notes "Use this when the
+other side does not answer, or something is wrong.", "Attestors will
+decide the trade. After this, neither side can release or cancel it."
+and the note about the username, the text box, Back and "Yes, dispute",
+red. The cancel asks a question first: "Have you sent any money to the
+seller?", the note "If you cancel, the anos go back to the seller.",
+and the buttons "No, I have not paid" and "Yes, I have paid". After
+"Yes, I have paid": "Do not cancel this trade", the notes "If you
+cancel, the seller keeps the anos and your money." and "Wait for the
+seller to release the anos. If the seller does not answer, or something
+is wrong, dispute the trade and attestors will decide.", Back and the
+red "Something is wrong: dispute", which opens the Dispute box; nothing
+is cancelled on this path. After "No, I have not paid": "Cancel this
+trade?", the line Amount, the notes "The 5 anos go back to the
+seller.", "Only cancel when you have not sent any money. If you have
+paid, do not cancel.", "It cannot be undone." and the note about the
+username, the text box, Back and "Yes, cancel the trade", which is not
+red. Back in any box sends nothing, and a button of the page does
+nothing while a box is open or a send is on its way. The Yes of the
+Release, the Dispute or the Cancel box is sent by escrow-actions.service
+(8.3), as the page itself sent it until then.
 Yes builds the escrowSuccess, escrowCancel or escrowDispute follow-up
 (crypto buildFollowUp, pair one from the keyBlob), /api/sign/<n> adds the
 wallet pair, /escrow-signature takes it, then "Sent. ..." in green or
@@ -2546,6 +2600,16 @@ excepted, with the keyholder and anos calls included.
                             submitCreation runs steps 5 and 6 alone, for Resubmit; ALREADY_THERE, the validator's
                             "already there" wording, the holding tables' included; used by the Wallet page and
                             the recovery finish's Move your money (12.3)
+    escrow-actions.service  a release, a cancel or a dispute of an escrow trade (2026-11-17, section 11): the type
+                            EscrowAction (release, cancel, dispute) and the follow-up each one sends
+                            (escrowSuccess, escrowCancel, escrowDispute); send(action, accountId,
+                            transactionId) opens pair one of the account from its keyBlob as the escrow trade
+                            page does (the session's accounts, /list-anos-accounts when the account is not
+                            among them, the key blob key), builds the follow-up (crypto buildFollowUp), has
+                            /api/sign/<n> add the wallet pair, posts it to /escrow-signature and resolves to
+                            that answer, deciding nothing about it; plainReason(res), the validator's refusal
+                            in plain words (8.2, Escrow trade), which the page had as its own until then; the
+                            escrow trade page sends through it
     log.service             the activity log
 
 Keys are regenerated from blobs at each unlock; nothing secret touches
@@ -2697,6 +2761,40 @@ src/app/components/ too:
   "No attestor has started a chat with you about this case yet." when
   both are empty. Live from session.chatRooms.
 
+One more small component, for an escrow trade (2026-11-17, section 11;
+the plan is forclaude/wallet-trade-guide-plan-1.md), under
+src/app/components/ too:
+
+- escrow-strip.component.ts (`<app-escrow-strip [guide]>`): the status
+  box, drawn by the escrow trade page first under its Back link while
+  the trade is open (8.2, Escrow trade). `guide` is an `EscrowGuide`
+  `{ tone, icon, headline, text, step }` and the box draws what it is
+  given: a Material icon (hidden from screen readers), the headline at
+  16 px, "Step 3 of 4" at the right of the headline's line when `step`
+  is a number, and the sentence under them at 14 px when `text` is not
+  empty. `tone` gives the colour: `ok` a light green (#e8f5e9) with dark
+  green words (#1b5e20), `warn` a light amber (#fff8e1) with dark amber
+  words (#7a5200), `plain` the theme's surface-container-high with the
+  on-surface colour. The box has `role="status"` and 12 px round
+  corners. It reads the dictionary itself for the step label only
+  (`escrowGuide.stepOf`).
+
+The box's content comes from src/app/escrow-stage.ts, beside
+`escrowStageWords`, and the boxes of an escrow trade from
+src/app/escrow-boxes.ts: `stateOfStage(stage)` turns the validator's
+stage word into the box's state (the word itself for waiting, held,
+releasing, cancelling and disputed, `open` for any other word) and
+`escrowGuide(state, side, name, anos, words)` answers the `EscrowGuide`
+of a state for a side, one case per state, with its colour, its icon,
+its step and the words of the dictionary's `escrowGuide` section (8.2,
+Escrow trade, gives them for an open trade; the states checking,
+unread, noAccount, noTrade and released are no stage of an open trade,
+and the escrow trade page never gives them), while escrow-boxes.ts
+holds the five boxes as five functions, `releaseBox`, `disputeBox`,
+`paidQuestionBox`, `doNotCancelBox` and `cancelBox`, each answering the
+`ConfirmData` that `askConfirm` takes (8.9), so every page that opens
+one of them opens the same box.
+
 ### 8.8 The languages
 
 The app speaks two languages, English and Thai (2026-11-06, section 11;
@@ -2797,7 +2895,12 @@ takes its words from `guardians` too, where step 3 had already put them,
 plus `guardians.payoutTo`, the payout row's "1500 anos to
 a1b2c3d4…e5f6"; Home's "A fund proposal is open for your vote" is
 `home.openFundVote`; the Thai is the build chat's, for Thai readers to
-correct.
+correct. The status box of an escrow trade and the five boxes of the
+escrow trade page (2026-11-17, section 11) take their words from two new
+sections, `escrowGuide` and `escrowBoxes`, which stand after
+`escrowStages`; the Thai is the planning chat's, as
+forclaude/wallet-trade-guide-plan-1.md gives it, and no Thai reader has
+read it.
 
 ### 8.9 The confirmation box
 
@@ -2853,21 +2956,32 @@ to the theme's error colours: a filled button is red with the on-error
 colour for its words, an outlined button has red words and a red
 outline, a text button has red words. The rule colours a button that
 can be pressed; a button that is off keeps the theme's disabled look.
-The same class stands on the cancel buttons of three pages (8.2):
+The same class stands on the cancel buttons of two pages (8.2):
 "Cancel transfer" under the Locked transfer row of the account page,
 "Cancel transfer" and "Yes, cancel the transfer" on the assisted
-transfer page, "Cancel trade" and "Yes, cancel the trade" on the escrow
-trade page.
+transfer page. On the escrow trade page it stood on "Cancel trade" and
+"Yes, cancel the trade" until 2026-11-17 (section 11). Since then it
+stands there on "Something is wrong: dispute", the page's button for
+both sides, and the page's cancel is a text button in the theme's
+colour: on that page red is Dispute's alone.
 
-Three places use it (8.2): the Send form of the account page, before
+Four places use it (8.2): the Send form of the account page, before
 every kind of send; "Open a new account" on the Wallet page, before
-Create anos account and Retry; and, since 2026-11-11 (section 11),
-"Cancel transfer" under the Locked transfer row of the account page.
-That third place is the only one that gives `cancelLabel`: Back
-(`common.back`), since Cancel there would read as the cancel itself; the
-other two keep Cancel. It is also the only one that gives `danger`. The
-Send form is the only one that gives `typed`, and only for a stake for
-daoVote or guardian: the label "Your username" and the anoPod's
+Create anos account and Retry; since 2026-11-11 (section 11), "Cancel
+transfer" under the Locked transfer row of the account page; and, since
+2026-11-17 (section 11), the escrow trade page, with the five boxes of
+src/app/escrow-boxes.ts (8.7): Release, Dispute, the question before a
+cancel, "Do not cancel this trade" and Cancel. The third and the fourth
+place give `cancelLabel`, the first two keep Cancel: the cancel of a
+locked transfer gives Back (`common.back`), since Cancel there would
+read as the cancel itself, and so do four of the escrow trade's boxes,
+while its question before a cancel gives "No, I have not paid". The
+same two places give `danger`: the cancel of a locked transfer, and of
+the escrow trade's boxes the two whose second button disputes, Dispute
+("Yes, dispute") and "Do not cancel this trade" ("Something is wrong:
+dispute"). `typed` comes from the Send form, only for a stake for
+daoVote or guardian, and from the Release, Dispute and Cancel boxes of
+the escrow trade page: the label "Your username" and the anoPod's
 username. Each does nothing while a box is already open.
 
 ## 9. Configuration, and running it on this machine
@@ -8742,6 +8856,180 @@ the plan's section 7 and decisions 23 to 30):
   times changed: the same lines set their scenes. The build cannot
   hear, so the mix was judged by its measured loudness only. Not run on
   a phone.
+
+### The escrow trade page: the status box, the red Dispute, the boxes with the username (2026-11-17)
+
+Built from `forclaude/wallet-trade-guide-plan-1.md` (FINAL, 2026-11-17),
+its step 1 of two, its sections 1 to 8, one commit, on top of b2d5717.
+The plan is about people losing money or anos in a marketplace trade.
+Nothing on the screens stopped a buyer from paying before the anos were
+in escrow, or a seller from releasing before the money had come. The
+user: "do not send the money until the coins are in escrow", "It also
+needs to be ever clear to the buyer whether the coins are currently in
+escrow or not in escrow." And on this page the buyer's "Cancel trade"
+was the filled red button, the one a worried person presses: a buyer
+who has paid and cancels loses the money, and a cancelled trade cannot
+be disputed any more. The user: "the dispute button should be the red
+one, maybe more bold. It looks like the button you press if shit is
+wrong." Step 1 is this page and the pieces the marketplace chat's card
+will share with it. Step 2, the card (the plan's sections 10 to 14), is
+not built here, and `src/app/components/pinned-listing.component.ts` is
+not touched. Wallet only: no route, no env variable and no npm package;
+the validators, the doormen, the masterpod, the keyholders and the
+proxy (`server/`) are not touched.
+
+- `src/app/escrow-stage.ts`: `escrowStageWords` is as it was, comment
+  and body. Under it, new: the types `EscrowGuideState` (eleven states:
+  checking, unread, noAccount, noTrade, waiting, held, releasing,
+  cancelling, disputed, released, open), `EscrowGuideTone` (`ok` green,
+  `warn` amber, `plain` grey) and `EscrowGuide` (`tone`, `icon`,
+  `headline`, `text`, `step`); `stateOfStage(stage)`; and
+  `escrowGuide(state, side, name, anos, words)`, the plan's table "The
+  status box", one case per state. The icons, by their Material names:
+  `hourglass_empty` for checking and waiting, `cloud_off` for unread,
+  `lock_open` for noAccount and noTrade, `lock` for held,
+  `check_circle` for releasing and released, `cancel` for cancelling,
+  `gavel` for disputed, `help_outline` for open. The steps: 1 for
+  noAccount, 2 for noTrade and waiting, 3 for held, 4 for releasing and
+  released, null for the rest.
+- `src/app/components/escrow-strip.component.ts` (new):
+  `EscrowStripComponent`, `<app-escrow-strip [guide]>`, with the
+  template and the nine style rules of the plan's section 2. It imports
+  `MatIconModule` and reads `LanguageService` for `escrowGuide.stepOf`
+  only.
+- `src/app/escrow-boxes.ts` (new): `releaseBox`, `disputeBox`,
+  `paidQuestionBox`, `doNotCancelBox` and `cancelBox`, each answering a
+  `ConfirmData` built from the whole `Words`, by the plan's section 3.
+  No line of code changed in `confirm-dialog.component.ts`.
+- `src/app/services/escrow-actions.service.ts` (new):
+  `EscrowActionsService`, provided in root. The type `EscrowAction` and
+  the constant `FOLLOW_UPS` came here from the page, where they were
+  `Action` and `FOLLOW_UPS`. `send(action, accountId, transactionId)`
+  is a copy of the page's `pairOne()` body with the account id as its
+  parameter, then `crypto.buildFollowUp`, `signing.sign` and
+  `anos.escrowSignature`; it resolves to that answer and decides
+  nothing about it. `plainReason(res)` is the page's function, moved
+  with its body unchanged, and with its `ConfigService` and
+  `LanguageService`.
+- `src/app/pages/escrow-trade.page.ts`. Template: `<app-escrow-strip
+  [guide]="guide(open)" />` first inside the open trade's block, before
+  the summary; the paragraph with `explain(open)` is gone; the block of
+  the stage held is the plan's: one row with the seller's filled
+  "Release the anos" and the filled red "Something is wrong: dispute"
+  (`class="danger"`), and for the buyer a second row with the text
+  button "I have not paid: cancel the trade"; the style rule
+  `.question` is gone. Class: `dialog` (`MatDialog`), `actions`
+  (`EscrowActionsService`) and the plain field `boxOpen`; `guide(t)`,
+  `box(data)`, `release(t)`, `dispute(t)`, `cancel(t)` and
+  `act(action, t)`, as the plan's section 5 says. Gone: `asking`,
+  `ask()`, `question()`, `yesLabel()`, `explain()`, `confirm()`,
+  `plainReason()`, the type `Action`, the constant `FOLLOW_UPS`, the
+  line `this.asking.set(null)` in `reset()`, the injections of
+  `SigningService` and `ConfigService`, and the imports of those two,
+  of `EscrowSignatureType` and of `ApiResponse`. `pairOne()`,
+  `refresh()`, `findCase()`, `words()`, `verdictsText()`,
+  `closedText()`, `side`, the timer and the rest of `reset()` are as
+  they were.
+- `src/app/i18n/en.ts` and `th.ts`: two new sections after
+  `escrowStages`, `escrowGuide` (31 entries) and `escrowBoxes` (17
+  entries), in the order of the plan's tables; `escrow.dispute` and
+  `escrow.cancelTrade` have their new words; gone from both files:
+  `escrow.askRelease`, `escrow.askCancel`, `escrow.askDispute` and the
+  seven `escrow.explain...` entries. The Thai is the plan's, character
+  for character. It is the planning chat's, and no Thai reader has read
+  it.
+- The comments the plan's section 7 names, and no line of code with
+  them: the page's class comment, from the buttons to the path the
+  follow-up takes, which now names the status box too; in
+  `confirm-dialog.component.ts` the class comment's list of where the
+  box opens and the comments of `cancelLabel`, `typed` and `danger`; in
+  `src/styles.css` the comment over `.danger`; in
+  `src/app/constants.ts` the comment of `CONFIRM_ARM_MS`.
+- Readings where the plan left a detail open. The copy of `pairOne()`
+  stands inside `send` itself, so the service has the two methods the
+  plan names and none of its own for pair one. `FOLLOW_UPS` is not
+  exported, since only `send` reads it; `EscrowAction` is. The service
+  keeps `t = this.lang.words`, so `plainReason` and the copied lines
+  read `this.t()` as they did on the page, letter for letter. `box()`
+  puts `boxOpen` back to false in a `finally`. `act()` is private;
+  `guide()`, `release()`, `dispute()` and `cancel()` are protected,
+  since the template calls them. The state checking has no sentence:
+  its `text` is the empty string, and the box draws no second line for
+  an empty text. In the dictionaries a sentence with `{anos}` or
+  `{name}` takes a string and `stepOf` takes a number. The new files
+  import a type with `import type` where they need nothing else from
+  the file. In this spec the new component has a paragraph of its own
+  at the end of 8.7, and the service's line stands before `log.service`
+  in 8.3.
+- Known and left as it is. The summary keeps its row Stage with the
+  words of `escrowStageWords` ("Waiting for the seller to release the
+  anos"), so on a held trade the page says it twice, in the box and in
+  the summary: the plan keeps the summary. A "Sent. ..." or a refusal
+  from before stays on the page while a box is open: `ask()` cleared
+  it when its question opened, and now `act()` clears it when a Yes
+  starts the send. The page goes on reading the trade every 5 seconds
+  while a box is open, and a box stays open when the stage changes
+  under it; its Yes then gets the validators' refusal, as a Yes in
+  place did. A step back in the browser's history closes an open box,
+  as Angular Material does for every dialog, and `askConfirm` answers
+  false for it, the answer of the first button. For the question before
+  a cancel the first button is "No, I have not paid", so after a step
+  back from that question the box "Cancel this trade?" opens, over the
+  page the browser went back to. It sends nothing unless the username
+  is typed and "Yes, cancel the trade" is pressed. The plan does not
+  speak of it, and it is in the build's report. `guide(open)` is called
+  by the template at every change detection and answers a new object
+  each time, so the box is drawn again each time. The plan's known
+  limits that touch this
+  step: the wallet cannot know whether a buyer has paid, so a buyer who
+  answers "No, I have not paid" and types the username can still cancel
+  after paying; the username check does nothing in a session that holds
+  no username, as in the stake box; a wallet tab opened before the
+  deploy keeps the old page until it is reloaded. Until step 2 is built
+  the pinned card of a marketplace chat is as it was, with "Share an
+  account", "Start the escrow trade" and "See the trade".
+- Left, and listed in the build's report, since the plan does not name
+  it: the heading of 8.7, "The marketplace components and the case chat
+  components", which does not name the status box that section now
+  holds.
+- Spec: 8.2 (Escrow trade: the box and its words by stage and side, the
+  buttons and their colours, the five boxes, the question before a
+  cancel), 8.3 (the line of `escrow-actions.service`), 8.7 (the bullet
+  of `escrow-strip.component.ts` and the sentence on `escrow-stage.ts`
+  and `escrow-boxes.ts`), 8.8 (the two new sections), 8.9 (where the
+  class `danger` stands, and the four places that use the box) and
+  this note. README: the layout line of
+  `components/confirm-dialog.component.ts` names the escrow trade's
+  boxes, and three new lines, `components/escrow-strip.component.ts`,
+  `escrow-boxes.ts` and `services/escrow-actions.service.ts`. The older
+  notes of this section keep "Cancel trade", "Dispute" and the question
+  asked in place, as history.
+- Checked. `npx ng build` from the web_app folder: clean, no warnings
+  (2.19 MB initial total, `main-ZG7OQNRR.js`, `styles-EMD3RG3N.css`;
+  the style file is the same file as before, since only a comment
+  changed in `src/styles.css`). The words: the 50 rows of the three
+  tables of the plan's section 6 were read from the plan file and
+  compared with what `en.ts` and `th.ts` export, the functions called
+  with a value; all 100 entries equal their cell character for
+  character, the two new sections hold the plan's keys in the plan's
+  order and no other, the ten entries that leave are gone from both
+  files, and the two files have the same keys in the same order. The
+  box: `escrowGuide` was called for each of the eleven states and both
+  sides and compared with the plan's table "The status box" and its
+  section 1; colour, icon, headline, sentence and step are right in all
+  22. The five boxes were printed in English and read against the
+  plan's table of boxes. Those checks ran from the build's scratchpad
+  and were not kept; nothing was added to the repo for them. The eight
+  icon names are in Google's list of Material Symbols names, the font
+  `src/index.html` loads. `git status` showed this step's twelve files
+  and no others. Nothing was run in a browser and no server was
+  started. The run-through is the user's, on the running network (the
+  plan's section 9): the seller and the buyer on a held trade, the
+  cancel by both answers, a dispute, and the same pages on a phone set
+  to Thai. By the plan the user deploys the wallet servers after step
+  2. The deploy is section 10 of `forclaude/wallet-deploy-plan-1.md`,
+  wallet1 and then wallet2, with no setting in `network/wallet.env` and
+  no `npm ci`.
 
 ## 12. Recovery and the moderator edition
 
