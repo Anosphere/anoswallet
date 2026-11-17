@@ -2667,7 +2667,7 @@ since 2026-11-12 (section 11) in the person's chats about an attestor
 case on My case and My recovery case (8.7), and beside each attestor in
 the conversation's "Invite an attestor" panel (8.2, Chat; 40 px).
 
-### 8.7 The marketplace components and the case chat components
+### 8.7 The marketplace components, the case chat components and the escrow trade's status box
 
 Five small components (2026-11-06, section 11), under
 src/app/components/:
@@ -8988,10 +8988,12 @@ proxy (`server/`) are not touched.
   deploy keeps the old page until it is reloaded. Until step 2 is built
   the pinned card of a marketplace chat is as it was, with "Share an
   account", "Start the escrow trade" and "See the trade".
-- Left, and listed in the build's report, since the plan does not name
-  it: the heading of 8.7, "The marketplace components and the case chat
-  components", which does not name the status box that section now
-  holds.
+- Put right on the user's word of 2026-11-17 ("You can change the
+  heading of 8.7"), in the commit after this step's (0cdfe5b): the
+  heading of 8.7, which said "The marketplace components and the case
+  chat components" and now names the escrow trade's status box too. The
+  build's first report had listed it as left, since the plan does not
+  name it. No line of code.
 - Spec: 8.2 (Escrow trade: the box and its words by stage and side, the
   buttons and their colours, the five boxes, the question before a
   cancel), 8.3 (the line of `escrow-actions.service`), 8.7 (the bullet
