@@ -1,6 +1,7 @@
 import { Component, DestroyRef, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
+import { MatDialog } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatMenuModule } from '@angular/material/menu';
@@ -8,12 +9,14 @@ import { MatSelectModule } from '@angular/material/select';
 import { RouterLink } from '@angular/router';
 import { anosToMillionths, millionthsToAnos } from '../amounts';
 import { ACCOUNT_POLL_MS, CARD_MESSAGES_PAGE, CARD_TRANSACTIONS_PAGE } from '../constants';
-import { escrowStageWords } from '../escrow-stage';
+import { releaseBox } from '../escrow-boxes';
+import { EscrowGuide, escrowGuide, stateOfStage } from '../escrow-stage';
 import { formatPrice, totalOf } from '../prices';
 import { AnosApiService, EscrowItem, TransactionItem } from '../services/anos-api.service';
 import { BalancesService } from '../services/balances.service';
 import { ChatService, piecesOf } from '../services/chat.service';
 import { CryptoService, PairOne } from '../services/crypto.service';
+import { EscrowActionsService } from '../services/escrow-actions.service';
 import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
 import { MarketplaceService } from '../services/marketplace.service';
@@ -21,6 +24,8 @@ import { MasterpodApiService, RoomItem } from '../services/masterpod-api.service
 import { SessionService } from '../services/session.service';
 import { SigningService } from '../services/signing.service';
 import { AvatarComponent } from './avatar.component';
+import { askConfirm } from './confirm-dialog.component';
+import { EscrowStripComponent } from './escrow-strip.component';
 
 /** An account id found in a room's decrypted messages: who posted it and at which position. */
 export interface FoundAccountId {
@@ -48,27 +53,50 @@ type Found = 'open' | 'released' | 'none' | 'unread';
  * room by pressing Connect, and the listing's owner (2026-11-12; anyone
  * else in the room is a guest and gets no card). The first line: the
  * listing in a few words, "Selling 100 anos · 35.50 THB each · 3,550 THB",
- * Closed when it is, with the other trader's avatar (8.6). The buyer's
- * "Share an account" posts one of this pod's account ids into the chat;
- * the seller's "Start the escrow trade", once the other trader has posted
- * an account id, opens a small form (From, To, Amount, the total at the
- * listing's price), asks once, and builds the escrowTransfer as the
- * account page's Send does. The roles come from the listing: the owner of
- * a sell listing and the other person of a buy listing are the seller.
+ * Closed when it is, with the other trader's avatar (8.6). Under it the
+ * card is the trade guide (2026-11-17,
+ * forclaude/wallet-trade-guide-plan-1.md). The status box
+ * (escrow-strip.component.ts) says whether the anos are in escrow, which
+ * of the four steps the trade is at and the one thing to do or not to do,
+ * and under the box stands what that step needs, one button at a time.
+ * Step 1: the buyer's "Send my account" posts one of this pod's account
+ * ids into the chat; once one is there it reads "Send another account",
+ * until a trade starts. Step 2: the seller's "Put the anos in escrow",
+ * shown once the other trader has posted an account id, opens a small
+ * form (From, To, Amount, the total at the listing's price), asks once,
+ * and builds the escrowTransfer as the account page's Send does. Step 3,
+ * while the anos are held: what they come to at the listing's price, a
+ * line for the buyer when fewer anos are held than the listing says, the
+ * link "Something wrong?" to the escrow trade page, where Dispute and
+ * Cancel are, and for the seller the button of step 4, "I have been paid:
+ * release the anos". It opens the Release box (escrow-boxes.ts, wallet
+ * spec 8.9), which asks for the username, and its Yes sends the release
+ * through escrow-actions.service.ts. In any other open stage the link
+ * reads "See the trade". "How a trade works" opens and closes a panel
+ * with the four steps, the step the trade is at in bold, and four lines
+ * of rules. The panel is drawn only where its button is drawn: not once
+ * the trade is released, and not while the seller's form is open (the
+ * plan's decision 27). The roles come from the listing: the owner of a
+ * sell listing
+ * and the other person of a buy listing are the seller.
  *
  * What the chat's trade is, the card reads from the validators (2026-11-10,
  * forclaude/wallet-finished-trade-plan-1.md), when the chat opens, every 5
- * seconds and once more when the seller says Yes to Start: an open trade
+ * seconds, once more when the seller says Yes to Start and once after the
+ * Yes of the Release box: an open trade
  * from /list-escrows, else a released one from /list-transactions since the
  * room was made, on the seller's spending accounts and this pod's accounts
  * named in the chat. A trade is the chat's when its other side is an account
  * named in the chat; the card reads the room's messages itself for those
  * ids, since the page holds the newest ones only. A released trade ends the
- * chat's trading: Released, no Share and no Start, and "Close the listing"
- * for the owner of an open listing. A trade seen open here and then gone
- * with nothing released reads Cancelled, and Share and Start come back.
- * Share and Start show only after a check that read everything; a read that
- * fails changes nothing else on the card.
+ * chat's trading: the box reads Released, no button of the guide comes
+ * back, and "Close the listing" shows for the owner of an open listing. A
+ * trade seen open here and then gone with nothing released reads Cancelled,
+ * and the guide is back at step 2. "Send my account" and "Put the anos in
+ * escrow" show only after a check that read everything: until the first
+ * check ends the box reads "Checking for a trade…", and after a read that
+ * failed "Cannot check right now"; a read that fails changes nothing else
+ * on the card.
  *
  * The same check tells the chat of its trade (2026-11-10,
  * forclaude/wallet-trade-message-plan-1.md): when this pod sent the trade
@@ -84,7 +112,7 @@ type Found = 'open' | 'released' | 'none' | 'unread';
  */
 @Component({
   selector: 'app-pinned-listing',
-  imports: [FormsModule, RouterLink, MatButtonModule, MatMenuModule, MatFormFieldModule, MatInputModule, MatSelectModule, AvatarComponent],
+  imports: [FormsModule, RouterLink, MatButtonModule, MatMenuModule, MatFormFieldModule, MatInputModule, MatSelectModule, AvatarComponent, EscrowStripComponent],
   template: `
     @if (listing(); as listing) {
       <div class="card">
@@ -98,13 +126,27 @@ type Found = 'open' | 'released' | 'none' | 'unread';
           }
         </div>
 
+        @if (cancelled() && !trade() && !released()) {
+          <p class="stage">{{ t().pinned.cancelled }}</p>
+        }
+        @if (guide(); as box) {
+          <app-escrow-strip [guide]="box" />
+        }
         @if (trade(); as open) {
-          <p class="stage">{{ t().pinned.tradeLine(millionthsToAnos(open.amount), stageWords(open)) }}</p>
+          @if (priceLine(); as line) {
+            <p class="field">{{ line }}</p>
+          }
+          @if (lessLine(); as line) {
+            <p class="field">{{ line }}</p>
+          }
           <div class="buttons">
-            <a mat-stroked-button [routerLink]="['/wallet', tradeAccount(), 'escrow', open.transactionId]">{{ t().pinned.seeTrade }}</a>
+            @if (open.stage === 'held' && tradeSide() === 'seller') {
+              <button mat-flat-button type="button" (click)="release(open)" [disabled]="busy()">{{ t().pinned.releaseNow }}</button>
+            }
+            <a mat-button [routerLink]="['/wallet', tradeAccount(), 'escrow', open.transactionId]">{{ open.stage === 'held' ? t().pinned.somethingWrong : t().pinned.seeTrade }}</a>
+            <button mat-button type="button" class="how" (click)="showSteps.set(!showSteps())">{{ t().pinned.howItWorks }}</button>
           </div>
-        } @else if (released(); as done) {
-          <p class="stage">{{ t().pinned.released(millionthsToAnos(done.amount)) }}</p>
+        } @else if (released()) {
           <p class="field hint">{{ t().pinned.finished }}</p>
           @if (isOwner() && !closed()) {
             @if (confirmClose()) {
@@ -118,20 +160,22 @@ type Found = 'open' | 'released' | 'none' | 'unread';
             }
           }
         } @else {
-          @if (cancelled()) {
-            <p class="stage">{{ t().pinned.cancelled }}</p>
-          }
           @if (!closed()) {
-            @if (read() === null) {
-              <p class="field hint">{{ t().pinned.checking }}</p>
-            } @else if (read() === false) {
-              <p class="field hint">{{ t().pinned.cannotCheck }}</p>
+            @if (read() !== true) {
+              <div class="buttons">
+                <button mat-button type="button" class="how" (click)="showSteps.set(!showSteps())">{{ t().pinned.howItWorks }}</button>
+              </div>
             } @else if (side() === 'buyer') {
               <div class="buttons">
-                <button mat-flat-button type="button" [matMenuTriggerFor]="accountsMenu" [disabled]="busy() || balances.usableAccounts().length === 0">{{ t().pinned.shareAccount }}</button>
+                @if (myNamedAccounts().length === 0) {
+                  <button mat-flat-button type="button" [matMenuTriggerFor]="accountsMenu" [disabled]="busy() || balances.usableAccounts().length === 0">{{ t().pinned.sendAccount }}</button>
+                } @else {
+                  <button mat-button type="button" [matMenuTriggerFor]="accountsMenu" [disabled]="busy() || balances.usableAccounts().length === 0">{{ t().pinned.sendAnother }}</button>
+                }
                 @if (balances.usableAccounts().length === 0) {
                   <span class="hint">{{ t().pinned.noAccounts }}</span>
                 }
+                <button mat-button type="button" class="how" (click)="showSteps.set(!showSteps())">{{ t().pinned.howItWorks }}</button>
               </div>
               <mat-menu #accountsMenu="matMenu">
                 @for (account of balances.usableAccounts(); track account.accountId) {
@@ -188,12 +232,27 @@ type Found = 'open' | 'released' | 'none' | 'unread';
               </div>
             } @else {
               <div class="buttons">
-                <button mat-flat-button type="button" (click)="openForm()" [disabled]="busy() || theirAccountIds().length === 0">{{ t().pinned.startTrade }}</button>
-                @if (theirAccountIds().length === 0) {
-                  <span class="hint">{{ t().pinned.askShare }}</span>
+                @if (theirAccountIds().length > 0) {
+                  <button mat-flat-button type="button" (click)="openForm()" [disabled]="busy()">{{ t().pinned.startTrade }}</button>
                 }
+                <button mat-button type="button" class="how" (click)="showSteps.set(!showSteps())">{{ t().pinned.howItWorks }}</button>
               </div>
             }
+          }
+        }
+        @if (showSteps() && (trade() || (!released() && (read() !== true || side() === 'buyer' || !starting())))) {
+          @if (guide(); as box) {
+            <div class="steps">
+              <ol>
+                @for (step of t().pinned.steps; track $index) {
+                  <li [class.now]="box.step === $index + 1">{{ step }}</li>
+                }
+              </ol>
+              <p>{{ t().pinned.ruleBuyer }}</p>
+              <p>{{ t().pinned.ruleSeller }}</p>
+              <p>{{ t().pinned.wrongBuyer }}</p>
+              <p>{{ t().pinned.wrongSeller }}</p>
+            </div>
           }
         }
         @if (error(); as text) {
@@ -214,6 +273,11 @@ type Found = 'open' | 'released' | 'none' | 'unread';
     .field { margin: 0; }
     .question { margin: 0; font-weight: 500; }
     .hint { font-size: 13px; color: var(--mat-sys-on-surface-variant); }
+    .how { margin-left: auto; }
+    .steps { font-size: 13px; }
+    .steps ol { margin: 0; padding-left: 20px; }
+    .steps li.now { font-weight: 500; }
+    .steps p { margin: 4px 0 0; }
     .error { color: var(--mat-sys-error); margin: 0; }
     code { font-size: 12px; word-break: break-all; }
   `,
@@ -240,11 +304,11 @@ export class PinnedListingComponent {
   private readonly anos = inject(AnosApiService);
   private readonly crypto = inject(CryptoService);
   private readonly signing = inject(SigningService);
+  private readonly actions = inject(EscrowActionsService);
+  private readonly dialog = inject(MatDialog);
   private readonly destroyRef = inject(DestroyRef);
   protected readonly lang = inject(LanguageService);
   protected readonly t = this.lang.words;
-
-  protected readonly millionthsToAnos = millionthsToAnos;
 
   protected readonly listing = computed(() => this.room().listing);
   protected readonly closed = computed(() => this.listing()?.status === 'closed');
@@ -274,7 +338,7 @@ export class PinnedListingComponent {
     return unique(this.ids().filter((a) => (other ? a.senderAnopodId === other.anopodId : a.senderAnopodId !== me)).map((a) => a.accountId));
   });
   /** This pod's usable accounts named in the chat (a lost account, whose keyBlob does not open, is left out; 2026-11-08). */
-  private readonly myNamedAccounts = computed(() => {
+  protected readonly myNamedAccounts = computed(() => {
     const mine = new Set(this.balances.usableAccounts().map((a) => a.accountId));
     return unique(this.ids().map((a) => a.accountId).filter((id) => mine.has(id)));
   });
@@ -285,7 +349,7 @@ export class PinnedListingComponent {
   private readonly watchedKey = computed(() => `${this.room().chatRoomId}|${this.watched().join(',')}`);
 
   protected readonly trade = signal<EscrowItem | null>(null);
-  /** This pod's account in the trade shown, for the stage's side and the link. */
+  /** This pod's account in the trade shown: it gives this pod's side in the trade (tradeSide), the link to the trade page and the account a release is sent as. */
   protected readonly tradeAccount = signal('');
   /** The chat's released trade; once found it stays until the card is given another room. */
   protected readonly released = signal<ReleasedTrade | null>(null);
@@ -301,6 +365,8 @@ export class PinnedListingComponent {
   protected readonly amount = signal('');
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
+  /** "How a trade works" is open (2026-11-17): the panel with the four steps and the four lines of rules shows under the buttons, wherever the template draws a row with its button, and nowhere else. */
+  protected readonly showSteps = signal(false);
 
   protected readonly canStart = computed(() => this.from() !== '' && this.to() !== '' && anosToMillionths(this.amount()) !== null);
   /** The form's total at the listing's price, once the amount reads. */
@@ -311,6 +377,53 @@ export class PinnedListingComponent {
     return formatPrice(totalOf(quantity, listing.price), listing.currency, 0);
   });
 
+  /** This pod's side in the open trade shown (2026-11-17): the seller when the account that sent the trade is this pod's account in it, else the buyer. */
+  protected readonly tradeSide = computed<'seller' | 'buyer'>(() => (this.trade()?.accountId === this.tradeAccount() ? 'seller' : 'buyer'));
+  /**
+   * The status box (escrow-stage.ts; 2026-11-17,
+   * forclaude/wallet-trade-guide-plan-1.md), with the other trader's
+   * username in the sentences that name them; null draws no box. An open
+   * trade: its stage, this pod's side in it and its amount. Else a released
+   * trade: Released with its amount, in the seller's words when this pod
+   * sent it, else in the buyer's. Else a closed listing: no box. Else the
+   * check, by this pod's side from the listing: "Checking for a trade…"
+   * until the first check ends, "Cannot check right now" after a read that
+   * failed. Else no trade: step 1 until an account is in the chat (for the
+   * buyer one of this pod's own, for the seller one the other trader
+   * posted), then step 2. A state with no trade has no amount, and the box
+   * is given an empty one.
+   */
+  protected readonly guide = computed<EscrowGuide | null>(() => {
+    const words = this.t().escrowGuide;
+    const name = this.otherName();
+    const open = this.trade();
+    if (open) return escrowGuide(stateOfStage(open.stage), this.tradeSide(), name, millionthsToAnos(open.amount), words);
+    const done = this.released();
+    if (done) return escrowGuide('released', done.mine ? 'seller' : 'buyer', name, millionthsToAnos(done.amount), words);
+    if (this.closed()) return null;
+    if (this.read() === null) return escrowGuide('checking', this.side(), name, '', words);
+    if (this.read() === false) return escrowGuide('unread', this.side(), name, '', words);
+    if (this.side() === 'buyer') return escrowGuide(this.myNamedAccounts().length === 0 ? 'noAccount' : 'noTrade', 'buyer', name, '', words);
+    return escrowGuide(this.theirAccountIds().length === 0 ? 'noAccount' : 'noTrade', 'seller', name, '', words);
+  });
+  /** While the anos are held (2026-11-17): what the trade's amount comes to at the listing's price, "At the listing's price that is 3,550 THB."; null in any other stage and with no open trade. */
+  protected readonly priceLine = computed(() => {
+    const listing = this.listing();
+    const open = this.trade();
+    if (!listing || !open || open.stage !== 'held') return null;
+    return this.t().pinned.priceLine(formatPrice(totalOf(open.amount, listing.price), listing.currency, 0));
+  });
+  /** For the buyer of a held trade whose amount is smaller than the listing's quantity (2026-11-17): "The listing says 100 anos, but only 40 are in escrow. Pay only for those."; null otherwise. */
+  protected readonly lessLine = computed(() => {
+    const listing = this.listing();
+    const open = this.trade();
+    if (!listing || !open || open.stage !== 'held' || this.tradeSide() !== 'buyer') return null;
+    if (BigInt(open.amount) >= BigInt(listing.quantity)) return null;
+    return this.t().pinned.lessLine(millionthsToAnos(listing.quantity), millionthsToAnos(open.amount));
+  });
+
+  /** True while the Release box is open: "I have been paid: release the anos" does nothing meanwhile. */
+  private boxOpen = false;
   /** The last check that read everything showed an open trade. */
   private seen = false;
   /** The trades this card posted a message about in this room, so a check that runs before the thread shows the message does not post it again. */
@@ -354,6 +467,7 @@ export class PinnedListingComponent {
     this.confirmStart.set(false);
     this.confirmClose.set(false);
     this.error.set(null);
+    this.showSteps.set(false);
     this.seen = false;
     this.told.clear();
     this.tellDisputeCase(null);
@@ -361,11 +475,6 @@ export class PinnedListingComponent {
 
   protected shortId(accountId: string): string {
     return `${accountId.slice(0, 8)}…${accountId.slice(-4)}`;
-  }
-
-  /** The stage in words from this pod's side of the trade (escrow-stage.ts). */
-  protected stageWords(t: EscrowItem): string {
-    return escrowStageWords(t.stage, t.accountId === this.tradeAccount() ? 'seller' : 'buyer', this.lang.words().escrowStages);
   }
 
   /** The buyer posts one of their account ids into the chat. */
@@ -430,6 +539,39 @@ export class PinnedListingComponent {
     const reason = reasonOf(res);
     if (/for this accountId is already (pending|held|locked)/.test(reason)) return this.t().pinned.alreadyHeld;
     return this.t().pinned.refused(reason);
+  }
+
+  /**
+   * The seller's "I have been paid: release the anos" (2026-11-17,
+   * forclaude/wallet-trade-guide-plan-1.md): the Release box of the escrow
+   * trade page (escrow-boxes.ts, wallet spec 8.9), with the buyer's account
+   * id and the username to type. Nothing happens while the box is open or
+   * something is on its way. Back sends nothing, and so does a box closed
+   * by a step back in the browser's history, which askConfirm answers as
+   * Back. On Yes the release is sent through escrow-actions.service.ts as
+   * this pod's account in the trade, and one check follows. An answer that
+   * failed shows in the error line, in the validator's plain words, only
+   * when after that check the card still shows this trade as held: an
+   * answer lost on the way whose release landed shows no error, as at
+   * Start. Anything thrown before the send (no key blob key in this tab,
+   * the signing servers) shows in the error line as it is.
+   */
+  protected async release(open: EscrowItem): Promise<void> {
+    if (this.boxOpen || this.busy()) return;
+    this.boxOpen = true;
+    let confirmed: boolean;
+    try {
+      confirmed = await askConfirm(this.dialog, releaseBox(this.t(), millionthsToAnos(open.amount), open.accountIdTo, this.session.username()));
+    } finally {
+      this.boxOpen = false;
+    }
+    if (!confirmed) return;
+    await this.run(async () => {
+      const res = await this.actions.send('release', this.tradeAccount(), open.transactionId);
+      await this.poll();
+      const shown = this.trade();
+      if (!res.ok && shown !== null && shown.transactionId === open.transactionId && shown.stage === 'held') throw new Error(this.actions.plainReason(res));
+    });
   }
 
   /** The owner closes the listing after a release; the room list is refreshed so the card reads Closed. */
@@ -503,9 +645,10 @@ export class PinnedListingComponent {
    * 2026-11-12); a check that finds no open trade tells the page that
    * there is no such case. A read that fails, or anything thrown (no key
    * blob key in this tab, a keyBlob that does not open), is unread: the
-   * card keeps the trade it shows and the dispute case it told, and Share
-   * and Start wait for a check that reads everything. A check that ends
-   * after the card was given another room changes nothing.
+   * card keeps the trade it shows and the dispute case it told, and "Send
+   * my account" and "Put the anos in escrow" wait for a check that reads
+   * everything. A check that ends after the card was given another room
+   * changes nothing.
    */
   private async check(): Promise<Found> {
     const room = this.room();
@@ -594,7 +737,7 @@ export class PinnedListingComponent {
     }
   }
 
-  /** A check that could not be read in full: the card keeps what it shows, and Share and Start wait for one that reads. */
+  /** A check that could not be read in full: the card keeps what it shows, and "Send my account" and "Put the anos in escrow" wait for one that reads. */
   private unread(room: RoomItem): Found {
     if (this.roomId === room.chatRoomId) this.read.set(false);
     return 'unread';

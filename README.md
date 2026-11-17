@@ -63,11 +63,13 @@ src/app/
   constants.ts             the PRF salt label, the polling intervals
   amounts.ts               anos <-> millionths
   countries.ts             the ISO 3166-1 alpha-2 codes for the identity form
+  escrow-boxes.ts          the five boxes of an escrow trade for the confirmation box: Release, Dispute, the question before a cancel, "Do not cancel this trade" and Cancel (spec 8.7, 8.9)
   i18n/en.ts, th.ts        the words of each language, one section per page (spec 8.8)
   unlock.ts                the unlock flow, shared by the landing page and setup
   components/camera.component.ts   the camera: live preview, Take photo, a file input as the fallback
   components/note-form.component.ts   the note form under a history row: the kind, the money and the currency, the memo (spec 8.2)
-  components/confirm-dialog.component.ts   the confirmation box before a send, before a new anos account and before the cancel of a locked transfer, with the username to type before a DAO or guardian stake and a red button for the cancel, and askConfirm (spec 8.9)
+  components/confirm-dialog.component.ts   the confirmation box before a send, before a new anos account, before the cancel of a locked transfer, before a release, a dispute and a cancel on the escrow trade page and before a release in the marketplace chat's pinned card (the Release box), with the username to type before a DAO or guardian stake and in the escrow trade's Release, Dispute and Cancel boxes, and a red button for the cancel of a locked transfer and for a dispute, and askConfirm and askChoice (spec 8.9)
+  components/escrow-strip.component.ts   the status box of an escrow trade: whether the anos are in escrow, the step of the four, and what to do and not to do, in green, amber or grey (spec 8.7)
   components/case-chat-start.component.ts   the attestor's Start chat button for the person on a case page: Start chat, Open chat, Invite again (spec 8.7, 13.3)
   components/case-chat-list.component.ts   the person's chats with the attestors of a case, on My case and My recovery case: Accept, Decline, Open chat (spec 8.7, 13.3)
   pages/                   one file per route: landing, create, recover, vouching, identity, setup,
@@ -88,6 +90,7 @@ src/app/
     settings.service.ts   the wallet settings on the masterpod, one encrypted object: the Protect your passkey answer (spec 8.2)
     chat.service.ts       what the chat pages share: the room keys, a room's title, and the chats about an attestor case: the room, the invites, Start chat, Invite again (spec 8.3)
     work-badge.service.ts the numbers on the Attesting and Moderation menu entries: the things on each page that this device has not seen yet, read every 15 seconds in that edition, the seen ids kept on the device (spec 8.1, 8.3)
+    escrow-actions.service.ts   a release, a cancel or a dispute of an escrow trade: the follow-up built with pair one, signed and posted to /escrow-signature, and the validator's refusal in plain words (spec 8.3)
 docs/                      schemas.md (the spec, build notes in section 11), public-ledger-id.md, build-plan.md
 proxy.conf.json            ng serve forwards /api to the proxy
 ```

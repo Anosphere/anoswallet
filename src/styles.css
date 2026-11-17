@@ -14,7 +14,7 @@ code {
   word-break: break-all;
 }
 
-/* The red of a cancel button (forclaude/wallet-case-chats-plan-1.md, 5.4; 2026-11-12): the class `danger` on a Material button gives it the theme's error colours, whether it is filled, outlined or a text button. A disabled button keeps the theme's disabled look. */
+/* The red of a cancel button (forclaude/wallet-case-chats-plan-1.md, 5.4; 2026-11-12) and, since 2026-11-17, of the escrow trade page's Dispute button and of the two box buttons that dispute, "Yes, dispute" and "Something is wrong: dispute" (forclaude/wallet-trade-guide-plan-1.md): the class `danger` on a Material button gives it the theme's error colours, whether it is filled, outlined or a text button. A disabled button keeps the theme's disabled look. */
 .danger {
   --mat-button-filled-container-color: var(--mat-sys-error);
   --mat-button-filled-label-text-color: var(--mat-sys-on-error);
