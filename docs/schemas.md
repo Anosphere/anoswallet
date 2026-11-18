@@ -1160,7 +1160,9 @@ with no name there shows as "Passkey". The row of the passkey that
 opened this session, the one whose credential id is the session's (8.3),
 also shows the line "In use now". Rename draws that row as a small form
 in the row's place: a text box labelled "Name" that holds the name
-(empty for "Passkey"), Save and Cancel. Save checks the name rule and
+(empty for "Passkey"), Save and Cancel. The two buttons are one group
+(2026-11-18, section 11): on a phone both stand under the box, and on a
+wide screen both beside it. Save checks the name rule and
 writes the settings with the new name beside the other names; a name
 that breaks the rule shows "A name is 1 to 40 characters." in red under
 the box, and a save that failed shows its reason there
@@ -1178,8 +1180,9 @@ most 40 characters; then three steps, each a numbered title, one line
 of text and one button. A button is on only while its step is the
 current one, the list is read and nothing is running; the first one
 also needs a valid name. Under the steps a quiet "Start again", which
-goes back to step 1, keeps the name and clears the two lines under it;
-then the success line and, in red, the error line.
+goes back to step 1, keeps the name, clears the two lines under it and
+reads the list again (2026-11-18, section 11; every button is off while
+it is read); then the success line and, in red, the error line.
 1. "Confirm it is you", "Tap a passkey this anoPod already has.", the
    button "Confirm with a passkey I have". Without the encryption key in
    RAM it shows "The encryption key is not in RAM: unlock again";
@@ -1224,7 +1227,11 @@ then the success line and, in red, the error line.
    "Passkey". 401 unknown or expired challenge shows "That took longer
    than ten minutes. Start again." and 401 unknown passkey shows "That
    passkey is not one of this anoPod's. Tap one that is."; both start
-   the steps over. Any other refusal, or no answer, shows
+   the steps over. After the first of the two the list is read again
+   (2026-11-18, section 11): the add may have gone through with its
+   answer lost on the way, and a passkey that was added then shows in
+   the list, as "Passkey", and stands in the exclude list of the next
+   try. Any other refusal, or no answer, shows
    "/add-passkey: <reason>" in red and keeps what was built, so the
    button sends it again without a tap. A name that no longer keeps the
    rule (the box was changed after step 1) shows "A name is 1 to 40
@@ -10144,6 +10151,97 @@ Account page's subtitle and first sentence, and the `/account` line of
   wallet1 and then wallet2, with no setting in `network/wallet.env` and
   no `npm ci`. This step stands on f3e8ee9, the Passkeys step; whether
   the two go out in one deploy or in two is the user's call.
+
+### The Passkeys page: Save and Cancel together, the list read again after a lost answer (2026-11-18)
+
+Two small fixes to the Passkeys page (8.2), built on the user's word in
+the chat of the note above ("Ok, go ahead and do both quick fixes"),
+with no plan file, one commit, on main at 343ed9c, the working tree
+clean. The second fix has two places: the build made the first, put the
+other to the user, and added it on the user's word ("Yes, add it"). One
+file of code, `src/app/pages/account-passkeys.page.ts`. No word of the
+dictionaries changes. Wallet only: nothing on the masterpod or on any
+other server.
+
+- The Rename form. The look of the note above showed the form with Save
+  beside the box and Cancel alone on the line under it, at 412 and 430
+  pixels. Measured before the fix: from 405 to 480 pixels of screen
+  width in English, and from 410 to 481 in Thai. Why: the box, Save and
+  Cancel were three pieces of one row that wraps, and they wrapped one
+  at a time. Now the two buttons stand in one group, `<div
+  class="rename-buttons">`, with one style line, `.rename-buttons {
+  display: flex; gap: 8px; }`, so the two wrap as one piece. Up to 480
+  pixels (481 in Thai) both buttons stand under the box, as they did up
+  to 404 (409) before. From 481 (482) the box and both buttons stand in
+  one row, as before. At 430 pixels the box is 332 pixels wide in place
+  of 245, and the 40-character name showed whole in it.
+- The list after the ten-minute answer. The note "More than one passkey
+  (2026-11-18)" lists this as known and left: when the answer of an
+  `/add-passkey` that succeeded is lost on the way, the next press gets
+  401 unknown or expired challenge, the page says "That took longer than
+  ten minutes. Start again.", and the list on the page does not have the
+  new passkey. The planning chat of the Account page plan then read the
+  end of that in the code: a second add on the same page builds its
+  exclude list from that old list, so the same key or phone replaces the
+  passkey just added, and its row stays on the masterpod and in the list
+  for good, dead, as "Passkey", since no route removes a passkey. Now
+  `finish()` reads the list again at that 401, after the steps start
+  over and before the sentence shows (`await this.load()`), and its
+  comment says so. A passkey that was added then shows in the list, as
+  "Passkey", and stands in the exclude list of the next try, where the
+  same key or phone answers "This place already holds a passkey of this
+  anoPod." Not changed: the sentence still speaks of ten minutes; the
+  name of that add is not saved, so the row reads "Passkey" until
+  Rename; the other 401 and every other refusal read nothing, as before.
+- The list at Start again. The same lost answer can be followed by a
+  press of the button "Start again" in place of a second press of "Check
+  and finish". No 401 comes then, so until this change the old list was
+  used again, and the end was the same dead row. The build had described
+  only the 401 to the user, so it left this, put it to the user, and
+  built it on the user's word. `startAgain()` now runs as a step does:
+  every button is off, the two lines under the steps go, the steps start
+  over, and the list is read again (`await this.load()`); its comment
+  says so. Until now it only started the steps over and cleared the two
+  lines. A read that is refused leaves the list of before on screen,
+  with the refusal in red where the list is, as on open.
+- Spec: 8.2 (the Rename sentence, the Start again sentence, and the 401
+  sentence of step 3); this note.
+- Checked. `npx ng build` from the web_app folder, after the two fixes
+  and again after the Start again change: clean, no warnings (2.22 MB
+  initial total, `main-SOIZYNNP.js`, `styles-EMD3RG3N.css`, the style
+  file of before). Then a development build served from a scratch folder
+  on this Mac, in the Claude app's browser pane, with a made-up session,
+  as in the note above; the temporary entry in
+  `/Users/codex/.claude/launch.json` is out again, and the file is byte
+  for byte what it was. The Rename form: its own width was set to what
+  it has at every screen width from 320 to 1000 pixels, in English and
+  in Thai, and Cancel stood alone at none of them. At the real widths
+  360 and 430 both buttons stood under the box, and at 1024 all three
+  stood in one row. A click on Cancel closed the form, and a click on
+  Save reached the save, which answered "The encryption key is not in
+  RAM: unlock again", since the made-up session has no key. The list:
+  the masterpod's answers were made up in the browser, so nothing was
+  sent. With `/add-passkey` answering 401 unknown or expired challenge,
+  a click on "Check and finish" called `/add-passkey` and then
+  `/list-passkeys`; the steps stood at 1, the list showed the new
+  passkey as "Passkey", its credential id stood in the exclude list, and
+  the red line read "That took longer than ten minutes. Start again."
+  With 401 unknown passkey, and with a made-up 500, `/add-passkey` alone
+  was called. Start again: the page was set as a lost answer leaves it
+  (step 3, the built body kept, a red line under the steps), and a click
+  on "Start again" called `/list-passkeys` alone. While that read ran,
+  made to take 0.6 seconds, all four buttons were off. Then the steps
+  stood at 1, the name was still in its box, no line stood under the
+  steps, the list showed the new passkey as "Passkey", and its
+  credential id stood in the exclude list. With the list's answer made
+  up as a refusal, the list of before stayed and "/list-passkeys: HTTP
+  500: made-up failure" showed in red where the list is. With nothing
+  lost, the same list came back and nothing else changed. The ten-minute
+  answer was tried once more after this change, with the same result.
+  `git status` showed this step's two files and no others. Not checked:
+  a phone; the live wallet; a real passkey; a real lost answer between
+  the wallet and the masterpod. The user deploys the wallet servers
+  after this step, as the note above says.
 
 ## 12. Recovery and the moderator edition
 

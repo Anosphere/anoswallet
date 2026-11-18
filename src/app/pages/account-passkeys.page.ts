@@ -71,8 +71,10 @@ function validName(text: string): string | null {
                     <mat-label>{{ t().common.name }}</mat-label>
                     <input matInput [ngModel]="renameText()" (ngModelChange)="renameText.set($event)" maxlength="40" autocomplete="off" />
                   </mat-form-field>
-                  <button mat-flat-button type="button" (click)="saveRename(p.passkeyId)" [disabled]="busy()">{{ t().common.save }}</button>
-                  <button mat-button type="button" (click)="cancelRename()" [disabled]="busy()">{{ t().common.cancel }}</button>
+                  <div class="rename-buttons">
+                    <button mat-flat-button type="button" (click)="saveRename(p.passkeyId)" [disabled]="busy()">{{ t().common.save }}</button>
+                    <button mat-button type="button" (click)="cancelRename()" [disabled]="busy()">{{ t().common.cancel }}</button>
+                  </div>
                 </div>
                 @if (renameError(); as text) {
                   <p class="error rename-error">{{ text }}</p>
@@ -136,6 +138,8 @@ function validName(text: string): string | null {
     .row mat-list-item { flex: 1; min-width: 0; }
     .rename { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 16px; }
     .rename mat-form-field { flex: 1 1 220px; max-width: 360px; }
+    /* Save and Cancel are one piece, so the two wrap under the box together and neither stands alone on a line. */
+    .rename-buttons { display: flex; gap: 8px; }
     .rename-error { margin: 0 16px 8px; }
     .name { width: 100%; max-width: 360px; }
     .step { margin: 20px 0 4px; font-weight: 500; }
@@ -297,7 +301,10 @@ export class AccountPasskeysPage {
    * list is read again. A challenge that is gone and a fresh tap the
    * masterpod does not know start the steps over with their sentence; any
    * other refusal, or no answer, keeps the built body, so the button
-   * sends it again without a tap.
+   * sends it again without a tap. After a challenge that is gone the list
+   * is read again too (2026-11-18): the add may have gone through with
+   * its answer lost on the way, and then the new passkey shows in the
+   * list and stands in the exclude list of the next try.
    */
   protected finish(): Promise<void> {
     return this.run(async () => {
@@ -327,6 +334,8 @@ export class AccountPasskeysPage {
         const reason = (res.body as unknown as Partial<ApiError> | null)?.error;
         if (res.status === 401 && reason === 'unknown or expired challenge') {
           this.resetSteps();
+          // The add may have gone through with its answer lost on the way: the list is read again, so a passkey that was added shows and stands in the exclude list of the next try.
+          await this.load();
           throw new Error(this.t().accountPasskeys.tooLong);
         }
         if (res.status === 401 && reason === 'unknown passkey') {
@@ -349,11 +358,12 @@ export class AccountPasskeysPage {
     });
   }
 
-  /** Start again: the steps start over, the name stays, and the lines under the steps go. */
-  protected startAgain(): void {
-    this.resetSteps();
-    this.error.set(null);
-    this.done.set(null);
+  /** Start again: the steps start over, the name stays, the lines under the steps go, and the list is read again (2026-11-18): an add whose answer was lost on the way may have gone through, and then its passkey shows and stands in the exclude list of the next try. Busy while the list is read, so no step starts on the old list. */
+  protected startAgain(): Promise<void> {
+    return this.run(async () => {
+      this.resetSteps();
+      await this.load();
+    });
   }
 
   /** Back to step 1 with nothing kept. */
