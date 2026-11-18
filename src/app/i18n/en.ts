@@ -269,13 +269,7 @@ export const en = {
     accountLimit: 'This anoPod has reached the limit for new anos accounts. Try again later.',
   },
   accountHome: {
-    intro: 'These are what a moderator would use to give your account back if you were ever locked out. The more you add, the easier it will be to recover your account.',
-    selfieTitle: 'Recovery selfie',
-    detailsTitle: 'Recovery details',
-    noneOnFile: 'None on file yet',
-    selfiesOnFile: (n: number) => `${n === 1 ? '1 selfie' : `${n} selfies`} on file`,
-    detailsOnFile: (photos: number, details: number) =>
-      `${photos === 1 ? '1 photo' : `${photos} photos`} and ${details === 1 ? '1 detail' : `${details} details`} on file`,
+    recoveryLine: 'Your recovery selfie and details',
     passkeysTitle: 'Passkeys',
     passkeysLine: 'See your passkeys, or add a spare',
   },
@@ -309,6 +303,15 @@ export const en = {
     tooLong: 'That took longer than ten minutes. Start again.',
     nameNotSaved: (reason: string) => `The passkey was added, but its name was not saved (${reason}). Use Rename.`,
     startAgain: 'Start again',
+  },
+  accountRecoveryHome: {
+    intro: 'These are what a moderator would use to give your account back if you were ever locked out. The more you add, the easier it will be to recover your account.',
+    selfieTitle: 'Recovery selfie',
+    detailsTitle: 'Recovery details',
+    noneOnFile: 'None on file yet',
+    selfiesOnFile: (n: number) => `${n === 1 ? '1 selfie' : `${n} selfies`} on file`,
+    detailsOnFile: (photos: number, details: number) =>
+      `${photos === 1 ? '1 photo' : `${photos} photos`} and ${details === 1 ? '1 detail' : `${details} details`} on file`,
   },
   recovery: {
     subtitle: 'What a moderator would use to give your account back if you were ever locked out.',

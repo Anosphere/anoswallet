@@ -280,12 +280,7 @@ export const th: Words = {
     accountLimit: 'anoPod นี้เปิดบัญชี anos ใหม่ครบจำนวนที่อนุญาตแล้ว ลองอีกครั้งในภายหลัง',
   },
   accountHome: {
-    intro: 'สิ่งเหล่านี้คือสิ่งที่ผู้ดูแลจะใช้เพื่อคืนบัญชีให้คุณ หากคุณถูกล็อกออก ยิ่งคุณเพิ่มมาก ยิ่งกู้คืนบัญชีได้ง่าย',
-    selfieTitle: 'เซลฟี่สำหรับกู้คืน',
-    detailsTitle: 'ข้อมูลสำหรับกู้คืน',
-    noneOnFile: 'ยังไม่มีในแฟ้ม',
-    selfiesOnFile: (n: number) => `มีเซลฟี่ ${n} รูปในแฟ้ม`,
-    detailsOnFile: (photos: number, details: number) => `มีรูปถ่าย ${photos} รูปและข้อมูล ${details} รายการในแฟ้ม`,
+    recoveryLine: 'เซลฟี่และข้อมูลสำหรับกู้คืนของคุณ',
     passkeysTitle: 'พาสคีย์',
     passkeysLine: 'ดูพาสคีย์ของคุณ หรือเพิ่มพาสคีย์สำรอง',
   },
@@ -319,6 +314,14 @@ export const th: Words = {
     tooLong: 'ใช้เวลานานกว่าสิบนาที เริ่มใหม่อีกครั้ง',
     nameNotSaved: (reason: string) => `เพิ่มพาสคีย์แล้ว แต่ไม่ได้บันทึกชื่อ (${reason}) ใช้ "เปลี่ยนชื่อ"`,
     startAgain: 'เริ่มใหม่อีกครั้ง',
+  },
+  accountRecoveryHome: {
+    intro: 'สิ่งเหล่านี้คือสิ่งที่ผู้ดูแลจะใช้เพื่อคืนบัญชีให้คุณ หากคุณถูกล็อกออก ยิ่งคุณเพิ่มมาก ยิ่งกู้คืนบัญชีได้ง่าย',
+    selfieTitle: 'เซลฟี่สำหรับกู้คืน',
+    detailsTitle: 'ข้อมูลสำหรับกู้คืน',
+    noneOnFile: 'ยังไม่มีในแฟ้ม',
+    selfiesOnFile: (n: number) => `มีเซลฟี่ ${n} รูปในแฟ้ม`,
+    detailsOnFile: (photos: number, details: number) => `มีรูปถ่าย ${photos} รูปและข้อมูล ${details} รายการในแฟ้ม`,
   },
   recovery: {
     subtitle: 'สิ่งที่ผู้ดูแลจะใช้เพื่อคืนบัญชีให้คุณ หากคุณถูกล็อกออก',

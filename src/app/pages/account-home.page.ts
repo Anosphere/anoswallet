@@ -1,20 +1,18 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatListModule } from '@angular/material/list';
 import { RouterLink } from '@angular/router';
 import { LanguageService } from '../services/language.service';
-import { SessionService } from '../services/session.service';
 
 /**
- * The Account page (wallet spec 8.2): the way back to the recovery
- * walkthrough once the next-step rule has stopped sending people there. Three
- * rows: Recovery selfie and Recovery details, each with what the status
- * counts on file, opening the walkthrough at the selfie or at the ID, and,
- * since 2026-11-18, Passkeys, which opens the Passkeys page
- * (/account/passkeys): the anoPod's passkeys, and adding one. The
- * status only counts, since every photo and line is encrypted, so the rows
- * say how many, never which.
+ * The Account page (wallet spec 8.2), at /account: a plain list under its
+ * title, one row per thing, each with an icon, a title and one line. Two
+ * rows: Account recovery, which opens the Account recovery page
+ * (/account/recovery), and, since 2026-11-18, Passkeys, which opens the
+ * Passkeys page (/account/passkeys). A new row goes under the last one.
+ * The page reads nothing. Until 2026-11-18 it carried the two recovery
+ * rows itself, under a subtitle and a sentence about recovery.
  */
 @Component({
   selector: 'app-account-home-page',
@@ -23,20 +21,13 @@ import { SessionService } from '../services/session.service';
     <mat-card appearance="outlined">
       <mat-card-header>
         <mat-card-title>{{ t().common.yourAccount }}</mat-card-title>
-        <mat-card-subtitle>{{ t().common.accountRecovery }}</mat-card-subtitle>
       </mat-card-header>
       <mat-card-content>
-        <p>{{ t().accountHome.intro }}</p>
         <mat-nav-list>
-          <a mat-list-item routerLink="/account/recovery/selfie">
-            <mat-icon matListItemIcon>photo_camera</mat-icon>
-            <span matListItemTitle>{{ t().accountHome.selfieTitle }}</span>
-            <span matListItemLine>{{ selfieLine() }}</span>
-          </a>
-          <a mat-list-item routerLink="/account/recovery/details">
-            <mat-icon matListItemIcon>badge</mat-icon>
-            <span matListItemTitle>{{ t().accountHome.detailsTitle }}</span>
-            <span matListItemLine>{{ detailsLine() }}</span>
+          <a mat-list-item routerLink="/account/recovery">
+            <mat-icon matListItemIcon>lock_reset</mat-icon>
+            <span matListItemTitle>{{ t().common.accountRecovery }}</span>
+            <span matListItemLine>{{ t().accountHome.recoveryLine }}</span>
           </a>
           <a mat-list-item routerLink="/account/passkeys">
             <mat-icon matListItemIcon>key</mat-icon>
@@ -48,23 +39,12 @@ import { SessionService } from '../services/session.service';
     </mat-card>
   `,
   styles: `
-    p { max-width: 640px; }
+    /* A Material list row has a fixed height and cuts its line at the row's width; here a row grows with its line and the line wraps onto a second one, so nothing is cut on a phone, and a row whose line fits keeps its 64px. */
+    a[mat-list-item] { height: auto; min-height: 64px; padding-bottom: 6px; }
+    a[mat-list-item] [matListItemLine] { white-space: normal; }
   `,
 })
 export class AccountHomePage {
-  private readonly session = inject(SessionService);
   protected readonly lang = inject(LanguageService);
   protected readonly t = this.lang.words;
-
-  protected readonly selfieLine = computed(() => {
-    const selfies = this.session.status()?.bucketOneImages ?? 0;
-    return selfies === 0 ? this.t().accountHome.noneOnFile : this.t().accountHome.selfiesOnFile(selfies);
-  });
-
-  protected readonly detailsLine = computed(() => {
-    const status = this.session.status();
-    const photos = status?.bucketTwoImages ?? 0;
-    const details = status?.bucketTwoInfos ?? 0;
-    return photos + details === 0 ? this.t().accountHome.noneOnFile : this.t().accountHome.detailsOnFile(photos, details);
-  });
 }

@@ -821,7 +821,8 @@ as in the test apps; a new tab unlocks again.
     /vouching                find seeds, send requests, wait
     /identity                the public ledger id: why, the form, the review
     /setup                   keys, the backup code, the deposits, complete-setup
-    /account                 your account: Recovery selfie and Recovery details, with what is on file
+    /account                 your account: a plain list of rows, Account recovery and Passkeys
+    /account/recovery        the Account recovery page: Recovery selfie and Recovery details, with what is on file
     /account/recovery/selfie    the account recovery walkthrough, opened at the selfie
     /account/recovery/details   the walkthrough opened at the ID
     /account/protect         the Protect your passkey page: the setup pane again, Save records the answer
@@ -1092,16 +1093,35 @@ details go in one batch. A failed deposit or call shows the error and
 Retry, which starts that send again with a fresh key.
 
 Account. "Your account", at /account, in the navigation once setup is
-complete, after Marketplace. Two rows, Recovery selfie and Recovery
-details, opening the walkthrough at step 1 or step 2, each with what the
-status counts on file ("1 selfie on file", "2 photos and 4 details on
-file", "None on file yet"). The status only counts, since everything is
-encrypted, so the rows say how many, never which. A third row since
-2026-11-18 (section 11): "Passkeys", with a key icon and the line "See
-your passkeys, or add a spare", which opens the Passkeys page,
-/account/passkeys (below). It has no condition of its own: Account is in
-the navigation only once setup is complete, and a pod that reaches the
-Passkeys page earlier by its address sees the masterpod's refusal there.
+complete, after DAO. Since 2026-11-18 (section 11; the plan is
+forclaude/wallet-account-page-plan-1.md) the page is a plain list under
+its title, with no subtitle and no sentence: one row per thing, each
+with an icon, a title and one line, and a new row goes under the last
+one. Two rows. "Account recovery", with the icon lock_reset (the one
+the Cases page gives a recovery case) and the line "Your recovery
+selfie and details", opens the Account recovery page, /account/recovery
+(below). "Passkeys" (2026-11-18, section 11), with a key icon and the
+line "See your passkeys, or add a spare", opens the Passkeys page,
+/account/passkeys (below). No row has a condition of its own: Account
+is in the navigation only once setup is complete, and a pod that
+reaches the Passkeys page earlier by its address sees the masterpod's
+refusal there. The page reads nothing: what is on file shows on the
+Account recovery page. Until 2026-11-18 the page carried the subtitle
+"Account recovery", the sentence that now stands on the Account
+recovery page, and the two recovery rows themselves.
+
+The Account recovery page (2026-11-18, section 11), at
+/account/recovery, reached from the Account page's first row. Titled
+"Account recovery", Back to Account (the navigation's word,
+"Account"), then "These are what a moderator would use to give your
+account back if you were ever locked out. The more you add, the easier
+it will be to recover your account." and two rows, Recovery selfie and
+Recovery details, opening the walkthrough above at step 1 or step 2,
+each with what the status counts on file ("1 selfie on file", "2
+photos and 4 details on file", "None on file yet"). The status only
+counts, since everything is encrypted, so the rows say how many, never
+which. The next-step rule (8.1) and Home's Things to do do not pass
+this page: they open the walkthrough directly.
 
 Protect your passkey (2026-11-07, section 11), at /account/protect,
 reached from Home's Things to do on an Android phone while the recorded
@@ -1116,7 +1136,7 @@ Home; a refusal in red. No row under Account.
 
 Passkeys (2026-11-18, section 11; the plan is
 forclaude/add-passkey-plan-1.md, and the masterpod's side is 4.8), at
-/account/passkeys, reached from the Account page's third row and from
+/account/passkeys, reached from the Account page's Passkeys row and from
 the notification "A passkey was added to your anoPod". Titled
 "Passkeys", Back to Account (the navigation's word, "Account"), then "A
 passkey is what unlocks your anoPod. You can add another one: a spare
@@ -3226,13 +3246,24 @@ forclaude/wallet-trade-guide-plan-1.md gives it, and no Thai reader has
 read it. The Passkeys page (2026-11-18, section 11) takes its words from
 a new section, `accountPasskeys`, which stands after `accountHome`: 29
 entries, three of them functions (`addedOn`, `added` and
-`nameNotSaved`). The Account page's third row is
+`nameNotSaved`). The Account page's Passkeys row is
 `accountHome.passkeysTitle` and `accountHome.passkeysLine`, and the
 notification's label is `notifications.labels.passkeyAdded`. Back to
 Account is `nav.account`; Name, Save, Cancel and the two "not in RAM"
 sentences come from `common`. The English is the plan's, letter for
 letter; the Thai is the build chat's, by the glossary, and no Thai
 reader has read it.
+The Account page as a plain list and the Account recovery page
+(2026-11-18, section 11): the sentence and the five entries of the two
+recovery rows moved from `accountHome` to a new section,
+`accountRecoveryHome`, which stands after `accountPasskeys`, their
+words unchanged in both languages. `accountHome` keeps `passkeysTitle`
+and `passkeysLine` and gains `recoveryLine`, "Your recovery selfie and
+details". The recovery row's title and the new page's title are
+`common.accountRecovery`, and Back to Account is `nav.account`. The
+English is the plan's, letter for letter; the one new Thai line is the
+planning chat's, as forclaude/wallet-account-page-plan-1.md gives it,
+and no Thai reader has read it.
 
 ### 8.9 The confirmation box
 
@@ -3488,6 +3519,12 @@ Cloud machines.
   new passkey where the main one lives, which replaces the main one on
   that device, and the person logs in with the new passkey from then
   on.
+- From the Account page plan (forclaude/wallet-account-page-plan-1.md,
+  2026-11-18): a row for Protect your passkey (its page is written for
+  Android phones, and Home shows its link to the people it is for); a
+  row for checking the public ledger id, which is to come in a step of
+  its own; what is on file counted on the Account page itself; groups
+  or headings on the Account page; a back link on the walkthrough.
 - Several passkeys, push delivery, a custom theme, rate limits.
 
 ## 11. Build notes
@@ -9933,6 +9970,180 @@ meets those checks.
   no `npm ci`; a page loaded before the deploy keeps working with the
   main passkey and shows "/unlock: HTTP 409: reload the wallet" with an
   added one.
+
+### The Account page as a plain list (2026-11-18)
+
+Built from `forclaude/wallet-account-page-plan-1.md` (FINAL,
+2026-11-18), its one step, one commit, on main at f3e8ee9, the commit of
+the note above, the working tree clean. Why: the Account page will keep
+gaining rows, and its subtitle and its one sentence spoke of recovery
+alone. Now the page is its title and a plain list, one row per thing,
+and the recovery selfie and details stand on a page of their own, the
+Account recovery page, one tap away. Wallet only: no route of the proxy
+(`server/`), no line of `network/wallet.env` and no npm package; the
+masterpod, the validators, the doormen, the keyholders and the signing
+servers are not touched. The walkthrough, the next-step rule, Home's
+Things to do and the two old `/security` addresses are as they were.
+
+This step settles two places the note above listed as out of date: the
+Account page's subtitle and first sentence, and the `/account` line of
+8.1.
+
+- `src/app/pages/account-home.page.ts`: the whole file as the plan's 1.1
+  gives it. The title and two rows, Account recovery (the icon
+  `lock_reset`) and Passkeys. The subtitle, the sentence, the two
+  recovery rows, the two computed lines and the `SessionService` left
+  it. The page had no styles; it has the three lines of the wrap style
+  now (below).
+- `src/app/pages/account-recovery-home.page.ts`, new, as the plan's 1.2
+  gives it (`AccountRecoveryHomePage`,
+  `app-account-recovery-home-page`): Back to Account, the sentence, and
+  the two rows with what is on file. The three lines of the wrap style
+  stand under its style line `p { max-width: 640px; }`.
+- `src/app/app.routes.ts`: the import, and the route `account/recovery`
+  after `account` and in front of `account/recovery/selfie`, with the
+  tab title "Account recovery".
+- `src/app/i18n/en.ts` and `th.ts`: `accountHome` holds `recoveryLine`,
+  `passkeysTitle` and `passkeysLine`. The new section
+  `accountRecoveryHome` stands after `accountPasskeys` and holds the six
+  entries that left `accountHome`. The English is the plan's 1.3 letter
+  for letter. In `th.ts` the six entries were moved as whole lines by a
+  one-off command kept outside the repo, and the one new Thai line was
+  copied out of the plan file the same way, so no Thai was typed.
+- Tables typed `Record<string, string>` added to the dictionaries: none.
+- README: the `pages/` line, as the plan gives it.
+- Spec: 8.1 (the `/account` line, and the new line under it); 8.2 (the
+  Account paragraph, the new Account recovery page paragraph, and
+  "Passkeys row" in the Passkeys paragraph); 8.8; 10 (one bullet); this
+  note.
+- Readings where the plan left a detail open. BUILD-DATE is 2026-11-18.
+  The 8.8 text stands on lines of its own at the end of its paragraph,
+  wrapped as the plan wraps it. The wrap style is three lines in the
+  `styles` of each of the two pages: a one-line comment,
+  `a[mat-list-item] { height: auto; min-height: 64px; padding-bottom:
+  6px; }` and `a[mat-list-item] [matListItemLine] { white-space: normal;
+  }`. The plan names `height: auto` and `white-space: normal`, and asks
+  that a row whose line fits keeps its height. `height: auto` alone
+  would let such a row shrink to the 57.5 pixels its title and its line
+  need (a row with a second line measured 77.5 with no padding), so
+  `min-height: 64px` holds the 64 pixels of before. `padding-bottom:
+  6px` gives a row with a second line the space under its text that a
+  row of one line has, 6.5 pixels; without it the row under it stood
+  that much closer. A row with a second line is 83.5 pixels high. A
+  padding of up to 6.5 pixels moves nothing in a row that fits. The row
+  is found as the link it is and the line by its attribute, so the two
+  templates are the plan's, with no class added. Only the line wraps: no
+  title is cut, and the title keeps Material's style. No `line-height`
+  is set, since the theme gives the line 20 pixels already.
+- The look, where. A development build in a scratch folder on this Mac,
+  served by a plain file server on 127.0.0.1 (a temporary entry in
+  `/Users/codex/.claude/launch.json`, taken out again; the file is byte
+  for byte what it was), in the Claude app's browser pane. A made-up
+  session was set through the `ng` debug tools: an anoPod id, a
+  username, and a status with `vouched` and `setupComplete` true and the
+  three counts. Not on a phone and not on the live wallet. No passkey
+  was asked. The pages asked the file server and Google's font files and
+  nothing else: `/api/config` answered 404, and a signed call answers
+  "no session" before anything is sent. The sizes: 360, 375, 390 and 430
+  pixels wide, each in English and in Thai. At these widths the pane
+  says it is Chrome on an Android phone, and it draws Thai with this
+  Mac's Thai font.
+- The look, the Account page and the Account recovery page before the
+  wrap style, at 360 pixels. Every title and every line has 222 pixels.
+  The English titles need 131.5 ("Account recovery"), 71.4 ("Passkeys"),
+  115.0 ("Recovery selfie") and 124.4 ("Recovery details"), and the Thai
+  ones 92.4, 50.9, 115.9 and 119.1, so a title has at least 90 pixels to
+  spare. The English lines: "Your recovery selfie and details" 201.9
+  (20.1 to spare); "See your passkeys, or add a spare" 218.7 (3.3 to
+  spare, so cut by the 10-pixel rule); "None on file yet" 101.0; "1
+  selfie on file" 91.0; "2 photos and 4 details on file" 187.1; "12
+  selfies on file" 106.6; "12 photos and 14 details on file" 203.3 (18.7
+  to spare). The Thai lines: the recovery row's 201.2 (20.8 to spare);
+  the Passkeys row's 230.5 (8.5 too wide, cut with three dots); none on
+  file 84.2; 1 selfie 116.5; 2 photos and 4 details 245.2 (23.2 too
+  wide, cut); 12 selfies 124.6; 12 photos and 14 details 261.4 (39.4 too
+  wide, cut). So both pages got the style. The Recovery details row
+  stood on the Account page until this step, with the same room, so its
+  Thai line was cut there too whenever something was on file; that page
+  was not measured.
+- The look, the two pages with the wrap style, built in and looked at
+  again at all four sizes in both languages. Nothing is cut and no page
+  scrolls sideways. A row whose line fits is 64 pixels high as before,
+  and when the style was tried in the scratch page, the icon, the title
+  and the line of every such row stood exactly where they stood without
+  it. On the Account page one line takes two lines: the Passkeys row's,
+  in Thai, at 360 pixels. At 375 it fits with 6.5 pixels to spare. The
+  English one is on one line at every size, with 3.3 pixels to spare at
+  360, so a phone whose letters are a little wider wraps it. On the
+  Account recovery page the Thai Recovery details line takes two lines
+  with 2 photos and 4 details at 360 and 375 (at 390 it fits with 6.8 to
+  spare), and with 12 photos and 14 details at 360, 375 and 390. At 430
+  everything is on one line. In English every line is on one line at
+  every size, with each of the three made-up statuses. The sentence
+  takes 4 lines in English (3 at 430) and 2 in Thai.
+- The look, the Passkeys page, with a made-up list set on the page's own
+  signals: the main passkey; an added one under a 40-character name; an
+  added one marked "In use now"; then Rename open on the first added one
+  with its red line, a name in the box, and the success line and a red
+  line under the steps. Nothing was changed there. What holds: the
+  page's two style lines work, a row grows with its lines and a line
+  wraps (the main passkey's line takes three lines in English at 360 and
+  375, and two otherwise); nothing runs past the card and no button is
+  off the edge (the widest, "Confirm with a passkey I have", is 237
+  pixels in a column of 294 at 360); nothing overlaps; no page scrolls
+  sideways; the name box and its hint fit; the success line and the red
+  line wrap inside the card. Four things for the user to decide. One: a
+  long name is cut with three dots at every size, in both languages. The
+  name has 182 pixels at 360, 197 at 375, 212 at 390 and 252 at 430; the
+  40-character English name needs 300 (it shows as "Spare security key
+  in t…" at 360, 23 characters, and 32 characters at 430), and the Thai
+  one 307. A name may be 40 characters, and no place on a phone shows it
+  whole: the Rename box scrolls. Two: the "Added" line takes two lines
+  at 360 and 375 in English ("Added Nov 18, 2026," then "7:50:12 AM"; it
+  needs 210 pixels) and at 360 in Thai (192). It is whole. Three: at 430
+  pixels, and at 412, which was tried for this, the Rename form puts
+  Save beside the box and Cancel alone on the line under it; at 360, 375
+  and 390 both stand under the box. Four: in Thai, the browser breaks a
+  line inside the word พาสคีย์ in places (พาส at the end of a line, คีย์
+  on the next): in the page's first sentence, in the main passkey's line
+  and in step 3's text at 360. Nothing is cut there. On open, before the
+  made-up list was set, the page showed "/list-passkeys: HTTP 0: no
+  session: unlock first" in red where the list would be, as it should
+  for a session without keys.
+- Seen in passing, outside the three pages: in Thai at 360 pixels the
+  toolbar's name, "กระเป๋าเงิน anoPod", touches the username beside it.
+  At 430 there is a gap.
+- Places this step left out of date that the plan does not name. One: in
+  8.8, "The Account page's third row is `accountHome.passkeysTitle` and
+  `accountHome.passkeysLine`", where the Passkeys row is the second row
+  now. The build left it and put it to the user. On the user's word, the
+  same day, it reads "The Account page's Passkeys row", as 8.2 does.
+- Checked. `npx ng build` from the web_app folder, before the wrap style
+  and again with it: clean, no warnings (2.22 MB initial total,
+  `main-KGPV2PQL.js`, `styles-EMD3RG3N.css`, the style file of before).
+  The plan's blocks were compared with the files by `diff`: the two
+  sections of `en.ts`, the README line and the spec's five blocks are
+  equal, and the two page files are the plan's but for the lines of the
+  wrap style. In `th.ts` the six lines taken out of `accountHome` and
+  the six put into `accountRecoveryHome` are the same, the new line is
+  the plan's byte for byte, and both files have the keys of the three
+  sections in the same order. In the scratch page, by clicks: the
+  Account recovery row opens /account/recovery, the tab reads "Account
+  recovery" and "Account" stays marked in the side menu; the back link
+  opens /account; the two rows open /account/recovery/selfie and
+  /account/recovery/details; the Passkeys row opens /account/passkeys,
+  and its back link /account. `git status` showed this step's seven
+  files and no others. Not checked: a phone; the live wallet; a real
+  session (every count was made up); the moderator and attestor editions
+  (one codebase; the scratch page was the wallet edition); the ripple of
+  a tap on a row of two lines. The browser pane was not on screen while
+  the look ran: the pictures and the measures do not need it, and these
+  pages have no motion to watch. The run-through is the user's, on a
+  phone (the plan's section 2). The user deploys the wallet servers
+  after this step, by section 10 of `forclaude/wallet-deploy-plan-1.md`,
+  wallet1 and then wallet2, with no setting in `network/wallet.env` and
+  no `npm ci`. This step stands on f3e8ee9, the Passkeys step; whether
+  the two go out in one deploy or in two is the user's call.
 
 ## 12. Recovery and the moderator edition
 

@@ -73,7 +73,7 @@ src/app/
   components/case-chat-start.component.ts   the attestor's Start chat button for the person on a case page: Start chat, Open chat, Invite again (spec 8.7, 13.3)
   components/case-chat-list.component.ts   the person's chats with the attestors of a case, on My case and My recovery case: Accept, Decline, Open chat (spec 8.7, 13.3)
   pages/                   one file per route: landing, create, recover, vouching, identity, setup,
-                           bucket-one, bucket-two, wallet, noted-transactions, account, account-protect, account-passkeys, chat, marketplace, notifications, seed, log
+                           wallet, noted-transactions, account, account-home, account-recovery-home, account-recovery, account-protect, account-passkeys, chat, marketplace, notifications, seed, log
   pages/my-recovery-case.page.ts   the person's recovery case, /cases/recovery/:caseId: the status, the video call with its time and its link, the chat with the attestor, the accounts being moved, the timeline (spec 13.3)
   services/
     config.service.ts      GET /api/config once

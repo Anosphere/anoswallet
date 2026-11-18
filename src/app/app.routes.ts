@@ -3,6 +3,7 @@ import { AccountHomePage } from './pages/account-home.page';
 import { AccountPage } from './pages/account.page';
 import { AccountPasskeysPage } from './pages/account-passkeys.page';
 import { AccountProtectPage } from './pages/account-protect.page';
+import { AccountRecoveryHomePage } from './pages/account-recovery-home.page';
 import { AccountRecoveryPage } from './pages/account-recovery.page';
 import { AssistedTransferPage } from './pages/assisted-transfer.page';
 import { AttestingDisputeCasePage } from './pages/attesting-dispute-case.page';
@@ -66,6 +67,7 @@ export const routes: Routes = [
   { path: 'identity', component: IdentityPage, canActivate: [sessionGuard], title: 'Public ledger id' },
   { path: 'setup', component: SetupPage, canActivate: [sessionGuard], title: 'Setup' },
   { path: 'account', component: AccountHomePage, canActivate: [sessionGuard], title: 'Your account' },
+  { path: 'account/recovery', component: AccountRecoveryHomePage, canActivate: [sessionGuard], title: 'Account recovery' },
   { path: 'account/recovery/selfie', component: AccountRecoveryPage, canActivate: [sessionGuard], data: { start: 'selfie' }, title: 'Recovery selfie' },
   { path: 'account/recovery/details', component: AccountRecoveryPage, canActivate: [sessionGuard], data: { start: 'details' }, title: 'Recovery details' },
   { path: 'account/protect', component: AccountProtectPage, canActivate: [sessionGuard], title: 'Protect your passkey' },
