@@ -321,6 +321,8 @@ const INFO = {
   kekPrf: 'masterpod/kek-prf/v1',
   /** The key the account key blobs are wrapped under, from the same PRF output as KEK_prf, a different derivation (wallet spec 7). */
   kekKeys: 'masterpod/kek-keys/v1',
+  /** The key an added passkey's copy of the key blob key is wrapped under, from that passkey's PRF output (wallet spec 7). */
+  kekKeysWrap: 'masterpod/kek-keys-wrap/v1',
   kekBackup: 'masterpod/kek-backup/v1',
   backupP256: 'masterpod/backup-p256/v1',
   backupMldsa: 'masterpod/backup-mldsa/v1',
@@ -514,6 +516,11 @@ export class CryptoService {
   /** The key blob key = HKDF(prf output, 'masterpod/kek-keys/v1', 32): what the account key blobs are wrapped under since 2026-11-08 (wallet spec 7). A lost passkey loses it, and the key blobs with it. */
   deriveKekKeys(prfOutput: Uint8Array): Promise<Bytes> {
     return this.hkdf(prfOutput, INFO.kekKeys, 32);
+  }
+
+  /** HKDF(prf output, 'masterpod/kek-keys-wrap/v1', 32): what an added passkey's copy of the key blob key is wrapped under (wallet spec 7). */
+  deriveKekKeysWrap(prfOutput: Uint8Array): Promise<Bytes> {
+    return this.hkdf(prfOutput, INFO.kekKeysWrap, 32);
   }
 
   /** KEK_backup = HKDF(backup code, 'masterpod/kek-backup/v1', 32). */

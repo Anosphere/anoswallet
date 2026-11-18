@@ -181,6 +181,7 @@ export class CreatePage {
       const res = await this.api.createAnopod({ payload, signatures: this.crypto.signPayload(keys, payload) });
       if (!res.ok) throw new Error(`/create-anopod: ${reasonOf(res)}`);
       this.session.open(res.body.anopodId, keys, res.body.username);
+      this.session.passkeyCredentialId.set(this.crypto.toHex(registration.rawId));
       this.session.firstName.set(firstName);
       this.session.lastName.set(lastName);
       this.session.setPrfOutput(registration.prfOutput);

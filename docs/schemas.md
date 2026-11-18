@@ -429,6 +429,75 @@ The proxy forwards them as any masterpod path (section 2). The wallet's
 side is settings.service (8.3), the setup page's Continue and the Protect
 your passkey page (8.2).
 
+### 4.8 More than one passkey
+
+Added 2026-11-18 (forclaude/add-passkey-plan-1.md; section 11): an anoPod
+can have more than one passkey, and every passkey unlocks the same anoPod
+and opens the same accounts. The masterpod's side is its own spec's
+section 19, which holds the table, the checks and the refusals in full;
+it was deployed before the wallet's step. The first passkey stays on the
+pod's anopods row: it is the main passkey, and nothing stored before
+changes. A passkey added later is one row of a new table, added_passkeys:
+its passkey_id (what the wallet keys the passkey's name by), the pod, the
+credential id and public key, and that passkey's own two locked copies,
+the pod's encryption key under its own KEK_prf (its blob1) and the pod's
+key blob key under a key from its own PRF output (section 7). The
+masterpod can open neither. No route removes a passkey and there is no
+cap; the finish of a recovery deletes the pod's added passkeys with the
+old main one, so the recovery passkey is the pod's one passkey from
+there, and its main one.
+
+    POST /challenge (none), a sixth purpose
+    body { purpose: "addPasskey", anopodId: hex }, the pod the passkey is added to
+    checks: those of openCase (400 bad request shape, 400 invalid anopodId, 404 unknown anopod)
+    answer: 200 { challenge, expiresAt, anopodId }; the challenge is bound to that pod, serves both passkey steps
+            of an add and lives ten minutes (ADD_PASSKEY_CHALLENGE_SECONDS, 600); the other purposes keep two
+
+    POST /list-passkeys (setup)
+    body { }
+    answer: 200 { main: { credentialId: hex }, added: [ { passkeyId: hex, credentialId: hex, createdAt: ISO 8601 } ] },
+            the added ones oldest first; the main passkey carries no date
+
+    POST /add-passkey (setup)
+    body { challenge: hex, assertion: the WebAuthn JSON of a fresh tap of a passkey the pod has, passkey: the
+           WebAuthn JSON of the new passkey's registration, blob1: hex, wrappedKeyBlobKey: hex }
+    checks, in order: the shape (400 bad request shape); blob1 and wrappedKeyBlobKey 1 to 1024 bytes (400 invalid
+           blob1, 400 invalid wrappedKeyBlobKey); the challenge issued for addPasskey, unexpired and bound to
+           the caller's pod (401 unknown or expired challenge); no PRF output in either JSON (400 prf output in
+           request) and prf.enabled in the registration (400 passkey without prf); the fresh tap by the pod's
+           main passkey or one it added (401 unknown passkey; 401 user handle mismatch when the tap carries a
+           user handle that is not the pod's id; 401 passkey verification failed); the registration against the
+           same challenge (401 passkey verification failed); the new credential id nobody's yet (409 passkey
+           already registered)
+    writes: one transaction: the challenge taken (gone meanwhile: 401 unknown or expired challenge), the
+           added_passkeys row, one notification of kind passkeyAdded to the pod, its reference the passkey_id
+    answer: 201 { passkeyId: hex, credentialId: hex, createdAt: ISO 8601 }
+
+    POST /unlock (none), changed
+    payload: may carry addedPasskeys: true; this wallet always sends it, and a masterpod of before ignores it
+    checks: the passkey is a pod's main one or one a pod added (neither: 401 unknown passkey, as before); an added
+           passkey from a payload without addedPasskeys: true is 409 reload the wallet
+    answer: as before, with blob1 the copy of the passkey that signed, and a new field wrappedKeyBlobKey: hex
+           for an added passkey, null for the main one
+
+The old page guard. An anoPod has one key blob key for all its accounts,
+and every passkey has to arrive at that same key. A wallet page loaded
+before this build does not know the locked copy of it. Unlocked with an
+added passkey, it would make a second key blob key from that passkey's
+PRF output, one that nothing in the anoPod is locked with: every account
+would show as "Lost with the old passkey", and an account made there
+would be locked under a key the main passkey cannot make. So this wallet
+says addedPasskeys: true in its /unlock payload, and the masterpod
+refuses an added passkey without it. An old page keeps working with the
+main passkey; with an added one it shows "/unlock: HTTP 409: reload the
+wallet", and a reload brings the new page.
+
+The proxy forwards the two new routes as any masterpod path (section 2);
+nothing in server/ changed. The wallet's side is the unlock flow (8.2,
+Landing), the Passkeys page (8.2), the four services of 8.3
+(passkey.service, session.service, settings.service and
+masterpod-api.service) and the two rows of section 7.
+
 ## 5. Validator changes (anossoftware)
 
 ### 5.1 A nonces table and two variables
@@ -692,8 +761,9 @@ flows/how_a_wallet_builds_a_transaction.md). New or changed:
                         forclaude/break-glass-plan-1.md) = HKDF(PRF output, "masterpod/kek-keys/v1", 32): from the
                         passkey's PRF output alone, a sibling of KEK_prf, derived at every unlock and create and
                         kept in RAM with the PRF output (session.service); not the encryption key, which the backup
-                        code also opens, so a backup-code recovery returns the pod and not the signing keys, and a
-                        lost passkey loses the key blobs for good (the wallet shows such an account as lost, 8.2).
+                        code also opens, so a backup-code recovery returns the pod and not the signing keys, and
+                        losing every passkey of the anoPod loses the key blobs for good (the wallet shows such an
+                        account as lost, 8.2).
                         ML-DSA-87 keys come back from their seeds (the test wallet's generateMlDsaKey(seed)), P-256
                         public keys from the scalars. Opened only to sign, then dropped; the ciphertext stays in
                         RAM for the session. Before 2026-11-08 the blob was under the encryption key.
@@ -720,6 +790,20 @@ flows/how_a_wallet_builds_a_transaction.md). New or changed:
                         a few hundred bytes; wrapJson / unwrapJson (crypto.service)
     settingsBlob (2026-11-07)
                         the same of { v: 1, protect }
+    wrappedKeyBlobKey (2026-11-18)
+                        AES-256-GCM of the key blob key under HKDF(the added passkey's PRF output,
+                        "masterpod/kek-keys-wrap/v1", 32), 60 bytes; the main passkey has none and makes the key blob
+                        key from its PRF output as before. Made when a passkey is added, from the PRF output of one
+                        sign-in with the new passkey (8.2, Passkeys); kept by the masterpod on that passkey's
+                        added_passkeys row and answered by /unlock (4.8); opened at every unlock with that passkey
+                        (deriveKekKeysWrap, crypto.service), and a copy that does not open ends the unlock. The
+                        added passkey's blob1 is made as the first one is: the encryption key under KEK_prf of that
+                        passkey's own PRF output.
+    passkeyNames (2026-11-18)
+                        a field of the settings object, so inside settingsBlob, which is now the same of
+                        { v: 1, protect, passkeyNames }: a map from an added passkey's passkey id (hex) to the name
+                        the person gave it, 1 to 40 characters. The main passkey has no entry. The masterpod stores
+                        no name and cannot read one.
 
 ## 8. The web app (src/)
 
@@ -741,6 +825,7 @@ as in the test apps; a new tab unlocks again.
     /account/recovery/selfie    the account recovery walkthrough, opened at the selfie
     /account/recovery/details   the walkthrough opened at the ID
     /account/protect         the Protect your passkey page: the setup pane again, Save records the answer
+    /account/passkeys        the Passkeys page: the anoPod's passkeys, and the three steps that add one
     /security/bucket-one     forwards to /account/recovery/selfie
     /security/bucket-two     forwards to /account/recovery/details
     /home                    home: the greeting, the balance card, things to do, the tiles
@@ -842,7 +927,18 @@ site on this device? Create an anoPod instead." Every word follows the
 language; under the card, while the app is in Thai, the button "Switch
 to English" (8.8). Log in: /challenge (unlock), the passkey assertion
 with the PRF salt, /unlock; opens blob1, chatPrivateKeyBlob and
-identityBlob; then /check-anopod-status and the next-step rule. The
+identityBlob; then /check-anopod-status and the next-step rule. Since
+2026-11-18 (4.8; section 11) the /unlock payload carries addedPasskeys:
+true, and any passkey of the anoPod logs in, the main one or an added
+one. There are two ways to the key blob key (section 7). The main
+passkey makes it from its PRF output, as before. For an added passkey
+the masterpod answers wrappedKeyBlobKey, that passkey's own copy, and
+the wallet opens it under a key from the passkey's PRF output; a copy
+that does not open stops the log-in with "/unlock: this passkey's copy
+of the key blob key does not open", and no key is made in its place.
+blob1 opens under KEK_prf either way: the masterpod answers the blob1
+of the passkey that signed. The credential id of that passkey is kept
+for the tab (session.service, 8.3), and the Passkeys page marks it. The
 platform's passkey picker is what says whether a passkey exists; with
 none, the authenticator's own message shows and the page suggests
 Create. Create goes to /create, Recover to /recover.
@@ -1000,7 +1096,12 @@ complete, after Marketplace. Two rows, Recovery selfie and Recovery
 details, opening the walkthrough at step 1 or step 2, each with what the
 status counts on file ("1 selfie on file", "2 photos and 4 details on
 file", "None on file yet"). The status only counts, since everything is
-encrypted, so the rows say how many, never which.
+encrypted, so the rows say how many, never which. A third row since
+2026-11-18 (section 11): "Passkeys", with a key icon and the line "See
+your passkeys, or add a spare", which opens the Passkeys page,
+/account/passkeys (below). It has no condition of its own: Account is in
+the navigation only once setup is complete, and a pod that reaches the
+Passkeys page earlier by its address sees the masterpod's refusal there.
 
 Protect your passkey (2026-11-07, section 11), at /account/protect,
 reached from Home's Things to do on an Android phone while the recorded
@@ -1012,6 +1113,107 @@ in a new tab, "Then choose one:" over "I turned it on" and "Skip for
 now") and Save, off until one is picked, which records the answer in the
 wallet settings (4.7, settings.service) as 'on' or 'skipped' and goes to
 Home; a refusal in red. No row under Account.
+
+Passkeys (2026-11-18, section 11; the plan is
+forclaude/add-passkey-plan-1.md, and the masterpod's side is 4.8), at
+/account/passkeys, reached from the Account page's third row and from
+the notification "A passkey was added to your anoPod". Titled
+"Passkeys", Back to Account (the navigation's word, "Account"), then "A
+passkey is what unlocks your anoPod. You can add another one: a spare
+security key, or a passkey kept with Apple when your first one is kept
+with Google. Every passkey here unlocks this same anoPod."
+
+The list is read on open with /list-passkeys. A refusal shows in red
+where the list would be, as "/list-passkeys: <reason>", and the three
+buttons of the add stay off until the list is read. First the main
+passkey, the one on the anoPod's row: a key icon, the fixed name "Main
+passkey" and the line "The passkey this anoPod was made with, or the one
+from its last recovery". It has no name of its own, no date and no
+Rename. Then each added passkey, oldest first: a key icon, its name, the
+line "Added Nov 18, 2026, 3:50:12 PM" (the moment of the add, in the
+language's date form) and, beside the row, a pencil button whose label
+is "Rename". The names are the wallet's own: they live in the wallet
+settings (4.7, settings.service) as passkeyNames, a map by passkey id
+(section 7), so the masterpod stores none and cannot read one; the
+settings are read on open when they were not read yet. An added passkey
+with no name there shows as "Passkey". The row of the passkey that
+opened this session, the one whose credential id is the session's (8.3),
+also shows the line "In use now". Rename draws that row as a small form
+in the row's place: a text box labelled "Name" that holds the name
+(empty for "Passkey"), Save and Cancel. Save checks the name rule and
+writes the settings with the new name beside the other names; a name
+that breaks the rule shows "A name is 1 to 40 characters." in red under
+the box, and a save that failed shows its reason there
+("/set-wallet-settings: <reason>"). The name rule, for Rename and for
+the add: the name trimmed, 1 to 40 characters, counted as whole
+characters (Array.from), so a Thai letter or an emoji counts once.
+
+The add, under the heading "Add a passkey": "Three taps: one with a
+passkey you already have, then two with the new one. Have both at
+hand." and "Keep the new passkey in a different place from the ones you
+have: another security key, or another password manager. A place that
+already holds a passkey of this anoPod will refuse a second one."; a
+text box "Name" with the hint "For example: Spare security key", at
+most 40 characters; then three steps, each a numbered title, one line
+of text and one button. A button is on only while its step is the
+current one, the list is read and nothing is running; the first one
+also needs a valid name. Under the steps a quiet "Start again", which
+goes back to step 1, keeps the name and clears the two lines under it;
+then the success line and, in red, the error line.
+1. "Confirm it is you", "Tap a passkey this anoPod already has.", the
+   button "Confirm with a passkey I have". Without the encryption key in
+   RAM it shows "The encryption key is not in RAM: unlock again";
+   without the key blob key, "The key that opens your account keys is
+   not in RAM: unlock again." Then /challenge (addPasskey, with the
+   anoPod's id), a refusal as "/challenge: <reason>", and the passkey
+   call of Log in, with no list of allowed passkeys, so it runs on
+   every device that logs in today. A passkey that is neither the main
+   one nor an added one of the list shows "That passkey is not one of
+   this anoPod's. Tap one that is." and the step stays 1. Otherwise the
+   challenge and the tap are kept and step 2 is on.
+2. "Save the new passkey", "Your browser asks where to save it. Choose
+   the new place: put in the new security key, or pick the other
+   password manager.", the button "Save the new passkey". The passkey
+   registration of Create, over the same challenge: the anoPod's id as
+   the user id, the username, the first and last name as the display
+   name (the username when both are empty), the PRF extension, and
+   every credential id of the list as the exclude list, so a place that
+   already holds a passkey of this anoPod refuses instead of replacing
+   it. That refusal, the browser's InvalidStateError, shows "This place
+   already holds a passkey of this anoPod. Choose a different security
+   key or password manager." and the step stays 2. Any other failure
+   shows the browser's or the service's own words, and the step stays
+   2. Otherwise the registration is kept and step 3 is on. The PRF
+   output of the registration is not used.
+3. "Check the new passkey", "Tap the new passkey once more. This shows
+   that it can unlock your anoPod.", the button "Check and finish". One
+   sign-in of the new passkey alone (the allowed list is that one
+   passkey), over a random challenge that goes nowhere, so its PRF
+   output comes by the route every later log-in takes. Another passkey
+   shows "That was not the new passkey. Tap the one you just saved."
+   From the PRF output the wallet makes the new passkey's two copies,
+   blob1 (the encryption key under KEK_prf) and wrappedKeyBlobKey (the
+   key blob key under the key of section 7), and sends /add-passkey
+   with the challenge, the tap of step 1, the registration and the two
+   copies. On 201 the name is saved in the wallet settings under the
+   new passkey's id, the line '"Spare security key" was added. It
+   unlocks your anoPod from now on.' shows, the steps and the name box
+   start over and the list is read again; when the name's save failed,
+   "The passkey was added, but its name was not saved (<reason>). Use
+   Rename." shows in red as well, and the list has the passkey as
+   "Passkey". 401 unknown or expired challenge shows "That took longer
+   than ten minutes. Start again." and 401 unknown passkey shows "That
+   passkey is not one of this anoPod's. Tap one that is."; both start
+   the steps over. Any other refusal, or no answer, shows
+   "/add-passkey: <reason>" in red and keeps what was built, so the
+   button sends it again without a tap. A name that no longer keeps the
+   rule (the box was changed after step 1) shows "A name is 1 to 40
+   characters." before the tap is asked.
+Nothing secret is kept between the steps: the challenge, the tap's
+JSON, the registration and the built body, which holds ciphertexts
+only; a PRF output lives for the length of one step. The masterpod tells
+the anoPod with a notification (Notifications, below). No button removes
+a passkey (section 10).
 
 Home (2026-11-06, section 11), at /home, where an unlock lands once
 setup is complete, first in the navigation; no outer card. Top to
@@ -2446,7 +2648,11 @@ section 11; masterpod 14.7), which the masterpod writes to the person
 when an attestor sets up the video call of their recovery case, reads "A
 video call was scheduled for your recovery" and links to the person's
 recovery case page, /cases/recovery/:caseId (13.3): its reference id is
-the case id.
+the case id. The kind passkeyAdded (2026-11-18, section 11; masterpod
+19.4), which the masterpod writes to the anoPod when a passkey is added
+to it, reads "A passkey was added to your anoPod" and links to the
+Passkeys page, /account/passkeys; its reference id is the new passkey's
+id, which the link does not use.
 
 Seed: the Vouch requests page, for a seed or super seed (2026-11-08,
 section 11). One small call, /list-vouch-requests, answers the open
@@ -2480,7 +2686,11 @@ excepted, with the keyholder and anos calls included.
                             from /check-anopod-status, the keyholder receiving keys, the
                             accounts (keyBlob ciphertext and creation, never open keys), the chat rooms (the
                             latest /list-chat-rooms answer), the seen positions with markSeen and the unread
-                            rooms (2026-11-05); the next-step rule
+                            rooms (2026-11-05); the next-step rule; passkeyCredentialId (2026-11-18, section 11),
+                            the credential id, hex, of the passkey that opened the session, set by the unlock flow
+                            and by Create, null again at close, which the Passkeys page marks "In use now"; since
+                            the same day the key blob key is derived from the PRF output only for the main
+                            passkey, and for an added one it is that passkey's wrapped copy, opened (8.2, Landing)
     masterpod-api.service   the keyholder test app's api.service.ts, base path /api/masterpod, the two changed
                             routes and the four new ones added; the marketplace routes of 2026-11-06: getListing,
                             listingId on createChatRoom, mine and status any on listListings, no hpkeKey on
@@ -2494,7 +2704,10 @@ excepted, with the keyholder and anos calls included.
                             CaseKind (trade, dispute or recovery), caseId and caseKind on RoomItem and on
                             InviteItem (a masterpod of before sends neither, and a missing one reads as null),
                             and a fifth optional parameter of createChatRoom, caseId, put into the body when
-                            given
+                            given; the passkeys (2026-11-18, section 11; 4.8): addPasskey among the purposes of
+                            challenge(), wrappedKeyBlobKey on UnlockAnswer (optional: a masterpod of before sends
+                            no field), the types AddedPasskeyItem, PasskeyList and AddPasskeyBody, and two
+                            methods, listPasskeys (with the quiet flag) and addPasskey
     keyholder-api.service   the keyholder test app's, base path /api/keyholder/<n>
     anos-api.service        the anos test app's account-api.service.ts, base path /api/anos/<the session's
                             validator> (2026-11-10, below; /api/anos/<defaultValidator> until then),
@@ -2587,7 +2800,10 @@ excepted, with the keyholder and anos calls included.
     notes.service           the noted transactions (2026-11-07): the last list read with its blobs opened,
                             byTransaction, add, update and remove, the preset kind and the starting currency
     settings.service        the wallet settings (2026-11-07): one encrypted object on the masterpod (4.7), read once
-                            per session (Home, quiet) and saved whole (setup's Continue, the protect page's Save)
+                            per session (Home, quiet) and saved whole (setup's Continue, the protect page's Save);
+                            since 2026-11-18 (section 11) the object also holds passkeyNames, the names of the
+                            added passkeys by passkey id, which the Passkeys page reads (on open, when the
+                            settings were not read yet) and saves (after an add's 201, and at Rename's Save)
     navigation.service      the one navigation list (2026-11-06): NavItem (path, label, icon, badge) and items,
                             the side panel's entries by the status and the edition, Home first once setup is
                             complete, Chat and Notifications with their unread counts; the side panel and the
@@ -2675,7 +2891,13 @@ excepted, with the keyholder and anos calls included.
                             AttestationPayload, AssistedTransferCancelPayload, LockedTransferCancelPayload
                             (2026-11-11, section 11), GuardianVotePayload, EscrowSignaturePayload and
                             EscrowVerdictPayload
-    passkey.service         the keyholder test app's, unchanged
+    passkey.service         the keyholder test app's; since 2026-11-18 (section 11) register() hands back the new
+                            credential's id and its transports with the registration and takes an exclude list,
+                            the credential ids the anoPod already has, so a place that holds one of them refuses
+                            instead of replacing it; assert() hands back the id of the credential that signed
+                            and can be asked of one passkey alone (its id and transports as the allowed list),
+                            the third tap of an add (8.2, Passkeys); the five callers of before pass neither new
+                            argument
     shares.service          the deposit rule of section 6, one function: deposit(secret, shareType)
     account-creation.service
                             opening an anos account (2026-11-08): createAccount(type, onStep) runs the six steps
@@ -3001,7 +3223,16 @@ escrow trade page (2026-11-17, section 11) take their words from two new
 sections, `escrowGuide` and `escrowBoxes`, which stand after
 `escrowStages`; the Thai is the planning chat's, as
 forclaude/wallet-trade-guide-plan-1.md gives it, and no Thai reader has
-read it.
+read it. The Passkeys page (2026-11-18, section 11) takes its words from
+a new section, `accountPasskeys`, which stands after `accountHome`: 29
+entries, three of them functions (`addedOn`, `added` and
+`nameNotSaved`). The Account page's third row is
+`accountHome.passkeysTitle` and `accountHome.passkeysLine`, and the
+notification's label is `notifications.labels.passkeyAdded`. Back to
+Account is `nav.account`; Name, Save, Cancel and the two "not in RAM"
+sentences come from `common`. The English is the plan's, letter for
+letter; the Thai is the build chat's, by the glossary, and no Thai
+reader has read it.
 
 ### 8.9 The confirmation box
 
@@ -3235,6 +3466,28 @@ Cloud machines.
   the break-glass key, for someone who lost their passkey; a line in the
   history or a notification for a cancelled transfer; the receiver's
   view of a locked transfer.
+- From the add passkey plan (forclaude/add-passkey-plan-1.md,
+  2026-11-18, its section 5): removing one passkey; a cap on a pod's
+  passkeys; a name or a date for the main passkey; moving the main
+  passkey into the new table; a fresh random key blob key and locking
+  the key blobs again under it; more than one live session (unlocking
+  on a second device still signs the first one out); pointing people to
+  the browser's QR code or testing it; security keys on an iPhone (by
+  Corbado's table of August 2026, iOS 26.4 is needed there and two
+  WebKit bugs are open); asking a phone to forget a passkey the
+  masterpod does not know (the WebAuthn Signal API). The known limits,
+  accepted with that plan's decisions 2 and 4: a lost passkey keeps
+  working for whoever has it and can pass its PIN or screen lock, and
+  only a recovery shuts it out, which also ends the old accounts' keys;
+  the key blob key stays the one the first passkey's secret can make,
+  as it is for every anoPod today; a tab closed in the middle of an add
+  leaves a passkey on the new key or phone that the masterpod does not
+  know, which shows in the browser's list at Log in and answers unknown
+  passkey, and adding again to the same place replaces it; a device
+  that ignores the exclude list (iOS 17.4.1 did) lets a person save the
+  new passkey where the main one lives, which replaces the main one on
+  that device, and the person logs in with the new passkey from then
+  on.
 - Several passkeys, push delivery, a custom theme, rate limits.
 
 ## 11. Build notes
@@ -9459,6 +9712,227 @@ and the proxy (`server/`) are not touched, and
   after this step, by section 10 of `forclaude/wallet-deploy-plan-1.md`,
   wallet1 and then wallet2, with no setting in `network/wallet.env`
   and no `npm ci`.
+
+### More than one passkey (2026-11-18)
+
+Built from `forclaude/add-passkey-plan-1.md` (FINAL, 2026-11-18), its
+step 2 of three, its section 2, one commit, on main at 8145540, the
+working tree clean. Step 1 was the masterpod (its spec's section 19,
+commit cc2bd44, merged and deployed the same day); step 3 is the record
+folders. Why: an anoPod had one passkey. A moderator or an attestor who
+unlocks with a YubiKey had no spare, so a lost key meant the long
+recovery. A person who made their anoPod with a Google passkey and uses
+Apple devices could not log in in Safari with Face ID. Now a person can
+add passkeys to their anoPod, and every passkey unlocks the same anoPod
+and opens the same accounts. Nothing a person has already encrypted
+changes: the first passkey stays the main one, and an added passkey
+carries its own locked copies of the encryption key and of the key blob
+key (4.8, section 7). Wallet only: no route of the proxy (`server/`), no
+line of `network/wallet.env` and no npm package; the validators, the
+doormen, the keyholders and the signing servers are not touched.
+
+The plan's section 2 and the masterpod as built do not disagree
+anywhere. The bodies, the answers and the refusal words this step reads
+(`/challenge` for addPasskey, `/add-passkey`, `/list-passkeys` and
+`/unlock`) were read in the masterpod's section 19 and in its code at
+cc2bd44, and they are the plan's. The two lookups the masterpod gained
+the same day outside the plan (`/create-anopod` and
+`/open-recovery-case` answer 409 key already registered when the new
+passkey's credential id stands in another passkey table) change nothing
+here: both routes had those words before, the create page shows them as
+they come, and the locked-out page reads every 409 of
+`/open-recovery-case` as "already open", as it did. A real passkey never
+meets those checks.
+
+- `src/app/services/passkey.service.ts`: `Registration` gains `rawId`
+  and `transports`, and `Assertion` gains `rawId`. `register()` takes
+  `exclude`, an empty list by default, and hands it to the browser as
+  `excludeCredentials`. `assert()` takes `only`, and with it the
+  browser's `allowCredentials` is that one credential. The class comment
+  names both. The five callers of before (`unlock.ts`, the create page,
+  the Recover page and the two calls of the locked-out page) pass
+  neither.
+- `src/app/services/crypto.service.ts`: `INFO.kekKeysWrap` and
+  `deriveKekKeysWrap(prfOutput)`. The copies are made and opened with
+  `encrypt` and `decrypt`, as blob1 is.
+- `src/app/services/masterpod-api.service.ts`: `'addPasskey'` in
+  `ChallengePurpose`; `wrappedKeyBlobKey` on `UnlockAnswer`; the types
+  `AddedPasskeyItem`, `PasskeyList` and `AddPasskeyBody`; `listPasskeys`
+  and `addPasskey` in a new group after the wallet settings group.
+- `src/app/services/session.service.ts`: the signal
+  `passkeyCredentialId`, null again at `close()`.
+- `src/app/unlock.ts`: `addedPasskeys: true` in the payload; the
+  credential id of the passkey that signed into the session, right after
+  `session.open`; the key blob key by one of two ways, the wrapped copy
+  when `/unlock` answers one and `deriveKekKeys` as before when it
+  answers none; the error of a copy that does not open; the function's
+  comment.
+- `src/app/pages/create.page.ts`: the new passkey's credential id into
+  the session, right after `session.open`.
+- `src/app/services/settings.service.ts`: `passkeyNames` on
+  `WalletSettings`; the interface's comment and the class comment.
+- `src/app/pages/account-passkeys.page.ts`, new, and its route in
+  `src/app/app.routes.ts` after `account/protect`: the page of 8.2,
+  Passkeys.
+- `src/app/pages/account-home.page.ts`: the third row; the class
+  comment.
+- `src/app/pages/notifications.page.ts`: `linkOf` sends `passkeyAdded`
+  to `/account/passkeys`; its comment.
+- `src/app/i18n/en.ts` and `th.ts`: `notifications.labels.passkeyAdded`,
+  `accountHome.passkeysTitle` and `passkeysLine`, and the new section
+  `accountPasskeys` after `accountHome`, 29 entries, three of them
+  functions. The English is the plan's 2.8 letter for letter.
+- Tables typed `Record<string, string>` added to the dictionaries (the
+  type cannot check their keys in Thai): none. `notifications.labels`
+  is such a table and gains one key, in both files.
+- Readings where the plan left a detail open, the services. BUILD-DATE
+  is 2026-11-18. `excludeCredentials` is always among the options, an
+  empty list for the callers of before, which is the browser's own
+  default. `allowCredentials` is among the options only with `only`.
+  `transports` is read from the hand-built JSON, where it is
+  `getTransports()` of the browser, or an empty list in a browser
+  without it. In `UnlockAnswer` the new field stands after `blob1`, as
+  the masterpod answers it. In `unlock.ts` the order is `session.open`,
+  the credential id, the PRF output, the key blob key. The wrapped copy
+  is opened whenever the field holds text; hex that does not decode
+  counts as a copy that does not open. When that error is thrown the tab
+  already holds the session, as after any failure that follows
+  `/unlock` (a blob1 that does not open, a refused status read): the
+  landing card shows the sentence, the session has no key blob key, and
+  every page that signs refuses without one. No key is made from the
+  added passkey's PRF output in its place: that would be the second key
+  of the old page guard.
+- Readings, the Passkeys page. The back link's word is `nav.account`
+  ("Account"), as the protect page's is `nav.home`. The rows are
+  Material list items. A Material list item has a fixed height and cuts
+  each line at the row's width, and the main passkey's line is 72
+  letters, so two style lines let a row grow with its lines and let a
+  line wrap. The Rename button stands beside the list item, the two in
+  one row, and not in the item's trailing slot, which is made for a
+  short text. "In use now" is a line of its own under the row's line. A
+  row being renamed is drawn as a small form in the row's place,
+  because a list item has no room for a text box: the box starts with
+  the stored name, empty for "Passkey"; one row at a time; the rule's
+  sentence and a save that failed show under the box. Rename and the
+  add share one busy state, so a save and a step do not run together.
+  The two name boxes take `maxlength="40"`, which counts UTF-16 units,
+  so a name made of emoji stops before 40 characters; the rule itself
+  counts whole characters. The step titles are "1. ", "2. " and "3. "
+  in front of the dictionary's titles, in both languages. `nameRule`
+  shows from Rename's Save, and in the add when the name in the box no
+  longer keeps the rule after step 1: step 3 checks before it asks for
+  the tap. Step 1's handler checks too, though its button is off then.
+  The success line is a line of its own in the primary colour, with the
+  red line under it; both go when a step starts and at Start again,
+  which is on whenever nothing runs. On a 201 whose name save failed
+  both lines show: the passkey was added, and the red line says what to
+  do about the name. The display name of the new passkey is the first
+  and last name joined by a space and trimmed, the username when that is
+  empty. A refused `/list-passkeys` has a line of its own where the list
+  would be, and the list on screen stays while it is read again. On a
+  201 the order is: the name's save, the steps and the name box start
+  over, the list is read, then the lines show. The name's save reads the
+  settings first when they were not read, so the names already stored
+  stay. No progress bar: the plan's list of Material parts has none, and
+  while a step runs every button is off. The exclusion of step 2 is read
+  from the browser's InvalidStateError alone; a browser that answers it
+  another way shows that error's own words.
+- Thai, written here by the glossary and style of the languages plan's
+  1.6 and the Thai settled in the notes above; no Thai reader has read
+  it. "Main passkey" reads พาสคีย์หลัก; "a spare" พาสคีย์สำรอง, and "a
+  spare security key" คีย์ความปลอดภัยสำรอง, with คีย์ความปลอดภัย as the
+  protect pane has it; "password manager" reads เครื่องมือจัดการรหัสผ่าน;
+  "a place" that holds a passkey reads ที่เก็บ; "tap" reads แตะ, as the
+  chat list has it; "In use now" กำลังใช้งานอยู่; "Rename" เปลี่ยนชื่อ;
+  "Start again" เริ่มใหม่อีกครั้ง; "Check and finish"
+  ตรวจสอบและเสร็จสิ้น. "You can add another one" reads
+  คุณเพิ่มพาสคีย์ได้อีก (you can add more passkeys), since Thai has no
+  "one" to stand for the noun. The numbers the English writes as words
+  stay words (สามครั้ง, หนึ่งครั้ง, สองครั้ง, สิบนาที) and its digits
+  stay digits (1 ถึง 40). A passkey counts with รายการ, a security key
+  and a password manager with ตัว. The name in `added` keeps its
+  straight double quotes, and `nameNotSaved` names the button as
+  "เปลี่ยนชื่อ" in the same quotes, as the Thai file quotes a button.
+  The word a Thai reader should look at first is ที่เก็บ.
+- Known and left as it is, three things the plan does not cover. One:
+  when the answer of an `/add-passkey` that succeeded is lost on the
+  way, the body is sent again at the next press, the masterpod has used
+  the challenge and answers 401 unknown or expired challenge, and the
+  page says "That took longer than ten minutes. Start again." although
+  the passkey was added. The plan reads the list again on a 201 only,
+  so the new passkey shows after the page is opened again, as
+  "Passkey". Until then its credential id is not in the exclude list,
+  and a second add to the same place would replace it there and leave
+  its row on the masterpod, which no route removes. Two: the settings
+  service treats a refused read as an empty object (since 2026-11-07),
+  and a save after such a read writes the object without what was
+  stored. Until now that could drop the Protect answer; now it can drop
+  the passkey names too, and the rows then show as "Passkey" until
+  renamed. Three: a new passkey is saved at step 2 even when the ten
+  minutes are already over, since only the masterpod knows the
+  challenge's end; step 3 then answers "That took longer than ten
+  minutes", and the passkey left on the key or phone is the unknown one
+  of section 10's known limits.
+- Places this step leaves out of date that the plan does not name. The
+  build left them as they are and put them to the user. In the code:
+  in `src/app/services/passkey.service.ts` the comments of `register()`
+  and `assert()` and of the two interfaces (a new pod, any passkey of
+  this site, `/create-anopod`, `/unlock`); in
+  `src/app/services/masterpod-api.service.ts` the comment of
+  `challenge()`, which names openCase alone as taking the anoPod id,
+  and the class comment, which lists the route groups; in
+  `src/app/services/crypto.service.ts` the comment of `deriveKekKeys`
+  ("A lost passkey loses it"); in `src/app/services/session.service.ts`
+  the comment of the field `keyBlobKey` ("set with the PRF output at
+  every unlock and create"); in `src/app/pages/notifications.page.ts`
+  the class comment, which lists the kinds that link; and on the
+  Account page the card's subtitle "Account recovery" and its first
+  sentence, which speak of the recovery rows alone. Here: 4.7's last
+  paragraph (the wallet's side of the settings, without the Passkeys
+  page); in section 7 the `keyBlob` row's "from the passkey's PRF output
+  alone ... derived at every unlock and create", true of the main
+  passkey, and the `settingsBlob` row's `{ v: 1, protect }`; in 8.1 the
+  `/account` line with its two rows; in 8.3 the line of
+  `crypto.service`, without `deriveKekKeysWrap`; and section 10's last
+  line, "Several passkeys".
+- Spec: 4.8, new; 7 (the `keyBlob` row's sentence, and two new rows);
+  8.1 (the route line); 8.2 (Landing, Account, the new Passkeys
+  paragraphs, Notifications); 8.3 (the lines of `passkey.service`,
+  `session.service`, `settings.service` and `masterpod-api.service`);
+  8.8; 10 (one bullet); this note. README: the pages line and the lines
+  of `passkey.service.ts` and `settings.service.ts`.
+- Checked. `npx ng build` from the web_app folder: clean, no warnings
+  (2.22 MB initial total, `main-Z4LZXPLO.js`, `styles-EMD3RG3N.css`, the
+  style file of before, since no global style changed). The 31 lines of
+  the section `accountPasskeys` in `en.ts` were compared with the plan's
+  block by `diff` and are equal, and the two files have the section's
+  keys in the same order. `git status` showed this step's fifteen files
+  and no others. That is all that was checked. Nothing was run in a
+  browser and no server was started, so the new page was not seen, at
+  any width: its rows, the two style lines that let them wrap and the
+  rename form are as written, not as looked at. No passkey was asked for
+  anything. And no route of the masterpod's step 1 has been called with
+  a real passkey either: that step was checked with `node --check`,
+  psql, a load of the app without a server and a type checker's read.
+  The user's run-through of the plan's section 4, after the wallet is
+  deployed, is the first real use of `/add-passkey`, of
+  `/list-passkeys` and of `/unlock` with an added passkey; a mismatch
+  found there has to be looked for on both sides, here and on the
+  masterpod. The run-through: a computer, Chrome and two YubiKeys (log
+  in with the first, Account, Passkeys, add the second under a name;
+  the notification; close the tab; log in with the second; the accounts
+  open and a transfer signs; make a new account, close the tab, log in
+  with the first, and the new account opens); a Mac with Chrome signed
+  in to the Google account that holds an anoPod's passkey (add a
+  passkey and choose iCloud Keychain, then log in in Safari on an
+  iPhone of the same Apple account); Rename, reload, the name is still
+  there; the same security key twice, where step 2 answers "This place
+  already holds a passkey". The user deploys the wallet servers after
+  this step, by section 10 of `forclaude/wallet-deploy-plan-1.md`,
+  wallet1 and then wallet2, with no setting in `network/wallet.env` and
+  no `npm ci`; a page loaded before the deploy keeps working with the
+  main passkey and shows "/unlock: HTTP 409: reload the wallet" with an
+  added one.
 
 ## 12. Recovery and the moderator edition
 

@@ -73,7 +73,7 @@ src/app/
   components/case-chat-start.component.ts   the attestor's Start chat button for the person on a case page: Start chat, Open chat, Invite again (spec 8.7, 13.3)
   components/case-chat-list.component.ts   the person's chats with the attestors of a case, on My case and My recovery case: Accept, Decline, Open chat (spec 8.7, 13.3)
   pages/                   one file per route: landing, create, recover, vouching, identity, setup,
-                           bucket-one, bucket-two, wallet, noted-transactions, account, account-protect, chat, marketplace, notifications, seed, log
+                           bucket-one, bucket-two, wallet, noted-transactions, account, account-protect, account-passkeys, chat, marketplace, notifications, seed, log
   pages/my-recovery-case.page.ts   the person's recovery case, /cases/recovery/:caseId: the status, the video call with its time and its link, the chat with the attestor, the accounts being moved, the timeline (spec 13.3)
   services/
     config.service.ts      GET /api/config once
@@ -83,11 +83,11 @@ src/app/
     masterpod-api.service.ts, keyholder-api.service.ts, anos-api.service.ts, signing.service.ts
                            one method per route of each backend, through the proxy
     crypto.service.ts      every derivation, blob, builder and signature; public-ledger-id.ts beside it
-    passkey.service.ts     the two WebAuthn ceremonies with the PRF extension
+    passkey.service.ts     the two WebAuthn ceremonies with the PRF extension; the exclude list and the one-passkey assert of an add
     shares.service.ts      the deposit rule of spec section 6: deposit(secret, shareType)
     log.service.ts         the activity log, and the HTTP plumbing every call goes through
     notes.service.ts      the noted transactions: the last list read, the blobs opened on the phone, add, update, remove (spec 8.2)
-    settings.service.ts   the wallet settings on the masterpod, one encrypted object: the Protect your passkey answer (spec 8.2)
+    settings.service.ts   the wallet settings on the masterpod, one encrypted object: the Protect your passkey answer and the names of the added passkeys (spec 8.2)
     chat.service.ts       what the chat pages share: the room keys, a room's title, and the chats about an attestor case: the room, the invites, Start chat, Invite again (spec 8.3)
     work-badge.service.ts the numbers on the Attesting and Moderation menu entries: the things on each page that this device has not seen yet, read every 15 seconds in that edition, the seen ids kept on the device (spec 8.1, 8.3)
     escrow-actions.service.ts   a release, a cancel or a dispute of an escrow trade: the follow-up built with pair one, signed and posted to /escrow-signature, and the validator's refusal in plain words (spec 8.3)

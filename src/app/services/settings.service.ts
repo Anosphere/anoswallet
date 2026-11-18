@@ -5,17 +5,20 @@ import { reasonOf } from './log.service';
 import { MasterpodApiService } from './masterpod-api.service';
 import { SessionService } from './session.service';
 
-/** What settingsBlob holds (wallet spec 7): version 1; `protect` the Protect your passkey answer, absent until setup or the protect page recorded one. */
+/** What settingsBlob holds (wallet spec 7): version 1; `protect` the Protect your passkey answer, absent until setup or the protect page recorded one; `passkeyNames` the names of the added passkeys (2026-11-18), absent until the Passkeys page saved one. */
 export interface WalletSettings {
   v: 1;
   protect?: 'on' | 'skipped';
+  /** The names of the added passkeys, by passkey id (masterpod spec 19); the main passkey has none. */
+  passkeyNames?: Record<string, string>;
 }
 
 /**
  * The small things the wallet remembers for the pod (wallet spec 4.7 and
  * 8.3; 2026-11-07, section 11): one encrypted JSON object on the
  * masterpod, read once per session and written whole. The Protect your
- * passkey answer is the first thing in it; a later thing is one more
+ * passkey answer is the first thing in it, and the names of the added
+ * passkeys the second (2026-11-18, section 11); a later thing is one more
  * field, with no masterpod change.
  */
 @Injectable({ providedIn: 'root' })

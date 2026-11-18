@@ -8,9 +8,11 @@ import { SessionService } from '../services/session.service';
 
 /**
  * The Account page (wallet spec 8.2): the way back to the recovery
- * walkthrough once the next-step rule has stopped sending people there. Two
- * rows, Recovery selfie and Recovery details, each with what the status
- * counts on file, opening the walkthrough at the selfie or at the ID. The
+ * walkthrough once the next-step rule has stopped sending people there. Three
+ * rows: Recovery selfie and Recovery details, each with what the status
+ * counts on file, opening the walkthrough at the selfie or at the ID, and,
+ * since 2026-11-18, Passkeys, which opens the Passkeys page
+ * (/account/passkeys): the anoPod's passkeys, and adding one. The
  * status only counts, since every photo and line is encrypted, so the rows
  * say how many, never which.
  */
@@ -35,6 +37,11 @@ import { SessionService } from '../services/session.service';
             <mat-icon matListItemIcon>badge</mat-icon>
             <span matListItemTitle>{{ t().accountHome.detailsTitle }}</span>
             <span matListItemLine>{{ detailsLine() }}</span>
+          </a>
+          <a mat-list-item routerLink="/account/passkeys">
+            <mat-icon matListItemIcon>key</mat-icon>
+            <span matListItemTitle>{{ t().accountHome.passkeysTitle }}</span>
+            <span matListItemLine>{{ t().accountHome.passkeysLine }}</span>
           </a>
         </mat-nav-list>
       </mat-card-content>
