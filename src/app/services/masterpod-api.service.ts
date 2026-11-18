@@ -27,8 +27,8 @@ export interface Image {
   image: string;
 }
 
-/** The purposes of /challenge: the two of masterpod spec 5 and the three recovery ones of 12.4.2. */
-export type ChallengePurpose = 'create' | 'unlock' | 'openCase' | 'unlockCase' | 'recover';
+/** The purposes of /challenge: the two of masterpod spec 5, the three recovery ones of 12.4.2 and addPasskey of masterpod spec 19 (2026-11-18), which takes the id of the anoPod the passkey is added to and lives ten minutes. */
+export type ChallengePurpose = 'create' | 'unlock' | 'openCase' | 'unlockCase' | 'recover' | 'addPasskey';
 
 export interface ChallengeAnswer {
   challenge: string;
@@ -160,9 +160,33 @@ export interface UnlockAnswer {
   vouched: boolean;
   setupComplete: boolean;
   blob1: string | null;
+  /** An added passkey's copy of the key blob key; null for the main passkey; an older masterpod sends no field. */
+  wrappedKeyBlobKey?: string | null;
   chatPrivateKeyBlob: string | null;
   identityBlob: string | null;
   ephemeralExpiresAt: string;
+}
+
+/** One added passkey as /list-passkeys lists it and /add-passkey answers it (masterpod spec 19): the ids hex, createdAt ISO 8601. The wallet keys the passkey's name by passkeyId (settings.service). */
+export interface AddedPasskeyItem {
+  passkeyId: string;
+  credentialId: string;
+  createdAt: string;
+}
+
+/** What /list-passkeys answers (masterpod spec 19): the main passkey, the one on the anoPod's row, by its credential id alone, and the added ones, oldest first. */
+export interface PasskeyList {
+  main: { credentialId: string };
+  added: AddedPasskeyItem[];
+}
+
+/** The body of /add-passkey (masterpod spec 19): the challenge of /challenge addPasskey, the WebAuthn JSON of the fresh tap of a passkey the anoPod has, the WebAuthn JSON of the new passkey's registration, and the new passkey's own copies of the encryption key (blob1) and of the key blob key, hex. */
+export interface AddPasskeyBody {
+  challenge: string;
+  assertion: Record<string, unknown>;
+  passkey: Record<string, unknown>;
+  blob1: string;
+  wrappedKeyBlobKey: string;
 }
 
 export interface VouchRequestItem {
@@ -974,6 +998,18 @@ export class MasterpodApiService {
 
   setWalletSettings(settingsBlob: string): Promise<ApiResponse<{ updatedAt: string }>> {
     return this.signed('/set-wallet-settings', { settingsBlob });
+  }
+
+  // --- level setup: the passkeys (masterpod spec 19) --------------------------
+
+  /** The anoPod's passkeys: the main one and the added ones, oldest first. */
+  listPasskeys(quiet = false): Promise<ApiResponse<PasskeyList>> {
+    return this.signed('/list-passkeys', {}, quiet);
+  }
+
+  /** One more passkey on the anoPod; 201 { passkeyId, credentialId, createdAt }. Refusals the Passkeys page reads: 401 unknown or expired challenge (the ten minutes are over, or the challenge was used) and 401 unknown passkey (the fresh tap was not by a passkey of this anoPod). */
+  addPasskey(body: AddPasskeyBody): Promise<ApiResponse<AddedPasskeyItem>> {
+    return this.signed('/add-passkey', body);
   }
 
   // --- level setup: after a recovery (masterpod 12.4.5) and the break-glass moves (masterpod 14.4.1) ---

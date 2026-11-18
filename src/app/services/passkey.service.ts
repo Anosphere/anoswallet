@@ -30,12 +30,18 @@ const CEREMONY_TIMEOUT_MS = 120_000;
 export interface Registration {
   passkey: Record<string, unknown>;
   prfOutput: Bytes | null;
+  /** The new credential's id. */
+  rawId: Bytes;
+  /** The new credential's transports, as the browser names them. */
+  transports: string[];
 }
 
 /** The assertion JSON for /unlock (prf removed) and the PRF output, a secret that stays in this tab. */
 export interface Assertion {
   assertion: Record<string, unknown>;
   prfOutput: Bytes;
+  /** The id of the credential that signed. */
+  rawId: Bytes;
 }
 
 /**
@@ -46,6 +52,10 @@ export interface Assertion {
  * never leaves the tab. The relying-party id comes from GET /api/config,
  * the proxy's RP_ID, not from the page's host: a wallet that cannot load
  * its configuration makes no passkey rather than one bound to the wrong id.
+ * For an add (2026-11-18, masterpod spec 19) the registration takes an
+ * exclude list, the credential ids the anoPod already has, so a place that
+ * holds one of them refuses instead of replacing it; and the assertion can
+ * be asked of one passkey alone, the new one, for its PRF output.
  */
 @Injectable({ providedIn: 'root' })
 export class PasskeyService {
@@ -57,7 +67,7 @@ export class PasskeyService {
    * /challenge, the pod id as the user handle. Refuses when the
    * authenticator does not report prf.enabled, since the server will.
    */
-  async register(challengeHex: string, anopodIdHex: string, username: string, displayName: string): Promise<Registration> {
+  async register(challengeHex: string, anopodIdHex: string, username: string, displayName: string, exclude: Uint8Array[] = []): Promise<Registration> {
     const { rpId } = await this.config.load();
     const credential = await navigator.credentials.create({
       publicKey: {
@@ -68,6 +78,7 @@ export class PasskeyService {
           { type: 'public-key', alg: -7 }, // ES256
           { type: 'public-key', alg: -257 }, // RS256
         ],
+        excludeCredentials: exclude.map((id) => ({ type: 'public-key' as const, id: toBuffer(id) })),
         authenticatorSelection: {
           residentKey: 'required',
           requireResidentKey: true,
@@ -87,19 +98,21 @@ export class PasskeyService {
     const first = ext.prf.results?.first;
     const prfOutput = first ? toBuffer(first instanceof ArrayBuffer ? first : new Uint8Array(first.buffer, first.byteOffset, first.byteLength)) : null;
     const clientExtensionResults = { ...(json['clientExtensionResults'] as object), prf: { enabled: true } };
-    return { passkey: { ...json, clientExtensionResults }, prfOutput };
+    const transports = (json['response'] as { transports?: string[] }).transports ?? [];
+    return { passkey: { ...json, clientExtensionResults }, prfOutput, rawId: toBuffer(pkc.rawId), transports };
   }
 
   /**
    * Authenticates with any passkey of this site and evaluates the PRF.
    * The assertion JSON goes to /unlock without its prf results.
    */
-  async assert(challengeHex: string): Promise<Assertion> {
+  async assert(challengeHex: string, only?: { id: Uint8Array; transports: string[] }): Promise<Assertion> {
     const { rpId } = await this.config.load();
     const credential = await navigator.credentials.get({
       publicKey: {
         challenge: toBuffer(hexToBytes(challengeHex)),
         rpId,
+        ...(only ? { allowCredentials: [{ type: 'public-key' as const, id: toBuffer(only.id), transports: only.transports as AuthenticatorTransport[] }] } : {}),
         userVerification: 'required',
         timeout: CEREMONY_TIMEOUT_MS,
         extensions: { prf: { eval: { first: PRF_SALT } } },
@@ -114,7 +127,7 @@ export class PasskeyService {
     const results = { ...(json['clientExtensionResults'] as Record<string, unknown>) };
     delete results['prf'];
     const bytes = first instanceof ArrayBuffer ? first : new Uint8Array(first.buffer, first.byteOffset, first.byteLength);
-    return { assertion: { ...json, clientExtensionResults: results }, prfOutput: toBuffer(bytes) };
+    return { assertion: { ...json, clientExtensionResults: results }, prfOutput: toBuffer(bytes), rawId: toBuffer(pkc.rawId) };
   }
 }
 

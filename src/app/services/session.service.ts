@@ -86,6 +86,8 @@ export class SessionService {
   readonly hasEncryptionKey = signal(false);
   readonly hasChatKeys = signal(false);
   readonly hasIdentity = signal(false);
+  /** The credential id, hex, of the passkey that opened this session; the Passkeys page marks it. */
+  readonly passkeyCredentialId = signal<string | null>(null);
   /** The pod's anos accounts from /list-anos-accounts. */
   readonly accounts = signal<AnosAccountItem[]>([]);
   /** The notifications, newest first, refreshed by the shell's 5-second poll. */
@@ -146,6 +148,7 @@ export class SessionService {
     this.hasEncryptionKey.set(false);
     this.hasChatKeys.set(false);
     this.hasIdentity.set(false);
+    this.passkeyCredentialId.set(null);
     this.accounts.set([]);
     this.notifications.set([]);
     this.chatRooms.set(null);
