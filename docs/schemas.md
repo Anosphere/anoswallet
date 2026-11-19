@@ -449,7 +449,8 @@ there, and its main one.
 
     POST /challenge (none), a sixth purpose
     body { purpose: "addPasskey", anopodId: hex }, the pod the passkey is added to
-    checks: those of openCase (400 bad request shape, 400 invalid anopodId, 404 unknown anopod)
+    checks: those of openCase for the anoPod id (400 bad request shape, 400 invalid anopodId, 404 unknown anopod);
+            addPasskey reads no lookup id, so it has none of the three checks openCase gained with 4.9
     answer: 200 { challenge, expiresAt, anopodId }; the challenge is bound to that pod, serves both passkey steps
             of an add and lives ten minutes (ADD_PASSKEY_CHALLENGE_SECONDS, 600); the other purposes keep two
 
@@ -497,6 +498,41 @@ nothing in server/ changed. The wallet's side is the unlock flow (8.2,
 Landing), the Passkeys page (8.2), the four services of 8.3
 (passkey.service, session.service, settings.service and
 masterpod-api.service) and the two rows of section 7.
+
+### 4.9 The passkey check and the open case check at a case's opening
+
+Added 2026-11-18 (forclaude/recovery-passkey-check-plan-1.md; section
+11): two checks at the opening of a recovery case, both through the
+/challenge request for openCase. The masterpod's side is its own spec's
+section 20, which holds the rule, the checks and what the two answers
+give out. The masterpod gained two things there. Its answer for openCase
+carries the credential ids of the pod's passkeys, so the wallet can hand
+them to the device as the exclude list of the recovery passkey: a device
+that already holds one of them makes no new passkey in its place. And
+the body may carry the lookup id: when a case is already open for it,
+the masterpod refuses at once, before any passkey is made. That is the
+question /open-recovery-case asks at its end, asked sooner; it stays the
+rule there. The masterpod stores nothing for either check. No new route,
+no table and no env variable; the five other purposes of /challenge are
+as they were.
+
+    POST /challenge (none), openCase changed
+    body { purpose: "openCase", anopodId: hex, lookupId: hex }; the masterpod takes a body without lookupId as
+           before, and this wallet always sends it
+    checks, in order, the new ones marked: anopodId a string (400 bad request shape); new: lookupId, when the
+           body has one, a string (400 bad request shape); anopodId 32 bytes (400 invalid anopodId); new:
+           lookupId 32 bytes (400 invalid lookupId); a pod has that id (404 unknown anopod); new: no case is
+           open for the lookup id (409 case already open), and at that refusal no challenge is issued and
+           nothing is written
+    answer: 200 { challenge, expiresAt, anopodId, username } as before, with a new field credentialIds: [hex],
+           the pod's passkeys, the main one first, then the added ones, oldest first, as /list-passkeys gives
+           them
+    a masterpod of before: ignores the lookup id and sends no credentialIds; the wallet then hands the device
+           an empty exclude list, so both checks do nothing, as before this build
+
+The proxy forwards the request as any masterpod path (section 2);
+nothing in server/ changed. The wallet's side is the two recovery pages
+(12.3), passkey.service (8.3) and masterpod-api.service (12.4).
 
 ## 5. Validator changes (anossoftware)
 
@@ -2923,8 +2959,9 @@ excepted, with the keyholder and anos calls included.
                             the credential ids the anoPod already has, so a place that holds one of them refuses
                             instead of replacing it; assert() hands back the id of the credential that signed
                             and can be asked of one passkey alone (its id and transports as the allowed list),
-                            the third tap of an add (8.2, Passkeys); the five callers of before pass neither new
-                            argument
+                            the third tap of an add (8.2, Passkeys); of the five callers of before, the
+                            registration of a recovery case's passkey passes the exclude list since 2026-11-18
+                            (12.3), and the four others pass neither new argument
     shares.service          the deposit rule of section 6, one function: deposit(secret, shareType)
     account-creation.service
                             opening an anos account (2026-11-08): createAccount(type, onStep) runs the six steps
@@ -3271,6 +3308,18 @@ details". The recovery row's title and the new page's title are
 English is the plan's, letter for letter; the one new Thai line is the
 planning chat's, as forclaude/wallet-account-page-plan-1.md gives it,
 and no Thai reader has read it.
+The passkey check and the open case check at a case's opening
+(2026-11-18, section 11): five entries in the two sections of the
+recovery pages. `recover` gains `tryLogIn`, its first entry, the
+paragraph that says to try Log in first. `recoverOpen` gains three
+entries after `passkeyText`: `onlyIfLockedOut`, the warning above "Open
+my case"; `notLockedOut`, the sentence after the device refused; and
+`toStart`, the button "Back to the start page". `recoverOpen.alreadyOpen`
+has new words, "A recovery case is already open for this account. Go
+back and tap Continue to carry on with it.", where it read "A case is
+already open for this identity". The Back button of step 1 is
+`common.back`. The English is the plan's, letter for letter; the Thai is
+the build chat's, by the glossary, and no Thai reader has read it.
 
 ### 8.9 The confirmation box
 
@@ -3532,6 +3581,33 @@ Cloud machines.
   row for checking the public ledger id, which is to come in a step of
   its own; what is on file counted on the Account page itself; groups
   or headings on the Account page; a back link on the walkthrough.
+- From the recovery passkey check plan
+  (forclaude/recovery-passkey-check-plan-1.md, 2026-11-18, its section
+  5): a cancel button for a person's own case (it stands on the
+  after-production list); a limit on opening cases, and a case that
+  someone else opened under a person's lookup id ("recovery rules left
+  loose" on that list); telling an anoPod's owner that a case was
+  opened; the line under a failed Log in, "No passkey for this site on
+  this device? Create an anoPod instead."; asking a phone to forget a
+  passkey the masterpod does not know; a change to the technical paper.
+  The known limits, as that section has them: the check is done by the
+  place that stores the passkey, not by the wallet (Apple Passwords,
+  Google Password Manager and security keys do it, by their makers'
+  pages and the FIDO standard, read on 2026-11-18; for password manager
+  apps and Windows Hello no statement from the maker was found, and no
+  fault is known), and where a place does not do it a person is where
+  they were before, no worse; the check sees only the place where the
+  new passkey would be saved, so a person whose own passkey is kept
+  somewhere else, on another device or on a security key that is not
+  plugged in, can still open a case by mistake, but their own passkey
+  is not replaced; a person who closes the phone's own passkey box gets
+  the browser's message, as before; a person whose own passkey was
+  replaced before this build is not helped by it and needs their case;
+  a person with an open case whose case passkey is gone is told so at
+  the birth record step, and a moderator has to dismiss that case
+  before a new one can be opened; and what the two answers give out:
+  the masterpod sees the lookup id one step earlier, and anyone who
+  knows an anoPod id can learn the credential ids of its passkeys.
 - Several passkeys, push delivery, a custom theme, rate limits.
 
 ## 11. Build notes
@@ -10243,6 +10319,205 @@ other server.
   the wallet and the masterpod. The user deploys the wallet servers
   after this step, as the note above says.
 
+### The passkey check and the open case check at Open my case (2026-11-18)
+
+Built from `forclaude/recovery-passkey-check-plan-1.md` (FINAL,
+2026-11-18), its step 2 of three, its section 2, one commit, on main at
+500e8f6, the working tree clean. Step 1 is the masterpod (its spec's
+section 20); step 3 is the record folders. Why: in the first days of
+production six people opened a recovery case without having lost their
+passkey. The user, 2026-11-18: "they're just confused, didn't know how
+to use their passkey and thought that account recovery was something
+more like forgot password". "Open my case" makes a new passkey on the
+device, with the anoPod id as its hidden user id, and a place that
+stores passkeys keeps one passkey per user id and site. So where the
+person's own passkey sat in that same place, the new passkey took its
+place. That person was then truly locked out, and no screen warned of
+it. Now the wallet hands the device the ids of the passkeys the anoPod
+already has, so a device that still holds one of them makes no new
+passkey. A person whose case is already open is told so at the birth
+record step, before any passkey is made. And two lines say to try Log
+in first. Wallet only: no route of the proxy (`server/`), no line of
+`network/wallet.env` and no npm package; the validators, the doormen,
+the keyholders and the signing servers are not touched. Either order of
+the two deploys is safe: a masterpod of before ignores the lookup id
+and sends no ids, and then both checks do nothing, as before this
+build.
+
+The masterpod's step 1 was not committed when this step was built. It
+stood in the masterpod's folder as uncommitted changes, on 3de0522.
+Its `challenge()` in `src/auth/auth.handlers.js` was read there: the
+six checks in the order of the plan's 1.1, the words of the refusals
+and the `credentialIds` line are the plan's, and they are what this
+step reads. The user committed it the same day, as 68b80b5 of
+masterpodsoftware, and the code lines of that commit are the ones that
+were read.
+
+- `src/app/services/masterpod-api.service.ts`: `credentialIds` on
+  `ChallengeAnswer`, with its comment. `challenge()` takes a third
+  argument, `lookupId`, and builds the body from `purpose`, with
+  `anopodId` and `lookupId` when each is given; its comment names the
+  lookup id, the 409 and the ids. The callers for the five other
+  purposes are not changed.
+- `src/app/pages/recover-open.page.ts`: the imports `RouterLink` and the
+  type `Registration`. Two signals, `caseOpen` and `hasPasskey`.
+  `next()` clears `caseOpen` where it clears `lookupError`, sends the
+  lookup id, and at a 409 sets the sentence and `caseOpen`, drops the
+  answers and returns. `open()` clears `hasPasskey` where it clears
+  `error`, sends the lookup id, throws the sentence at a 409, hands
+  `register()` the exclude list made from `credentialIds`, and at the
+  browser's `InvalidStateError` sets `hasPasskey` and returns. The
+  template: the Back button of step 1, and in step 3 the second
+  paragraph, the sentence and the button "Back to the start page". The
+  class comment, the comments of `next()` and `open()` and the comment
+  over the `/challenge` call in `next()` each gained a sentence.
+- `src/app/pages/recover.page.ts`: the paragraph `recover.tryLogIn` in
+  front of `recover.lockedOutText`; the class comment names it.
+- `src/app/services/passkey.service.ts`: the class comment alone.
+- `src/app/i18n/en.ts` and `th.ts`: `recover.tryLogIn`, new and first in
+  its section; `recoverOpen.onlyIfLockedOut`, `notLockedOut` and
+  `toStart`, new, after `passkeyText`; `recoverOpen.alreadyOpen`, new
+  words. The English is the plan's 2.5 letter for letter. No other
+  entry changed.
+- Tables typed `Record<string, string>` added to the dictionaries: none.
+
+The five Thai lines, as `th.ts` has them:
+
+    recover.tryLogIn             ลอง "เข้าสู่ระบบ" ก่อน พาสคีย์ของคุณถูกบันทึกไว้บนโทรศัพท์หรือคอมพิวเตอร์ที่คุณใช้สร้าง anoPod ของคุณ หาก "เข้าสู่ระบบ" ใช้งานได้ที่นั่น แสดงว่าคุณไม่ได้ถูกล็อกออก และคุณไม่จำเป็นต้องใช้สิ่งนี้
+    recoverOpen.onlyIfLockedOut  เปิดเคสเฉพาะเมื่อ "เข้าสู่ระบบ" ใช้งานไม่ได้สำหรับคุณเท่านั้น พาสคีย์ใหม่ที่สร้างที่นี่อาจแทนที่พาสคีย์ของคุณเอง และพาสคีย์ของคุณเองจะหายไปอย่างถาวร
+    recoverOpen.notLockedOut     อุปกรณ์นี้มีพาสคีย์ของคุณอยู่แล้ว คุณไม่ได้ถูกล็อกออก ย้อนกลับแล้วแตะ "เข้าสู่ระบบ"
+    recoverOpen.toStart          กลับไปที่หน้าแรก
+    recoverOpen.alreadyOpen      มีเคสกู้คืนเปิดอยู่แล้วสำหรับบัญชีนี้ ย้อนกลับแล้วแตะ "ดำเนินการต่อ" เพื่อดำเนินการเคสนั้นต่อ
+
+- Thai, written here by the glossary and style of the languages plan's
+  1.6 and the Thai `th.ts` already has for the same things; no Thai
+  reader has read it. A button is named by its own label, in straight
+  double quotes, as the Thai file quotes a button: "เข้าสู่ระบบ" is
+  `landing.unlock` (Log in) and "ดำเนินการต่อ" is `common.continue`
+  (Continue). "You are not locked out" reads คุณไม่ได้ถูกล็อกออก and
+  "the start page" หน้าแรก, both as `recover.noCase` has them. "Back
+  to" reads กลับไปที่, as `backToChats` has it. "Recovery case" reads
+  เคสกู้คืน, as `recoverOpen.subtitle` has it. "Saved" reads บันทึก and
+  "tap" แตะ, as the Passkeys page has them. "Take the place of" reads
+  แทนที่, as `recoverCase.newCodeText` has it. New to the file:
+  คอมพิวเตอร์ for "computer", and หายไปอย่างถาวร for "gone for good".
+  "Where you made your anoPod" is written as "that you used to make
+  your anoPod" (ที่คุณใช้สร้าง anoPod ของคุณ). "Go back" reads ย้อนกลับ,
+  which is also the label of the Back button, as "Go back" and "Back"
+  are in English.
+- Readings where the plan left a detail open. BUILD-DATE is 2026-11-18.
+  `credentialIds` stands after `username` in `ChallengeAnswer`.
+  `challenge()` builds its body as `createChatRoom` in the same file
+  builds its own, so the keys go out in the order `purpose`, `anopodId`,
+  `lookupId`. `RouterLink` stands in the component's `imports` in front
+  of `IdentityFormComponent`. `caseOpen` stands under `lookupError` and
+  `hasPasskey` under `error`, each with the plan's words as its comment.
+  A case already open is read from the status 409 alone, at both
+  `/challenge` requests, not from the refusal's words; `/challenge` has
+  no other 409. In `next()` the 409 is read inside the block for a
+  refused challenge, in front of the line for every other refusal. In
+  `open()` the refusal is one `throw` for both cases, written as the
+  `/open-recovery-case` line under it is. Each comment gained a
+  sentence that begins "Since 2026-11-18", and no sentence of before
+  was reworded; in `passkey.service.ts` the second user stands in
+  brackets inside the sentence on the exclude list, so the half on the
+  one-passkey assert stays about the add. In 12.3, "the first sentence
+  of decision 4" was read as the whole first warning, all three
+  sentences of it. In 12.3's list of refusals the new sentence stands
+  where the old one stood, and the paragraph added under it says that
+  the `/challenge` request's 409 shows it too. 4.9 gives the checks in
+  the masterpod's order, with the new ones marked.
+- Spec: 4.9, new; 8.3 (the line of `passkey.service`); 12.3 (Recover;
+  Locked out, steps 1 and 3); 12.4 (the line of
+  `masterpod-api.service`); this note; and, on the user's word, the
+  three places of the bullet "Places this step left as they are" below:
+  4.8 (one line), 8.8 (one paragraph) and 10 (one bullet). README: the
+  line of `passkey.service.ts`.
+- The look, where. A development build in a scratch folder on this Mac,
+  served by a plain file server on 127.0.0.1 (a temporary entry in
+  `/Users/codex/.claude/launch.json`, taken out again; the file is byte
+  for byte what it was), in the Claude app's browser pane. Not on a
+  phone and not on the live wallet. No passkey was asked, and none of
+  our servers: the page's request list shows the file server alone,
+  where `/api/config` answered 404. The states were set by hand through
+  the `ng` debug tools. Step 1: `lookupError` set to the sentence and
+  `caseOpen` true. Step 3: a made-up lookup id, anoPod id and username,
+  an email and a phone number, and the stepper moved on twice. The
+  refusal: `hasPasskey` true. The sizes: 360, 375, 390 and 430 pixels
+  wide, each in English and in Thai. At these widths the pane says it
+  is Chrome on an Android phone, and it draws Thai with this Mac's Thai
+  font. The pane was not on screen while the look ran, so the stepper's
+  slide from step to step was switched off in the scratch page and was
+  not watched: the measures and the pictures are of the page at rest.
+- The look, what it showed. At none of the four sizes, in neither
+  language, is a line cut, a button's label cut, a button off the card,
+  or one thing over another, and no page scrolls sideways. The Recover
+  account page: the new paragraph stands first in the card "I'm locked
+  out", in the ordinary colour, 14 pixels above the paragraph of
+  before. It takes 4 lines in English at 360, 375 and 390 and 3 at 430,
+  and 4 lines in Thai at every size. Step 1 of the locked-out page: a
+  step's text has 210 pixels at 360, 225 at 375, 240 at 390 and 280 at
+  430. The sentence shows in red, in 3 lines in English at every size,
+  and in Thai in 3 lines up to 390 and 2 at 430. Under it stands Back,
+  an outlined button whose link is `/recover`, and under Back stands
+  Next, which is off while the form is empty. Step 3: the step's text
+  takes 6 lines at 360, 5 at 375 and 390 and 4 at 430, in both
+  languages. The new paragraph under it takes 5 lines in English up to
+  390 and 4 at 430, and in Thai 5 lines at 360 and 375 and 4 at 390 and
+  430. Step 3 after the refusal: the sentence has the colour of the
+  paragraphs above it, not red, and takes 3 lines up to 390 and 2 at
+  430, in both languages. Under it stands "Back to the start page", a
+  filled button on one line whose link is `/`: 188 pixels wide in
+  English, with 22 to spare at 360, and 147 in Thai. Under that stands
+  the row of before, Back and "Open my case". So after the refusal two
+  filled buttons stand one above the other, and two buttons begin with
+  "Back".
+- The look, the row with Back and "Open my case", which this step did
+  not change. In English the two stand in one row at every size, and at
+  360 the row needs 209.5 of the 210 pixels. In Thai at 360 the row
+  needs 216.7 pixels, so "เปิดเคสของฉัน" stands on a line of its own
+  under "ย้อนกลับ", 8 pixels in from the left; from 375 the two stand
+  in one row. It was so before this step.
+- Seen in passing, not from this step, and not new: at 360 pixels the
+  boxes of the birth record form in step 1 are 240 pixels wide in a
+  step that has 210, and the stepper cuts the last 6 pixels off, so
+  their right border does not show. At 375 they are whole. It is what
+  bug 5 of the phase 2 list fixed for the Contact email box of step 2,
+  and the note of 2026-11-10 above, "The locked-out page's email box
+  fits its step", already has it as left as it is. Nothing was changed
+  for it in this step.
+- Places this step left as they are that the plan does not name. The
+  build put them to the user. One: in 4.8, the block for addPasskey
+  reads "checks: those of openCase", with its three refusals in
+  brackets. openCase has three more checks now, for the lookup id,
+  which addPasskey does not have. Two: 8.8 keeps a running record of
+  the later changes to the words, and it has no line for this step's
+  five entries. Three: section 10 has a bullet for the add passkey plan
+  and one for the Account page plan, each with what its plan left out;
+  it has none for this plan's section 5 (what is out, and the known
+  limits). On the user's word, the same day ("Yes to both question 1
+  and 2"), all three were brought in line before the commit: the line
+  in 4.8 says that addPasskey shares openCase's checks for the anoPod
+  id and has none of the three for the lookup id; 8.8 has a paragraph
+  for the five entries; and section 10 has a bullet for this plan's
+  section 5.
+- Checked. `npx ng build` from the web_app folder: clean, no warnings
+  (2.22 MB initial total, `main-GG2MNMFJ.js`, `styles-EMD3RG3N.css`,
+  the style file of before). The five English entries were compared
+  with the plan's lines by `diff` and are equal, and both files have
+  the keys of `recover` and `recoverOpen` in the same order. `git
+  status` showed this step's eight files and no others. Then the look
+  above. Not checked: a phone; the live wallet; a real passkey, so the
+  device's refusal itself, and what the phone shows by itself at the
+  refusal; an answer from a masterpod, since no request left this Mac;
+  a click on either new button, whose links were read from the page;
+  the moderator and attestor editions (one codebase; the scratch page
+  was the wallet edition). The run-through is the user's, on a phone
+  (the plan's section 4). The user deploys the wallet servers after
+  this step, by section 10 of `forclaude/wallet-deploy-plan-1.md`,
+  wallet1 and then wallet2, with no setting in `network/wallet.env` and
+  no `npm ci`.
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`
@@ -10291,7 +10566,11 @@ the moderator edition; a pod that is not a moderator sees the masterpod's
 
 ### 12.3 The screens
 
-**Recover** (`/recover`). Two cards. "I'm locked out": "If you lost the
+**Recover** (`/recover`). Two cards. "I'm locked out": since 2026-11-18
+(section 11) the card begins with a paragraph of its own, "Try Log in
+first. Your passkey is saved on the phone or computer where you made
+your anoPod. If Log in works there, you are not locked out and you do
+not need this." Then, as before: "If you lost the
 device with your passkey, we can get you back in. You'll need your birth
 record, and an email and a phone number where a moderator can reach you.
 A moderator will meet you on a video call and check your security
@@ -10326,6 +10605,13 @@ the authenticator's message shows.
    A masterpod refusal shows as `/challenge: <reason>`. Once found, with
    the form empty, a line says the account was found and the answers
    dropped, and that filling the form in again starts over.
+   Since 2026-11-18 (4.9, section 11) the `/challenge` request carries
+   the lookup id too. When a case is already open for it the masterpod
+   answers `409`, and the page shows, in red as every line there, "A
+   recovery case is already open for this account. Go back and tap
+   Continue to carry on with it." The answers are dropped, and a Back
+   button stands under the sentence, to `/recover`, where Continue is.
+   No passkey is made.
 2. Your account: "We found your account: alice", then "Give an email
    address and a phone number. Both are needed. A moderator will text you
    first, and will email you if a text is not possible." and two boxes,
@@ -10356,9 +10642,23 @@ the authenticator's message shows.
    `contactEmail` always and no phone). On 201 the recovery
    session is open, both contacts are kept in `RecoveryService` (12.4)
    and the page goes to `/recover/case`. The
-   refusals shown: "a case is already open for this identity" (409), a
+   refusals shown: "A recovery case is already open for this account. Go
+   back and tap Continue to carry on with it." (409), a
    masterpod refusal as `/challenge: <reason>` or `/open-recovery-case:
    <reason>`, the passkey messages as on Create.
+   Since 2026-11-18 (4.9, section 11): under the step's text stands a
+   second paragraph, "Open a case only if Log in does not work for you.
+   The new passkey made here can take the place of your own passkey, and
+   your own is then gone for good." The `/challenge` request carries the
+   lookup id here too, so its `409` shows the sentence above as well.
+   The `credentialIds` of its answer go to the passkey registration as
+   the exclude list (8.3). A device that already holds one of the
+   anoPod's passkeys then makes no new one, and the page shows "This
+   device already has your passkey. You are not locked out. Go back and
+   tap Log in." in the ordinary text colour, not in red, with the button
+   "Back to the start page" under it, to `/`. No case is opened. Back
+   and "Open my case" stay on the page, and a second tap asks the device
+   again.
 
 **My recovery** (`/recover/case`). The case id (short, with Copy), the
 status in words ("Open: a moderator will contact you at <contact> and
@@ -10599,8 +10899,10 @@ button and every 15 s
                             anosAccounts, both optional, since a masterpod of before sends neither
     masterpod-api.service   one method per new route (masterpod 12.4); challenge() takes the three new purposes,
                             openCase with the anoPod id the keyholders named, and answers its username
-                            (2026-11-08); listAnosAccounts items carry breakGlassBlob;
-                            listMyBreakGlassMoves and fileBreakGlassMoves (masterpod 14.4.1, 2026-11-08)
+                            (2026-11-08); since 2026-11-18 (4.9) challenge() takes the lookup id too for
+                            openCase, and its answer carries credentialIds; listAnosAccounts items carry
+                            breakGlassBlob; listMyBreakGlassMoves and fileBreakGlassMoves (masterpod 14.4.1,
+                            2026-11-08)
     anos-api.service        getAccountAs(envelope, quiet) (2026-11-08): /get-account with an envelope the caller
                             signed, the break-glass pair's at the finish; getAccount calls it;
                             getAssistedTransferAs(envelope, quiet) (2026-11-10): /get-assisted-transfer the same

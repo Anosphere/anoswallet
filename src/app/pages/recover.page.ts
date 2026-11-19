@@ -12,7 +12,9 @@ import { CaseStatus, RecoveryService } from '../services/recovery.service';
 
 /**
  * /recover (wallet spec 12.3): two cards. "I'm locked out" starts the
- * locked-out stepper at /recover/open. "Continue a recovery" unlocks the
+ * locked-out stepper at /recover/open; since 2026-11-18 its text begins
+ * with a line that says to try Log in first (recover.tryLogIn), for a
+ * person whose passkey still works. "Continue a recovery" unlocks the
  * recovery pod with the passkey made at case open: /challenge (unlockCase),
  * the passkey assertion with the PRF salt, /unlock-recovery-pod, KEK_prf
  * from the PRF output, hybridKeyBlob opened, then /recover/case. The
@@ -27,6 +29,7 @@ import { CaseStatus, RecoveryService } from '../services/recovery.service';
       <mat-card appearance="outlined" class="card">
         <mat-card-header><mat-card-title>{{ t().common.lockedOut }}</mat-card-title></mat-card-header>
         <mat-card-content>
+          <p>{{ t().recover.tryLogIn }}</p>
           <p>{{ t().recover.lockedOutText }}</p>
         </mat-card-content>
         <mat-card-actions class="actions">

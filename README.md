@@ -83,7 +83,7 @@ src/app/
     masterpod-api.service.ts, keyholder-api.service.ts, anos-api.service.ts, signing.service.ts
                            one method per route of each backend, through the proxy
     crypto.service.ts      every derivation, blob, builder and signature; public-ledger-id.ts beside it
-    passkey.service.ts     the two WebAuthn ceremonies with the PRF extension; the exclude list and the one-passkey assert of an add
+    passkey.service.ts     the two WebAuthn ceremonies with the PRF extension; the exclude list of an add and of a recovery case's opening; the one-passkey assert of an add
     shares.service.ts      the deposit rule of spec section 6: deposit(secret, shareType)
     log.service.ts         the activity log, and the HTTP plumbing every call goes through
     notes.service.ts      the noted transactions: the last list read, the blobs opened on the phone, add, update, remove (spec 8.2)
