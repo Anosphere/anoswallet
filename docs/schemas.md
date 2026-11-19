@@ -1327,6 +1327,15 @@ whose session holds no id (it came to this address before its setup)
 sees, in red, "Your public ledger id is not in this tab's memory.
 Finish setup first, or log in again." in place of everything under
 the back link.
+After a check the result stays on the screen (2026-11-18, section 11,
+the note after the page's own): the three lines come in above Check and
+push it down, on a phone past the screen's bottom edge together with the
+sentence, so once they are drawn the page scrolls just far enough that
+the row of Check is on the screen again, with the 33 pixels that stand
+under the row (the card's padding and border, the page's padding). The
+page is then at its end, Check stands where it was pressed and the three
+lines stand above it. Nothing moves when all of that is on the screen
+already.
 
 Home (2026-11-06, section 11), at /home, where an unlock lands once
 setup is complete, first in the navigation; no outer card. Top to
@@ -10860,6 +10869,121 @@ codebase, so all three get the row and the page.
   after this step, by section 10 of `forclaude/wallet-deploy-plan-1.md`,
   wallet1 and then wallet2, with no setting in `network/wallet.env` and
   no `npm ci`.
+
+### The Public ledger id page: the result stays on the screen (2026-11-18)
+
+One small fix, built on the user's word in the chat of the note above
+("Fix it now", to the question what should happen with the sentence that
+lands under the screen's edge after Check; the other choice was a line
+on the after-production list), with no plan file, one commit, on top of
+the commit of the note above. Why: the note above measured that right
+after the first press of Check, with the page at its end, the sentence
+that says the same or different stood under the screen's bottom edge,
+and Check with it. The plan expected the whole result on the screen (its
+decision 5, and in its section 2 "After a tap on Check the result shows
+without scrolling"). Now, once the three lines of a result are drawn,
+the page scrolls just far enough that the row of Check is on the screen
+again, with the lines above it. Wallet only: one file of code, and no
+word of the dictionaries changes.
+
+- `src/app/pages/account-ledger-id.page.ts`. The row that holds Check
+  has a name in the template (`#actions`), and the class reads it with
+  `viewChild`. In the constructor an `afterRenderEffect` reads `result`
+  and, when there is one, calls `scrollIntoView({ block: 'nearest' })`
+  on the row: it runs after the render that draws a result, and at no
+  other time. The row's style has `scroll-margin-bottom: 33px`, with a
+  comment. The import line names `ElementRef`, `afterRenderEffect` and
+  `viewChild`, and the class comment has three lines more. `check()` is
+  as the plan has it. From this commit on the file differs from the
+  plan's 1.1 by these lines; the plan file is FINAL and was not edited.
+- Why 33 pixels. Under the row stand the card's padding (16), the card's
+  border (1) and the page's padding (16). With that margin the page
+  stops at its end and Check stands where it was pressed: its top is 73
+  pixels above the screen's bottom edge before the press and after it.
+  Without the margin, tried by hand in the scratch page before any file
+  was changed, the scroll stops with Check's lower edge on the screen's
+  edge, 33 pixels lower than where it was pressed, and the card's end
+  under it stays out of sight.
+- Why `afterRenderEffect`. The chat page and the locked-out page wait
+  for a render with `afterNextRender` and the page's injector, called
+  from the method that made the change, and the fix was first built that
+  way, in `check()`. When the page was left while a check ran, that call
+  was made with the dead page's injector and threw "NG0911: View has
+  already been destroyed" into `check()`'s own catch. Nothing showed and
+  nothing was logged, but an effect made in the constructor belongs to
+  the page's life, so nothing runs after the page is left: the same
+  leave then gave no error. `afterRenderEffect` is new to the wallet.
+- Spec: 8.2, three sentences at the end of the page's paragraph; this
+  note. The note above stands as it was written: it is the record of the
+  step.
+- The look, where: the way of the note above. A development build in a
+  scratch folder on this Mac, served by a plain file server on 127.0.0.1
+  (port 8803, the temporary entry in `/Users/codex/.claude/launch.json`
+  taken out again, the file byte for byte what it was), in the Claude
+  app's browser pane, with the made-up session of the note above. Not on
+  a phone and not on the live wallet. 360, 375, 390 and 430 pixels wide
+  and 600 high, each in English and in Thai.
+- The look, what is on the screen after Check, at every size in both
+  languages. A first press with the page at its end, a match and a miss:
+  every line of the result is on the screen, and Check is on the screen
+  with its top 73 and its lower edge 33 pixels above the bottom edge,
+  where it stood before the press; the page is at its end. A second
+  press, after the city was put back: the same. A first press with
+  Check's lower edge right on the screen's edge, the page 33.5 pixels
+  short of its end: the same. A first press with Check half under the
+  edge: the same. One press was made by the pane's own pointer (360
+  pixels, English, a miss): the same. At 1024 by 600 pixels, the side
+  menu open: the same. At 1024 by 1600, where the whole page fits:
+  nothing moves.
+- The look, what does not move. The page opens at its top. Filling the
+  form moves nothing. With a result showing and the page scrolled 300
+  pixels up, a changed answer moves nothing, and the old result stays.
+  On the Account page nothing is scrolled after the new page was left in
+  the middle of a check.
+- The look, everything else, again: the measures and the line counts of
+  the note above came out the same at every size in both languages (the
+  card's room, the boxes, the "Known?" boxes, Check's width, the lines
+  of each text, the four states), with nothing cut and nothing past the
+  card. The requests were the file server and Google's font files, and
+  no press of Check sent one; the console held the 404 of `/api/config`
+  and no other error.
+- The look, the page without the fix, once more. While the scroll was
+  tried by hand on the unfixed scratch page, Chrome moved the page by
+  itself after some first presses, so that the three lines were on the
+  screen with Check, or the lines without Check; in the runs of the note
+  above it never did. That is Chrome's own keeping of the page in place
+  as its height changes, and it cannot be counted on. With the fix the
+  end was the same every time.
+- The look, real iPhone Safari, which does not move a page by itself
+  that way. The iOS simulator on this Mac (iPhone 17e, iOS 27, Safari
+  27.0, 390 points wide, 699 points of the page on the screen), started
+  with no window. A probe script in a copy of the scratch page's index
+  file set the made-up session, filled the form with "Saint Louis" for
+  the city, scrolled to the end (the page inside the shell, and the
+  whole document, which Safari lets move by 40 points), pressed Check
+  and sent its numbers to the file server's log. The row's
+  `scroll-margin-bottom` is 33px there. Before the press Check stood
+  from 626 to 666. In a first run the row's `scrollIntoView` was
+  replaced by an empty function, which is the page of the note above:
+  the two lines with the ends of the ids were on the screen, the
+  sentence's box reached from 696 to 776 with the edge at 699, and Check
+  stood from 790 to 830, under the edge; the page had not moved. In the
+  second run, with the fix: the three parts of the result stood from 464
+  to 612, all on the screen, and Check from 626 to 666, where it stood
+  before the press, with the page at its end; no error. A picture taken
+  afterwards shows that. Only a miss in English was run there.
+- Checked. `npx ng build` from the web_app folder: clean, no warnings
+  (2.23 MB initial total, `main-OHJAV7CU.js`, `styles-EMD3RG3N.css`, the
+  style file of before). `git status` showed the nine files of the note
+  above and no others; this fix is in two of them, the page file and
+  this spec. Not checked: a phone; the live wallet; a match, and Thai,
+  in Safari; Chrome on an Android phone; a press of Check while the
+  phone's keyboard is up; the moderator and attestor editions (one
+  codebase). The browser pane was not on screen while the look ran, so
+  the page's jump was measured and not watched. The run-through is the
+  user's, on a phone (section 2 of
+  `forclaude/wallet-ledger-id-check-plan-1.md`: "After a tap on Check
+  the result shows without scrolling").
 
 ## 12. Recovery and the moderator edition
 

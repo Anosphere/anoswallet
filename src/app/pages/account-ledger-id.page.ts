@@ -1,4 +1,4 @@
-import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { Component, DestroyRef, ElementRef, afterRenderEffect, inject, signal, viewChild } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
@@ -30,6 +30,9 @@ function endOf(id: string): string {
  * they stay, so one field can be fixed and Check pressed again; leaving
  * the page drops them. Nothing is sent: no server is asked, and the
  * answers and the id made from them never leave this component's memory.
+ * The lines of a result come in above Check and push it down, so once
+ * they are drawn the page scrolls just far enough that Check is on the
+ * screen again, with the lines above it.
  */
 @Component({
   selector: 'app-account-ledger-id-page',
@@ -61,7 +64,7 @@ function endOf(id: string): string {
               <p class="error">{{ t().accountLedgerId.different }}</p>
             }
           }
-          <div class="actions">
+          <div class="actions" #actions>
             <button mat-flat-button type="button" (click)="check(id)" [disabled]="!form.complete() || computing()">{{ t().accountLedgerId.check }}</button>
           </div>
         } @else {
@@ -74,7 +77,8 @@ function endOf(id: string): string {
     p { max-width: 640px; }
     /* The app's code style breaks a long id anywhere; here the 12 characters stay together and go to the next line as one piece. */
     code { white-space: nowrap; }
-    .actions { display: flex; gap: 8px; margin-top: 12px; }
+    /* After a check the page scrolls this row back onto the screen (the constructor, below). The 33px are what stands under the row, the card's padding and border and the page's padding, so the page stops at its end and Check stands where it was pressed. */
+    .actions { display: flex; gap: 8px; margin-top: 12px; scroll-margin-bottom: 33px; }
     .error { color: var(--mat-sys-error); }
     .ok { color: var(--mat-sys-primary); }
   `,
@@ -91,10 +95,16 @@ export class AccountLedgerIdPage {
   /** The last check: the end of the id made from the answers, and whether the two whole ids are equal. */
   protected readonly result = signal<{ typedEnd: string; same: boolean } | null>(null);
   protected readonly endOf = endOf;
+  /** The row that holds Check: after a check it is scrolled back onto the screen. */
+  private readonly actions = viewChild<ElementRef<HTMLElement>>('actions');
 
   constructor() {
     // The answers leave the tab's memory when the page is left.
     inject(DestroyRef).onDestroy(() => this.form.reset());
+    // The three lines of a result come in above Check and push it down, on a phone past the screen's edge together with the sentence. Once they are drawn, the row of Check is scrolled back onto the screen, just far enough.
+    afterRenderEffect(() => {
+      if (this.result()) this.actions()?.nativeElement.scrollIntoView({ block: 'nearest' });
+    });
   }
 
   /** Makes the id from the answers (scrypt takes well under a second) and compares it with the session's, whole id against whole id. A match drops the answers; a miss keeps them. */
