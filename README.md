@@ -65,13 +65,14 @@ src/app/
   countries.ts             the ISO 3166-1 alpha-2 codes for the identity form
   escrow-boxes.ts          the five boxes of an escrow trade for the confirmation box: Release, Dispute, the question before a cancel, "Do not cancel this trade" and Cancel (spec 8.7, 8.9)
   i18n/en.ts, th.ts        the words of each language, one section per page (spec 8.8)
-  unlock.ts                the unlock flow, shared by the landing page and setup
+  unlock.ts                the unlock flow, shared by the landing page, setup, the finish of a recovery and the walk-through of the locked-out page
   components/camera.component.ts   the camera: live preview, Take photo, a file input as the fallback
   components/note-form.component.ts   the note form under a history row: the kind, the money and the currency, the memo (spec 8.2)
   components/confirm-dialog.component.ts   the confirmation box before a send, before a new anos account, before the cancel of a locked transfer, before a release, a dispute and a cancel on the escrow trade page and before a release in the marketplace chat's pinned card (the Release box), with the username to type before a DAO or guardian stake and in the escrow trade's Release, Dispute and Cancel boxes, and a red button for the cancel of a locked transfer and for a dispute, and askConfirm and askChoice (spec 8.9)
   components/escrow-strip.component.ts   the status box of an escrow trade: whether the anos are in escrow, the step of the four, and what to do and not to do, in green, amber or grey (spec 8.7)
   components/case-chat-start.component.ts   the attestor's Start chat button for the person on a case page: Start chat, Open chat, Invite again (spec 8.7, 13.3)
   components/case-chat-list.component.ts   the person's chats with the attestors of a case, on My case and My recovery case: Accept, Decline, Open chat (spec 8.7, 13.3)
+  components/find-passkey.component.ts   the walk-through in front of the locked-out stepper, "Find your passkey first": five screens that name where a passkey may be and ask about each, with the start page's Log in on the first (spec 12.3)
   pages/                   one file per route: landing, create, recover, vouching, identity, setup,
                            wallet, noted-transactions, account, account-home, account-recovery-home, account-recovery, account-protect, account-passkeys, account-ledger-id, chat, marketplace, notifications, seed, log
   pages/my-recovery-case.page.ts   the person's recovery case, /cases/recovery/:caseId: the status, the video call with its time and its link, the chat with the attestor, the accounts being moved, the timeline (spec 13.3)

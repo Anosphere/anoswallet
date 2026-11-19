@@ -3393,6 +3393,23 @@ Back to Account is `nav.account`, and the form's words are
 letter; the eleven Thai lines are the planning chat's, as
 forclaude/wallet-ledger-id-check-plan-1.md gives them, and no Thai
 reader has read them.
+The walk-through in front of the locked-out stepper (2026-11-18,
+section 11) takes its words from a new section, `findPasskey`,
+which stands after `recover` and in front of `recoverOpen`: 39
+entries, nine of them functions (`counter`, `tryNone`, `tryOther`,
+`foundHere`, `s2OtherApp`, `s2Found`, `s3Apple`, `s5Bankers` and
+`s5Waits`). The entries of a screen begin with its number, `s1` to
+`s5`; `tryButton`, the three sentences of a try and `foundHere`
+serve more than one screen. A sentence that names the site or the
+address takes it as its argument, and the two numbered lines of the
+last screen take their numbers, so no host name and no number is
+typed into the dictionary. Back and Next are `common.back` and
+`common.next`, "Back to the start page" is `recoverOpen.toStart`,
+and "Logging in…" is `landing.unlocking`. `recover.lockedOutText`
+has a new first sentence, "If your passkey is gone for good, we can
+get you back in." The English is the plan's, letter for letter; the
+Thai is the build chat's, by the glossary, and no Thai reader has
+read it.
 
 ### 8.9 The confirmation box
 
@@ -3690,6 +3707,42 @@ Cloud machines.
   limit: "the same" shows that the person can type the answers the
   same way again, which is what the locked-out page needs to find the
   account; it does not show that the answers are true.
+- From the recover walk-through plan
+  (forclaude/recover-walkthrough-plan-1.md, 2026-11-18, its section
+  4): the line under a failed Log in on the start page, "No passkey for
+  this site on this device? Create an anoPod instead." (it stays, and
+  it stays on the list of the recovery passkey check plan above); the
+  phone's passkey used on a computer through the browser's QR code; a
+  Log in that offers only the passkeys of the account the birth record
+  found; finding out by itself that the page is shown inside another
+  app; anything stored or sent about the walk-through (the masterpod
+  and the moderators learn nothing of a person's answers); a cancel
+  button for a person's own case (it stands on the after-production
+  list); a change to "Continue a recovery", to the three steps of the
+  form, or to the passkey check at "Open my case"; a Thai reader's
+  read of the new lines ("Thai read by a Thai reader" stands on the
+  after-production list); a change to the technical paper, which does
+  not describe these screens. The known limits, as that section has
+  them: the wallet can check screen 1 by itself, and screens 2 to 4
+  rest on the person's own answer, because no website can see another
+  device or another account, so this cuts the mistaken cases and does
+  not end them; the browser gives one answer for three things (the
+  person closed the passkey box, the device has no passkey for the
+  site, or the browser does not allow passkeys where the page is
+  shown), so the sentence for it says "may not be on this device"; the
+  sentence that names the Google app rests on one thing seen, that
+  inside the Google app on an iPhone "Create account" fails, and Log
+  in was not tried there before this plan and no other app was tried;
+  the sentences on Apple's and Google's lists were read from their
+  help pages on 2026-11-18, the makers move their menus, and a passkey
+  kept by another password app gets one line and no steps; a passkey
+  made in Chrome on a computer may be kept by Google, by Apple or by
+  that computer alone, so screen 3 says where to look, not where a
+  passkey was made; a person who is truly locked out taps through five
+  screens on every visit, since nothing is remembered; the browser's
+  own Back leaves the walk-through, and the person starts again at
+  screen 1; and a person who taps "Yes, I still have it" by mistake
+  has to tap Back to answer again.
 - Several passkeys, push delivery, a custom theme, rate limits.
 
 ## 11. Build notes
@@ -10985,6 +11038,410 @@ word of the dictionaries changes.
   `forclaude/wallet-ledger-id-check-plan-1.md`: "After a tap on Check
   the result shows without scrolling").
 
+### The walk-through in front of the locked-out stepper (2026-11-18)
+
+Built from `forclaude/recover-walkthrough-plan-1.md` (FINAL,
+2026-11-18), its step 1 of two, its section 1, one commit, on main at
+bc11503, the commit the plan stands on, the working tree clean. Step 2
+is one sentence in each of two record files. Why: in the first days of
+production six people opened a recovery case without having lost their
+passkey. The user, 2026-11-18: "they're just confused, didn't know how
+to use their passkey and thought that account recovery was something
+more like forgot password". The passkey check of the same day (the
+note "The passkey check and the open case check at Open my case"
+above) stops such a person only at the last tap, after the birth
+record, an email and a phone number are typed, and it sees only the
+device in the person's hand. The user, 2026-11-18: "I want to make the
+user walk through more things before actually being able to start a
+case. Like it should tell them various ways to find their passkey and
+ask if they've checked these other methods." Now the page at
+`/recover/open` opens with five screens, "Find your passkey first": a
+real Log in on the device, the other places a passkey may be, and what
+a recovery is. The form of before shows after them. Wallet only: no
+route of the proxy (`server/`), no line of `network/wallet.env` and no
+npm package; the masterpod, the validators, the doormen, the
+keyholders and the signing servers are not touched, and the new
+screens ask the masterpod only what the start page's Log in asks. The
+wallet, the moderator edition and the attestor edition are one
+codebase, so all three get the screens.
+
+The plan's code had never been compiled: the user chose to have it
+built once, by this build (the plan's "Not tried yet"). It compiled as
+written, at the first build, with no warning. One word differs from
+the plan's code, in each of two files: `block: 'nearest'` where the
+plan has `block: 'start'`. It was changed on the user's word, after
+the look found a fault in iPhone Safari (the bullet on iPhone Safari
+below).
+
+- `src/app/components/find-passkey.component.ts`, new, the whole file
+  as the plan's 1.1 gives it but for that one word
+  (`FindPasskeyComponent`, `app-find-passkey`): one card, five screens
+  shown one at a time, the two views of screens 2 to 4, the shared
+  block with "Try Log in now", the progress bar and the sentence of a
+  try, the box of screen 5, and `done`, its one output. It keeps
+  everything in its own signals and nothing anywhere else.
+- `src/app/pages/recover-open.page.ts`: the page shows the
+  walk-through until `done`, and its card of before afterwards. The
+  first import names `ElementRef`, `afterRenderEffect` and `viewChild`
+  too; the import of the component stands in front of the one of
+  `IdentityFormComponent`, and `FindPasskeyComponent` in `imports` the
+  same way; the template has `@if (!checked())` around the card, with
+  `<div #formTop>` in front of it, every line of the card two spaces
+  deeper and letter for letter otherwise; the signal `checked` in front
+  of `form`; the field `formTop` under `hasPasskey`; the
+  `afterRenderEffect` in the constructor, with that one word; and a
+  paragraph at the end of the class comment. `next()`, `open()`, the
+  three steps and the style lines are as they were.
+- `src/app/unlock.ts`: the one sentence of the doc comment, which now
+  names the four users of `unlockWithPasskey`. No line of code.
+- `src/app/i18n/en.ts` and `th.ts`: the new section `findPasskey`
+  between `recover` and `recoverOpen`, 39 entries, nine of them
+  functions, and the new first sentence of `recover.lockedOutText`. The
+  English is the plan's 1.4 letter for letter. No other entry changed.
+- Tables typed `Record<string, string>` added to the dictionaries: none.
+- README: the `unlock.ts` line, and the new line of
+  `components/find-passkey.component.ts` after the one of
+  `components/case-chat-list.component.ts`, as the plan gives them.
+- Spec: 8.8; 10 (a new bullet); 12.2 (the `/recover/open` line); 12.3
+  (Recover; Locked out, the line that begins the part and the six
+  paragraphs under it); 12.4 (the `find passkey` line); this note.
+
+The forty Thai lines, as `th.ts` has them:
+
+    recover.lockedOutText, its first sentence   หากพาสคีย์ของคุณหายไปอย่างถาวร เราช่วยให้คุณกลับเข้ามาได้
+    findPasskey.title          ค้นหาพาสคีย์ของคุณก่อน
+    findPasskey.counter        ${screen} จาก ${screens}
+    findPasskey.tryButton      ลอง "เข้าสู่ระบบ" ตอนนี้
+    findPasskey.tryNone        ไม่มีการใช้พาสคีย์ หากอุปกรณ์ของคุณไม่ได้แสดงพาสคีย์สำหรับ ${site} พาสคีย์ของคุณอาจไม่ได้อยู่บนอุปกรณ์นี้
+    findPasskey.tryUnknown     พาสคีย์นั้นเปิด anoPod ใดไม่ได้ อาจเป็นพาสคีย์เก่า หากอุปกรณ์ของคุณเสนอพาสคีย์อื่น ให้ลองพาสคีย์นั้น หากคุณเปิดเคสกู้คืนไว้แล้ว ย้อนกลับแล้วแตะ "ดำเนินการต่อ"
+    findPasskey.tryOther       "เข้าสู่ระบบ" ไม่สำเร็จ (${reason}) ลองอีกครั้งในอีกสักครู่
+    findPasskey.foundHere      อยู่บนอุปกรณ์นี้ใช่ไหม แตะปุ่ม อยู่บนอุปกรณ์อื่นใช่ไหม เปิด ${address} ที่นั่นแล้วแตะ "เข้าสู่ระบบ"
+    findPasskey.s1Title        ลองพาสคีย์ของคุณที่นี่
+    findPasskey.s1Text1        ไม่มีรหัสผ่าน จึงไม่มีสิ่งใดต้องรีเซ็ต คุณสร้างพาสคีย์ตอนที่คุณสร้าง anoPod ของคุณ อุปกรณ์ของคุณเก็บพาสคีย์นั้นไว้ และเปิดด้วยใบหน้า ลายนิ้วมือ หรือการล็อกหน้าจอของคุณ
+    findPasskey.s1Text2        แตะปุ่ม อุปกรณ์ของคุณจะแสดงพาสคีย์พร้อมชื่อผู้ใช้ของคุณ เลือกพาสคีย์นั้น
+    findPasskey.s1Next         ใช้งานไม่ได้ที่นี่
+    findPasskey.s2Title        อุปกรณ์ที่คุณใช้สร้าง anoPod ของคุณ
+    findPasskey.s2Text         พาสคีย์ของคุณถูกบันทึกไว้บนโทรศัพท์หรือคอมพิวเตอร์ที่คุณใช้สร้าง anoPod ของคุณ
+    findPasskey.s2OtherApp     คุณมาที่นี่จากลิงก์ภายในแอปอื่น เช่น แอป Google ใช่ไหม ถ้าเช่นนั้น หน้านี้เข้าถึงพาสคีย์ของคุณไม่ได้ เปิด Safari หรือ Chrome แล้วไปที่ ${address} ในนั้น
+    findPasskey.s2Question     คุณสร้าง anoPod ของคุณบนโทรศัพท์หรือคอมพิวเตอร์เครื่องอื่น และคุณยังมีเครื่องนั้นอยู่ใช่ไหม
+    findPasskey.s2Yes          ใช่ ฉันยังมีอยู่
+    findPasskey.s2No           ไม่ใช่
+    findPasskey.s2Found        พาสคีย์ของคุณอยู่บนอุปกรณ์นั้น เปิด ${address} ที่นั่นแล้วแตะ "เข้าสู่ระบบ" คุณไม่ได้ถูกล็อกออก หาก "เข้าสู่ระบบ" ใช้งานไม่ได้ที่นั่น ให้เริ่มการตรวจสอบนี้อีกครั้งบนอุปกรณ์นั้น
+    findPasskey.s3Title        บัญชี Apple หรือ Google ของคุณ
+    findPasskey.s3Text         พาสคีย์ที่สร้างบนโทรศัพท์จะถูกเก็บไว้กับบัญชี Apple หรือ Google ของคุณ ไม่ใช่เฉพาะบนโทรศัพท์เครื่องนั้น หากโทรศัพท์ของคุณหายหรือชำรุด อุปกรณ์อื่นที่ลงชื่อเข้าใช้ด้วยบัญชีเดียวกันยังมีพาสคีย์ของคุณอยู่
+    findPasskey.s3Apple        Apple: บน iPhone, iPad หรือ Mac เปิดแอปรหัสผ่าน (Passwords) แล้วมองหา ${site} อุปกรณ์ Apple ทุกเครื่องที่ลงชื่อเข้าใช้ด้วย Apple Account เดียวกันมีรายการเดียวกัน
+    findPasskey.s3Google       Google: บนโทรศัพท์ Android หรือใน Chrome เปิดเครื่องมือจัดการรหัสผ่านบน Google (Google Password Manager) แล้วแตะ "พาสคีย์" (Passkeys) อุปกรณ์ทุกเครื่องที่ลงชื่อเข้าใช้ด้วยบัญชี Google เดียวกันมีรายการเดียวกัน บนอุปกรณ์ใหม่ Google จะขอการล็อกหน้าจอของโทรศัพท์เครื่องเก่าของคุณ
+    findPasskey.s3OtherApp     คุณเก็บรหัสผ่านไว้ในแอปอื่นใช่ไหม ดูที่นั่นด้วย
+    findPasskey.s3Yes          ฉันพบแล้ว
+    findPasskey.s3No           ไม่อยู่ที่นั่น
+    findPasskey.s4Title        พาสคีย์สำรอง
+    findPasskey.s4Text         คุณเพิ่มพาสคีย์ที่สองไว้ที่ "บัญชี", "พาสคีย์" ใช่ไหม อาจเป็นคีย์ความปลอดภัยสำรอง หรือพาสคีย์ที่เก็บไว้กับ Apple เมื่อพาสคีย์แรกของคุณเก็บไว้กับ Google พาสคีย์ทุกรายการของ anoPod ของคุณใช้เข้าสู่ระบบได้
+    findPasskey.s4Yes          ฉันมี
+    findPasskey.s4No           ฉันไม่มีพาสคีย์สำรอง
+    findPasskey.s4Found        เสียบคีย์ความปลอดภัยของคุณ หรือหยิบอุปกรณ์ที่มีพาสคีย์สำรองมา
+    findPasskey.s5Title        การกู้คืนคืออะไร
+    findPasskey.s5Intro        การกู้คืนไม่ใช่การรีเซ็ตรหัสผ่าน นี่คือสิ่งที่จะเกิดขึ้น:
+    findPasskey.s5Moderator    ผู้ดูแลจะพบคุณทางวิดีโอคอลและตรวจสอบว่าเป็นคุณจริง
+    findPasskey.s5Bankers      จากนั้นคุณรอนายธนาคาร พวกเขาเป็นบุคคลที่แยกจากกัน และแต่ละคนเก็บกุญแจของคุณไว้หนึ่งส่วน ในจำนวนนั้น ${needed} คนต้องส่งส่วนของตน
+    findPasskey.s5BankersSome  จากนั้นคุณรอนายธนาคาร พวกเขาเป็นบุคคลที่แยกจากกัน และแต่ละคนเก็บกุญแจของคุณไว้หนึ่งส่วน ในจำนวนนั้นต้องมีคนส่งส่วนของตนมากพอ
+    findPasskey.s5Money        จากนั้นคุณกลับเข้ามา เงินของคุณจะถูกย้ายไปยังบัญชีใหม่ และผู้ยืนยันสองคนต้องลงนามในการย้ายเงินแต่ละครั้ง
+    findPasskey.s5Waits        จากนั้นเงินในบัญชีหน่วงเวลาจะรอ ${guarded} และเงินในบัญชีนิรภัยจะรอ ${vault}
+    findPasskey.s5WaitsSome    จากนั้นเงินในบัญชีหน่วงเวลาหรือบัญชีนิรภัยจะรอตัวล็อกเวลาของบัญชีนั้น
+    findPasskey.s5Tick         ฉันลองทั้งหมดนี้แล้ว พาสคีย์ของฉันหายไปแล้ว
+
+- Thai, written here by the rules of the plan's 1.4, by the glossary
+  and style of the languages plan's 1.6 and by the Thai `th.ts` already
+  has for the same things; no Thai reader has read it. No line ends in
+  a full stop, and the keys of `findPasskey` stand in the English
+  file's order.
+- The names of the two apps, as Apple's and Google's own Thai help
+  pages have them; both pages could be read, on 2026-11-18. Apple's
+  article 104955 in Thai (support.apple.com/th-th/104955, "ค้นหารหัสผ่าน
+  และพาสคีย์ที่บันทึกไว้บน iPhone ของคุณ") says "เปิดแอปรหัสผ่าน", so the
+  Passwords app reads แอปรหัสผ่าน (Passwords). Chrome Help's "Manage
+  passkeys in Chrome" for Android in Thai (support.google.com/chrome,
+  answer 13168025, "จัดการพาสคีย์ใน Chrome") names Google Password
+  Manager เครื่องมือจัดการรหัสผ่านบน Google throughout, with no English
+  name, and says "แตะพาสคีย์เพื่อให้ระบบแสดงพาสคีย์" for its entry
+  Passkeys. So the two read เครื่องมือจัดการรหัสผ่านบน Google (Google
+  Password Manager) and "พาสคีย์" (Passkeys), each with the English
+  name in round brackets after it, as the plan says. The entry stands
+  in straight double quotes, as the file quotes a label: without them
+  "แตะพาสคีย์" reads as "tap the passkey", which the Passkeys page says
+  of a passkey itself.
+- A button of the wallet is named by its own label in straight double
+  quotes: "เข้าสู่ระบบ" is `landing.unlock` (Log in) and "ดำเนินการต่อ"
+  is `common.continue` (Continue). `tryButton`, itself a button, names
+  Log in the same way, as `recover.tryLogIn` begins. In `s4Text`,
+  "under Account, Passkeys" reads ที่ "บัญชี", "พาสคีย์": `nav.account`
+  and `accountHome.passkeysTitle`. "Every passkey of your anoPod logs
+  you in" has no quotes: it speaks of the act, not of the button.
+- As the file has them: นายธนาคาร (the bankers), ถูกล็อกออก (locked
+  out), เคสกู้คืน (recovery case), คีย์ความปลอดภัย (security key), ผู้ดูแล
+  and ผู้ยืนยัน, บัญชีหน่วงเวลา and บัญชีนิรภัย, ตัวล็อกเวลา (the lock),
+  วิดีโอคอล, การล็อกหน้าจอ (screen lock), ลงชื่อเข้าใช้ (signed in, of a
+  Google or Apple account, as the Protect page and Google's page have
+  it), หายไปอย่างถาวร (gone for good), กลับเข้ามา (get back in), ที่คุณใช้
+  สร้าง anoPod ของคุณ (where you made your anoPod), จาก for "of" in a
+  count, and ใช่ไหม at the end of a question, with no question mark.
+  `s2Text` is the middle sentence of `recover.tryLogIn`, word for word.
+  `s2No` reads ไม่ใช่, the answer to a question that ends in ใช่ไหม.
+- New to the file: รีเซ็ต (reset), ใบหน้า (face), ลายนิ้วมือ
+  (fingerprint), ชำรุด (broken), มองหา (look for: Apple's article names
+  no search box), ถ้าเช่นนั้น (then), and ส่วน for "part" of a key, where
+  the file says ส่วนแบ่ง for "share": the plan chose "part" over "share"
+  in the English. "Does not open an anoPod" reads เปิด anoPod ใดไม่ได้
+  (cannot open any anoPod). "I have no spare" reads ฉันไม่มีพาสคีย์สำรอง,
+  with the noun. "There" reads ในนั้น where it means inside Safari or
+  Chrome, and ที่นั่น where it means the other device.
+- Readings where the plan left a detail open. BUILD-DATE is 2026-11-18;
+  the date is as long as the word, so no line of the plan's blocks
+  wraps differently. The blocks of the plan's 1.1 and 1.4 and the five
+  spec blocks of its 1.5 were taken out of the plan file by a command,
+  each line less the spaces of its indent, and put into the files by a
+  command; the changes of 1.2, the comment of 1.3 and the two README
+  lines were typed and then compared. In `recover-open.page.ts` the new
+  paragraph of the class comment stands after an empty comment line and
+  begins "Since 2026-11-18 (wallet spec 12.3)"; `checked` stands right
+  in front of `form`, and `formTop` right under `hasPasskey`. In
+  `unlock.ts` the sentence after the changed one, "Returns the status;
+  ...", wraps anew and keeps its words. In 12.2 and 12.4 the lines keep
+  the four spaces every line of their lists has. In 12.3, Recover, the
+  plan's paragraph stands on lines of its own between the sentence
+  before it and "Continue a recovery". The 8.8 text stands on lines of
+  its own at the end of its paragraph. The bullet of section 10 says
+  what the plan's section 4 says, in the form of the bullets above it.
+- The look, where. A development build in a scratch folder on this Mac,
+  served by a plain file server on 127.0.0.1 (port 8805, a temporary
+  entry in `/Users/codex/.claude/launch.json`, taken out again, and the
+  file was then byte for byte what it had been), in the Claude app's
+  browser pane. The
+  page was opened at `/` and the app's own router went on to
+  `/recover/open`. Not on a phone and not on the live wallet. No passkey
+  was asked, and none of our servers: the request list shows the file
+  server alone, where `/api/config` answered 404 and the challenge
+  request of a real press of "Try Log in now" answered 501, and
+  Google's font files. The console held those answers and no other
+  error. The sizes: 360, 375, 390 and 430 pixels wide and 600 high,
+  each in English and in Thai, the language set before the page was
+  opened. At these widths the pane says it is Chrome on an Android
+  phone, and it draws Thai with this Mac's Thai font. The look was made
+  twice, as the plan says. As it is: no configuration, so the site name
+  is the page's host (`localhost`), the address is `localhost:8805`,
+  and the second and fourth lines of screen 5 read without a number.
+  And with the configuration set by hand (`rpId` wallet.anocloud.com,
+  `shareThreshold` 6, the two lock numbers 10080 and 43200), which
+  shows "6", "7 days" and "30 days"; in that run the component's
+  `address` was set by hand to wallet.anocloud.com too, so the counts
+  below are those of the words production prints. The states a click
+  cannot reach without a passkey were set through the component's own
+  signals (`tried`, `busy`, and `result` with each of its three kinds).
+  The browser pane was not on screen while the look ran: the pictures
+  and the measures do not need it, but no motion was watched.
+- The look, by clicks, at 360 pixels in English. "Start" on the card
+  "I'm locked out" opens `/recover/open`; the tab reads "Locked out",
+  and the page shows the card "Find your passkey first", "1 of 5", and
+  no stepper. Before a try "It did not work here" is not on the screen.
+  One press of "Try Log in now" by the pane's own pointer: the progress
+  bar and "Logging in…" came with the button off, then the red sentence
+  "Log in did not go through (/challenge: HTTP 501). Try again in a
+  moment." and, under "Try Log in now", the outlined button "It did not
+  work here". That button opens screen 2. "Yes, I still have it" shows
+  the ending with "Back to the start page", a link to `/`, and Back,
+  and no other button; Back shows the question again; Back on the
+  question shows screen 1, where the sentence is gone and "It did not
+  work here" still stands, since a try was made in this visit. "No"
+  opens screen 3; "I found it" shows the ending with "Try Log in now"
+  and Back, and without "It did not work here"; Back shows the question
+  and Back again screen 2. "It is not there" opens screen 4; "I have
+  one" shows its ending; Back, and Back again, show the question and
+  screen 3. "I have no spare" opens screen 5, with Next off. A tick
+  turns Next on; Back and "I have no spare" again show the box
+  unticked. With the tick, Next shows the card "I'm locked out", "Open a
+  recovery case", with the steps "Your birth record", "Your account"
+  and "Open my case". The app loaded again, and `/recover/open` opened
+  again, show screen 1 with no "It did not work here": nothing was kept,
+  and the app wrote nothing into the browser's storage. Back on screen 1
+  is a link to `/recover`.
+- The look, every screen and every ending, at every size, in both
+  languages, as it is and with the configuration: no line is cut, no
+  button's label is cut or takes two lines, no button and no box runs
+  past the card, nothing stands over another thing, and no page scrolls
+  sideways. The text has 294, 309, 324 and 364 pixels. The progress bar
+  is that wide and 4 high. During a try "Try Log in now" is off, and on
+  the endings of screens 3 and 4 Back is off too; on screen 1 Back is a
+  link and stays on. The two plain sentences of a try have the colour
+  of the text around them, and the third is red. With the address of
+  the moderator edition set by hand (moderator.wallet.anocloud.com, the
+  longest of the three), at 360 pixels in both languages: nothing is
+  cut and nothing runs past the card; of the two sentences of screen 2
+  that hold it, each takes one line more in English, and in Thai the
+  ending does.
+- The look, the buttons. Each is 40 pixels high, on one line, and as
+  wide at every size. In English: "Try Log in now" 140.7 pixels, "It did
+  not work here" 172.4, "Yes, I still have it" 154.1, "No" 68.1, "Back
+  to the start page" 187.6, "I found it" 104.5, "It is not there" 133.9,
+  "I have one" 112.7, "I have no spare" 146.1, Next 77.5, Back 64. In
+  Thai, in that order: 181.8, 136.3, 126.2, 81, 146.5, 107.8, 108.3,
+  74.3, 171.5, 80.6, 75.6. The two answers of screens 2, 3 and 4 stand
+  side by side at every size in both languages. The two buttons of
+  screen 1 after a try need 321.1 pixels in English and 326.1 in Thai:
+  in English one stands under the other at 360 and 375 and they stand
+  side by side at 390 and 430; in Thai one under the other at 360, 375
+  and 390, and side by side at 430.
+- The look, the lines each text takes at 360, 375, 390 and 430 pixels,
+  with the words production prints. The card's title, the line "1 of
+  5" and the title of a screen take one line, but for the title of
+  screen 2 in English: 2, 2, 2, 1. Screen 1: the first paragraph 5, 4,
+  4, 4 in English and 4, 4, 4, 3 in Thai; the second 2 at every size in
+  both; "Logging in…" 1. The sentences of a try: no passkey used 3 at
+  every size in English and 3, 3, 3, 2 in Thai; the passkey that opens
+  no anoPod 4, 4, 4, 3 and 4, 4, 3, 3; the red one, with the reason
+  above, 2 at every size in both. Screen 2: the first paragraph 2 at
+  every size in both; the one on another app 4 at every size in English
+  and 4, 4, 4, 3 in Thai; the question 2 at every size in English and
+  3, 2, 2, 2 in Thai; the ending 4, 4, 4, 3 in both. Screen 3: the first
+  paragraph 5, 5, 4, 4 and 5, 4, 4, 4; Apple 5, 4, 4, 3 and 5, 4, 4, 4;
+  Google 6, 6, 5, 4 and 7, 6, 6, 5; the line on another app 2 at every
+  size in English and 1 in Thai. "On this device? ..." on the endings of
+  screens 3 and 4: 3, 3, 2, 2 and 3, 2, 2, 2. Screen 4: the paragraph
+  5, 5, 5, 4 and 5, 4, 4, 4; the first sentence of its ending 2 at
+  every size in both. Screen 5: the sentence above the list 2, 2, 2, 1
+  in English and 1 in Thai; the four lines of the list 2, 2, 2, 2,
+  then 3 at every size, then 3, 3, 3, 2, then 3, 2, 2, 2 in English, and
+  2, 2, 2, 1, then 3 at every size, then 3, 3, 3, 2, then 2 at every
+  size in Thai; the box's label 2, 1, 1, 1 and 2, 2, 1, 1.
+- The look, the lines as it is, where they differ from those above:
+  with `localhost` for the site, no passkey used takes 3, 3, 3, 2 in
+  English and Apple 4, 4, 4, 3 in both languages; with `localhost:8805`
+  for the address, the paragraph on another app takes 4, 4, 4, 3 in
+  English and 4, 3, 3, 3 in Thai, and "On this device? ..." 2 at every
+  size in Thai; without a number, "Enough of them have to send their
+  part." makes the second line of the list 4, 4, 3, 3 in English and
+  4, 3, 3, 3 in Thai, and "Money in a guarded or vault account then
+  waits out its lock." takes 2 at every size in both.
+- The look, the Recover account page. The card "I'm locked out" holds
+  its two paragraphs. The first, of before, takes 4, 4, 4, 3 lines in
+  English and 4 at every size in Thai. The second, with its new first
+  sentence, takes 6, 6, 6, 5 lines in English and 5, 5, 5, 4 in Thai.
+  Nothing is cut.
+- The look, the scrolling, in the pane, with the code as it is
+  committed (`block: 'nearest'`). No motion was watched: where things
+  stand was measured after each tap, with the page put at its end
+  before the tap, where the buttons are. The page has 544 pixels of the
+  600 under the wallet's bar. At 360 pixels screens 3 and 5 are longer
+  than that, in both languages. After every tap of the walk, on and
+  back, the card's title is on the screen, 33 pixels under the bar: the
+  page stands at its top, with its own 16 pixels of space above the
+  card. After Next, with screen 5 at its end, the card "I'm locked out"
+  has its title 17 pixels under the bar: the page stands 16 pixels down
+  there, with the card's top edge at the bar's edge. In a window 460
+  pixels high, where in English every screen but the fourth is longer
+  than the page: from the end of one long screen to another long one
+  (screen 1 to screen 2, screen 2 to screen 3, and each way back) the
+  title is 17 pixels under the bar, and after the other taps 33. With
+  the plan's `block: 'start'`, which the first look had, the title
+  stood 17 pixels under the bar on every screen longer than the page,
+  and 33 on the others.
+- The look, the scrolling after a try. The real "Try Log in now" was
+  pressed with the page at its end, and the wallet's services answered
+  by hand in the scratch page, so that the method and
+  `unlockWithPasskey` ran as built: a `NotAllowedError` from the
+  passkey call gave the sentence that no passkey was used; a 401
+  unknown passkey from `/unlock` gave the sentence on a passkey that
+  opens no anoPod; the file server's own 501 gave the red one. On
+  screen 1 and on the endings of screens 3 and 4, in English and in
+  Thai, at 600 and at 460 pixels of height, 36 presses: after each one
+  the sentence and the row with "Try Log in now" are whole on the
+  screen. At 600 nothing had to move. At 460, on screen 1, the sentence
+  and the second button pushed the row under the screen's edge, and
+  the page moved so that the row's lower edge stands on that edge, with
+  the sentence above it; Back is then under the edge. So the row inside
+  the shared template block is found (`viewChild('tryRow')`). In some
+  runs Chrome itself had already moved the page when the progress bar
+  came in, as the note "The Public ledger id page: the result stays on
+  the screen" above has it of Chrome; the row then ended a little above
+  the edge, and the sentence and the row were whole on the screen all
+  the same. A page left by Back on screen 1 while a try ran gave no
+  error. The 36 presses were made with the plan's code and again with
+  the code as it is committed, with the same end.
+- The look, real iPhone Safari, one fault, and the one word changed for
+  it. The plan's 1.7 does not ask for this look; it was made because
+  the pane's Chrome cannot show what a phone's browser does with the
+  whole page. The iOS simulator on this Mac (iPhone 17e, iOS 27, Safari
+  27.0, 390 points wide, 699 points of the page on the screen), started
+  with no window. A probe script in a copy of the scratch page's index
+  file went through the walk and sent its numbers to the file server's
+  log. In English only. The wallet's shell is as high as the browser's
+  whole window (`height: 100vh` in `src/app/app.css`, there since the
+  app's first build), 739 points there, so in Safari the whole page can
+  move 40 points under the phone's top edge. The fault, with the plan's
+  code: when the walk-through was first drawn, its
+  `scrollIntoView({ block: 'start' })` moved the page inside the shell
+  and that whole page too. The whole page went up by those 40 points
+  and stayed there through every screen. The wallet's top bar is 56
+  points high; 16 of them still showed, and its words "anoPod wallet"
+  stood under the phone's clock. A picture shows it. With the page's
+  scroll calls switched off in the probe the whole page stayed where it
+  was and the bar was whole, so the calls were the cause. That is a
+  fault by the plan's 1.7, a thing cut after a tap. The build changed
+  nothing for it and put it to the user, with the change it had tried
+  in the probe and in the pane: the same call with `block: 'nearest'`.
+  The user, the same day: "Yes, fix it". So `block: 'nearest'` stands
+  where the plan has `block: 'start'`, in the first `afterRenderEffect`
+  of `find-passkey.component.ts` and in the one of
+  `recover-open.page.ts`: one word in each file, and nothing else. The
+  plan file is FINAL and was not edited. `'nearest'` moves a thing only
+  as far as it takes to bring it onto the screen, and moves nothing
+  that is on it already; the Public ledger id page calls it for its
+  row. Looked at again in Safari with the code as it is committed: the
+  whole page stays where it is at every step, the bar is whole, each
+  new screen's title is on the screen, the form's title is on the
+  screen after Next, and the sentence and the row are on the screen
+  after a try. A picture shows that too. One thing is different with
+  the change, in Safari only, on a screen longer than the phone's:
+  after a try the row stops at the lower edge of the page inside the
+  shell, and in Safari that edge lies 40 points under the screen's
+  edge, behind Safari's own bar, until the person drags the page, as
+  the end of every long page of the wallet does there today. With the
+  plan's code the row was on the screen, since the whole page already
+  stood 40 points up. It was seen with the screens made longer by
+  larger text in the probe; on this iPhone every real screen fits. On a
+  smaller iPhone it can show on screen 1, for the second button. The
+  user was told of it before the yes.
+- Places this step left as they are that the plan does not name. One;
+  the build left it and put it to the user. In
+  `src/app/pages/recover.page.ts`, a file the plan says is not edited,
+  the class comment says that "I'm locked out" "starts the locked-out
+  stepper at /recover/open". Start opens the walk-through there now,
+  and the stepper after it.
+- Checked. `npx ng build` from the web_app folder: clean, no warnings
+  (2.26 MB initial total, 2.23 before; `main-SJSK7E5X.js`,
+  `styles-EMD3RG3N.css`, the style file of before; with the plan's word
+  the script file was `main-UZFDTHTY.js`). The plan's blocks were
+  compared with the files by `diff`, with the build's date in the place
+  of BUILD-DATE: the new component differs from the plan's by the one
+  line with the changed word and by nothing else; the section
+  `findPasskey` of `en.ts` and the entry `recover.lockedOutText` are
+  equal; and the five spec blocks stand in this file as the plan has
+  them (the line of 12.2 and the lines of 12.4 less the four spaces in
+  front of them). Both language files have the 39 keys of `findPasskey`
+  in the same order, nine of them functions in each. The plan file is
+  as it was read. `git status` showed this step's seven files and no
+  others. Then the look above. Not checked: a phone; a small iPhone;
+  the live wallet; a
+  real passkey, so a try that works and where it lands (its two lines
+  are the start page's own), the device's own passkey box, and Log in
+  inside the Google app on an iPhone; an answer from a masterpod, since
+  no request left this Mac; Chrome on an Android phone, where the whole
+  page may move as it does in Safari; Thai in Safari; the moderator and
+  attestor editions (one codebase; the scratch page was the wallet
+  edition, and the longest address was set by hand); the Thai by a Thai
+  reader. The run-through is the user's, on a phone (the plan's section
+  3). The user deploys the wallet servers after this step, by section
+  10 of `forclaude/wallet-deploy-plan-1.md`, wallet1 and then wallet2,
+  with no setting in `network/wallet.env` and no `npm ci`.
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`
@@ -11020,7 +11477,7 @@ account page's Send, as today); every other page works as it does.
 ### 12.2 Routes and guards
 
     /recover                 Recover account: I'm locked out, or Continue a recovery
-    /recover/open            the locked-out stepper (12.3)
+    /recover/open            the walk-through "Find your passkey first", then the locked-out stepper (12.3)
     /recover/case            my recovery: the case, its progress, the finish
     /moderation              the cases (moderator edition)
     /moderation/:caseId      one case: profile, events, buckets, sign-off, dismissal, banker packet
@@ -11037,13 +11494,19 @@ the moderator edition; a pod that is not a moderator sees the masterpod's
 (section 11) the card begins with a paragraph of its own, "Try Log in
 first. Your passkey is saved on the phone or computer where you made
 your anoPod. If Log in works there, you are not locked out and you do
-not need this." Then, as before: "If you lost the
-device with your passkey, we can get you back in. You'll need your birth
-record, and an email and a phone number where a moderator can reach you.
-A moderator will meet you on a video call and check your security
-buckets before anything is released." (the phone number in it since
-2026-11-12, section 11; until then "your birth record and an email").
-Button: Start, to `/recover/open`. "Continue
+not need this."
+Then: "If your passkey is gone for good, we can get you back in.
+You'll need your birth record, and an email and a phone number where
+a moderator can reach you. A moderator will meet you on a video call
+and check your security buckets before anything is released." (its
+first sentence since 2026-11-18, section 11: until then "If you lost
+the device with your passkey, we can get you back in.", which
+invited a person whose phone is lost and whose passkey is still with
+their Apple or Google account; the phone number in it since
+2026-11-12, section 11; until then "your birth record and an
+email"). Button: Start, to `/recover/open`, which since 2026-11-18
+opens with the walk-through below.
+"Continue
 a recovery": "Already opened a case on this device? Unlock it with the
 passkey you made then." Button: Continue, which runs `/challenge`
 (unlockCase), the passkey assertion with the PRF salt,
@@ -11051,7 +11514,110 @@ passkey you made then." Button: Continue, which runs `/challenge`
 to `/recover/case`. The platform's picker shows the passkeys; with none
 the authenticator's message shows.
 
-**Locked out** (`/recover/open`), a linear stepper
+**Locked out** (`/recover/open`), a walk-through and then a linear stepper
+
+The walk-through (2026-11-18, section 11; the plan is
+forclaude/recover-walkthrough-plan-1.md). The page opens with it,
+and the stepper below shows only once the person has gone through
+it in this visit. Nothing keeps that: a reload, a new visit or the
+page's own address starts the walk-through again. Why: six people
+of the first days of production opened a case without having lost
+their passkey, and the check at "Open my case" (step 3) sees only
+the device in the person's hand, at the last tap. It is a component
+of its own (12.4): a card titled "Find your passkey first", with
+"1 of 5" to "5 of 5" under the title, one screen at a time. Each
+screen names one place a passkey may be. Screens 2 to 4 ask with
+two buttons: the filled one ends the walk because the passkey is
+found, the outlined one goes on. The answer that ends the walk puts
+the screen's ending in the place of the question and its buttons,
+and Back on an ending shows the question again. Back on a question
+shows the screen before; on screen 1 it opens `/recover`. A new
+screen or view starts at its top: the page scrolls there. No host
+name is typed into a sentence: <site> below is the configuration's
+`rpId`, the name a password list shows, and <address> is the page's
+own host; in the wallet edition both read wallet.anocloud.com.
+
+1 of 5, "Try your passkey here": "There is no password, so there is
+nothing to reset. You made a passkey when you made your anoPod. Your
+device keeps it and opens it with your face, your fingerprint or
+your screen lock." and "Tap the button. Your device shows the
+passkey with your username. Pick it." The button "Try Log in now"
+runs the start page's Log in (`unlockWithPasskey`, 8.2), under a
+progress bar and "Logging in…", with the screen's buttons off. A try
+that works opens the session and goes where the start page's Log in
+goes. A try that does not shows one sentence above the button, and
+the row of buttons is scrolled back onto the screen. The device
+used no passkey (the browser's NotAllowedError: the passkey box was
+closed, the device has none for the site, or the browser does not
+allow passkeys where the page is shown): "No passkey was used. If
+your device showed none for <site>, your passkey may not be on this
+device." The passkey opens no anoPod (`/unlock` answered 401 unknown
+passkey, which the masterpod also answers for the passkey of an open
+recovery case): "That passkey does not open an anoPod. It may be an
+old one. If your device offers another, try it. If you already
+opened a recovery case, go back and tap Continue." Both in the
+ordinary text colour. Anything else, in red: "Log in did not go
+through (<what was thrown>). Try again in a moment." After the first
+try that did not log the person in, and not before, the outlined
+button "It did not work here" stands beside "Try Log in now" and
+opens screen 2. The page never shows the start page's "No passkey
+for this site on this device? Create an anoPod instead."
+
+2 of 5, "The device where you made your anoPod": "Your passkey was
+saved on the phone or computer where you made your anoPod.", then
+"Did you come here from a link inside another app, like the Google
+app? Then this page cannot reach your passkey. Open Safari or Chrome
+and go to <address> there." (bug 4 of the phase 2 list: inside the
+Google app on an iPhone making a passkey fails), then the question
+"Did you make your anoPod on a different phone or computer, and do
+you still have it?" with "Yes, I still have it" and "No". Yes ends
+the walk: "Your passkey is on that device. Open <address> there and
+tap Log in. You are not locked out. If Log in does not work there,
+start this check again on that device.", with the button "Back to
+the start page", to `/`. No button leads on from there. No opens
+screen 3.
+
+3 of 5, "Your Apple or Google account": "A passkey made on a phone
+is kept with your Apple or Google account, not only on that phone.
+If your phone was lost or broken, another device signed in to the
+same account still has your passkey.", then both of these, always:
+"Apple: on an iPhone, iPad or Mac, open the Passwords app and look
+for <site>. Every Apple device signed in to the same Apple Account
+has the same list." and "Google: on an Android phone or in Chrome,
+open Google Password Manager and tap Passkeys. Every device signed
+in to the same Google account has the same list. On a new device
+Google asks for the screen lock of your old phone." (read on Apple's
+and Google's own help pages on 2026-11-18), then "Do you keep your
+passwords in another app? Look there too." The buttons "I found it"
+and "It is not there". Found: "On this device? Tap the button. On
+another device? Open <address> there and tap Log in.", with "Try
+Log in now" as on screen 1. Not there opens screen 4.
+
+4 of 5, "A spare passkey": "Did you add a second passkey under
+Account, Passkeys? It can be a spare security key, or a passkey kept
+with Apple when your first one is kept with Google. Every passkey of
+your anoPod logs you in." The buttons "I have one" and "I have no
+spare". I have one: "Put in your security key, or take the device
+that has the spare.", the sentence "On this device? ..." of screen 3
+and "Try Log in now". No spare opens screen 5.
+
+5 of 5, "What a recovery is": "A recovery is not a password reset.
+This is what happens:" and a numbered list of four. "A moderator
+meets you on a video call and checks that it is really you." "Then
+you wait for the bankers. They are separate people who each keep one
+part of your key. 6 of them have to send their part.", the number
+being `shareThreshold` of `/api/config`. "Then you get back in. Your
+money is moved to new accounts, and two attestors have to sign each
+move." "Money in a guarded account then waits 7 days, and money in a
+vault account 30 days.", the two being `guardedLockMinutes` and
+`vaultLockMinutes` in words (the dictionary's `minutes()`), the lock
+alone, without the offset. When the configuration has not loaded or
+the proxy sent no lock numbers, the second line ends "Enough of them
+have to send their part." and the fourth reads "Money in a guarded
+or vault account then waits out its lock." Under the list a box to
+tick, "I tried all of these. My passkey is gone.", and the button
+Next, off until the box is ticked. Next shows the stepper, at its
+top. Leaving the screen unticks the box.
 
 1. Your birth record: the nine fields of `docs/public-ledger-id.md` as the
    identity page has them (the same form, moved into a component the two
@@ -11397,6 +11963,10 @@ button and every 15 s
     config.service          edition in WalletConfig
     identity form           the nine-field form of the identity page becomes a component both the identity page
                             and the locked-out stepper use; the identity page's behaviour does not change
+    find passkey            the walk-through in front of the locked-out stepper (2026-11-18), a component the
+                            locked-out page shows first: five screens, the start page's unlockWithPasskey behind
+                            "Try Log in now", and done, at which the page shows its stepper; it keeps nothing, and
+                            it asks the masterpod only what a Log in asks
     shell                   Moderation in the navigation when edition is moderator and a session is open
 
 ### 12.5 Running it on this machine

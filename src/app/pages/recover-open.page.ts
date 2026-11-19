@@ -1,4 +1,4 @@
-import { Component, DestroyRef, Injector, afterNextRender, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, ElementRef, Injector, afterNextRender, afterRenderEffect, computed, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -7,6 +7,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatStepper, MatStepperModule } from '@angular/material/stepper';
 import { Router, RouterLink } from '@angular/router';
+import { FindPasskeyComponent } from '../components/find-passkey.component';
 import { IdentityFormComponent, IdentityFormState } from '../components/identity-form.component';
 import { CryptoService } from '../services/crypto.service';
 import { LanguageService } from '../services/language.service';
@@ -63,81 +64,91 @@ function isContactPhone(value: string): boolean {
  * one of them makes no new passkey, and the page then says that the
  * person is not locked out, with a button to the start page, and opens
  * no case.
+ *
+ * Since 2026-11-18 (wallet spec 12.3) the page opens with the
+ * walk-through "Find your passkey first" (find-passkey.component.ts),
+ * and the stepper shows once the person has gone through it in this
+ * visit; nothing keeps that.
  */
 @Component({
   selector: 'app-recover-open-page',
-  imports: [FormsModule, MatStepperModule, MatFormFieldModule, MatInputModule, MatButtonModule, MatCardModule, MatProgressBarModule, RouterLink, IdentityFormComponent],
+  imports: [FormsModule, MatStepperModule, MatFormFieldModule, MatInputModule, MatButtonModule, MatCardModule, MatProgressBarModule, RouterLink, FindPasskeyComponent, IdentityFormComponent],
   template: `
-    <mat-card appearance="outlined">
-      <mat-card-header>
-        <mat-card-title>{{ t().common.lockedOut }}</mat-card-title>
-        <mat-card-subtitle>{{ t().recoverOpen.subtitle }}</mat-card-subtitle>
-      </mat-card-header>
-      <mat-card-content>
-        <mat-stepper linear orientation="vertical" #stepper>
-          <mat-step [completed]="anopodId() !== null" [label]="t().recoverOpen.stepRecord">
-            <p>{{ t().recoverOpen.recordText }}</p>
-            <app-identity-form [state]="form" />
-            @if (computing()) {
-              <mat-progress-bar mode="indeterminate"></mat-progress-bar>
-              <p class="muted">{{ t().recoverOpen.finding }}</p>
-            }
-            @if (lookupError(); as text) {
-              <p class="error">{{ text }}</p>
-            }
-            @if (caseOpen()) {
-              <p><a mat-stroked-button routerLink="/recover">{{ t().common.back }}</a></p>
-            }
-            @if (anopodId() !== null && !form.complete()) {
-              <p class="muted">{{ t().recoverOpen.computed }}</p>
-            }
-            <button mat-flat-button type="button" (click)="next(stepper)" [disabled]="computing() || (!form.complete() && anopodId() === null)">{{ t().common.next }}</button>
-          </mat-step>
+    @if (!checked()) {
+      <app-find-passkey (done)="checked.set(true)" />
+    } @else {
+      <div #formTop></div>
+      <mat-card appearance="outlined">
+        <mat-card-header>
+          <mat-card-title>{{ t().common.lockedOut }}</mat-card-title>
+          <mat-card-subtitle>{{ t().recoverOpen.subtitle }}</mat-card-subtitle>
+        </mat-card-header>
+        <mat-card-content>
+          <mat-stepper linear orientation="vertical" #stepper>
+            <mat-step [completed]="anopodId() !== null" [label]="t().recoverOpen.stepRecord">
+              <p>{{ t().recoverOpen.recordText }}</p>
+              <app-identity-form [state]="form" />
+              @if (computing()) {
+                <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+                <p class="muted">{{ t().recoverOpen.finding }}</p>
+              }
+              @if (lookupError(); as text) {
+                <p class="error">{{ text }}</p>
+              }
+              @if (caseOpen()) {
+                <p><a mat-stroked-button routerLink="/recover">{{ t().common.back }}</a></p>
+              }
+              @if (anopodId() !== null && !form.complete()) {
+                <p class="muted">{{ t().recoverOpen.computed }}</p>
+              }
+              <button mat-flat-button type="button" (click)="next(stepper)" [disabled]="computing() || (!form.complete() && anopodId() === null)">{{ t().common.next }}</button>
+            </mat-step>
 
-          <mat-step [completed]="whoDone()" [label]="t().recoverOpen.stepWho">
-            <p>{{ t().recoverOpen.foundAccount(foundUsername()) }}</p>
-            <p>{{ t().recoverOpen.contactText }}</p>
-            <div class="fields">
-              <mat-form-field appearance="outline" subscriptSizing="dynamic">
-                <mat-label>{{ t().recoverOpen.contactEmail }}</mat-label>
-                <input matInput type="email" [ngModel]="email()" (ngModelChange)="email.set($event)" autocomplete="email" />
-                <mat-hint>{{ t().recoverOpen.emailHint }}</mat-hint>
-              </mat-form-field>
-            </div>
-            <div class="fields">
-              <mat-form-field appearance="outline" subscriptSizing="dynamic">
-                <mat-label>{{ t().recoverOpen.contactPhone }}</mat-label>
-                <input matInput type="tel" [ngModel]="phone()" (ngModelChange)="phone.set($event)" autocomplete="tel" />
-                <mat-hint>{{ t().recoverOpen.phoneHint }}</mat-hint>
-              </mat-form-field>
-            </div>
-            <div>
-              <button mat-button type="button" matStepperPrevious>{{ t().common.back }}</button>
-              <button mat-flat-button type="button" matStepperNext [disabled]="!whoDone()">{{ t().common.next }}</button>
-            </div>
-          </mat-step>
+            <mat-step [completed]="whoDone()" [label]="t().recoverOpen.stepWho">
+              <p>{{ t().recoverOpen.foundAccount(foundUsername()) }}</p>
+              <p>{{ t().recoverOpen.contactText }}</p>
+              <div class="fields">
+                <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                  <mat-label>{{ t().recoverOpen.contactEmail }}</mat-label>
+                  <input matInput type="email" [ngModel]="email()" (ngModelChange)="email.set($event)" autocomplete="email" />
+                  <mat-hint>{{ t().recoverOpen.emailHint }}</mat-hint>
+                </mat-form-field>
+              </div>
+              <div class="fields">
+                <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                  <mat-label>{{ t().recoverOpen.contactPhone }}</mat-label>
+                  <input matInput type="tel" [ngModel]="phone()" (ngModelChange)="phone.set($event)" autocomplete="tel" />
+                  <mat-hint>{{ t().recoverOpen.phoneHint }}</mat-hint>
+                </mat-form-field>
+              </div>
+              <div>
+                <button mat-button type="button" matStepperPrevious>{{ t().common.back }}</button>
+                <button mat-flat-button type="button" matStepperNext [disabled]="!whoDone()">{{ t().common.next }}</button>
+              </div>
+            </mat-step>
 
-          <mat-step [label]="t().recoverOpen.openCase">
-            <p>{{ t().recoverOpen.passkeyText }}</p>
-            <p>{{ t().recoverOpen.onlyIfLockedOut }}</p>
-            @if (busy()) {
-              <mat-progress-bar mode="indeterminate"></mat-progress-bar>
-            }
-            @if (error(); as text) {
-              <p class="error">{{ text }}</p>
-            }
-            @if (hasPasskey()) {
-              <p>{{ t().recoverOpen.notLockedOut }}</p>
-              <p><a mat-flat-button routerLink="/">{{ t().recoverOpen.toStart }}</a></p>
-            }
-            <div>
-              <button mat-button type="button" matStepperPrevious [disabled]="busy()">{{ t().common.back }}</button>
-              <button mat-flat-button type="button" (click)="open()" [disabled]="busy()">{{ t().recoverOpen.openCase }}</button>
-            </div>
-          </mat-step>
-        </mat-stepper>
-      </mat-card-content>
-    </mat-card>
+            <mat-step [label]="t().recoverOpen.openCase">
+              <p>{{ t().recoverOpen.passkeyText }}</p>
+              <p>{{ t().recoverOpen.onlyIfLockedOut }}</p>
+              @if (busy()) {
+                <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+              }
+              @if (error(); as text) {
+                <p class="error">{{ text }}</p>
+              }
+              @if (hasPasskey()) {
+                <p>{{ t().recoverOpen.notLockedOut }}</p>
+                <p><a mat-flat-button routerLink="/">{{ t().recoverOpen.toStart }}</a></p>
+              }
+              <div>
+                <button mat-button type="button" matStepperPrevious [disabled]="busy()">{{ t().common.back }}</button>
+                <button mat-flat-button type="button" (click)="open()" [disabled]="busy()">{{ t().recoverOpen.openCase }}</button>
+              </div>
+            </mat-step>
+          </mat-stepper>
+        </mat-card-content>
+      </mat-card>
+    }
   `,
   styles: `
     .fields { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
@@ -158,6 +169,8 @@ export class RecoverOpenPage {
   protected readonly lang = inject(LanguageService);
   protected readonly t = this.lang.words;
 
+  /** The person went through the walk-through (find-passkey.component.ts) in this visit, and the stepper shows. Nothing keeps it: a reload or a new visit starts the walk-through again. */
+  protected readonly checked = signal(false);
   protected readonly form = new IdentityFormState();
   /** What step 1 ends with: the lookup id, the anoPod id the keyholders named for it, and that pod's username from the masterpod. */
   protected readonly lookupId = signal<string | null>(null);
@@ -174,12 +187,18 @@ export class RecoverOpenPage {
   protected readonly error = signal<string | null>(null);
   /** The device refused the new passkey because it already holds one of the anoPod's. */
   protected readonly hasPasskey = signal(false);
+  /** The top of the card: when the card takes the walk-through's place, the page scrolls there. */
+  private readonly formTop = viewChild<ElementRef<HTMLElement>>('formTop');
 
   /** Step 2 is done when both boxes are filled in and both are valid (2026-11-12; until then one of the two was enough). An empty box is not valid. */
   protected readonly whoDone = computed(() => isContactEmail(this.email().trim()) && isContactPhone(this.phone().trim()));
 
   constructor() {
     inject(DestroyRef).onDestroy(() => this.form.reset());
+    // The walk-through ends at the bottom of its last screen; the card that takes its place starts at its top.
+    afterRenderEffect(() => {
+      if (this.checked()) this.formTop()?.nativeElement.scrollIntoView({ block: 'nearest' });
+    });
   }
 
   /**
