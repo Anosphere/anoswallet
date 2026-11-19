@@ -10518,6 +10518,70 @@ The five Thai lines, as `th.ts` has them:
   wallet1 and then wallet2, with no setting in `network/wallet.env` and
   no `npm ci`.
 
+### The birth record form's boxes fit their step (2026-11-18)
+
+One small fix, built on the user's word in the chat of the note above
+("Yes to both question 1 and 2"; question 2 asked whether to fix this
+now or to put a line on the after-production list), with no plan file,
+one commit, on top of the commit of the note above. Why: on a phone 360
+pixels wide the boxes of the birth record form in step 1 of
+`/recover/open` were wider than the room their step has, and the
+stepper cut their right edge off, so the right border did not show. The
+note of 2026-11-10, "The locked-out page's email box fits its step",
+fixed the same thing for the Contact email box of step 2 and left this
+as it was: "they are whole from 375 px up and lose 6 px on the right on
+a 360 px screen". The look of the note above saw it again. Wallet only:
+one style line, and no word of the dictionaries changes.
+
+- `src/app/components/identity-form.component.ts`: `.grow` has
+  `min-width: min(240px, 100%)` where it had `min-width: 240px`, with a
+  one-line comment that says why. A box is 240 pixels wide at the
+  least, as before, or as wide as its row where the row is narrower. A
+  step of the locked-out stepper has the screen's width less 150
+  pixels. So on a 360 pixel screen the boxes are 210 pixels wide; they
+  were 240, with 6 cut off. On a 375 pixel screen they are 225; they
+  were 240 and whole, but ran 15 pixels past the step's text into its
+  margin. From 390 pixels up nothing changes.
+- Unchanged: the "Known?" boxes (140 pixels), the order and the place
+  of every box, the form's height, the words, and the identity page of
+  setup, which shows the same form in a card. Its rows are 294 pixels
+  wide on a 360 pixel screen, so the new rule never bites there.
+- Spec: this note only.
+- Checked. `npx ng build` from the web_app folder: clean, no warnings
+  (2.22 MB initial total, `main-TUFTZIHZ.js`, `styles-EMD3RG3N.css`,
+  the style file of before). Then the look, the way of the note above:
+  a development build in a scratch folder on this Mac, served by a
+  plain file server on 127.0.0.1, in the Claude app's browser pane; the
+  temporary entry in `/Users/codex/.claude/launch.json` is out again,
+  and the file is byte for byte what it was. The rule was first tried
+  in the scratch page, set by hand on the boxes, before the file was
+  edited; then it was built in and looked at again. The sizes: 360,
+  375, 390, 430 and 1024 pixels wide, in English and in Thai, on both
+  pages: step 1 of `/recover/open`, and the form pane of `/identity`
+  with a made-up session. On each page the old rule was put back by
+  hand and the two were compared. They differ only in the stepper at
+  360 and 375, as said above. At every size no box is cut, no box runs
+  past its step's text, no label is cut and no page scrolls sideways.
+  The narrowest box in which a label is still whole was measured too:
+  196 pixels for "Mother's maiden name", the longest label in English,
+  and 184 for the longest in Thai. So in a box of 210 pixels every
+  label has 14 pixels or more to spare. The pane is Chrome, so the rule
+  was also looked at in real iPhone Safari, in the iOS simulator on
+  this Mac (iPhone 17e, iOS 27, 390 points wide), started with no
+  window. A small test page with rows of 210 to 400 pixels gave the
+  widths Chrome gave: a box of 210 in a row of 210, 225 in 225, 240 in
+  240, and the "Known?" box under the text box until the row has room
+  for both. The locked-out page itself, opened there, showed its boxes
+  240 pixels wide and whole, each "Known?" box under its text box, as
+  before the fix at that width. This Mac has no simulator of an iPhone
+  375 points wide or less, so the narrower box was seen in Safari in
+  the test page alone. Not checked: a phone; the live wallet; the
+  pop-ups of the date picker and of the country list, which this rule
+  does not touch; the moderator and attestor editions (one codebase).
+  The pane was not on screen while the look ran. The user deploys the
+  wallet servers after this step, together with the step of the note
+  above.
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`
