@@ -17,6 +17,7 @@ import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
 import { MasterpodApiService, MessageItem, Profile, RoomItem, RoomMember } from '../services/masterpod-api.service';
 import { SessionService } from '../services/session.service';
+import { TradeMessageKind, tradeMessageKind } from '../trade-messages';
 import { REVIEW_STATUSES } from './attesting.page';
 
 /** A decrypted message of the room, split into its pieces; `pending` while this pod's own message is on its way. */
@@ -28,6 +29,8 @@ interface ShownMessage {
   pieces: Piece[];
   mine: boolean;
   pending: boolean;
+  /** For the two traders of a marketplace chat (2026-11-19): what the message is when the pinned card posted it, and the thread then draws a grey line in its place; null for every other message, and always for a guest and in every other room. */
+  notice: TradeMessageKind | null;
 }
 
 /** Messages by one sender within GROUP_MINUTES of each other on one day: the name once on top (someone else's, in a room that is not direct), the time once below. */
@@ -40,8 +43,8 @@ interface Group {
   time: string;
 }
 
-/** What the thread draws: a day line, or a group of bubbles. */
-type ThreadItem = { kind: 'day'; key: string; label: string } | { kind: 'group'; key: string; group: Group };
+/** What the thread draws: a day line, a group of bubbles, or, for the two traders of a marketplace chat (2026-11-19), a grey line in the place of a message the pinned card posted. */
+type ThreadItem = { kind: 'day'; key: string; label: string } | { kind: 'group'; key: string; group: Group } | { kind: 'notice'; key: string; text: string };
 
 /** Messages this close in time by one sender share a group. */
 const GROUP_MINUTES = 5;
@@ -72,7 +75,14 @@ const FOLLOW_PX = 120;
  * the open dispute case of the chat's trade, and with one the menu has
  * Invite an attestor: a panel with the attestors on that case, each with
  * Invite, which brings the attestor into the chat, where they read
- * everything (2026-11-12).
+ * everything (2026-11-12). The two traders of such a chat read each of
+ * the three messages the card posts (trade-messages.ts) as a short grey
+ * line with no account id: "You sent your account for this trade." or
+ * "mai sent their account for this trade." for the buyer's account,
+ * "Trade update. Look at the box at the top of this chat." for a trade
+ * started or released; and for them an account id in any other message
+ * has no copy button. A guest reads the messages as they are, with the
+ * copy button (2026-11-19, forclaude/wallet-chat-and-passkey-plan-1.md).
  */
 @Component({
   selector: 'app-chat-room-page',
@@ -150,6 +160,8 @@ const FOLLOW_PX = 120;
         @for (item of thread(); track item.key) {
           @if (item.kind === 'day') {
             <div class="day"><span>{{ item.label }}</span></div>
+          } @else if (item.kind === 'notice') {
+            <div class="notice"><span>{{ item.text }}</span></div>
           } @else {
             <div class="group" [class.mine]="item.group.mine">
               @if (item.group.showSender) {
@@ -164,7 +176,10 @@ const FOLLOW_PX = 120;
                     <span class="text">
                       @for (piece of m.pieces; track $index) {
                         @if (piece.accountId) {
-                          <code>{{ piece.text }}</code><app-copy-button [text]="piece.text" [label]="t().common.copyAccountId" />
+                          <code>{{ piece.text }}</code>
+                          @if (!trader()) {
+                            <app-copy-button [text]="piece.text" [label]="t().common.copyAccountId" />
+                          }
                         } @else {
                           <span class="plain">{{ piece.text }}</span>
                         }
@@ -225,6 +240,8 @@ const FOLLOW_PX = 120;
     .older { align-self: center; }
     .day { display: flex; justify-content: center; margin: 8px 0 0; }
     .day span { font-size: 12px; color: var(--mat-sys-on-surface-variant); background: var(--mat-sys-surface-container); border-radius: 10px; padding: 2px 10px; }
+    .notice { display: flex; justify-content: center; }
+    .notice span { font-size: 12px; color: var(--mat-sys-on-surface-variant); text-align: center; }
     .group { display: flex; align-items: flex-end; gap: 8px; max-width: 80%; align-self: flex-start; }
     .group.mine { align-self: flex-end; }
     .face { margin-bottom: 18px; }
@@ -269,6 +286,11 @@ export class ChatRoomPage {
   protected readonly room = computed(() => this.session.chatRooms()?.rooms.find((r) => r.chatRoomId === this.chatRoomId()) ?? null);
   protected readonly isCreator = computed(() => this.room()?.creatorAnopodId === this.session.anopodId());
   protected readonly canInvite = computed(() => this.isCreator() && this.room()?.type !== 'marketplace');
+  /** True for the two traders of a marketplace chat (2026-11-19): they read the card's messages as grey lines, and an account id in a message has no copy button. */
+  protected readonly trader = computed(() => {
+    const room = this.room();
+    return room !== null && this.chat.isTrader(room);
+  });
   protected readonly messages = signal<ShownMessage[]>([]);
   protected readonly canLoadOlder = signal(false);
   protected readonly showInvite = signal(false);
@@ -297,7 +319,7 @@ export class ChatRoomPage {
     return [...found.values()];
   });
 
-  /** The messages as the thread draws them: a day line before each day, the messages of one sender within GROUP_MINUTES in one group. */
+  /** The messages as the thread draws them: a day line before each day, the messages of one sender within GROUP_MINUTES in one group, and for the two traders of a marketplace chat (2026-11-19) a grey line in the place of each message the pinned card posted, which ends the group before it. */
   protected readonly thread = computed<ThreadItem[]>(() => {
     const room = this.room();
     if (!room) return [];
@@ -311,6 +333,11 @@ export class ChatRoomPage {
         items.push({ kind: 'day', key: `day-${day}`, label: this.chat.dayLabel(m.createdAt) });
         lastDay = day;
         group = null;
+      }
+      if (m.notice) {
+        items.push({ kind: 'notice', key: m.messageId, text: this.noticeText(room, m) });
+        group = null;
+        continue;
       }
       const previous = group ? group.messages[group.messages.length - 1] : null;
       if (group && previous && group.senderAnopodId === m.senderAnopodId && minutesBetween(previous.createdAt, m.createdAt) < GROUP_MINUTES) {
@@ -368,6 +395,13 @@ export class ChatRoomPage {
   /** The members' usernames, then the invited as "(invited)". */
   protected membersLine(room: RoomItem): string {
     return [...room.members.map((m) => m.username), ...room.invited.map((m) => this.t().rooms.invited(m.username))].join(', ');
+  }
+
+  /** The grey line a trader reads in place of a message the pinned card posted (2026-11-19): for the buyer's account, who sent it; for the news of the trade, where to look. It never says that anos are in escrow: only the card's status box says that, and it reads the validators. */
+  private noticeText(room: RoomItem, m: ShownMessage): string {
+    const words = this.t().chatRoom;
+    if (m.notice === 'trade') return words.tradeUpdate;
+    return m.mine ? words.youSentAccount : words.theySentAccount(this.senderName(room, m.senderAnopodId));
   }
 
   /** Enter sends; Shift+Enter is left to the textarea, a new line. */
@@ -447,7 +481,7 @@ export class ChatRoomPage {
     if (follow) this.scrollToBottom();
   }
 
-  /** The messages decrypted with the room key and split into pieces; the two reasons a text cannot show, as before. */
+  /** The messages decrypted with the room key and split into pieces; the two reasons a text cannot show, as before. For the two traders of a marketplace chat (2026-11-19) each message also says what it is when the pinned card posted it (`notice`, from tradeMessageKind); null for every other message. */
   private async shown(room: RoomItem, items: MessageItem[]): Promise<ShownMessage[]> {
     const hasKey = (await this.chat.roomKeyOf(room)) !== null;
     const me = this.session.anopodId();
@@ -462,6 +496,7 @@ export class ChatRoomPage {
         pieces: piecesOf(text),
         mine: m.senderAnopodId === me,
         pending: false,
+        notice: this.chat.isTrader(room) ? tradeMessageKind(text) : null,
       });
     }
     return list;
@@ -489,6 +524,7 @@ export class ChatRoomPage {
         pieces: piecesOf(text),
         mine: true,
         pending: true,
+        notice: null,
       };
       this.messages.update((list) => [...list, pending]);
       this.messageText.set('');

@@ -752,6 +752,9 @@ export const th: Words = {
     cannotDecrypt: '(ถอดรหัสไม่ได้)',
     noRoomKey: '(ไม่มีกุญแจห้อง)',
     notOpen: 'แชทนี้ไม่ได้เปิดอยู่',
+    youSentAccount: 'คุณส่งบัญชีของคุณสำหรับการซื้อขายนี้แล้ว',
+    theySentAccount: (name: string) => `${name} ส่งบัญชีของตนสำหรับการซื้อขายนี้แล้ว`,
+    tradeUpdate: 'ความคืบหน้าการซื้อขาย ดูกล่องที่ด้านบนของแชทนี้',
   },
   rooms: {
     publicRoom: 'ห้องสาธารณะ',
@@ -762,6 +765,9 @@ export const th: Words = {
     justYou: 'คุณคนเดียว',
     selling: (anos: string, currency: string) => `ขาย ${anos} anos รับ ${currency}`,
     buying: (anos: string, currency: string) => `ซื้อ ${anos} anos ด้วย ${currency}`,
+    youSelling: (anos: string) => `คุณกำลังขาย ${anos} anos`,
+    youBuying: (anos: string) => `คุณกำลังซื้อ ${anos} anos`,
+    theySelling: (name: string, anos: string) => `${name} กำลังขาย ${anos} anos`,
     caseChat: { trade: 'เคสการโอนแบบมีผู้ยืนยัน', dispute: 'เคสข้อพิพาทเอสโครว์', recovery: 'เคสการกู้คืน' },
   },
   marketplace: {
@@ -807,7 +813,10 @@ export const th: Words = {
     nobody: 'ยังไม่มีใครติดต่อมา',
   },
   pinned: {
-    summary: (side: string, anos: string, price: string, total: string) => `${side} ${anos} anos · ${price} ต่อ anos · ${total}`,
+    youSell: (anos: string, name: string) => `คุณกำลังขาย ${anos} anos ให้ ${name}`,
+    youBuy: (anos: string, name: string) => `คุณกำลังซื้อ ${anos} anos จาก ${name}`,
+    sellTerms: (price: string, name: string, total: string) => `${price} ต่อ anos · ${name} จ่ายเงินให้คุณ ${total}`,
+    buyTerms: (price: string, name: string, total: string) => `${price} ต่อ anos · คุณจ่ายเงินให้ ${name} ${total}`,
     seeTrade: 'ดูการซื้อขาย',
     closeListing: 'ปิดประกาศ',
     noAccounts: 'anoPod นี้ยังไม่มีบัญชี anos',
@@ -820,6 +829,7 @@ export const th: Words = {
     them: 'อีกฝ่าย',
     finished: 'การซื้อขายนี้เสร็จสิ้นแล้ว หากต้องการซื้อขายอีกครั้ง ให้เริ่มแชทใหม่',
     cancelled: 'ยกเลิกแล้ว: ผู้ขายเก็บ anos ไว้',
+    // The chat page knows this message by these words (trade-messages.ts). A change of the words needs the old words kept there.
     shareMessage: (accountId: string) => `กรุณาส่ง anos มาที่บัญชีนี้: ${accountId}`,
     pickAccounts: 'เลือกบัญชีและจำนวนเป็น anos',
     notSentUnread: 'ตรวจสอบการซื้อขายก่อนหน้าไม่ได้ จึงยังไม่ได้ส่งอะไร ลองอีกครั้ง',
@@ -827,8 +837,10 @@ export const th: Words = {
     refused: (reason: string) => `ผู้ตรวจสอบปฏิเสธการซื้อขาย: ${reason}`,
     alreadyHeld: 'บัญชีนี้มีการซื้อขายแบบเอสโครว์หรือการโอนที่รออยู่บนผู้ตรวจสอบอยู่แล้ว ทำรายการนั้นให้เสร็จก่อน หรือใช้บัญชีอื่น',
     noAnswer: 'ผู้ตรวจสอบไม่ตอบ หากการซื้อขายเริ่มแล้ว จะแสดงที่นี่ในอีกสักครู่ หากไม่แสดง ให้ลองอีกครั้ง',
+    // The chat page knows this message by these words (trade-messages.ts). A change of the words needs the old words kept there.
     startedMessage: (anos: string, from: string, to: string, transactionId: string) =>
       `เริ่มการซื้อขายแบบเอสโครว์แล้ว: ${anos} anos จาก ${from} ไปยัง ${to} ธุรกรรม ${transactionId}`,
+    // The chat page knows this message by these words (trade-messages.ts). A change of the words needs the old words kept there.
     releasedMessage: (anos: string, from: string, to: string, transactionId: string) =>
       `ปล่อยการซื้อขายแบบเอสโครว์แล้ว: ${anos} anos จาก ${from} ไปยัง ${to} ธุรกรรม ${transactionId}`,
     sendAccount: 'ส่งบัญชีของฉัน',

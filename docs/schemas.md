@@ -2037,14 +2037,26 @@ else the room's creation). A row shows the other person's avatar (8.6)
 for a private room with one other person, member or invited, else the
 kind's icon (group, public, storefront); the title; the newest message
 decrypted as one line, "You: " before this pod's own, "No messages yet"
-without one, "(cannot read)" when it will not open; and the time (today
+without one, "(cannot read)" when it will not open, and, for the two
+traders of a marketplace chat, the grey line's words in the place of a
+message the pinned card posted, with no "You: " before them (2026-11-19,
+section 11; the words are in the paragraph "One conversation", below);
+and the time (today
 the time, yesterday "Yesterday", within six days the weekday, else the
 date); an unread room (below) has a dot under the time and a bold
 title. A room's title: a public room's name; an old listing room's "Sell
 50 anos for THB" from the listing summary the masterpod sends; a private
 room's other people, the invited as "mai (invited)", or "Just you", and
-for a private room about a listing (2026-11-06) the listing's words after
-them, "somchai · Selling 100 anos for THB". A private room about an
+for a private room about a listing (2026-11-06) the trade in a few words
+after them, from the reader's own side (2026-11-19, section 11; until
+then the listing's words, "somchai · Selling 100 anos for THB"). The
+seller reads "mai · You are selling 100 anos". The buyer reads "somchai ·
+You are buying 100 anos". A guest, who is neither of the two traders,
+reads "mai, somchai · somchai is selling 100 anos", with the seller's
+username. The seller is the owner of a sell listing and the other trader
+of a buy listing, the person who made the room; when that person is
+neither a member of the room nor invited to it any more, a guest reads
+the listing's words, as before. A private room about an
 attestor case (2026-11-12, section 11) has the case's kind in words after
 its people: "attestorjoy · Assisted transfer case", or "Escrow dispute
 case", or "Recovery case". The invited mark stays, "somchai (invited) ·
@@ -2076,8 +2088,18 @@ that is not a direct chat, the sender's avatar and name once on top; the
 time once under the group's last bubble; a day line ("Today",
 "Yesterday", else the date) between days. A run of exactly 64 hex
 characters with no hex character on either side (an account id) shows in
-code font with a copy button (8.5) after it; the rest of the text shows
-as written, line breaks kept. The message box at the bottom grows to
+code font with a copy button (8.5) after it, but with no copy button for
+the two traders of a marketplace chat (2026-11-19, section 11); the rest
+of the text shows as written, line breaks kept. The two traders of a
+marketplace chat read each message the pinned card posted (the three
+paragraphs below) as a short grey line in the middle of the thread, with
+no account id (2026-11-19, section 11; the plan is
+forclaude/wallet-chat-and-passkey-plan-1.md): for the buyer's account
+"You sent your account for this trade." to the pod that sent it and "mai
+sent their account for this trade." to the other, and for a trade
+started or released "Trade update. Look at the box at the top of this
+chat."; a guest in such a chat reads the messages as they are. The
+message box at the bottom grows to
 five lines; Enter sends and Shift+Enter makes a new line; Send is a
 round button. A sent message shows at once as a pale bubble with
 "Sending" where the tick goes; /send-message's answer gives it its id
@@ -2093,11 +2115,18 @@ the room's two traders only (2026-11-12, section 11: the person who made
 the room by pressing Connect, and the listing's owner; anyone else in
 the room is a guest and gets no card, and "the other person" in this
 paragraph and the two after it is the other trader, never a guest; 8.7,
-and the paragraph on the attestor in a marketplace chat, below): the
-listing in one line, "Selling 100 anos · 35.50 THB each · 3,550 THB",
-with the other person's avatar (8.6) and Closed when the listing is
-closed; the roles from the listing (the owner of a sell listing and the
-other person of a buy listing are the seller). Under that line the card
+and the paragraph on the attestor in a marketplace chat, below): two
+lines (2026-11-19, section 11; until then the listing in one line,
+"Selling 100 anos · 35.50 THB each · 3,550 THB", with the other person's
+avatar). The first line is the trade in one sentence from the reader's
+own side, with the other person's username and no avatar: "You are
+selling 500 anos to mai" for the seller, "You are buying 500 anos from
+somchai" for the buyer, and Closed when the listing is closed. The line
+under it, smaller and grey, is the listing's price and who pays whom how
+much: "2.00 THB each · mai pays you 1,000 THB" for the seller, "2.00 THB
+each · you pay somchai 1,000 THB" for the buyer. The roles come from the
+listing (the owner of a sell listing and the
+other person of a buy listing are the seller). Under those lines the card
 is the trade guide (rewritten 2026-11-17, section 11; the plan is
 forclaude/wallet-trade-guide-plan-1.md): it walks both sides through the
 four steps of a trade, the same list for both, one button at a time. The
@@ -2135,7 +2164,10 @@ once one of this pod's accounts is in the chat; until 2026-11-17 it was
 "Share an account". It opens a menu of this pod's accounts (the id
 shortened, the type); one tap posts "Please send the anos to this
 account: <the account id>" into the chat, encrypted like any message, so
-the thread shows the id in code font with its copy button (8.5). The
+the thread shows the id in code font with its copy button (8.5); since
+2026-11-19 (section 11) the two traders read a grey line in its place,
+"You sent your account for this trade." or "mai sent their account for
+this trade.", and a guest reads the message as it is. The
 seller's button, with no trade: "Put the anos in escrow" (filled), shown
 once the other person has posted an account id; until 2026-11-17 it was
 "Start the escrow trade", shown from the first and disabled with the
@@ -2160,7 +2192,9 @@ waiting on the validators. Finish that first, or use another account.").
 After any other answer the card checks the chat's trade once more
 (below), and that check posts the message "Escrow trade started: 100 anos
 from <my account id> to <their account id>. Transaction <id>."; Yes does
-not post it. The validator stores a trade before it answers, so an answer
+not post it. Since 2026-11-19 (section 11) the two traders read a grey
+line in its place, "Trade update. Look at the box at the top of this
+chat.", and a guest reads the message as it is. The validator stores a trade before it answers, so an answer
 lost on the way (no network, the proxy's 502, the doorman's 502 or 504)
 may hide a trade that started: found open, it has started and no error
 shows; otherwise the card says "The validators did not answer. If the
@@ -2276,7 +2310,9 @@ itself, in the seller's name, encrypted with the room key like any other:
 "Escrow trade started: 100 anos from <my account id> to <their account
 id>. Transaction <id>." for an open trade, "Escrow trade released: 100
 anos from <my account id> to <their account id>. Transaction <id>." for
-one already released. This is the only place the message is posted. So a
+one already released. Since 2026-11-19 (section 11) the two traders read
+a grey line in the place of either, "Trade update. Look at the box at
+the top of this chat.", and a guest reads the message as it is. This is the only place the message is posted. So a
 lost answer to the transfer, a /send-message that failed, a tab closed in
 between and a trade started from the account page's Send (escrow kind) to
 an account named in the chat all end with the chat told, the next time
@@ -2954,7 +2990,11 @@ excepted, with the keyholder and anos calls included.
     chat.service            what the chat pages share (2026-11-05): room keys (roomKeyOf, wrapFor), decryptMessage,
                             piecesOf, a room's title, kind, icon and other person, the order by activity, shortWhen,
                             timeOf and dayLabel, requestedRooms, refreshRooms; listingWords, a listing in a few
-                            words for a title or a request (2026-11-06); the case chats (2026-11-12, section
+                            words for a request (2026-11-06), and for a title only where tradeWords finds no
+                            seller; tradeWords(room), a listing chat's trade in a few words from the reader's
+                            own side, for a title (2026-11-19, section 11): "You are selling 100 anos" for the
+                            seller, "You are buying 100 anos" for the buyer, and for a guest "mai is selling
+                            100 anos", with the seller's username; the case chats (2026-11-12, section
                             11): the title of a room about a case; caseRoomWith(caseId, anopodId), the
                             attestor's side: the room about the case that this pod created with the person in
                             it, a member first, else invited, and when there is none the newest room about the
@@ -3080,8 +3120,10 @@ it is given (navigator.clipboard.writeText) and shows "copied" next to
 the icon for two seconds, or "could not copy" when the browser refuses.
 It sits after the account id in the Account title, in the footer of each
 account card on the Wallet page (2026-11-06, section 11), after an
-account id in a chat message, and in a history row's details beside the
-other side's id and the transaction id (2026-11-06). The case pages of
+account id in a chat message, but not for the two traders of a
+marketplace chat (2026-11-19, section 11), and in a history row's
+details beside the other side's id and the transaction id (2026-11-06).
+The case pages of
 sections 12 and 13 keep their own copy code.
 
 ### 8.6 The avatar
@@ -3093,8 +3135,9 @@ else a round disc in the primary-container colour with the first letter
 of the username. The profile comes from profile-cache.service (8.3), one
 /get-anopod-profile per pod per tab. In the chat list, the conversation
 header, the members panel and the chat requests; since 2026-11-06 also on
-the listing cards (24 px), the listing page (56 px), the people who
-connected and the pinned listing card (8.7), and on Home beside the
+the listing cards (24 px), the listing page (56 px) and the people who
+connected (8.7; the pinned listing card drew one too until 2026-11-19,
+section 11), and on Home beside the
 greeting (56 px); since 2026-11-08 on the cards of the Vouch requests
 page (72 px) and beside the proposer on the DAO proposal page (40 px);
 since 2026-11-12 (section 11) in the person's chats about an attestor
@@ -3145,13 +3188,24 @@ src/app/components/:
   "Share an account" until 2026-11-17; Escrow trade started and, since
   2026-11-10, Escrow trade released, the last two from its check)
   encrypted with the room key, and the thread's
-  poll shows them. It exports `FoundAccountId`. Since 2026-11-10 the card
+  poll shows them: since 2026-11-19 (section 11) to the two traders as
+  short grey lines with no account id, and to a guest as they are. The
+  conversation page and the chat list know the three messages by their
+  words, in every language of the wallet, through `tradeMessageKind` of
+  src/app/trade-messages.ts: it makes its patterns from the three
+  dictionary sentences (`pinned.shareMessage`, `pinned.startedMessage`
+  and `pinned.releasedMessage`, 8.8) and answers `account`, `trade` or
+  null for a whole text, so a change of those words needs the old words
+  kept in that file. What the card reads from the chat is as it was: it
+  finds the account ids in every message, the ones drawn as a grey line
+  too. It exports `FoundAccountId`. Since 2026-11-10 the card
   also reads the room's messages itself for their account ids (8.2,
   Chat): the page's computed holds the ids of the newest 50 messages and
   of what arrived since, which is not the whole chat. Since 2026-11-12
   (section 11, step 6) the card is drawn for the room's two traders only
   (chat.service's `isTrader`, 8.3) and goes by the other trader: `other`,
-  whose avatar and username the card shows, is `otherTrader(room)`, the
+  whose username the card shows (until 2026-11-19 the avatar too), is
+  `otherTrader(room)`, the
   other of the room's creator and the listing's owner, and the form's To
   list takes the account ids that trader posted, so a guest's messages
   never feed the trade form. Only when the other trader is neither a
@@ -3211,7 +3265,7 @@ src/app/components/ too:
 - escrow-strip.component.ts (`<app-escrow-strip [guide]>`): the status
   box, drawn by the escrow trade page first under its Back link while
   the trade is open (8.2, Escrow trade) and by the pinned card of a
-  marketplace chat under the listing's line, with and without a trade
+  marketplace chat under the listing's two lines, with and without a trade
   (8.2, Chat). `guide` is an `EscrowGuide`
   `{ tone, icon, headline, text, step }` and the box draws what it is
   given: a Material icon (hidden from screen readers), the headline at
@@ -3410,6 +3464,25 @@ has a new first sentence, "If your passkey is gone for good, we can
 get you back in." The English is the plan's, letter for letter; the
 Thai is the build chat's, by the glossary, and no Thai reader has
 read it.
+Who buys and who sells, and the card's messages as grey lines
+(2026-11-19, section 11): ten new entries in three sections, and one
+gone. In `pinned`, `summary` is gone and four functions stand in its
+place: `youSell` and `youBuy`, the card's first line for the seller and
+for the buyer, and `sellTerms` and `buyTerms`, the line under it.
+`rooms` gains three functions after `buying`: `youSelling`, `youBuying`
+and `theySelling`, the trade in a chat's title for the seller, the buyer
+and a guest. `rooms.selling` and `rooms.buying` stay, for the Chat
+requests page, and `market.selling` and `market.buying` stay, for the
+listing cards and the listing page. `chatRoom` gains three entries after
+`notOpen`, the grey lines: `youSentAccount`, `theySentAccount`, a
+function, and `tradeUpdate`. The three sentences the card posts,
+`pinned.shareMessage`, `pinned.startedMessage` and
+`pinned.releasedMessage`, keep their words in both files, and a comment
+line stands over each: the chat page knows the message by those words
+(src/app/trade-messages.ts, 8.7), so a change of the words needs the old
+words kept there. The English is the plan's, letter for letter; the ten
+Thai lines are the build chat's, by the glossary and by the Thai the
+file had for the same things, and no Thai reader has read them.
 
 ### 8.9 The confirmation box
 
@@ -11441,6 +11514,316 @@ The forty Thai lines, as `th.ts` has them:
   3). The user deploys the wallet servers after this step, by section
   10 of `forclaude/wallet-deploy-plan-1.md`, wallet1 and then wallet2,
   with no setting in `network/wallet.env` and no `npm ci`.
+
+### Who buys and who sells, and the card's messages as grey lines (2026-11-19)
+
+Built from `forclaude/wallet-chat-and-passkey-plan-1.md` (FINAL,
+2026-11-19), its step 1 of six, its section 1, one commit, on main at
+fc5ef0c, the merge of pull request 32, the working tree clean. Why, in
+the user's words of 2026-11-19, on the marketplace chat of the
+production wallet. The card "shows a picture of the other person and
+then selling 500 anos for 2 thb each. It makes it seem to me like
+they're doing the opposite what they're doing." And: Share account
+"throws it into the chat with a copy button. This is confusing and
+could lead to someone sending people coins from their wallet not in
+escrow. Same when the other side sends to escrow, it throws a chunk of
+lines into the chat." Of the sentence from the reader's own side: "I
+like it." Of keeping the messages posted and no longer showing them as
+they are: "B sounds like the much easier way." Wallet only: no route,
+no line of `network/wallet.env` and no npm package; the masterpod, the
+validators, the doormen, the keyholders, the signing servers and the
+proxy (`server/`) are not touched. The card posts the same three
+messages with the same words, and `share()`, `tell()`, `check()` and
+every rule by which the card finds the chat's trade have the code they
+had: they guard against a second send.
+
+- `src/app/i18n/en.ts` and `th.ts`. In `pinned`, `summary` is gone and
+  `youSell`, `youBuy`, `sellTerms` and `buyTerms` stand in its place;
+  the comment line "The chat page knows this message by these words
+  (trade-messages.ts). A change of the words needs the old words kept
+  there." stands over `shareMessage`, `startedMessage` and
+  `releasedMessage`, in English in both files, and the three keep their
+  words. In `rooms`, `youSelling`, `youBuying` and `theySelling` after
+  `buying`. In `chatRoom`, `youSentAccount`, `theySentAccount` and
+  `tradeUpdate` after `notOpen`. The English is the plan's 1.1, letter
+  for letter.
+- The ten Thai lines, the build chat's, in full. No Thai reader has
+  read them; "Thai read by a Thai reader" stands on the
+  after-production list.
+  `pinned.youSell`: "คุณกำลังขาย ${anos} anos ให้ ${name}".
+  `pinned.youBuy`: "คุณกำลังซื้อ ${anos} anos จาก ${name}".
+  `pinned.sellTerms`: "${price} ต่อ anos · ${name} จ่ายเงินให้คุณ ${total}".
+  `pinned.buyTerms`: "${price} ต่อ anos · คุณจ่ายเงินให้ ${name} ${total}".
+  `rooms.youSelling`: "คุณกำลังขาย ${anos} anos".
+  `rooms.youBuying`: "คุณกำลังซื้อ ${anos} anos".
+  `rooms.theySelling`: "${name} กำลังขาย ${anos} anos".
+  `chatRoom.youSentAccount`: "คุณส่งบัญชีของคุณสำหรับการซื้อขายนี้แล้ว".
+  `chatRoom.theySentAccount`: "${name} ส่งบัญชีของตนสำหรับการซื้อขายนี้แล้ว".
+  `chatRoom.tradeUpdate`: "ความคืบหน้าการซื้อขาย ดูกล่องที่ด้านบนของแชทนี้".
+  How they were made, from the glossary and style of
+  `forclaude/wallet-languages-plan-1.md` 1.6 and from the Thai the file
+  had: "each" is "ต่อ anos", as `pinned.summary` had it. "Pays" is
+  "จ่ายเงินให้", as `escrowGuide.buyerHeld` and `pinned.steps` have it.
+  "Their account" is "บัญชีของตน", as the staff pages write "ของตน".
+  "The box" is "กล่อง", as `escrowGuide` has "กล่องนี้". "You are selling"
+  is "คุณกำลังขาย", with "กำลัง", where `rooms.selling` has the plain
+  "ขาย": the plain verb can be read as a sale that is done, and the line
+  is there to say what is going on. "Trade update" is
+  "ความคืบหน้าการซื้อขาย", the trade's progress: the glossary has no word
+  for "update", and its list of transliterated words does not hold one.
+  No sentence ends in a full stop, and a Latin word or a number has a
+  space on each side.
+- `src/app/trade-messages.ts`, new, as the plan's 1.2 gives it, with a
+  file comment over the imports. `tradeMessageKind(text)` answers
+  `account`, `trade` or null for a whole text, trimmed. Its patterns are
+  made from the three dictionary sentences of every language, so the
+  file holds no words of its own. The four placeholders are written as
+  the escapes `\u0001` to `\u0004`, not as control characters.
+- `src/app/services/chat.service.ts`: the last line of `title()` calls
+  the new `tradeWords(room)`, which stands after `listingWords()`, as
+  the plan's 1.3 gives it. `listingWords()` has the body it had. The
+  comments the plan names: the class comment, `title()`,
+  `listingWords()` and `Piece`. `piecesOf` and `ACCOUNT_ID_IN_TEXT` are
+  as they were.
+- `src/app/components/pinned-listing.component.ts`: the template's
+  first block and the paragraph `terms` under it, the two computed
+  `headline` and `terms` in the place of `summary`, the style line
+  `.terms`, and `AvatarComponent` out of the imports, as the plan's 1.4
+  gives them. `other` and `otherName` stay. The class comment's sentence
+  on the first line is rewritten to the two lines. No other line of the
+  file changed.
+- `src/app/pages/chat-room.page.ts`, as the plan's 1.5 gives it: the
+  import, `ShownMessage.notice`, the third kind of `ThreadItem`, the
+  computed `trader`, `notice` in `shown()` and in `send()`, the block in
+  `thread`, the method `noticeText()`, the template's `notice` branch,
+  the copy button inside `@if (!trader())`, the two style lines and the
+  class comment. `accountIds` is as it was.
+- `src/app/pages/chat.page.ts`, as the plan's 1.6 gives it: the import,
+  the signal `notices`, `preview()`, the two lines and the last line in
+  `decryptPreviews()`, the class comment and the comment of `preview()`.
+- README: the line of `trade-messages.ts` after `escrow-boxes.ts`, and
+  the words "from the reader's own side for a listing chat" in the line
+  of `chat.service.ts`.
+- Spec: 8.2, Chat (the paragraph "Chat": the title and the preview; the
+  paragraph "One conversation": the copy button and the grey lines; the
+  paragraph "The pinned card": the two lines, "Under those lines", the
+  buyer's button and what follows Start; the paragraph "The chat's
+  message about its trade"), 8.3 (the line of `chat.service`), 8.5, 8.6,
+  8.7 (the bullets of `pinned-listing.component.ts` and of
+  `escrow-strip.component.ts`), 8.8 and this note. The line of
+  `marketplace.service` in 8.3 is as it was: `sideWords` stays, for the
+  listing cards and the listing page.
+- What follows from the plan's code, written here so that it is not
+  taken for a fault. A message is known by its words, so the card's
+  messages posted before this step are grey lines too. A person's own
+  message shows as a bubble while it is on its way, and a card sentence
+  typed by hand turns into a grey line with the next read. A grey line
+  ends a group of bubbles: the bubbles before it get their time, and the
+  ones after it start a new group. In the chat list the grey words have
+  no "You: " in front. A guest's title needs the seller's username: for
+  a buy listing that is the person who made the room, and when that
+  person is neither a member nor invited any more the title falls back
+  to the listing's words.
+- Readings where the plan left a detail open. BUILD-DATE is 2026-11-19.
+  The file comment of `trade-messages.ts` is the build's wording. The
+  style line `.terms` stands after `.summary`, the two `.notice` lines
+  after `.day span`, and the import of `trade-messages` after the
+  session service's in both pages, by the order of the paths. The
+  comment of `Piece` has the plan's words with "the button" in front
+  ("the button not for the two traders of a marketplace chat"), so that
+  the code font is not read as taken away: a trader still sees an id in
+  code font. The card's class comment ends its new sentence on the
+  second line, so the sentence after it, "Under it the card is the
+  trade guide", stays as it was and stays true. In 8.2 the three
+  wordings of a title are three sentences, with the fallback of the
+  point above; the preview's sentence says that no "You: " stands
+  before the grey words; "One conversation" has the grey lines as one
+  sentence, and what knows the messages is in 8.7. In 8.6 the card
+  leaves the list as "the pinned listing card drew one too until
+  2026-11-19".
+- The look, where. A development build in a scratch folder on this Mac,
+  served by a plain file server on 127.0.0.1 (a temporary entry in
+  `/Users/codex/.claude/launch.json`, taken out again; the file is byte
+  for byte what it was), in the Claude app's browser pane, at 360, 375,
+  390 and 430 pixels wide, in English and in Thai. A made-up session
+  was set through the `ng` debug tools: an anoPod id, a username, a
+  status, two accounts and twelve chats. The messages were real
+  ciphertexts: each chat got a room key from the wallet's own
+  `newRoomKey`, each message went through its `encryptText`, and the
+  masterpod's answers (the room list, the messages, a send, the
+  notifications, the status, the accounts, a profile) were given in the
+  browser by functions set on the API service. So the pages opened,
+  recognised and drew the messages with their own code, the Thai
+  sentences in an English wallet and the other way round. The card
+  cannot read the validators without keys; its result was set by hand
+  to "read everything, no trade". None of our servers was asked: the
+  request list shows the file server and Google's font files. Not on a
+  phone and not on the live wallet, and no passkey was asked. The pane
+  says it is Chrome on an Android phone at these widths and draws Thai
+  with this Mac's Thai font. The pane was not on screen while the look
+  ran; the pictures and the measures do not need it.
+- The look, the card. The card has 302 pixels for its lines at 360,
+  317 at 375, 332 at 390 and 372 at 430. No picture stands on it. With
+  the usernames "mai" and "somchai" the first line is one line at every
+  size in both languages, for the seller ("You are selling 500 anos to
+  mai") and for the buyer ("You are buying 500 anos from somchai"), on
+  a sell listing and on a buy listing. The second line is one line in
+  English at every size. In Thai the buyer's second line takes two
+  lines at 360 ("2.00 THB ต่อ anos · คุณจ่ายเงินให้ somchai 1,000", then
+  "THB") and one from 375; the seller's is one line at every size. With
+  a username of 32 ordinary characters
+  ("somchai_the_anos_trader_bangkok1") each of the two lines takes two
+  lines at every size in both languages, and nothing is cut. Closed
+  stands at the right of the first line, beside both of its lines when
+  it has two; it touches no word and does not pass the edge. The card
+  is taller than at the commit before, measured in a build of fc5ef0c
+  at 360: 245.7 pixels against 239.7 for a seller with no trade (the
+  old line took two lines beside the avatar), 344.5 against 298.5 with
+  the 32-character name, and 237.3 against 211.3 for the Thai buyer. So
+  the thread has 6 to 46 pixels less.
+- The look, cut on the card: only with the widest username the rules
+  allow, 32 times the letter m. That name alone is 390 pixels wide in
+  the first line. It runs past the card's inner edge and is cut at the
+  chat's frame: by 88 pixels at 360, 73 at 375, 58 at 390 and 18 at 430
+  in the first line, and by 63, 48 and 33 pixels at 360, 375 and 390 in
+  the second line, which fits at 430. Both languages alike. The status
+  box under the two lines cuts the same name the same way in its
+  sentence, and that box is older than this step. Nothing was changed
+  for it.
+- The look, the thread. A grey line is 12 pixels, in the grey of the
+  day line's words, with no box, in the middle of the thread (0 pixels
+  off centre), 8 pixels from the item above and the item below, as any
+  two items are. One line at every size in both languages with a short
+  username: "mai sent their account for this trade." is 193 pixels
+  wide, "You sent your account for this trade." 193, "Trade update.
+  Look at the box at the top of this chat." 278, which leaves 24 at
+  360; the Thai three are 210, 207 and 247. A trader's thread held no
+  account id in code font and no copy button, where the build of
+  fc5ef0c drew seven ids with seven buttons for the same chat. A guest
+  in a chat of two other people read the messages as they are: four
+  ids, four copy buttons, no grey line, and no card. With the 32 m's
+  the grey account line takes two lines and runs 17 pixels past the
+  thread's inner edge at 360, 10 at 375 and 2 at 390, and at 360 the
+  thread can be pushed 5 pixels sideways; at 430 it fits.
+- The look, the chat list: lines that are cut. A row's title and its
+  preview are one line each and end in three dots when they do not fit,
+  as before this step. They share one width, which the time beside them
+  sets. Beside a time of today, such as "11:58 AM", it is 171 pixels in
+  English and 192 in Thai at 360, 186 and 207 at 375, 201 and 222 at
+  390, 241 and 262 at 430; a row of another day has a little more or
+  less (169 to 202 in English at 360, 184 to 195 in Thai). The numbers
+  that follow are for a row of today. The titles: "mai · You are selling
+  500 anos" needs 187 pixels and is cut at 360 (it reads "mai · You are
+  selling 500 …") and by one pixel at 375, and is whole at 390 and 430.
+  "somchai · You
+  are buying 500 anos" needs 218 and is cut at 360, 375 and 390 (at 360
+  it reads "somchai · You are buying …", the amount gone), and is whole
+  at 430. In Thai the first needs 170 and is whole at every size; the
+  second needs 193 and is cut at 360, whole from 375. A title with the
+  32-character name shows the name and none of the trade's words, at
+  every size. A guest's title ("mai, somchai · somchai is selling 500
+  anos", 268 pixels) is cut at 360, 375 and 390, and in Thai at 430
+  too. The titles of the
+  commit before were cut the same way: "mai · Selling 500 anos for THB"
+  needed 190 pixels and "somchai · Selling 500 anos for THB" 220, in
+  Thai 169 and 200. The previews: "Trade update. Look at the box at the
+  top of this chat." needs 301 pixels and is cut at every size (at 360
+  it reads "Trade update. Look at the b…"); "You sent your account for
+  this trade." needs 209 and is cut at 360, 375 and 390, whole at 430.
+  In Thai the trade line needs 268 and is cut at every size, and the
+  account line needs 225 and is cut at 360, 375 and 390. No preview
+  holds an account id; at the commit before the same row read "You:
+  Escrow trade released: 500 anos from 1111…". Nothing was changed for
+  it.
+- The look, the conversation's title: cut more often than the list's,
+  since the back arrow, the avatar and the menu button leave it 146
+  pixels at 360, 161 at 375, 176 at 390 and 216 at 430. "mai · You are
+  selling 500 anos" is cut at 360, 375 and 390 (at 360 it reads "mai ·
+  You are selling …") and whole at 430; with "somchai" it is cut at all
+  four, by 2 pixels at 430. In Thai the first is cut at 360 and 375,
+  the second at 360, 375 and 390. The old titles were cut the same way.
+  The card under the title says the whole sentence. Nothing was changed
+  for it.
+- The look, the rest. No page scrolls sideways at any size. A row of
+  the list is 68 pixels high, as before. At 1024 pixels, looked at once,
+  the list and the conversation stand side by side and nothing is cut
+  on the card.
+- Tried in the scratch page besides the look, with the chat open as
+  the seller. An account id the other trader typed by hand ("My other
+  account is …, use that one") arrived as a bubble with the id in code
+  font and no copy button, and the card's To list took it as the
+  newest. The share sentence typed by hand and sent with the page's own
+  Send became the grey line "You sent your account for this trade.". A
+  released sentence from the other side arrived by the page's 3-second
+  read as the grey trade line.
+- Seen in passing, in the scratch page only, and outside this step.
+  Twice the page stopped answering right after the chat list opened.
+  The likely cause, not proven: a made-up session has no keys, so every
+  read of a person's profile for a picture fails at once, with nothing
+  sent; `profile-cache.service.ts` forgets a read that failed for
+  another reason than a 404, and `avatar.component.ts` asks again when
+  the page is drawn again. Measured: one picture asked 100 times in a
+  row and then stopped, in the build of fc5ef0c too. With the profile
+  reads answered in the browser by a 404, so that the letter shows, the
+  list opened every time, more than ten times, and the whole look was
+  made that way. This step touches neither file. On the live wallet
+  such a read goes to the masterpod and fails only when the masterpod
+  or the network cannot be reached; whether a picture then asks again
+  and again was not tried.
+- Brought in line on the user's word of 2026-11-19 ("Yes, update
+  them"), before this step was committed and in its commit: five
+  comments in four files that the step left out of date and the plan
+  does not name. The build's first report had listed them as left. In
+  `src/app/components/escrow-strip.component.ts` the class comment said
+  the card draws the box "under the listing's line" and now says "under
+  the listing's two lines". In `src/app/components/avatar.component.ts`
+  the class comment listed "the pinned listing card" among the places
+  with an avatar and now says that the card drew one until 2026-11-19.
+  In `src/app/components/copy-button.component.ts` the class comment
+  said the button is next to account ids "in chat" and now adds "but
+  not for the two traders of a marketplace chat". In
+  `src/app/pages/chat-room.page.ts` the comment of `thread` named the
+  day line and the groups and now names the grey line too, and the
+  comment of `shown()` now names `notice`. No line of code changed with
+  them.
+- Checked. `git status` showed a clean tree at the start, and this
+  step's nine files and no others before the build and before the
+  first report: eight changed, and `src/app/trade-messages.ts` new.
+  With the five comments brought in line it shows twelve: the three
+  component files joined. `npx ng build` from the web_app folder:
+  clean, no warnings (2.26 MB initial total, `main-ZKMT5IIL.js`,
+  `styles-EMD3RG3N.css`, the style file of before; run again after the
+  five comments, with the same two files, since a comment does not
+  reach the build). The plan's section 1 has 19 indented blocks; each
+  was looked for in the files with the build's date in the place of
+  BUILD-DATE, line for line and with its indentation, and all 19 are
+  there, the English entries among them, before the five comments and
+  after them. Both language files have the same keys in
+  the same order in the three sections, 36 in `pinned`, 12 in `rooms`
+  and 22 in `chatRoom`. `tradeMessageKind` was bundled with the two
+  dictionaries into the build's scratch folder and run in Node, 27
+  cases: `account` for the English and the Thai share sentence of a
+  made-up id, in capitals and with spaces around it too; `trade` for
+  the four started and released sentences, with amounts of six
+  decimals, 0.5 and a large one; null for "Hi, is this still
+  available?", a bare account id, a share sentence with a word after it
+  or before it, an id of 63 and of 65 characters, an amount in words or
+  with a comma, a line added after a sentence, and the grey line's own
+  words. All right; the check was not kept. Not checked: a phone; the
+  live wallet; iPhone Safari; a real session, with a room key the
+  masterpod hands out and the card's own read of the validators; a real
+  trade from the first message to the release; the moderator and
+  attestor editions (one codebase; the scratch page was the wallet
+  edition); the Thai by a Thai reader. The run-through is the user's,
+  with two anoPods and a listing (the plan's section 7): each side's
+  own sentence on the card, in the title and in the chat list; "Send my
+  account" and one grey line on each side; "Put the anos in escrow"
+  with the buyer's account in its form; the grey trade line after the
+  start and after the release; a trade that was under way before the
+  deploy; an attestor invited into the chat. The user deploys the
+  wallet servers after this step, by section 10 of
+  `forclaude/wallet-deploy-plan-1.md`, wallet1 and then wallet2, with
+  no setting in `network/wallet.env` and no `npm ci`.
 
 ## 12. Recovery and the moderator edition
 

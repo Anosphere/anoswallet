@@ -10,6 +10,7 @@ import { LanguageService } from '../services/language.service';
 import { reasonOf } from '../services/log.service';
 import { RoomItem } from '../services/masterpod-api.service';
 import { SessionService } from '../services/session.service';
+import { TradeMessageKind, tradeMessageKind } from '../trade-messages';
 
 /**
  * Chat (wallet spec 8.2): the list of chats, and beside it on a desktop the
@@ -21,6 +22,10 @@ import { SessionService } from '../services/session.service';
  * /chat/new. An unread room (session.unreadRooms) has a dot under its
  * time and a bold title. The rooms are session.chatRooms, which the shell's poll
  * refreshes every 5 seconds; the page refreshes them once when it opens.
+ * For the two traders of a marketplace chat (2026-11-19,
+ * forclaude/wallet-chat-and-passkey-plan-1.md) a newest message that the
+ * pinned card posted (trade-messages.ts) shows in the preview as the
+ * conversation's grey line does, in its words and with no account id.
  */
 @Component({
   selector: 'app-chat-page',
@@ -152,6 +157,8 @@ export class ChatPage {
   protected readonly error = signal<string | null>(null);
   /** The newest message of each room, decrypted, by message id. */
   private readonly previews = signal(new Map<string, string>());
+  /** For a room whose newest message the pinned card posted, when this pod is one of its two traders (2026-11-19): what that message is, by message id. */
+  private readonly notices = signal(new Map<string, TradeMessageKind>());
 
   constructor() {
     void this.chat.refreshRooms().then((res) => {
@@ -163,13 +170,20 @@ export class ChatPage {
     });
   }
 
-  /** The one-line preview: "You: " before this pod's own message; the two texts for a room without messages or a message that will not open. */
+  /** The one-line preview: "You: " before this pod's own message; the two texts for a room without messages or a message that will not open. For the two traders of a marketplace chat (2026-11-19), a newest message that the pinned card posted shows as the conversation's grey line does, with no account id: "You sent your account for this trade.", "mai sent their account for this trade." or "Trade update. Look at the box at the top of this chat." */
   protected preview(room: RoomItem): string {
     const last = room.lastMessage;
     if (!last) return this.t().chat.noMessages;
+    const mine = last.senderAnopodId === this.session.anopodId();
+    const notice = this.notices().get(last.messageId);
+    if (notice === 'trade') return this.t().chatRoom.tradeUpdate;
+    if (notice === 'account') {
+      const name = room.members.find((m) => m.anopodId === last.senderAnopodId)?.username ?? last.senderAnopodId.slice(0, 8);
+      return mine ? this.t().chatRoom.youSentAccount : this.t().chatRoom.theySentAccount(name);
+    }
     const text = this.previews().get(last.messageId);
     if (text === undefined) return '';
-    return (last.senderAnopodId === this.session.anopodId() ? this.t().chat.youPrefix : '') + text;
+    return (mine ? this.t().chat.youPrefix : '') + text;
   }
 
   private async decryptPreviews(rooms: RoomItem[]): Promise<void> {
@@ -177,12 +191,16 @@ export class ChatPage {
     const todo = rooms.filter((r) => r.lastMessage !== null && !have.has(r.lastMessage.messageId));
     if (todo.length === 0) return;
     const added = new Map<string, string>();
+    const noticed = new Map<string, TradeMessageKind>();
     for (const room of todo) {
       const last = room.lastMessage;
       if (!last) continue;
       const text = await this.chat.decryptMessage(room, last.message);
       added.set(last.messageId, text === null ? this.t().chat.cannotRead : text.replace(/\s+/g, ' ').trim());
+      const kind = text !== null && this.chat.isTrader(room) ? tradeMessageKind(text) : null;
+      if (kind) noticed.set(last.messageId, kind);
     }
     this.previews.update((map) => new Map([...map, ...added]));
+    if (noticed.size > 0) this.notices.update((map) => new Map([...map, ...noticed]));
   }
 }

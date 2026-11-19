@@ -746,6 +746,9 @@ export const en = {
     cannotDecrypt: '(cannot decrypt)',
     noRoomKey: '(no room key)',
     notOpen: 'This chat is not open',
+    youSentAccount: 'You sent your account for this trade.',
+    theySentAccount: (name: string) => `${name} sent their account for this trade.`,
+    tradeUpdate: 'Trade update. Look at the box at the top of this chat.',
   },
   rooms: {
     publicRoom: 'Public room',
@@ -756,6 +759,9 @@ export const en = {
     justYou: 'Just you',
     selling: (anos: string, currency: string) => `Selling ${anos} anos for ${currency}`,
     buying: (anos: string, currency: string) => `Buying ${anos} anos for ${currency}`,
+    youSelling: (anos: string) => `You are selling ${anos} anos`,
+    youBuying: (anos: string) => `You are buying ${anos} anos`,
+    theySelling: (name: string, anos: string) => `${name} is selling ${anos} anos`,
     caseChat: { trade: 'Assisted transfer case', dispute: 'Escrow dispute case', recovery: 'Recovery case' },
   },
   marketplace: {
@@ -801,7 +807,10 @@ export const en = {
     nobody: 'Nobody has connected yet.',
   },
   pinned: {
-    summary: (side: string, anos: string, price: string, total: string) => `${side} ${anos} anos · ${price} each · ${total}`,
+    youSell: (anos: string, name: string) => `You are selling ${anos} anos to ${name}`,
+    youBuy: (anos: string, name: string) => `You are buying ${anos} anos from ${name}`,
+    sellTerms: (price: string, name: string, total: string) => `${price} each · ${name} pays you ${total}`,
+    buyTerms: (price: string, name: string, total: string) => `${price} each · you pay ${name} ${total}`,
     seeTrade: 'See the trade',
     closeListing: 'Close the listing',
     noAccounts: 'This anoPod has no anos account yet.',
@@ -814,6 +823,7 @@ export const en = {
     them: 'them',
     finished: 'This trade is finished. To trade again, start a new chat.',
     cancelled: 'Cancelled: the seller kept the anos.',
+    // The chat page knows this message by these words (trade-messages.ts). A change of the words needs the old words kept there.
     shareMessage: (accountId: string) => `Please send the anos to this account: ${accountId}`,
     pickAccounts: 'Pick the accounts and an amount in anos',
     notSentUnread: 'Could not check for an earlier trade, so nothing was sent. Try again.',
@@ -821,8 +831,10 @@ export const en = {
     refused: (reason: string) => `The validator refused the trade: ${reason}`,
     alreadyHeld: 'This account already has an escrow trade or a transfer waiting on the validators. Finish that first, or use another account.',
     noAnswer: 'The validators did not answer. If the trade started, it will show here in a moment. If it does not, try again.',
+    // The chat page knows this message by these words (trade-messages.ts). A change of the words needs the old words kept there.
     startedMessage: (anos: string, from: string, to: string, transactionId: string) =>
       `Escrow trade started: ${anos} anos from ${from} to ${to}. Transaction ${transactionId}.`,
+    // The chat page knows this message by these words (trade-messages.ts). A change of the words needs the old words kept there.
     releasedMessage: (anos: string, from: string, to: string, transactionId: string) =>
       `Escrow trade released: ${anos} anos from ${from} to ${to}. Transaction ${transactionId}.`,
     sendAccount: 'Send my account',

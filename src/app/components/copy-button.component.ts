@@ -7,8 +7,9 @@ import { LanguageService } from '../services/language.service';
  * The copy button (wallet spec 8.5): an icon button that copies `text` to
  * the clipboard and shows "copied" next to the icon for two seconds, or
  * "could not copy" when the browser refuses. Next to account ids on the
- * wallet list, the account page and in chat; the case pages keep their own
- * copy code.
+ * wallet list, the account page and in chat, but not for the two traders
+ * of a marketplace chat (2026-11-19); the case pages keep their own copy
+ * code.
  */
 @Component({
   selector: 'app-copy-button',

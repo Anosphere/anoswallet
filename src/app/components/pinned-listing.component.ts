@@ -23,7 +23,6 @@ import { MarketplaceService } from '../services/marketplace.service';
 import { MasterpodApiService, RoomItem } from '../services/masterpod-api.service';
 import { SessionService } from '../services/session.service';
 import { SigningService } from '../services/signing.service';
-import { AvatarComponent } from './avatar.component';
 import { askConfirm } from './confirm-dialog.component';
 import { EscrowStripComponent } from './escrow-strip.component';
 
@@ -51,9 +50,13 @@ type Found = 'open' | 'released' | 'none' | 'unread';
  * conversation page under its header, above the thread, in a private room
  * about a listing, for the room's two traders: the person who made the
  * room by pressing Connect, and the listing's owner (2026-11-12; anyone
- * else in the room is a guest and gets no card). The first line: the
- * listing in a few words, "Selling 100 anos · 35.50 THB each · 3,550 THB",
- * Closed when it is, with the other trader's avatar (8.6). Under it the
+ * else in the room is a guest and gets no card). The first line
+ * (2026-11-19, forclaude/wallet-chat-and-passkey-plan-1.md): the trade in
+ * one sentence from this pod's own side, with the other trader's username
+ * and no avatar, "You are selling 500 anos to mai" or "You are buying 500
+ * anos from somchai", Closed when the listing is. The second line: the
+ * listing's price, and who pays whom how much, "2.00 THB each · mai pays
+ * you 1,000 THB" or "2.00 THB each · you pay somchai 1,000 THB". Under it the
  * card is the trade guide (2026-11-17,
  * forclaude/wallet-trade-guide-plan-1.md). The status box
  * (escrow-strip.component.ts) says whether the anos are in escrow, which
@@ -112,19 +115,17 @@ type Found = 'open' | 'released' | 'none' | 'unread';
  */
 @Component({
   selector: 'app-pinned-listing',
-  imports: [FormsModule, RouterLink, MatButtonModule, MatMenuModule, MatFormFieldModule, MatInputModule, MatSelectModule, AvatarComponent, EscrowStripComponent],
+  imports: [FormsModule, RouterLink, MatButtonModule, MatMenuModule, MatFormFieldModule, MatInputModule, MatSelectModule, EscrowStripComponent],
   template: `
     @if (listing(); as listing) {
       <div class="card">
         <div class="first">
-          @if (other(); as person) {
-            <app-avatar [anopodId]="person.anopodId" [username]="person.username" [size]="24" />
-          }
-          <span class="summary">{{ summary() }}</span>
+          <span class="summary">{{ headline() }}</span>
           @if (closed()) {
             <span class="label">{{ t().common.closed }}</span>
           }
         </div>
+        <p class="terms">{{ terms() }}</p>
 
         @if (cancelled() && !trade() && !released()) {
           <p class="stage">{{ t().pinned.cancelled }}</p>
@@ -266,6 +267,7 @@ type Found = 'open' | 'released' | 'none' | 'unread';
     .card { padding: 8px 12px; border-bottom: 1px solid var(--mat-sys-outline-variant); background: var(--mat-sys-surface-container-low); display: flex; flex-direction: column; gap: 6px; }
     .first { display: flex; align-items: center; gap: 8px; }
     .summary { font-weight: 500; flex: 1; min-width: 0; }
+    .terms { margin: 0; font-size: 13px; color: var(--mat-sys-on-surface-variant); }
     .label { font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 10px; background: var(--mat-sys-secondary-container); color: var(--mat-sys-on-secondary-container); white-space: nowrap; }
     .stage { margin: 0; }
     .buttons { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -321,11 +323,20 @@ export class PinnedListingComponent {
   /** The other trader (2026-11-12): the other of the room's creator and the listing's owner, never a guest such as an attestor invited into the chat. */
   protected readonly other = computed(() => this.chat.otherTrader(this.room()));
   protected readonly otherName = computed(() => this.other()?.username ?? this.t().pinned.them);
-  protected readonly summary = computed(() => {
+  /** The card's first line (2026-11-19): the trade in one sentence from this pod's own side, with the other trader's username: "You are selling 500 anos to mai", "You are buying 500 anos from somchai". */
+  protected readonly headline = computed(() => {
     const listing = this.listing();
     if (!listing) return '';
+    const anos = millionthsToAnos(listing.quantity);
+    return this.side() === 'seller' ? this.t().pinned.youSell(anos, this.otherName()) : this.t().pinned.youBuy(anos, this.otherName());
+  });
+  /** The line under it (2026-11-19): the listing's price, and who pays whom how much: "2.00 THB each · mai pays you 1,000 THB", "2.00 THB each · you pay somchai 1,000 THB". */
+  protected readonly terms = computed(() => {
+    const listing = this.listing();
+    if (!listing) return '';
+    const price = formatPrice(listing.price, listing.currency);
     const total = formatPrice(totalOf(listing.quantity, listing.price), listing.currency, 0);
-    return this.t().pinned.summary(this.market.sideWords(listing), millionthsToAnos(listing.quantity), formatPrice(listing.price, listing.currency), total);
+    return this.side() === 'seller' ? this.t().pinned.sellTerms(price, this.otherName(), total) : this.t().pinned.buyTerms(price, this.otherName(), total);
   });
   /** The account ids the card read from the room's messages itself (readIds), since the page holds the newest messages only; null until that read is whole. */
   private readonly older = signal<FoundAccountId[] | null>(null);

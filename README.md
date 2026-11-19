@@ -64,6 +64,7 @@ src/app/
   amounts.ts               anos <-> millionths
   countries.ts             the ISO 3166-1 alpha-2 codes for the identity form
   escrow-boxes.ts          the five boxes of an escrow trade for the confirmation box: Release, Dispute, the question before a cancel, "Do not cancel this trade" and Cancel (spec 8.7, 8.9)
+  trade-messages.ts        the three messages the pinned card posts into a marketplace chat, known by their words in every language, so the chat can draw them as grey lines (spec 8.2, 8.7)
   i18n/en.ts, th.ts        the words of each language, one section per page (spec 8.8)
   unlock.ts                the unlock flow, shared by the landing page, setup, the finish of a recovery and the walk-through of the locked-out page
   components/camera.component.ts   the camera: live preview, Take photo, a file input as the fallback
@@ -89,7 +90,7 @@ src/app/
     log.service.ts         the activity log, and the HTTP plumbing every call goes through
     notes.service.ts      the noted transactions: the last list read, the blobs opened on the phone, add, update, remove (spec 8.2)
     settings.service.ts   the wallet settings on the masterpod, one encrypted object: the Protect your passkey answer and the names of the added passkeys (spec 8.2)
-    chat.service.ts       what the chat pages share: the room keys, a room's title, and the chats about an attestor case: the room, the invites, Start chat, Invite again (spec 8.3)
+    chat.service.ts       what the chat pages share: the room keys, a room's title, from the reader's own side for a listing chat, and the chats about an attestor case: the room, the invites, Start chat, Invite again (spec 8.3)
     work-badge.service.ts the numbers on the Attesting and Moderation menu entries: the things on each page that this device has not seen yet, read every 15 seconds in that edition, the seen ids kept on the device (spec 8.1, 8.3)
     escrow-actions.service.ts   a release, a cancel or a dispute of an escrow trade: the follow-up built with pair one, signed and posted to /escrow-signature, and the validator's refusal in plain words (spec 8.3)
 docs/                      schemas.md (the spec, build notes in section 11), public-ledger-id.md, build-plan.md
