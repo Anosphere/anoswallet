@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { AccountHomePage } from './pages/account-home.page';
+import { AccountLedgerIdPage } from './pages/account-ledger-id.page';
 import { AccountPage } from './pages/account.page';
 import { AccountPasskeysPage } from './pages/account-passkeys.page';
 import { AccountProtectPage } from './pages/account-protect.page';
@@ -72,6 +73,7 @@ export const routes: Routes = [
   { path: 'account/recovery/details', component: AccountRecoveryPage, canActivate: [sessionGuard], data: { start: 'details' }, title: 'Recovery details' },
   { path: 'account/protect', component: AccountProtectPage, canActivate: [sessionGuard], title: 'Protect your passkey' },
   { path: 'account/passkeys', component: AccountPasskeysPage, canActivate: [sessionGuard], title: 'Passkeys' },
+  { path: 'account/ledger-id', component: AccountLedgerIdPage, canActivate: [sessionGuard], title: 'Public ledger id' },
   { path: 'security/bucket-one', redirectTo: 'account/recovery/selfie', pathMatch: 'full' },
   { path: 'security/bucket-two', redirectTo: 'account/recovery/details', pathMatch: 'full' },
   { path: 'home', component: HomePage, canActivate: [sessionGuard], title: 'Home' },

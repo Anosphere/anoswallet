@@ -93,7 +93,11 @@ with the person's answers recomputes both ids.
   confirmed and are dropped once the two ids exist. On the locked-out
   page they stay until the keyholders have found the account (since
   2026-11-08), so a miss can be corrected without typing the record
-  again. Nothing goes to browser storage.
+  again. On the Public ledger id page under Account (since 2026-11-18)
+  they stay until a check gives the id the session holds, or until the
+  page is left; the id made there is compared in RAM and goes nowhere,
+  and the page shows the last 12 characters of an id, never a whole
+  one. Nothing goes to browser storage.
 
 ## 8. Test vector
 

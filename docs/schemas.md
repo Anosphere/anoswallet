@@ -857,12 +857,13 @@ as in the test apps; a new tab unlocks again.
     /vouching                find seeds, send requests, wait
     /identity                the public ledger id: why, the form, the review
     /setup                   keys, the backup code, the deposits, complete-setup
-    /account                 your account: a plain list of rows, Account recovery and Passkeys
+    /account                 your account: a plain list of rows, Account recovery, Passkeys and Public ledger id
     /account/recovery        the Account recovery page: Recovery selfie and Recovery details, with what is on file
     /account/recovery/selfie    the account recovery walkthrough, opened at the selfie
     /account/recovery/details   the walkthrough opened at the ID
     /account/protect         the Protect your passkey page: the setup pane again, Save records the answer
     /account/passkeys        the Passkeys page: the anoPod's passkeys, and the three steps that add one
+    /account/ledger-id       the Public ledger id page: the birth record typed again, and whether it gives the same id
     /security/bucket-one     forwards to /account/recovery/selfie
     /security/bucket-two     forwards to /account/recovery/details
     /home                    home: the greeting, the balance card, things to do, the tiles
@@ -1133,18 +1134,23 @@ complete, after DAO. Since 2026-11-18 (section 11; the plan is
 forclaude/wallet-account-page-plan-1.md) the page is a plain list under
 its title, with no subtitle and no sentence: one row per thing, each
 with an icon, a title and one line, and a new row goes under the last
-one. Two rows. "Account recovery", with the icon lock_reset (the one
+one. Three rows. "Account recovery", with the icon lock_reset (the one
 the Cases page gives a recovery case) and the line "Your recovery
 selfie and details", opens the Account recovery page, /account/recovery
 (below). "Passkeys" (2026-11-18, section 11), with a key icon and the
 line "See your passkeys, or add a spare", opens the Passkeys page,
-/account/passkeys (below). No row has a condition of its own: Account
-is in the navigation only once setup is complete, and a pod that
-reaches the Passkeys page earlier by its address sees the masterpod's
-refusal there. The page reads nothing: what is on file shows on the
-Account recovery page. Until 2026-11-18 the page carried the subtitle
-"Account recovery", the sentence that now stands on the Account
-recovery page, and the two recovery rows themselves.
+/account/passkeys (below). "Public ledger id" (2026-11-18, section 11),
+with the icon fingerprint (the one the case pages give a shared lookup
+id) and the line "Check the birth record you gave at setup", opens the
+Public ledger id page, /account/ledger-id (below). No row has a
+condition of its own: Account is in the navigation only once setup is
+complete. A pod that reaches the Passkeys page earlier by its address
+sees the masterpod's refusal there, and one that reaches the Public
+ledger id page earlier sees that page's one red sentence. The page
+reads nothing: what is on file shows on the Account recovery page.
+Until 2026-11-18 the page carried the subtitle "Account recovery", the
+sentence that now stands on the Account recovery page, and the two
+recovery rows themselves.
 
 The Account recovery page (2026-11-18, section 11), at
 /account/recovery, reached from the Account page's first row. Titled
@@ -1277,6 +1283,59 @@ JSON, the registration and the built body, which holds ciphertexts
 only; a PRF output lives for the length of one step. The masterpod tells
 the anoPod with a notification (Notifications, below). No button removes
 a passkey (section 10).
+
+Public ledger id (2026-11-18, section 11; the plan is
+forclaude/wallet-ledger-id-check-plan-1.md), at /account/ledger-id,
+reached from the Account page's Public ledger id row: a person types
+the birth record again and sees whether it gives the public ledger id
+of their anoPod. A slip in the birth record at setup is easy to make,
+and without this page it shows only when a recovery cannot find the
+account. Titled "Public ledger id", Back to Account (the navigation's
+word, "Account"), then two short paragraphs that say what the id is
+and why to check it: "Your public ledger id was made from the birth
+record you typed at setup. If you are ever locked out, you type that
+record again, and that is how your account is found." and "If
+something was typed wrong at setup, like a name or the date, your
+account would not be found. Here you can check. Type your birth record
+again and press Check. Nothing you type is sent." Then "Your public
+ledger id ends in" with the last 12 characters of the id the session
+holds (8.3), the one opened from identityBlob at Log in. Then the
+nine-field form of the identity page (the shared component, 12.4),
+with its guidance, and the button Check, off until the form is
+complete and while a check runs. Check makes the id from the answers
+with identityIdsOf, as the identity page does, behind a progress bar,
+and compares the two whole ids. Between the form and the button, where
+the locked-out page (12.3) has its line, the page then shows "Your
+public ledger id ends in" and "The id from what you typed ends in",
+each with its last 12 characters, and one of two sentences: "These are
+the same. These are the answers to give if you are ever locked out.",
+in the theme's primary colour, or, in red, "These are different. Check
+the spelling, each Known or Unknown choice, the country and the date,
+then try again. Capital letters and extra spaces make no difference."
+On a match the answers are dropped and the form is empty again; on a
+miss they stay, so one field can be fixed and Check pressed again;
+leaving the page drops them. A new check clears the lines of the one
+before. Only the end of an id is shown, never a whole id and never a
+copy button: the lookup id is made from an id's first 16 characters
+and the person's name (docs/public-ledger-id.md section 6), and the
+last 12 give none of those away. A style line of the page keeps the 12
+characters in one piece on a narrow screen. The page cannot say which
+answer is off, since the answers given at setup were never stored, and
+it has no review step. Nothing is sent and no server is asked: the
+answers and the id made from them stay in the page's memory. A pod
+whose session holds no id (it came to this address before its setup)
+sees, in red, "Your public ledger id is not in this tab's memory.
+Finish setup first, or log in again." in place of everything under
+the back link.
+After a check the result stays on the screen (2026-11-18, section 11,
+the note after the page's own): the three lines come in above Check and
+push it down, on a phone past the screen's bottom edge together with the
+sentence, so once they are drawn the page scrolls just far enough that
+the row of Check is on the screen again, with the 33 pixels that stand
+under the row (the card's padding and border, the page's padding). The
+page is then at its end, Check stands where it was pressed and the three
+lines stand above it. Nothing moves when all of that is on the screen
+already.
 
 Home (2026-11-06, section 11), at /home, where an unlock lands once
 setup is complete, first in the navigation; no outer card. Top to
@@ -3320,6 +3379,20 @@ back and tap Continue to carry on with it.", where it read "A case is
 already open for this identity". The Back button of step 1 is
 `common.back`. The English is the plan's, letter for letter; the Thai is
 the build chat's, by the glossary, and no Thai reader has read it.
+The Public ledger id row and page (2026-11-18, section 11):
+`accountHome` gains `ledgerIdTitle` and `ledgerIdLine`, the row's title
+and line, after `passkeysLine`. The page takes its words from a new
+section, `accountLedgerId`, which stands after `accountPasskeys` and in
+front of `accountRecoveryHome`: nine entries, none of them a function
+(`title`, `intro1`, `intro2`, `yours`, `typed`, `check`, `same`,
+`different` and `noIdentity`). `intro1` and `intro2` are the two
+paragraphs at the top. `yours` and `typed` are captions: each stands
+in front of an id's last 12 characters, which the page draws itself.
+Back to Account is `nav.account`, and the form's words are
+`identityForm`'s, unchanged. The English is the plan's, letter for
+letter; the eleven Thai lines are the planning chat's, as
+forclaude/wallet-ledger-id-check-plan-1.md gives them, and no Thai
+reader has read them.
 
 ### 8.9 The confirmation box
 
@@ -3577,10 +3650,9 @@ Cloud machines.
   on.
 - From the Account page plan (forclaude/wallet-account-page-plan-1.md,
   2026-11-18): a row for Protect your passkey (its page is written for
-  Android phones, and Home shows its link to the people it is for); a
-  row for checking the public ledger id, which is to come in a step of
-  its own; what is on file counted on the Account page itself; groups
-  or headings on the Account page; a back link on the walkthrough.
+  Android phones, and Home shows its link to the people it is for);
+  what is on file counted on the Account page itself; groups or
+  headings on the Account page; a back link on the walkthrough.
 - From the recovery passkey check plan
   (forclaude/recovery-passkey-check-plan-1.md, 2026-11-18, its section
   5): a cancel button for a person's own case (it stands on the
@@ -3608,6 +3680,16 @@ Cloud machines.
   before a new one can be opened; and what the two answers give out:
   the masterpod sees the lookup id one step earlier, and anyone who
   knows an anoPod id can learn the credential ids of its passkeys.
+- From the public ledger id check plan
+  (forclaude/wallet-ledger-id-check-plan-1.md, 2026-11-18, its section
+  3): a way to change a public ledger id (nothing changes one after
+  setup: the masterpod writes identityBlob once, and a keyholder
+  writes its owners row at the first deposit); telling a person which
+  answer is off; a whole id on a screen, or a copy button for it; a
+  review step before the check; a change to the shared form. The known
+  limit: "the same" shows that the person can type the answers the
+  same way again, which is what the locked-out page needs to find the
+  account; it does not show that the answers are true.
 - Several passkeys, push delivery, a custom theme, rate limits.
 
 ## 11. Build notes
@@ -10581,6 +10663,327 @@ one style line, and no word of the dictionaries changes.
   The pane was not on screen while the look ran. The user deploys the
   wallet servers after this step, together with the step of the note
   above.
+
+### The Public ledger id row and page (2026-11-18)
+
+Built from `forclaude/wallet-ledger-id-check-plan-1.md` (FINAL,
+2026-11-18), its one step, one commit, on main at cc7b3a3, the commit
+the plan stands on, the working tree clean. Why: a slip in the birth
+record at setup is easy to make, and until now it showed only when a
+recovery could not find the account. Now a logged-in person can type the
+birth record again, on a page under Account, and see whether it gives
+the public ledger id of their anoPod. Wallet only: no route of the proxy
+(`server/`), no line of `network/wallet.env` and no npm package; the
+masterpod, the validators, the doormen, the keyholders and the signing
+servers are not touched, and the new page asks none of them anything.
+The wallet, the moderator edition and the attestor edition are one
+codebase, so all three get the row and the page.
+
+- `src/app/pages/account-ledger-id.page.ts`, new, the whole file as the
+  plan's 1.1 gives it (`AccountLedgerIdPage`,
+  `app-account-ledger-id-page`): Back to Account, the two paragraphs,
+  the end of the session's id, the shared form with a form state of its
+  own, the progress bar, the three lines of the result between the form
+  and the button, and Check. Its one style line for `code` keeps an id's
+  12 characters together.
+- `src/app/pages/account-home.page.ts`: the whole file as the plan's 1.2
+  gives it. The class comment says three rows, and the third row, Public
+  ledger id with the icon `fingerprint`, stands under Passkeys. Nothing
+  else changed.
+- `src/app/app.routes.ts`: the import, between those of
+  `AccountHomePage` and `AccountPage`, and the route
+  `account/ledger-id`, after `account/passkeys` and in front of
+  `security/bucket-one`, behind the session guard, with the tab title
+  "Public ledger id".
+- `src/app/components/identity-form.component.ts`: the one comment
+  sentence of the plan's 1.4, which now names the three pages that show
+  the form. No line of code. On the user's word a second comment changed
+  in this file, the one of `IdentityFormState` (below).
+- `src/app/i18n/en.ts` and `th.ts`: `accountHome` gains `ledgerIdTitle`
+  and `ledgerIdLine` after `passkeysLine`, and the new section
+  `accountLedgerId`, nine entries, stands after `accountPasskeys` and in
+  front of `accountRecoveryHome`. The English is the plan's 1.5 letter
+  for letter. The thirteen Thai lines, two in `accountHome` and eleven
+  in `accountLedgerId`, were copied out of the plan file by a one-off
+  command kept outside the repo, so no Thai was typed.
+- Tables typed `Record<string, string>` added to the dictionaries: none.
+- README: the `pages/` line, as the plan gives it.
+- `docs/public-ledger-id.md`: section 7, its third point, the one new
+  sentence on where the answers stay on this page.
+- Spec: 8.1 (the `/account` line, and the new line under the
+  `/account/passkeys` line); 8.2 (the Account paragraph, and the new
+  Public ledger id paragraph in front of Home); 8.8; 10 (the Account
+  page plan's bullet without its clause on this row, and a new bullet);
+  this note.
+- Readings where the plan left a detail open. BUILD-DATE is 2026-11-18;
+  the date is as long as the word, so no line of the plan's blocks wraps
+  differently. The blocks of the plan's 1.1, 1.2, 1.5 and 1.6 were taken
+  out of the plan file by a command, each line less the spaces of its
+  indent, and put into the files by a command; the two lines of 1.3, the
+  comment of 1.4 and the README line were typed and then compared with
+  the plan. In 8.1 the two lines keep the four spaces every line of that
+  list has. The 8.8 text stands on lines of its own at the end of its
+  paragraph, wrapped as the plan wraps it. Nothing was built that
+  differs from the plan.
+- The look, where. A development build in a scratch folder on this Mac,
+  served by a plain file server on 127.0.0.1 (port 8803, a temporary
+  entry in `/Users/codex/.claude/launch.json`, taken out again; the file
+  is byte for byte what it was), in the Claude app's browser pane. A
+  made-up session was set through the `ng` debug tools: an anoPod id, a
+  username, a status with `vouched` and `setupComplete` true and, with
+  `session.setIdentity`, the two ids of the test record in
+  `docs/public-ledger-id.md` section 8. Not on a phone and not on the
+  live wallet. No passkey was asked. The sizes: 360, 375, 390 and 430
+  pixels wide and 600 high, each in English and in Thai, the language
+  set before a page was opened. At these widths the pane says it is
+  Chrome on an Android phone, and it draws Thai with this Mac's Thai
+  font. The form was filled through the page's own form state with the
+  nine answers of the test record as typed there: the stray spaces, the
+  capital letters, the E with its accent as two characters, the no-break
+  space, the curly apostrophe, the father's last name Unknown, US, and
+  `new Date(1987, 8, 5)`. Check was pressed by a click: once by the
+  pane's own pointer, and in the runs through the sizes by the button's
+  `click()`.
+- The look, by clicks, at 360 pixels in English. The third row opens
+  /account/ledger-id, and the tab reads "Public ledger id". The back
+  link opens /account. On the new page "Account" is the one entry of the
+  side menu that is marked: read from the entry's class at phone width,
+  where the menu is closed, and seen marked at 1024 pixels, where the
+  menu stands open.
+- The look, the Account page. A title and a line each have 222 pixels at
+  360, 237 at 375, 252 at 390 and 292 at 430. The new row's title needs
+  117.1 in English and 134.8 in Thai, and its line 260.2 and 258.4: the
+  plan's numbers to the tenth of a pixel. In both languages the line
+  takes two lines at 360, 375 and 390, where the row is 83.5 pixels
+  high, and one at 430, where the row is 64. The two rows above measure
+  as the note "The Account page as a plain list" has them. No title and
+  no line is cut, each icon is drawn as an icon, and the page does not
+  scroll sideways.
+- The look, the new page, in four states at each size in both languages.
+  When it opens: the title on one line, the back link, the two
+  paragraphs, "Your public ledger id ends in" with `e9da3e47c2b8`, the
+  form with its guidance, and Check, off; no result. A match (the test
+  record's answers, then Check): `mat-progress-bar` came into the page
+  between the form and the button when Check was pressed, with Check
+  off, and left when the three lines came (measured at 430 pixels: 4
+  pixels high and 364 wide, the card's room; on this Mac it stood there
+  about 40 milliseconds); both ids end in `e9da3e47c2b8`; the sentence
+  for a match shows in the theme's primary colour (`rgb(0, 92, 187)`);
+  the form is empty, no box holds a value, and Check is off. A miss
+  ("Saint Louis" for the city, on the page opened again): the typed id
+  ends in `75d899e7e3c0`; the sentence for a miss shows in the theme's
+  error colour (`rgb(186, 26, 26)`); the six texts, the one Unknown, the
+  country and the date are still in the form, and Check is on. With the
+  city put back, the three old lines stayed until Check was pressed;
+  then they left as the bar came, and the match came. A form state with
+  answers in it held none after the page was left. No id
+  (`session.setIdentity(null)`, the page opened again): the title, the
+  back link and the one red sentence, and no form.
+- The look, the measures of the new page, each set against the plan's.
+  The card's room, and with it each of the nine boxes of the form: 294,
+  309, 324 and 364 pixels. The five "Known?" boxes: 140. Check: 87.5
+  pixels in English and 104.3 in Thai. Every one is the plan's number to
+  the tenth of a pixel. At every size, in both languages, in each of the
+  four states: no line is cut, none of the 14 labels is cut, at rest or
+  floated, no box and no button runs past the card, each id's 12
+  characters stand on one line, and the page does not scroll sideways.
+- The look, the lines each text takes at 360, 375, 390 and 430 pixels.
+  Every count is the plan's. The first paragraph: 4, 4, 4, 3 in English
+  and 4, 3, 3, 3 in Thai. The second: 5, 4, 4, 4 and 4, 4, 4, 3. The
+  person's id: 1 at every size in English; in Thai 2, 2, 1, 1, with the
+  id on the second line where there are two. The typed id: in English 2,
+  1, 1, 1, with the id on the second line at 360; in Thai 1 at every
+  size. The sentence for a match: 2 at every size in English; in Thai 2,
+  2, 2, 1. The sentence for a miss: 4, 4, 4, 3 and 4, 3, 3, 3. The red
+  sentence with no id: 2 at every size in both languages. Not on the
+  plan's list: the form's guidance takes 5, 5, 5, 4 lines in English and
+  4 at every size in Thai.
+- The look, what is on the screen right after Check. One thing the plan
+  does not speak of; it is put to the user. The page is longer than a
+  phone's screen (1595 to 1675 pixels high when it opens) and Check is
+  the last thing on it, so a person scrolls to the page's end to press
+  it. There the top of Check stands 73 pixels above the bottom edge of
+  the screen, at every size and in both languages, and it cannot stand
+  higher. The result comes in above the button, and the page does not
+  move: the three lines start 71 pixels above the bottom edge and push
+  Check under it. So right after the first press the two lines with the
+  ends of the two ids are on the screen; where the two take three lines
+  (at 360 in English, at 360 and 375 in Thai) the third stands right at
+  the edge and is not wholly on the screen (in English it is cut by a
+  pixel). The sentence that says the same or different is not on the
+  screen: it begins at the edge or 19.5 pixels under it, and ends 16 to
+  96 pixels under it. A short scroll shows it, and Check. Measured with
+  the page at its end before the press, in a window 600 pixels high; the
+  73 pixels are the button and what stands under it, so they do not
+  depend on the screen's height. On a second press on the same page,
+  again with the page at its end, the whole result was on the screen in
+  this pane: Chrome kept the page at its end as the old lines left and
+  the new ones came. The build changed nothing for this: where the
+  result stands is the plan's decision 5.
+- The look, the requests. The pane's request list showed the file server
+  alone: `/`, `styles.css`, `main.js`, `logo.png` and `/api/config`,
+  which answered 404. The page's own list of what it loaded adds
+  Google's two font style sheets (`fonts.googleapis.com`). Nothing else,
+  and nothing at all after the page had loaded: no opening of the row or
+  the page and no press of Check sent a request. The console held the
+  404 of `/api/config` and no other error.
+- Places this step left out of date that the plan does not name. Two;
+  the build left both and put them to the user. One: in
+  `src/app/components/identity-form.component.ts`, the comment of
+  `IdentityFormState` said the page that owns the state "resets it once
+  the ids exist". The Public ledger id page resets it on a match and
+  when the page is left; on a miss the ids exist and the answers stay.
+  The sentence was behind before this step: the locked-out page has kept
+  its answers until the account is found since 2026-11-08. On the user's
+  word, the same day ("Change the first"), the comment says when each
+  page resets the state: the identity page once the ids exist, the
+  locked-out page once the account is found or the page is left, the
+  Public ledger id page on a match or when the page is left. Two: 12.3,
+  step 1 of Locked out, says the form was "moved into a component the
+  two pages share, 12.4"; three pages show it now. The plan leaves the
+  like line of 12.4 as it is, as history, and the user left this one as
+  it is too.
+- Checked. `npx ng build` from the web_app folder: clean, no warnings
+  (2.23 MB initial total, 2.22 before; `main-2WN3DITE.js`,
+  `styles-EMD3RG3N.css`, the style file of before). The plan's blocks
+  were compared with the files by `diff`, with the build's date in the
+  place of BUILD-DATE: the new page whole, the Account page whole, the
+  two comment lines of the form, the two blocks of `en.ts`, the README
+  line, the point of `docs/public-ledger-id.md` and the six blocks of
+  the spec are equal (the README line and the two lines of 8.1 less the
+  spaces in front of them). In `th.ts` the two new lines of
+  `accountHome` and the eleven lines of `accountLedgerId` are the plan's
+  byte for byte, and both files have the keys of the two sections in the
+  same order. The two lines of 1.3 stand in `app.routes.ts` as the plan
+  writes them. The plan file is as it was read. `git status` showed this
+  step's nine files and no others. Not checked: a phone; the live
+  wallet; a real session and a person's own birth record (the ids were
+  the test record's); Safari (the pane is Chrome); the moderator and
+  attestor editions (one codebase; the scratch page was the wallet
+  edition); the date picker's and the country list's pop-ups, which the
+  form brings as they are; the Thai by a Thai reader. The browser pane
+  was not on screen while the look ran: the pictures and the measures do
+  not need it, but no motion was watched, so the progress bar was found
+  in the page and not seen moving. The run-through is the user's, on a
+  phone (the plan's section 2). The user deploys the wallet servers
+  after this step, by section 10 of `forclaude/wallet-deploy-plan-1.md`,
+  wallet1 and then wallet2, with no setting in `network/wallet.env` and
+  no `npm ci`.
+
+### The Public ledger id page: the result stays on the screen (2026-11-18)
+
+One small fix, built on the user's word in the chat of the note above
+("Fix it now", to the question what should happen with the sentence that
+lands under the screen's edge after Check; the other choice was a line
+on the after-production list), with no plan file, one commit, on top of
+the commit of the note above. Why: the note above measured that right
+after the first press of Check, with the page at its end, the sentence
+that says the same or different stood under the screen's bottom edge,
+and Check with it. The plan expected the whole result on the screen (its
+decision 5, and in its section 2 "After a tap on Check the result shows
+without scrolling"). Now, once the three lines of a result are drawn,
+the page scrolls just far enough that the row of Check is on the screen
+again, with the lines above it. Wallet only: one file of code, and no
+word of the dictionaries changes.
+
+- `src/app/pages/account-ledger-id.page.ts`. The row that holds Check
+  has a name in the template (`#actions`), and the class reads it with
+  `viewChild`. In the constructor an `afterRenderEffect` reads `result`
+  and, when there is one, calls `scrollIntoView({ block: 'nearest' })`
+  on the row: it runs after the render that draws a result, and at no
+  other time. The row's style has `scroll-margin-bottom: 33px`, with a
+  comment. The import line names `ElementRef`, `afterRenderEffect` and
+  `viewChild`, and the class comment has three lines more. `check()` is
+  as the plan has it. From this commit on the file differs from the
+  plan's 1.1 by these lines; the plan file is FINAL and was not edited.
+- Why 33 pixels. Under the row stand the card's padding (16), the card's
+  border (1) and the page's padding (16). With that margin the page
+  stops at its end and Check stands where it was pressed: its top is 73
+  pixels above the screen's bottom edge before the press and after it.
+  Without the margin, tried by hand in the scratch page before any file
+  was changed, the scroll stops with Check's lower edge on the screen's
+  edge, 33 pixels lower than where it was pressed, and the card's end
+  under it stays out of sight.
+- Why `afterRenderEffect`. The chat page and the locked-out page wait
+  for a render with `afterNextRender` and the page's injector, called
+  from the method that made the change, and the fix was first built that
+  way, in `check()`. When the page was left while a check ran, that call
+  was made with the dead page's injector and threw "NG0911: View has
+  already been destroyed" into `check()`'s own catch. Nothing showed and
+  nothing was logged, but an effect made in the constructor belongs to
+  the page's life, so nothing runs after the page is left: the same
+  leave then gave no error. `afterRenderEffect` is new to the wallet.
+- Spec: 8.2, three sentences at the end of the page's paragraph; this
+  note. The note above stands as it was written: it is the record of the
+  step.
+- The look, where: the way of the note above. A development build in a
+  scratch folder on this Mac, served by a plain file server on 127.0.0.1
+  (port 8803, the temporary entry in `/Users/codex/.claude/launch.json`
+  taken out again, the file byte for byte what it was), in the Claude
+  app's browser pane, with the made-up session of the note above. Not on
+  a phone and not on the live wallet. 360, 375, 390 and 430 pixels wide
+  and 600 high, each in English and in Thai.
+- The look, what is on the screen after Check, at every size in both
+  languages. A first press with the page at its end, a match and a miss:
+  every line of the result is on the screen, and Check is on the screen
+  with its top 73 and its lower edge 33 pixels above the bottom edge,
+  where it stood before the press; the page is at its end. A second
+  press, after the city was put back: the same. A first press with
+  Check's lower edge right on the screen's edge, the page 33.5 pixels
+  short of its end: the same. A first press with Check half under the
+  edge: the same. One press was made by the pane's own pointer (360
+  pixels, English, a miss): the same. At 1024 by 600 pixels, the side
+  menu open: the same. At 1024 by 1600, where the whole page fits:
+  nothing moves.
+- The look, what does not move. The page opens at its top. Filling the
+  form moves nothing. With a result showing and the page scrolled 300
+  pixels up, a changed answer moves nothing, and the old result stays.
+  On the Account page nothing is scrolled after the new page was left in
+  the middle of a check.
+- The look, everything else, again: the measures and the line counts of
+  the note above came out the same at every size in both languages (the
+  card's room, the boxes, the "Known?" boxes, Check's width, the lines
+  of each text, the four states), with nothing cut and nothing past the
+  card. The requests were the file server and Google's font files, and
+  no press of Check sent one; the console held the 404 of `/api/config`
+  and no other error.
+- The look, the page without the fix, once more. While the scroll was
+  tried by hand on the unfixed scratch page, Chrome moved the page by
+  itself after some first presses, so that the three lines were on the
+  screen with Check, or the lines without Check; in the runs of the note
+  above it never did. That is Chrome's own keeping of the page in place
+  as its height changes, and it cannot be counted on. With the fix the
+  end was the same every time.
+- The look, real iPhone Safari, which does not move a page by itself
+  that way. The iOS simulator on this Mac (iPhone 17e, iOS 27, Safari
+  27.0, 390 points wide, 699 points of the page on the screen), started
+  with no window. A probe script in a copy of the scratch page's index
+  file set the made-up session, filled the form with "Saint Louis" for
+  the city, scrolled to the end (the page inside the shell, and the
+  whole document, which Safari lets move by 40 points), pressed Check
+  and sent its numbers to the file server's log. The row's
+  `scroll-margin-bottom` is 33px there. Before the press Check stood
+  from 626 to 666. In a first run the row's `scrollIntoView` was
+  replaced by an empty function, which is the page of the note above:
+  the two lines with the ends of the ids were on the screen, the
+  sentence's box reached from 696 to 776 with the edge at 699, and Check
+  stood from 790 to 830, under the edge; the page had not moved. In the
+  second run, with the fix: the three parts of the result stood from 464
+  to 612, all on the screen, and Check from 626 to 666, where it stood
+  before the press, with the page at its end; no error. A picture taken
+  afterwards shows that. Only a miss in English was run there.
+- Checked. `npx ng build` from the web_app folder: clean, no warnings
+  (2.23 MB initial total, `main-OHJAV7CU.js`, `styles-EMD3RG3N.css`, the
+  style file of before). `git status` showed the nine files of the note
+  above and no others; this fix is in two of them, the page file and
+  this spec. Not checked: a phone; the live wallet; a match, and Thai,
+  in Safari; Chrome on an Android phone; a press of Check while the
+  phone's keyboard is up; the moderator and attestor editions (one
+  codebase). The browser pane was not on screen while the look ran, so
+  the page's jump was measured and not watched. The run-through is the
+  user's, on a phone (section 2 of
+  `forclaude/wallet-ledger-id-check-plan-1.md`: "After a tap on Check
+  the result shows without scrolling").
 
 ## 12. Recovery and the moderator edition
 
