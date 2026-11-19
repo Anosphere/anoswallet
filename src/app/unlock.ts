@@ -17,8 +17,11 @@ export interface UnlockServices {
  * passkey assertion with the PRF salt, /unlock; the key blob key from the
  * PRF output (2026-11-08, wallet spec 7); opens blob1, chatPrivateKeyBlob
  * and identityBlob; then /check-anopod-status. Shared by
- * the landing page and by setup, which unlocks first when the PRF output is
- * not in RAM. Returns the status; throws with the reason on any refusal.
+ * the landing page, by setup, which unlocks first when the PRF output is
+ * not in RAM, by the finish of a recovery (Get back in) and, since
+ * 2026-11-18, by the walk-through in front of the locked-out stepper
+ * (find-passkey.component.ts). Returns the status; throws with the reason
+ * on any refusal.
  * Since 2026-11-18 (masterpod spec 19) any passkey of the anoPod unlocks
  * it, the main one or an added one. The payload says addedPasskeys: true
  * (the old page guard: the masterpod refuses an added passkey without it,
