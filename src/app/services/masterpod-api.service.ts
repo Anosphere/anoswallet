@@ -35,6 +35,8 @@ export interface ChallengeAnswer {
   anopodId?: string;
   /** openCase only (2026-11-08): the username of the pod the anoPod id names, shown as the account found. */
   username?: string;
+  /** openCase only (2026-11-18): the credential ids of the pod's passkeys, hex, the main one first; a masterpod of before sends none. */
+  credentialIds?: string[];
   expiresAt: string;
 }
 
@@ -775,9 +777,12 @@ export class MasterpodApiService {
 
   // --- level none ---------------------------------------------------------
 
-  /** A challenge for `purpose`; openCase takes the anoPod id the keyholders named for the lookup id and answers that pod's username (masterpod 12.4.2, 2026-11-08). */
-  challenge(purpose: ChallengePurpose, anopodId?: string): Promise<ApiResponse<ChallengeAnswer>> {
-    return this.post('/challenge', anopodId === undefined ? { purpose } : { purpose, anopodId });
+  /** A challenge for `purpose`; openCase takes the anoPod id the keyholders named for the lookup id and answers that pod's username (masterpod 12.4.2, 2026-11-08). Since 2026-11-18 (masterpod spec 20) openCase may take the lookup id too: a case already open for it answers 409 case already open, and the answer carries the credential ids of the pod's passkeys. */
+  challenge(purpose: ChallengePurpose, anopodId?: string, lookupId?: string): Promise<ApiResponse<ChallengeAnswer>> {
+    const body: Record<string, unknown> = { purpose };
+    if (anopodId !== undefined) body['anopodId'] = anopodId;
+    if (lookupId !== undefined) body['lookupId'] = lookupId;
+    return this.post('/challenge', body);
   }
 
   checkUsername(username: string, quiet = false): Promise<ApiResponse<{ username: string; available: boolean }>> {

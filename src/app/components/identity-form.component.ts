@@ -168,7 +168,8 @@ export class IdentityFormState {
     .guidance { max-width: 720px; }
     .grid { display: flex; flex-direction: column; gap: 4px; max-width: 720px; }
     .field-row { display: flex; gap: 8px; flex-wrap: wrap; }
-    .grow { flex: 1; min-width: 240px; }
+    /* 240 px at the least, or the row's whole width where the row is narrower: a step of the locked-out stepper has 210 px on a phone 360 px wide, and the stepper cut a wider box off. */
+    .grow { flex: 1; min-width: min(240px, 100%); }
     .known { width: 140px; }
     .error { color: var(--mat-sys-error); }
   `,

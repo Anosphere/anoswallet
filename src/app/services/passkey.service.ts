@@ -54,8 +54,10 @@ export interface Assertion {
  * its configuration makes no passkey rather than one bound to the wrong id.
  * For an add (2026-11-18, masterpod spec 19) the registration takes an
  * exclude list, the credential ids the anoPod already has, so a place that
- * holds one of them refuses instead of replacing it; and the assertion can
- * be asked of one passkey alone, the new one, for its PRF output.
+ * holds one of them refuses instead of replacing it (the passkey of a
+ * recovery case is registered with that list too, since 2026-11-18,
+ * masterpod spec 20); and the assertion can be asked of one passkey alone,
+ * the new one, for its PRF output.
  */
 @Injectable({ providedIn: 'root' })
 export class PasskeyService {

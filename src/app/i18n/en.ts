@@ -974,6 +974,8 @@ export const en = {
     payoutRecipient: (n: number) => `Payout ${n}: the recipient must be an account id of 64 hex characters`,
   },
   recover: {
+    tryLogIn:
+      'Try Log in first. Your passkey is saved on the phone or computer where you made your anoPod. If Log in works there, you are not locked out and you do not need this.',
     lockedOutText:
       "If you lost the device with your passkey, we can get you back in. You'll need your birth record, and an email and a phone number where a moderator can reach you. A moderator will meet you on a video call and check your security buckets before anything is released.",
     continueTitle: 'Continue a recovery',
@@ -999,8 +1001,12 @@ export const en = {
     openCase: 'Open my case',
     passkeyText:
       "Your recovery passkey is created now, with this device's screen lock or biometrics. Keep this device: you unlock your case with that passkey while the recovery runs.",
+    onlyIfLockedOut:
+      'Open a case only if Log in does not work for you. The new passkey made here can take the place of your own passkey, and your own is then gone for good.',
+    notLockedOut: 'This device already has your passkey. You are not locked out. Go back and tap Log in.',
+    toStart: 'Back to the start page',
     noAnopodId: '/challenge answered no anopodId',
-    alreadyOpen: 'A case is already open for this identity',
+    alreadyOpen: 'A recovery case is already open for this account. Go back and tap Continue to carry on with it.',
   },
   recoverCase: {
     title: 'My recovery',

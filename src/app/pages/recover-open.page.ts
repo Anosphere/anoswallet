@@ -6,13 +6,13 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatStepper, MatStepperModule } from '@angular/material/stepper';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { IdentityFormComponent, IdentityFormState } from '../components/identity-form.component';
 import { CryptoService } from '../services/crypto.service';
 import { LanguageService } from '../services/language.service';
 import { reasonOf } from '../services/log.service';
 import { MasterpodApiService } from '../services/masterpod-api.service';
-import { PasskeyService } from '../services/passkey.service';
+import { PasskeyService, Registration } from '../services/passkey.service';
 import { identityIdsOf } from '../services/public-ledger-id';
 import { RecoveryService } from '../services/recovery.service';
 import { SharesService } from '../services/shares.service';
@@ -36,7 +36,11 @@ function isContactPhone(value: string): boolean {
  * keyholder's /get-owner) and the masterpod for that pod's username
  * (/challenge openCase with the anoPod id; this challenge is never used
  * and expires), then drops the answers. A miss keeps the answers in the
- * form so one field can be fixed and Next pressed again. 2. Your account:
+ * form so one field can be fixed and Next pressed again. Since 2026-11-18
+ * (masterpod spec 20) that /challenge carries the lookup id too, and a
+ * case already open for it (409) stops the person here: the sentence
+ * that a recovery case is already open, the answers dropped, and a Back
+ * button to /recover, where Continue is. 2. Your account:
  * "We found your account: <username>", then a contact email and a contact
  * phone, both required (2026-11-12: a moderator texts first, and the email
  * is there when a text is not possible; as wallet case chats plan 1 had it
@@ -51,11 +55,18 @@ function isContactPhone(value: string): boolean {
  * pair and hybridKeyBlob; the ephemeral keys; /open-recovery-case, the
  * payload without a username, with contactEmail and contactPhone, both
  * trimmed. On 201 the recovery session is open, both contacts are kept in
- * RecoveryService and the page goes to /recover/case.
+ * RecoveryService and the page goes to /recover/case. Since 2026-11-18
+ * (masterpod spec 20): a line above the button says to open a case only
+ * if Log in does not work; this /challenge carries the lookup id too and
+ * answers the credential ids of the pod's passkeys, which the
+ * registration takes as its exclude list; a device that already holds
+ * one of them makes no new passkey, and the page then says that the
+ * person is not locked out, with a button to the start page, and opens
+ * no case.
  */
 @Component({
   selector: 'app-recover-open-page',
-  imports: [FormsModule, MatStepperModule, MatFormFieldModule, MatInputModule, MatButtonModule, MatCardModule, MatProgressBarModule, IdentityFormComponent],
+  imports: [FormsModule, MatStepperModule, MatFormFieldModule, MatInputModule, MatButtonModule, MatCardModule, MatProgressBarModule, RouterLink, IdentityFormComponent],
   template: `
     <mat-card appearance="outlined">
       <mat-card-header>
@@ -73,6 +84,9 @@ function isContactPhone(value: string): boolean {
             }
             @if (lookupError(); as text) {
               <p class="error">{{ text }}</p>
+            }
+            @if (caseOpen()) {
+              <p><a mat-stroked-button routerLink="/recover">{{ t().common.back }}</a></p>
             }
             @if (anopodId() !== null && !form.complete()) {
               <p class="muted">{{ t().recoverOpen.computed }}</p>
@@ -105,11 +119,16 @@ function isContactPhone(value: string): boolean {
 
           <mat-step [label]="t().recoverOpen.openCase">
             <p>{{ t().recoverOpen.passkeyText }}</p>
+            <p>{{ t().recoverOpen.onlyIfLockedOut }}</p>
             @if (busy()) {
               <mat-progress-bar mode="indeterminate"></mat-progress-bar>
             }
             @if (error(); as text) {
               <p class="error">{{ text }}</p>
+            }
+            @if (hasPasskey()) {
+              <p>{{ t().recoverOpen.notLockedOut }}</p>
+              <p><a mat-flat-button routerLink="/">{{ t().recoverOpen.toStart }}</a></p>
             }
             <div>
               <button mat-button type="button" matStepperPrevious [disabled]="busy()">{{ t().common.back }}</button>
@@ -147,10 +166,14 @@ export class RecoverOpenPage {
   /** Step 1's work in progress: the lookup id, the keyholders, the masterpod. */
   protected readonly computing = signal(false);
   protected readonly lookupError = signal<string | null>(null);
+  /** The masterpod answered that a case is already open. */
+  protected readonly caseOpen = signal(false);
   protected readonly email = signal('');
   protected readonly phone = signal('');
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
+  /** The device refused the new passkey because it already holds one of the anoPod's. */
+  protected readonly hasPasskey = signal(false);
 
   /** Step 2 is done when both boxes are filled in and both are valid (2026-11-12; until then one of the two was enough). An empty box is not valid. */
   protected readonly whoDone = computed(() => isContactEmail(this.email().trim()) && isContactPhone(this.phone().trim()));
@@ -165,13 +188,18 @@ export class RecoverOpenPage {
    * account's username; found, the answers are dropped and the stepper moves
    * on. Not found, no keyholder reached, or the masterpod refused: the line
    * under the form says so and the answers stay, so one field can be fixed
-   * and Next pressed again.
+   * and Next pressed again. Since 2026-11-18 the lookup id goes to the
+   * masterpod with that request, and one refusal drops the answers: a case
+   * already open for the lookup id (409). The account was found, so the
+   * line says that a recovery case is already open, and the Back button to
+   * /recover shows under it.
    */
   protected async next(stepper: MatStepper): Promise<void> {
     const answers = this.form.answers();
     if (answers) {
       this.computing.set(true);
       this.lookupError.set(null);
+      this.caseOpen.set(false);
       try {
         // Let the progress bar paint before scrypt blocks the thread.
         await new Promise((resolve) => setTimeout(resolve, 20));
@@ -183,9 +211,17 @@ export class RecoverOpenPage {
         }
         // The account's username. This challenge is never used: CHALLENGE_SECONDS
         // (120) is too short to carry to step 3, and the masterpod sweeps it
-        // with the expired ones.
-        const challenge = await this.api.challenge('openCase', owner.anopodId);
+        // with the expired ones. Since 2026-11-18 the lookup id goes along: a
+        // case already open for it is refused here (409), before any passkey
+        // is made.
+        const challenge = await this.api.challenge('openCase', owner.anopodId, ids.lookupId);
         if (!challenge.ok) {
+          if (challenge.status === 409) {
+            this.lookupError.set(this.t().recoverOpen.alreadyOpen);
+            this.caseOpen.set(true);
+            this.form.reset();
+            return;
+          }
           this.lookupError.set(`/challenge: ${reasonOf(challenge)}`);
           return;
         }
@@ -203,21 +239,43 @@ export class RecoverOpenPage {
     if (this.anopodId() !== null) stepper.next();
   }
 
-  /** Step 3: the challenge, the recovery passkey named with the username, the PRF output, the hybrid pair, the signed payload, the case. */
+  /**
+   * Step 3: the challenge, the recovery passkey named with the username, the
+   * PRF output, the hybrid pair, the signed payload, the case. Since
+   * 2026-11-18 the challenge request carries the lookup id, so a case
+   * already open for it is refused there (409) and its sentence shows; and
+   * the registration takes the credential ids of the pod's passkeys, from
+   * the challenge's answer, as its exclude list. A device that already
+   * holds one of them refuses: hasPasskey is set, and no case is opened.
+   */
   protected async open(): Promise<void> {
     const lookupId = this.lookupId();
     const anopodId = this.anopodId();
     if (!lookupId || !anopodId) return;
     this.busy.set(true);
     this.error.set(null);
+    this.hasPasskey.set(false);
     try {
       const contactEmail = this.email().trim();
       const contactPhone = this.phone().trim();
-      const challenge = await this.api.challenge('openCase', anopodId);
-      if (!challenge.ok) throw new Error(`/challenge: ${reasonOf(challenge)}`);
+      const challenge = await this.api.challenge('openCase', anopodId, lookupId);
+      if (!challenge.ok) {
+        throw new Error(challenge.status === 409 ? this.t().recoverOpen.alreadyOpen : `/challenge: ${reasonOf(challenge)}`);
+      }
       if (!challenge.body.anopodId) throw new Error(this.t().recoverOpen.noAnopodId);
       const username = challenge.body.username ?? this.foundUsername();
-      const registration = await this.passkey.register(challenge.body.challenge, challenge.body.anopodId, username, username);
+      const exclude = (challenge.body.credentialIds ?? []).map((id) => this.crypto.fromHex(id));
+      let registration: Registration;
+      try {
+        registration = await this.passkey.register(challenge.body.challenge, challenge.body.anopodId, username, username, exclude);
+      } catch (err) {
+        // The device already holds one of the anoPod's passkeys: the person is not locked out.
+        if (err instanceof DOMException && err.name === 'InvalidStateError') {
+          this.hasPasskey.set(true);
+          return;
+        }
+        throw err;
+      }
       let prf = registration.prfOutput;
       if (!prf) {
         // The authenticator gave no PRF output at registration: one local assertion with a random challenge gets it.
