@@ -44,9 +44,12 @@ function allKnown(): Record<TextKey, boolean> {
  * The answers of the nine-field form while they are typed. The page that
  * shows the form owns one (so the answers survive a pane or step change and
  * a review pane can read them), hands it to the component, and resets it
- * once the ids exist. Nothing here leaves the tab's memory. The country
- * names and the date text follow the app's language (the language service,
- * injected here: a page makes the state in a field initializer).
+ * when the answers are no longer needed: the identity page once the ids
+ * exist, the locked-out page once the account is found or the page is
+ * left, the Public ledger id page on a match or when the page is left.
+ * Nothing here leaves the tab's memory. The country names and the date
+ * text follow the app's language (the language service, injected here: a
+ * page makes the state in a field initializer).
  */
 export class IdentityFormState {
   private readonly lang = inject(LanguageService);
@@ -114,8 +117,8 @@ export class IdentityFormState {
  * The nine-field birth record form of docs/public-ledger-id.md (wallet spec
  * 8.2 and 12.4): the seven texts with Known / Unknown beside the five that
  * allow it, a country select, a date picker, and the guidance above them.
- * The identity page and the locked-out stepper both show it, each with its
- * own IdentityFormState.
+ * The identity page, the locked-out stepper and, since 2026-11-18, the
+ * Public ledger id page show it, each with its own IdentityFormState.
  */
 @Component({
   selector: 'app-identity-form',

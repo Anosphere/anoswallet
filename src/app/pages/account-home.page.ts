@@ -7,12 +7,14 @@ import { LanguageService } from '../services/language.service';
 
 /**
  * The Account page (wallet spec 8.2), at /account: a plain list under its
- * title, one row per thing, each with an icon, a title and one line. Two
+ * title, one row per thing, each with an icon, a title and one line. Three
  * rows: Account recovery, which opens the Account recovery page
- * (/account/recovery), and, since 2026-11-18, Passkeys, which opens the
- * Passkeys page (/account/passkeys). A new row goes under the last one.
- * The page reads nothing. Until 2026-11-18 it carried the two recovery
- * rows itself, under a subtitle and a sentence about recovery.
+ * (/account/recovery); since 2026-11-18, Passkeys, which opens the
+ * Passkeys page (/account/passkeys); and, since 2026-11-18, Public ledger
+ * id, which opens the Public ledger id page (/account/ledger-id). A new
+ * row goes under the last one. The page reads nothing. Until 2026-11-18 it
+ * carried the two recovery rows itself, under a subtitle and a sentence
+ * about recovery.
  */
 @Component({
   selector: 'app-account-home-page',
@@ -33,6 +35,11 @@ import { LanguageService } from '../services/language.service';
             <mat-icon matListItemIcon>key</mat-icon>
             <span matListItemTitle>{{ t().accountHome.passkeysTitle }}</span>
             <span matListItemLine>{{ t().accountHome.passkeysLine }}</span>
+          </a>
+          <a mat-list-item routerLink="/account/ledger-id">
+            <mat-icon matListItemIcon>fingerprint</mat-icon>
+            <span matListItemTitle>{{ t().accountHome.ledgerIdTitle }}</span>
+            <span matListItemLine>{{ t().accountHome.ledgerIdLine }}</span>
           </a>
         </mat-nav-list>
       </mat-card-content>

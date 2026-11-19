@@ -272,6 +272,8 @@ export const en = {
     recoveryLine: 'Your recovery selfie and details',
     passkeysTitle: 'Passkeys',
     passkeysLine: 'See your passkeys, or add a spare',
+    ledgerIdTitle: 'Public ledger id',
+    ledgerIdLine: 'Check the birth record you gave at setup',
   },
   accountPasskeys: {
     title: 'Passkeys',
@@ -303,6 +305,17 @@ export const en = {
     tooLong: 'That took longer than ten minutes. Start again.',
     nameNotSaved: (reason: string) => `The passkey was added, but its name was not saved (${reason}). Use Rename.`,
     startAgain: 'Start again',
+  },
+  accountLedgerId: {
+    title: 'Public ledger id',
+    intro1: 'Your public ledger id was made from the birth record you typed at setup. If you are ever locked out, you type that record again, and that is how your account is found.',
+    intro2: 'If something was typed wrong at setup, like a name or the date, your account would not be found. Here you can check. Type your birth record again and press Check. Nothing you type is sent.',
+    yours: 'Your public ledger id ends in',
+    typed: 'The id from what you typed ends in',
+    check: 'Check',
+    same: 'These are the same. These are the answers to give if you are ever locked out.',
+    different: 'These are different. Check the spelling, each Known or Unknown choice, the country and the date, then try again. Capital letters and extra spaces make no difference.',
+    noIdentity: "Your public ledger id is not in this tab's memory. Finish setup first, or log in again.",
   },
   accountRecoveryHome: {
     intro: 'These are what a moderator would use to give your account back if you were ever locked out. The more you add, the easier it will be to recover your account.',
