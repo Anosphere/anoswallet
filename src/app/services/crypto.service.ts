@@ -131,9 +131,13 @@ export interface CreateAccountTransaction {
 }
 
 /**
- * The secret halves of pair one and pair two, the 128 bytes inside keyBlob:
+ * The secret halves of pair one and pair two, the 128 bytes inside the
+ * key blob with both pairs:
  * key1 scalar (32) || postQuantumKey1 seed (32) || key2 scalar (32) ||
- * postQuantumKey2 seed (32). The public keys come back from them.
+ * postQuantumKey2 seed (32). The public keys come back from them. Since
+ * 2026-11-20 that blob is no longer what the wallet is handed as keyBlob:
+ * the masterpod keeps it, and hands out the first key blob, pair one's
+ * 64 bytes alone (wrapFirstKeyBlob), once an account has one.
  */
 export interface AccountSecrets {
   key1Scalar: Uint8Array;
@@ -143,7 +147,9 @@ export interface AccountSecrets {
 }
 
 /**
- * Thrown by unwrapKeyBlob (and so by pairOneFromKeyBlob) when a keyBlob does
+ * Thrown by unwrapKeyBlob and by pairOneFromKeyBlob (which opens the blob
+ * itself since 2026-11-20, and no longer through unwrapKeyBlob) when a
+ * keyBlob does
  * not open under the key blob key: the blob was wrapped under the key of
  * another passkey, the one that was lost, or was changed. Since 2026-11-08
  * the pages show such an account as lost (wallet spec 8.2); nothing
@@ -189,6 +195,9 @@ export interface AnosTransferTransaction {
   payload: AnosTransferPayload;
   signatures: TransferSignatures;
 }
+
+/** What stands in front of the list of fingerprints when the challenge of a signing passkey is worked out (signingChallenge; 2026-11-20). The signing server has the same string (SIGNING_PASSKEY_LABEL in its src/sign.js); a new rule for the challenge gets a new string. */
+export const SIGNING_PASSKEY_LABEL = 'anos/signing-passkey/v1:';
 
 /** The fund's account id: the SHA-256 of "anosFund", the genesis fund account every validator ships with. */
 export const FUND_ACCOUNT_ID = 'b8f8da9cc80161e0705943de93dedfe850f0cab74b1939df806972df6ef61e24';
@@ -833,12 +842,12 @@ export class CryptoService {
     };
   }
 
-  /** keyBlob: key1 scalar || postQuantumKey1 seed || key2 scalar || postQuantumKey2 seed, 156 bytes, under the key blob key (deriveKekKeys), not the encryption key, since 2026-11-08. */
+  /** The key blob with both pairs: key1 scalar || postQuantumKey1 seed || key2 scalar || postQuantumKey2 seed, 156 bytes, under the key blob key (deriveKekKeys), not the encryption key, since 2026-11-08. Since 2026-11-20 it is made for a new account and kept by the masterpod; what the wallet is handed as keyBlob is the first key blob (wrapFirstKeyBlob), and this one only while an account has none. */
   wrapKeyBlob(secrets: AccountSecrets, keyBlobKey: Uint8Array): Promise<Bytes> {
     return this.encrypt(keyBlobKey, concatBytes(secrets.key1Scalar, secrets.postQuantumKey1Seed, secrets.key2Scalar, secrets.postQuantumKey2Seed));
   }
 
-  /** The secrets back from keyBlob, under the key blob key (deriveKekKeys), not the encryption key, since 2026-11-08. A blob that does not open under it throws KeyBlobLostError: the account's keys went with another passkey. */
+  /** The secrets back from keyBlob, under the key blob key (deriveKekKeys), not the encryption key, since 2026-11-08. A blob that does not open under it throws KeyBlobLostError: the account's keys went with another passkey. Since 2026-11-20 it reads the key blob with both pairs alone: a first key blob makes it throw "keyBlob must open to 128 bytes", and its one caller is the login (unlock.ts), for an account that has no first key blob yet. */
   async unwrapKeyBlob(blob: Uint8Array, keyBlobKey: Uint8Array): Promise<AccountSecrets> {
     let plain: Bytes;
     try {
@@ -855,10 +864,21 @@ export class CryptoService {
     };
   }
 
-  /** Pair one out of a keyBlob, for one signature; the caller drops it afterwards. Under the key blob key (deriveKekKeys), not the encryption key, since 2026-11-08; KeyBlobLostError when the blob does not open under it. */
+  /** The first key blob (2026-11-20, wallet spec 7): key1 scalar || postQuantumKey1 seed, pair one alone, 92 bytes, under the key blob key. The masterpod hands it to the wallet as keyBlob once an account has one; pair two is not in it. */
+  wrapFirstKeyBlob(secrets: AccountSecrets, keyBlobKey: Uint8Array): Promise<Bytes> {
+    return this.encrypt(keyBlobKey, concatBytes(secrets.key1Scalar, secrets.postQuantumKey1Seed));
+  }
+
+  /** Pair one out of a keyBlob, for one signature; the caller drops it afterwards. Since 2026-11-20 the blob is an account's first key blob, which holds pair one alone (64 bytes inside), or, for an account that has none yet, the blob with both pairs (128 bytes inside), whose first 64 bytes are pair one. Under the key blob key (deriveKekKeys), not the encryption key, since 2026-11-08; KeyBlobLostError when the blob does not open under it. */
   async pairOneFromKeyBlob(blob: Uint8Array, keyBlobKey: Uint8Array): Promise<PairOne> {
-    const secrets = await this.unwrapKeyBlob(blob, keyBlobKey);
-    return { key1: this.p256KeyFromScalar(secrets.key1Scalar), postQuantumKey1: this.generateMlDsaKey(secrets.postQuantumKey1Seed) };
+    let plain: Bytes;
+    try {
+      plain = await this.decrypt(keyBlobKey, blob);
+    } catch {
+      throw new KeyBlobLostError();
+    }
+    if (plain.length !== 64 && plain.length !== 128) throw new Error(`keyBlob must open to 64 or 128 bytes, got ${plain.length}`);
+    return { key1: this.p256KeyFromScalar(plain.subarray(0, 32)), postQuantumKey1: this.generateMlDsaKey(plain.subarray(32, 64)) };
   }
 
   /** The break-glass seed, 32 random bytes per anos account, split and deposited as breakglasskey, then wiped. */
@@ -1004,6 +1024,16 @@ export class CryptoService {
       case 'ML-DSA-87':
         return ml_dsa87.sign(message, key.secretKey);
     }
+  }
+
+  /** The fingerprint of a payload (2026-11-20, wallet spec 3): the SHA-256 of its RFC 8785 canonical bytes, the bytes pair one signs and a signing server signs, as lowercase hex. */
+  fingerprint(payload: object): string {
+    return bytesToHex(sha256(this.canonicalBytes(payload)));
+  }
+
+  /** The challenge a passkey answers before a signing server signs (2026-11-20, wallet spec 3): the SHA-256 of SIGNING_PASSKEY_LABEL followed by the fingerprints joined by commas, as hex. One answer so covers every payload whose fingerprint is in the list, and nothing else. */
+  signingChallenge(fingerprints: string[]): string {
+    return this.sha256Hex(SIGNING_PASSKEY_LABEL + fingerprints.join(','));
   }
 
   /** The payload with its transactionId: the SHA-256 of the canonical JSON of the payload without it. */

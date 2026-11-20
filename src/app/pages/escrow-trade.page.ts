@@ -13,7 +13,7 @@ import { cancelBox, disputeBox, doNotCancelBox, paidQuestionBox, releaseBox } fr
 import { EscrowGuide, escrowGuide, escrowStageWords, stateOfStage } from '../escrow-stage';
 import { AnosApiService, EscrowItem } from '../services/anos-api.service';
 import { CryptoService, KeyBlobLostError, PairOne } from '../services/crypto.service';
-import { EscrowAction, EscrowActionsService } from '../services/escrow-actions.service';
+import { ApprovedEscrowAction, EscrowAction, EscrowActionsService } from '../services/escrow-actions.service';
 import { LanguageService } from '../services/language.service';
 import { reasonOf } from '../services/log.service';
 import { MasterpodApiService } from '../services/masterpod-api.service';
@@ -48,17 +48,21 @@ interface Outcome {
  * opens the confirmation box (wallet spec 8.9) with one of the five boxes
  * of escrow-boxes.ts, and Release, Dispute and Cancel each ask for the
  * passkey there when their button is pressed (2026-11-19; until then the
- * username was typed there). The cancel asks a question
+ * username was typed there). Since 2026-11-20
+ * (forclaude/second-key-and-signing-passkey-plan-1.md) that button first
+ * has escrow-actions.service.ts build the escrowSuccess, escrowCancel or
+ * escrowDispute follow-up with pair one, and the passkey is asked for
+ * exactly that follow-up (approve). The cancel asks a question
  * first, "Have you sent any money to the seller?": after "Yes, I have
  * paid" a box says not to cancel and offers the dispute, and nothing is
  * cancelled on that path; after "No, I have not paid" comes the cancel
  * box; when the question closes without a button, by a step back or
  * forward in the browser's history, that is no answer, so no further box
  * opens and nothing is sent (askChoice, wallet spec 8.9). After a Yes,
- * escrow-actions.service.ts builds the escrowSuccess,
- * escrowCancel or escrowDispute follow-up with pair one, has it signed by
- * /api/sign/<n> and posts it to /escrow-signature, the path the old paste
- * form took. In dispute: who disputed it, the verdicts so
+ * escrow-actions.service.ts has the follow-up that Yes built signed by
+ * /api/sign/<n>, with the passkey's answer sent along, and posts it to
+ * /escrow-signature, the path the old paste
+ * form took (send). In dispute: who disputed it, the verdicts so
  * far and a link to the case under Cases when there is one. The page
  * refreshes every 5 seconds while the trade is open. A trade seen open and
  * then missing from the list is closed: its id on the first page of
@@ -246,6 +250,18 @@ export class EscrowTradePage {
     }
   }
 
+  /** Opens one of the three boxes that end in a signature, Release, Dispute or Cancel (2026-11-20), and sends the follow-up when its Yes passed. The box is given the step its Yes runs (`approve`, wallet spec 8.9): escrow-actions.service.ts builds the follow-up of `action` for this trade with pair one and asks the passkey for it. When the box closes with true, act() sends what that step made. */
+  private async ask(action: EscrowAction, t: EscrowItem, data: ConfirmData): Promise<void> {
+    let approved = null as ApprovedEscrowAction | null;
+    const yes = await this.box({
+      ...data,
+      approve: async () => {
+        approved = await this.actions.approve(action, this.accountId(), t.transactionId);
+      },
+    });
+    if (yes && approved) await this.act(action, approved);
+  }
+
   /** Opens the confirmation box as box() does, for a box whose first button is an answer of its own (2026-11-17, decision 25 of forclaude/wallet-trade-guide-plan-1.md), and resolves to askChoice's answer: true by its second button, false by its first, null when the box closed without a button, which a step back or forward in the browser's history does. boxOpen is true while the box is open and false again whatever happens. */
   private async choice(data: ConfirmData): Promise<boolean | null> {
     this.boxOpen = true;
@@ -256,21 +272,21 @@ export class EscrowTradePage {
     }
   }
 
-  /** The seller's "Release the anos" (2026-11-17): the Release box, with the buyer's account id; its Yes asks for the passkey (2026-11-19), and when that passes the release is sent. Nothing happens while a box is open or a send is on its way. A "Sent. ..." or a refusal from before goes from the page when the box opens. */
+  /** The seller's "Release the anos" (2026-11-17): the Release box, with the buyer's account id, opened through ask() since 2026-11-20; its Yes builds the release and asks for the passkey for it (the passkey since 2026-11-19, the build in front of it since 2026-11-20), and when that passes the release is sent. Nothing happens while a box is open or a send is on its way. A "Sent. ..." or a refusal from before goes from the page when the box opens. */
   protected async release(t: EscrowItem): Promise<void> {
     if (this.boxOpen || this.busy()) return;
     this.outcome.set(null);
-    if (await this.box(releaseBox(this.t(), millionthsToAnos(t.amount), t.accountIdTo))) await this.act('release', t);
+    await this.ask('release', t, releaseBox(this.t(), millionthsToAnos(t.amount), t.accountIdTo));
   }
 
-  /** "Something is wrong: dispute", either side's (2026-11-17): the Dispute box; its Yes asks for the passkey (2026-11-19), and when that passes the dispute is sent. Nothing happens while a box is open or a send is on its way. A "Sent. ..." or a refusal from before goes from the page when the box opens. */
+  /** "Something is wrong: dispute", either side's (2026-11-17): the Dispute box, opened through ask() since 2026-11-20; its Yes builds the dispute and asks for the passkey for it (the passkey since 2026-11-19, the build in front of it since 2026-11-20), and when that passes the dispute is sent. Nothing happens while a box is open or a send is on its way. A "Sent. ..." or a refusal from before goes from the page when the box opens. */
   protected async dispute(t: EscrowItem): Promise<void> {
     if (this.boxOpen || this.busy()) return;
     this.outcome.set(null);
-    if (await this.box(disputeBox(this.t()))) await this.act('dispute', t);
+    await this.ask('dispute', t, disputeBox(this.t()));
   }
 
-  /** The buyer's "I have not paid: cancel the trade" (2026-11-17). First the question "Have you sent any money to the seller?", opened with choice(), since its first button is an answer too. After "Yes, I have paid": the box "Do not cancel this trade", whose red button opens the Dispute box, and on that box's Yes, which asks for the passkey (2026-11-19), the dispute is sent; nothing is cancelled on this path. After "No, I have not paid": the cancel box, whose Yes asks for the passkey (2026-11-19), and when that passes the cancel is sent. When the question closes without a button, by a step back or forward in the browser's history, that is no answer: no further box opens and nothing is sent. Nothing happens while a box is open or a send is on its way. A "Sent. ..." or a refusal from before goes from the page when the question opens. */
+  /** The buyer's "I have not paid: cancel the trade" (2026-11-17). First the question "Have you sent any money to the seller?", opened with choice(), since its first button is an answer too. After "Yes, I have paid": the box "Do not cancel this trade", whose red button opens the Dispute box, and on that box's Yes, which asks for the passkey (2026-11-19), the dispute is sent; nothing is cancelled on this path. After "No, I have not paid": the cancel box, whose Yes asks for the passkey (2026-11-19), and when that passes the cancel is sent. Since 2026-11-20 the Dispute box and the cancel box are opened through ask(), so their Yes builds the dispute or the cancel first and the passkey is asked for exactly that; the question and "Do not cancel this trade" sign nothing and are opened as before. When the question closes without a button, by a step back or forward in the browser's history, that is no answer: no further box opens and nothing is sent. Nothing happens while a box is open or a send is on its way. A "Sent. ..." or a refusal from before goes from the page when the question opens. */
   protected async cancel(t: EscrowItem): Promise<void> {
     if (this.boxOpen || this.busy()) return;
     this.outcome.set(null);
@@ -278,10 +294,10 @@ export class EscrowTradePage {
     if (paid === null) return;
     if (paid) {
       if (!(await this.box(doNotCancelBox(this.t())))) return;
-      if (await this.box(disputeBox(this.t()))) await this.act('dispute', t);
+      await this.ask('dispute', t, disputeBox(this.t()));
       return;
     }
-    if (await this.box(cancelBox(this.t(), millionthsToAnos(t.amount)))) await this.act('cancel', t);
+    await this.ask('cancel', t, cancelBox(this.t(), millionthsToAnos(t.amount)));
   }
 
   protected closedText(c: Closed): string {
@@ -343,12 +359,12 @@ export class EscrowTradePage {
     if (found) this.caseId.set(found.caseId);
   }
 
-  /** Sends the follow-up of the action a box said Yes to, through escrow-actions.service.ts (2026-11-17), shows "Sent. ..." or the validator's refusal in plain words, then refreshes. */
-  private async act(action: EscrowAction, t: EscrowItem): Promise<void> {
+  /** Sends the follow-up of the action a box said Yes to, through escrow-actions.service.ts (2026-11-17), shows "Sent. ..." or the validator's refusal in plain words, then refreshes. Since 2026-11-20 it is handed what that Yes made (`approved`, from ask()): the follow-up signed by pair one and the passkey's answer for it, which the service's send() takes to the signing server and the validator. */
+  private async act(action: EscrowAction, approved: ApprovedEscrowAction): Promise<void> {
     this.busy.set(true);
     this.outcome.set(null);
     try {
-      const res = await this.actions.send(action, this.accountId(), t.transactionId);
+      const res = await this.actions.send(approved);
       if (!res.ok) throw new Error(this.actions.plainReason(res));
       this.outcome.set({ ok: true, text: this.t().escrow.sent[action] });
     } catch (err) {

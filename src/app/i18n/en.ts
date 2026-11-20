@@ -204,6 +204,7 @@ export const en = {
     otherPasskey: 'That was not the passkey you logged in with, so nothing was done.',
     failed: (reason: string) => `The passkey could not be used, so nothing was done: ${reason}`,
     noSession: 'This tab no longer has what the passkey step needs, so nothing was done. Log in again.',
+    notChecked: 'The passkey could not be checked just now, so nothing was sent. Try again in a moment.',
   },
   shares: {
     noIdentity: 'no public ledger id in RAM: unlock again',

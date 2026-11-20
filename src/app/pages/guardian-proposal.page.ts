@@ -7,9 +7,9 @@ import { MatSelectModule } from '@angular/material/select';
 import { RouterLink } from '@angular/router';
 import { millionthsToAnos } from '../amounts';
 import { CopyButtonComponent } from '../components/copy-button.component';
-import { checkSessionPasskey } from '../passkey-check';
+import { SigningPasskey, askSigningPasskey } from '../passkey-check';
 import { AnosApiService, FundProposal, FundSettings } from '../services/anos-api.service';
-import { CryptoService, GuardianVotePayload, Vote } from '../services/crypto.service';
+import { CryptoService, FollowUp, GuardianVotePayload, Vote } from '../services/crypto.service';
 import { GuardianAccount, GuardianAccountsService } from '../services/guardian-accounts.service';
 import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
@@ -49,12 +49,15 @@ const CLOSED = /has closed/;
  * no select. Under it the selected account's state, or, while the vote is
  * open and the account neither proposed nor voted, For and Against, the
  * DAO page's pair, asking in place, with the line that the passkey will
- * be asked for under the question (2026-11-19); Yes first asks the device
- * for the passkey that opened the session (passkey-check.ts), and a check
- * that does not pass leaves the question open; then it opens pair one of
+ * be asked for under the question (2026-11-19); Yes opens pair one of
  * the account for
- * the signature and drops it, builds the guardianVote follow-up, has
- * /api/sign/<n> add the wallet pair and posts /guardian-vote; the green line
+ * the signature and drops it, builds the guardianVote follow-up, and asks
+ * the device for the passkey that opened the session, for exactly that
+ * vote (passkey-check.ts; since 2026-11-20 the build comes first,
+ * forclaude/second-key-and-signing-passkey-plan-1.md), and a step that
+ * does not pass leaves the question open; then it has
+ * /api/sign/<n> add the wallet pair, with the passkey's answer sent
+ * along, and posts /guardian-vote; the green line
  * says the vote is sent, the proposal is read again (the vote shows as
  * waiting for approval until every validator accepted it) and the select
  * moves to the next account that can still vote. The refusals in words,
@@ -322,15 +325,17 @@ export class GuardianProposalPage {
   }
 
   /**
-   * Yes, after the ask. First the passkey check (2026-11-19,
-   * passkey-check.ts): the device is asked for the passkey that opened the
-   * session, straight from this click. A check that does not pass shows
-   * its sentence in the error line and leaves the question open, so Yes
-   * can be pressed again; it is the one failure that does not close the
-   * question, and nothing is built or signed. Then
+   * Yes, after the ask. Since 2026-11-20 the vote is built first:
    * pair one of the picked account for the signature
-   * and dropped, the guardianVote follow-up (crypto.buildFollowUp),
-   * /api/sign/<n>, /guardian-vote. The ask closes; the green line says the
+   * and dropped, the guardianVote follow-up (crypto.buildFollowUp). Then
+   * the passkey check (2026-11-19, passkey-check.ts; askSigningPasskey
+   * since 2026-11-20): the device is asked for the passkey that opened the
+   * session, for exactly that vote. When the build or the check does not
+   * pass, its sentence shows in the error line and the question stays
+   * open, so Yes can be pressed again; these are the failures that do not
+   * close the question, and nothing is sent. Then
+   * /api/sign/<n>, with the passkey's answer sent along, /guardian-vote.
+   * The ask closes; the green line says the
    * vote is sent and the proposal is read again (the vote shows as waiting
    * for approval until every validator accepted it), then the select moves
    * to the next account that can still vote; a refusal in words, and one
@@ -343,8 +348,12 @@ export class GuardianProposalPage {
     this.busy.set(true);
     this.done.set(null);
     this.error.set(null);
+    let vote: FollowUp<GuardianVotePayload>;
+    let passkey: SigningPasskey;
     try {
-      await checkSessionPasskey({ crypto: this.crypto, passkey: this.passkey, session: this.session }, this.t());
+      const payload: GuardianVotePayload = { type: 'guardianVote', transactionId: this.transactionId(), guardianId: account.accountId, vote: side };
+      vote = this.crypto.buildFollowUp(await this.guardians.pairOne(account.accountId), payload);
+      passkey = await askSigningPasskey({ crypto: this.crypto, passkey: this.passkey, session: this.session }, this.t(), [vote.payload]);
     } catch (err) {
       // The passkey check did not pass: the question stays, so Yes can be pressed again.
       this.error.set(err instanceof Error ? err.message : String(err));
@@ -352,9 +361,7 @@ export class GuardianProposalPage {
       return;
     }
     try {
-      const payload: GuardianVotePayload = { type: 'guardianVote', transactionId: this.transactionId(), guardianId: account.accountId, vote: side };
-      const pairOne = await this.guardians.pairOne(account.accountId);
-      const followUp = await this.signing.sign(this.crypto.buildFollowUp(pairOne, payload), account.accountId);
+      const followUp = await this.signing.sign(vote, account.accountId, passkey);
       const res = await this.anos.guardianVote(followUp);
       this.asking.set(null);
       if (res.ok) {

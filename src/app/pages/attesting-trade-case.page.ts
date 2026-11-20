@@ -13,7 +13,7 @@ import { millionthsToAnos } from '../amounts';
 import { CaseChatStartComponent } from '../components/case-chat-start.component';
 import { CASES_POLL_MS } from '../constants';
 import { imageObjectUrl } from '../images';
-import { checkSessionPasskey } from '../passkey-check';
+import { askSigningPasskey } from '../passkey-check';
 import { AnosApiService } from '../services/anos-api.service';
 import { AttestingService, attestingError } from '../services/attesting.service';
 import { BalancesService } from '../services/balances.service';
@@ -110,9 +110,11 @@ function accepted(result: SentResult): boolean {
  * one-time hybrid pair, the account envelope signed by pair one of the
  * staked account to every keyholder in parallel, the shares opened and
  * combined, the rows decrypted), Attest (the line that the passkey will be
- * asked for, and on "Sign the attestation" first the passkey check, since
- * 2026-11-19, passkey-check.ts; then the attestation follow-up built as
- * the account page builds one, then /sign-off-trade-case), Send to the
+ * asked for, and on "Sign the attestation" the attestation follow-up built as
+ * the account page builds one, then the passkey check for exactly that
+ * follow-up, passkey-check.ts, the check since 2026-11-19 and the build in
+ * front of it since 2026-11-20, then /api/sign/<n> with the passkey's
+ * answer, then /sign-off-trade-case), Send to the
  * validators once the case is decided (the stored attestations posted to
  * /attestation and /mark-attestor-case-sent; run at once on the page whose
  * signature decided the case), and Dismiss behind a confirmation.
@@ -642,20 +644,24 @@ export class AttestingTradeCasePage {
    * accountId the sender, transactionId the trade's, the wallet pair from
    * /api/sign/<n>; then /sign-off-trade-case. When the answer says decided
    * this signature decided the case and the sending runs at once.
-   * Since 2026-11-19 the passkey check comes first (passkey-check.ts): the
-   * device is asked for the passkey that opened the session, straight from
-   * the click, before pair one is opened. A check that does not pass shows
-   * its sentence in red under the button, and nothing is signed.
+   * Since 2026-11-19 the passkey is asked for (passkey-check.ts), and
+   * since 2026-11-20 for what was built
+   * (forclaude/second-key-and-signing-passkey-plan-1.md): pair one is
+   * opened and the follow-up built first, then the device is asked for
+   * the passkey that opened the session, for exactly that follow-up
+   * (askSigningPasskey), and the answer goes to /api/sign/<n> with the
+   * follow-up. A check that does not pass shows
+   * its sentence in red under the button, and nothing is sent.
    */
   protected async attest(): Promise<void> {
     let decided = false;
     await this.act(this.attestOutcome, async () => {
       const d = this.data();
       if (!d) throw new Error(this.t().common.caseNotLoaded);
-      await checkSessionPasskey({ crypto: this.crypto, passkey: this.passkey, session: this.session }, this.t());
       const { account, pairOne } = await this.attesting.pairOne();
       const followUp = this.crypto.buildFollowUp(pairOne, { type: 'attestation', transactionId: d.case.transactionId, accountId: d.case.accountId, attestorId: account.accountId });
-      const signed = await this.signing.sign(followUp, account.accountId);
+      const passkey = await askSigningPasskey({ crypto: this.crypto, passkey: this.passkey, session: this.session }, this.t(), [followUp.payload]);
+      const signed = await this.signing.sign(followUp, account.accountId, passkey);
       const res = await this.masterpod.signOffTradeCase(this.caseId(), signed);
       if (!res.ok) throw new Error(this.refusal(res, '/sign-off-trade-case'));
       decided = res.body.status === 'decided';

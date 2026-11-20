@@ -32,6 +32,10 @@ export interface UnlockServices {
  * passkey's own copy, wrappedKeyBlobKey, which opens under a key from its
  * PRF output (deriveKekKeysWrap). A copy that does not open throws, and no
  * key is made in its place.
+ * Since 2026-11-20 (masterpod spec 22; wallet spec 4.11) a login of a
+ * vouched anoPod whose setup is complete ends by storing the first key
+ * blob of each anos account that has none yet (storeFirstKeyBlobs, below).
+ * Nothing there stops the login or changes what is returned.
  */
 export async function unlockWithPasskey({ api, crypto, passkey, session }: UnlockServices): Promise<StatusAnswer> {
   const challenge = await api.challenge('unlock');
@@ -81,5 +85,56 @@ export async function unlockWithPasskey({ api, crypto, passkey, session }: Unloc
   const status = await api.checkAnopodStatus();
   if (!status.ok) throw new Error(`/check-anopod-status: ${reasonOf(status)}`);
   session.status.set(status.body);
+  if (status.body.vouched && status.body.setupComplete) await storeFirstKeyBlobs({ api, crypto, passkey, session });
   return status.body;
+}
+
+/**
+ * The first key blobs (2026-11-20, masterpod spec 22; wallet spec 4.11).
+ * Until 2026-11-20 an account had one blob at the masterpod, with pair one
+ * and pair two in it, and every login got it. Now the masterpod hands the
+ * wallet a blob with pair one alone, the first key blob, and keeps the
+ * blob with both pairs to itself. An account made before has no first key
+ * blob yet, and this makes it, at the login: for each account the
+ * masterpod lists with firstKeyOnly false, the blob with both pairs is
+ * opened, pair one's two secrets are wrapped again alone, and the new
+ * blob is checked before it is sent: it must open to the two public keys
+ * the account's creation names as key1 and postQuantumKey1. Then
+ * /store-first-key-blob. The masterpod writes it once and never touches
+ * the blob with both pairs. After a store the list is read again, so the
+ * session keeps first key blobs only. An account whose blob does not open
+ * (a lost account), one whose check fails and one the masterpod refuses
+ * are left as they are, for the next login. Nothing here stops a login:
+ * every failure is passed over.
+ */
+async function storeFirstKeyBlobs({ api, crypto, session }: UnlockServices): Promise<void> {
+  const keyBlobKey = session.getKeyBlobKey();
+  if (!keyBlobKey) return;
+  try {
+    const listed = await api.listAnosAccounts(true);
+    if (!listed.ok) return;
+    let stored = false;
+    for (const account of listed.body.accounts) {
+      if (account.firstKeyOnly !== false) continue;
+      try {
+        const secrets = await crypto.unwrapKeyBlob(crypto.fromHex(account.keyBlob), keyBlobKey);
+        const blob = await crypto.wrapFirstKeyBlob(secrets, keyBlobKey);
+        const pairOne = await crypto.pairOneFromKeyBlob(blob, keyBlobKey);
+        const named = account.creation.payload['publicKeys'] as Record<string, unknown> | undefined;
+        if (crypto.toHex(pairOne.key1.publicKey) !== named?.['key1'] || crypto.toHex(pairOne.postQuantumKey1.publicKey) !== named?.['postQuantumKey1']) continue;
+        const res = await api.storeFirstKeyBlob(account.accountId, crypto.toHex(blob));
+        if (res.ok || res.status === 409) stored = true;
+      } catch {
+        // A blob that does not open, or anything else: this account is left for the next login.
+      }
+    }
+    if (!stored) {
+      session.accounts.set(listed.body.accounts);
+      return;
+    }
+    const again = await api.listAnosAccounts(true);
+    if (again.ok) session.accounts.set(again.body.accounts);
+  } catch {
+    // Nothing here stops a login.
+  }
 }

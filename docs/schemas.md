@@ -33,7 +33,9 @@ validators' new "account" level (section 5.3).
                                 the signing server :3300 (two signing servers on the network, section 3)
     a validator                 the masterpod, POST /get-anos-account (new); the other validators, as today
     a keyholder                 the masterpod, POST /get-anopod-session-keys, as today
-    a signing server            nobody on this machine; on the network Google Cloud KMS, which holds its wallet pairs
+    a signing server            the masterpod, POST /check-signing-passkey: whether the passkey's answer that came with
+                                a request is good (section 3 and 4.11; 2026-11-20, from the signing servers' own
+                                update on); on the network also Google Cloud KMS, which holds its wallet pairs
 
 Ports on this machine: 4200 ng serve (the user runs it), 4300 the proxy,
 3300 the signing server, the rest as they are.
@@ -261,6 +263,13 @@ its settings, its log lines. This section keeps what the wallet needs to
 know: the two routes, the request and the answers. Until 2026-11-13 it
 described the stand-in, one server with one wallet pair that signed
 whatever the wallet handed it; the notes of section 11 keep that record.
+Since 2026-11-20 a request also carries the passkey's answer for the
+thing to sign (forclaude/second-key-and-signing-passkey-plan-1.md; 4.11
+and the note in section 11). The wallet sends it from its own update on.
+The signing servers read it and have the masterpod check it from their
+own update on, the third step of that plan; until then they read only
+`transaction` and `creation`, and what is said below of `passkey` and of
+the masterpod is not in force yet.
 
 On the network there are two signing servers, the same software on both,
 holding the same wallet pairs, 100 of them; on this machine there is
@@ -274,31 +283,60 @@ per session and asks the other when it does not answer (8.3).
                             for every new account and puts the two keys into the creation, so an account names
                             one wallet pair for life (section 7).
     POST /sign              body { transaction: { payload: object, signatures: object },
-                                   creation: { payload: object } }
+                                   creation: { payload: object },
+                                   passkey: { assertion: object, covers: [hex (32)] } }
                             transaction: what the browser built and signed with its own keys: a creation, a
                             transfer, a transferToFund, a fundProposal or a follow-up.
                             creation: the creation of the signer's account, its payload alone (about 21 KB),
                             without its eight signatures, which the server does not read. It goes with every
                             request but a creation's own: there the transaction is the creation, and the
                             body is { transaction }.
+                            passkey (2026-11-20): the answer of the person's passkey for the thing to sign.
+                            assertion is the WebAuthn JSON of that answer, without its PRF results, in the
+                            form /unlock takes one. covers is the list of the fingerprints the answer was
+                            given for, 1 to 100 of them, each the SHA-256 of the canonical bytes of a payload
+                            as 64 lowercase hex characters (section 7); the fingerprint of this transaction's
+                            payload is one of them. It goes with every request but a creation's own, as the
+                            creation does: a new account needs no passkey answer.
                             200 { transaction }: the transaction with signatures.walletKey (64 bytes r||s
                             over the SHA-256 of the RFC 8785 canonical bytes of payload) and
                             signatures.walletPostQuantumKey (4627 bytes, pure ML-DSA-87, empty context, over
                             the canonical bytes) set, replacing any present; everything else untouched
                             400 { error: reason }: the server does not sign, and the reason says why
+                            400 passkey answer is missing: reload the wallet: a request for anything but a
+                            creation came without a passkey part; a wallet page loaded before 2026-11-20
+                            sends none
+                            400 passkey.covers must be 1 to 100 fingerprints of 64 lowercase hex characters
+                            400 the passkey answer does not cover this transaction: the fingerprint of the
+                            payload is not in covers
+                            400 the passkey answer was refused: <reason>: the masterpod's no, with its reason
                             503 { error: "kms unavailable" }: the server could not get the two signatures
                             from its key store; the wallet counts it as no answer and asks the other server
+                            503 { error: "masterpod unavailable" }: the masterpod gave the server no answer
+                            about the passkey; the wallet counts it as no answer too and asks the other
+                            server, and when that was the last one it shows the sentence
+                            passkeyCheck.notChecked (8.3, 8.8)
 
-Before it signs, the server checks four things without asking anyone.
+Before it signs, the server checks four things from the request alone.
 The signer's account id is the SHA-256 of pair one's two public keys in
 the creation sent along. The wallet pair that creation names is one of
 the server's own, which is also the pair it signs with. The person's
 signatures on the transaction verify: pair one's two, or on a creation
 the six the browser makes. And the transaction is a kind the server
-knows, with the right shape and the right id. It does not check a
+knows, with the right shape and the right id. Then, for everything but
+a creation, the passkey (2026-11-20), which the masterpod checks. The
+fingerprint of the transaction's payload has to be in `covers`. The
+server works the passkey's challenge out again from that list (section
+7) and asks the masterpod, POST /check-signing-passkey with the signer's
+account id, the challenge and the assertion, whether the answer is from
+a passkey of the anoPod that made the account and is an answer to that
+challenge (4.11). It signs on a yes. A no of the masterpod is the 400
+with the masterpod's reason; no answer from the masterpod within 4
+seconds is the 503. It does not check a
 balance or the previous transaction id; the validators do. So a signing
 server signs only what the holder of an account's pair one has already
-signed. A break-glass move and its cancel are signed by the break-glass
+signed and what a passkey of the account's anoPod has answered for. A
+break-glass move and its cancel are signed by the break-glass
 pair alone and are never sent to a signing server, which would refuse
 them.
 
@@ -357,6 +395,7 @@ src/anos-accounts/ (router, handlers, service, queries).
     anopod_id     BYTEA NOT NULL (32)               the pod; index on it
     account_type  TEXT NOT NULL                     spending | guarded | vault | assisted (CHECK)
     key_blob      BYTEA NOT NULL (<= 1024)          pair one and pair two's private halves under the encryption key, 156 bytes (section 7)
+                                                    since 2026-11-20 a second column stands beside it, first_key_blob, pair one alone: 4.11
     creation      JSONB NOT NULL                    the signed creation transaction, all eight signatures, as posted to the validator
     submitted_at  TIMESTAMPTZ                       null until a validator answered the creation
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -367,6 +406,7 @@ signatures; the validators do.
 
     POST /create-anos-account (setup)
     body { accountId: hex, accountType: string, keyBlob: hex, creation: { payload, signatures } }
+      since 2026-11-20 the body also carries firstKeyBlob: hex, the account's first key blob, with one check of its own: 4.11
     checks, in order: the shape (400 bad request shape); accountId 32 bytes (400 invalid accountId);
       accountType one of the four (400 invalid accountType); keyBlob 1 to 1024 bytes (400 invalid keyBlob);
       creation.payload.accountId decodes to the same 32 bytes, creation.payload.accountType equals accountType,
@@ -386,6 +426,8 @@ signatures; the validators do.
     body { }
     answer: 200 { accounts: [ { accountId, accountType, keyBlob: hex, creation, submittedAt: ISO 8601 | null, createdAt } ] },
       the caller's rows, oldest first
+      since 2026-11-20 the body is { firstKeyBlobs: true }, every account also carries firstKeyOnly, and keyBlob is the
+      account's first key blob once it has one: 4.11
 
     POST /get-anos-account (none)
     body { accountId: hex }
@@ -682,6 +724,134 @@ nothing in server/ changed. The wallet's side is the conversation (8.2,
 Chat, the paragraphs "One conversation" and "Unread") and
 masterpod-api.service (8.3).
 
+### 4.11 The first key blob, and the passkey check for the signing servers
+
+Added 2026-11-20 (forclaude/second-key-and-signing-passkey-plan-1.md, its
+step 2; section 11). Why: an anos account has three signing pairs, and
+the validators take any two. Pair one and pair two are the person's own;
+the third is the wallet pair, which the signing servers hold. Until then
+the wallet got pair one and pair two at every login, in one blob per
+account, and the key that opens that blob stays in the browser tab. And
+a signing server signed for whoever showed pair one's signatures. So a
+copy of what an open tab holds was enough to move the person's anos, in
+two ways: with pair one and pair two and no signing server, or with pair
+one and a signing server. Each half of the plan closes one of the two
+ways, and neither half works alone. The first half: the masterpod keeps
+the blob with both pairs as it is, and hands the wallet a new, small
+blob with pair one alone, the first key blob. The second half: a signing
+server signs only when a passkey answer made for the exact thing to sign
+comes with the request, and it asks the masterpod whether that answer is
+good (section 3). The masterpod's side is its own spec's section 22,
+which holds the rule, the column and the checks in full; it is deployed
+before the wallet's step, and the signing servers' step comes after the
+wallet's. The masterpod gained five things there. One column,
+first_key_blob on anos_accounts: null until the wallet stores it,
+written once and never changed, while key_blob is never changed at all.
+One route by which the wallet stores it, /store-first-key-blob. One
+optional field in the body of /create-anos-account. One field in the
+body and one in the answer of /list-anos-accounts, with a refusal for a
+wallet page of before. And one route for the signing servers,
+/check-signing-passkey. No table, no env variable and no npm package.
+
+    POST /create-anos-account (setup), one field more
+    body: as 4.4, and firstKeyBlob: hex, 1 to 1024 bytes, 92 in practice (section 7); the masterpod takes a body
+           without it, and this wallet always sends it
+    checks: as 4.4, with one more after the check of keyBlob: a firstKeyBlob that is there is 1 to 1024 bytes
+           (400 invalid firstKeyBlob); only a body without the field counts as none
+    writes: the row of 4.4, with first_key_blob the blob that was sent, or null
+    answer: 201 { accountId }, as before
+
+    POST /list-anos-accounts (setup), one field in the body, one field more in the answer, one refusal
+    body { firstKeyBlobs: true }: this page can open a first key blob; a wallet page of before sends { }
+    checks: the old page guard: a body that does not say firstKeyBlobs: true, from a pod one of whose accounts
+           has a first key blob, is 409 reload the wallet
+    answer: every account carries firstKeyOnly: boolean beside the fields of 4.4. true: keyBlob is the account's
+           first key blob. false: the account has none yet, and keyBlob is the blob with both pairs, as before.
+           Once an account has a first key blob, its blob with both pairs is answered to nobody
+    a masterpod of before: ignores the body and sends no firstKeyOnly; the wallet then opens the blob with both
+           pairs as before and stores nothing
+
+    POST /store-first-key-blob (setup), new
+    body { accountId: hex, firstKeyBlob: hex }: one of the caller's accounts, and its first key blob, 1 to 1024
+           bytes
+    checks, in order: the shape (400 bad request shape); accountId 32 bytes (400 invalid accountId); firstKeyBlob
+           1 to 1024 bytes (400 invalid firstKeyBlob); a row with this accountId and this pod (404 account not
+           found); the row has no first key blob yet (409 first key blob already stored)
+    writes: first_key_blob on that row, and only where it is null; key_blob is not touched; no notification
+    answer: 200 { accountId: hex }
+    a masterpod of before: does not have the route, and the wallet never calls it there, since that masterpod
+           says firstKeyOnly: false for no account
+
+    POST /check-signing-passkey (none), new; a signing server calls it, the wallet never does
+    body { accountId: hex, challenge: hex (32), assertion: the WebAuthn JSON of a passkey's answer }
+    answer: 200 { accountId, verified: true } when the passkey that answered is one of the anoPod that made the
+           account, its main one or one it added, and the answer verifies against that challenge; else a
+           refusal with its reason (400 bad request shape, 400 invalid accountId, 400 invalid challenge, 400 prf
+           output in request, 404 unknown account, 401 unknown passkey, 401 user handle mismatch, 401 passkey
+           verification failed), which the signing server hands on in its own 400 (section 3). It reads the
+           masterpod's rows and writes nothing, so an answer is not used up
+
+The old page guard. A wallet page loaded before this build opens a key
+blob as the blob with both pairs and nothing else: on a first key blob
+it throws "keyBlob must open to 128 bytes, got 64", and no account would
+open. So this wallet says firstKeyBlobs: true whenever it asks for the
+list, and the masterpod refuses a list without it once one of the pod's
+accounts has a first key blob. A person meets that when they log in on
+an old page after having logged in somewhere with the new wallet: the
+Wallet page and Home show "/list-anos-accounts: HTTP 409: reload the
+wallet", and a reload brings the new page.
+
+What the wallet does with each.
+
+- A login. unlockWithPasskey (unlock.ts), the one door of every login
+  (8.2, Landing), ends with storeFirstKeyBlobs when the anoPod is vouched
+  and its setup is complete. It reads the list. For each account that
+  comes with firstKeyOnly false it opens the blob with both pairs, wraps
+  pair one's two secrets again alone (the first key blob, section 7),
+  opens the new blob again, and compares its two public keys with key1
+  and postQuantumKey1 in the account's creation. Only a blob that passes
+  is sent to /store-first-key-blob. After a store, and after a 409, which
+  says that another login stored one meanwhile, the list is read once
+  more, so the session keeps first key blobs only; when nothing was
+  stored, the first list is the session's. An account whose blob does
+  not open (a lost account, 8.2), one whose check fails and one the
+  masterpod refuses are left as they are, for the next login. The person
+  sees nothing of this, and nothing of it stops a login: every failure
+  is passed over. The login waits for it, so no page reads the account
+  list while the blobs are being stored. It costs one short call for
+  each account, once; a later login finds firstKeyOnly true and stores
+  nothing.
+- A new account. createAccount (account-creation.service, 8.3) makes
+  both blobs in its first step and sends both to /create-anos-account in
+  its fourth (8.2, Wallet).
+- Every read of the list goes through masterpod-api.service's
+  listAnosAccounts (8.3), which says firstKeyBlobs: true.
+- Opening pair one. The field keeps its name, keyBlob, in the answer and
+  in the session's account list (session.service, 8.3), with
+  firstKeyOnly beside it. pairOneFromKeyBlob (crypto.service) opens both
+  kinds: 64 bytes inside, pair one alone, or 128, of which the first 64
+  are pair one. So the thirteen places that open pair one from keyBlob
+  did not change, and the lost check of balances.service opens with it
+  too.
+- The passkey check. The wallet's part is the answer it sends to the
+  signing server with everything but a creation: askSigningPasskey (8.9)
+  and signing.service (8.3).
+
+Two limits of the first half, told to the user when it was planned. A
+copy of a tab made before a person's first login after this build
+already holds both pairs of the accounts they had then. And until a
+person logs in again, the masterpod still hands their old blob to their
+own wallet. Nothing hands the second key out yet: the blob with both
+pairs lies at the masterpod, and the screen where a person asks for it
+comes later (section 10).
+
+The proxy forwards the new route as any masterpod path (section 2);
+nothing in server/ changed. The wallet's side is the unlock flow (8.2,
+Landing), the Wallet page's new account (8.2), the confirmation box and
+the buttons that sign (8.9), the services of 8.3 (session.service,
+signing.service, passkey.service, escrow-actions.service,
+masterpod-api.service and crypto.service) and the rows of section 7.
+
 ## 5. Validator changes (anossoftware)
 
 ### 5.1 A nonces table and two variables
@@ -951,13 +1121,41 @@ flows/how_a_wallet_builds_a_transaction.md). New or changed:
                         ML-DSA-87 keys come back from their seeds (the test wallet's generateMlDsaKey(seed)), P-256
                         public keys from the scalars. Opened only to sign, then dropped; the ciphertext stays in
                         RAM for the session. Before 2026-11-08 the blob was under the encryption key.
+                        Since 2026-11-20 (4.11) this is the blob with both pairs, and it is kept at the masterpod: a
+                        new account sends it once, and the wallet is handed it, as keyBlob in the answer of
+                        /list-anos-accounts, only until the account has a first key blob (the next row). From
+                        then on what the wallet holds and opens to sign is the first key blob.
+    firstKeyBlob (2026-11-20)
+                        AES-256-GCM under the key blob key of key1 scalar (32) || postQuantumKey1 seed (32), 92
+                        bytes: pair one alone (wrapFirstKeyBlob, crypto.service). Pair two is not in it. Made with
+                        a new account, beside the keyBlob, and, for an account that has none yet, at the person's
+                        next login (unlock.ts; 4.11), where it is opened again and its two public keys are compared
+                        with key1 and postQuantumKey1 in the account's creation before it is sent. The masterpod
+                        stores it once (first_key_blob) and from then on answers it as keyBlob, with firstKeyOnly
+                        true. pairOneFromKeyBlob (crypto.service) opens both kinds of blob: 64 bytes inside, or 128,
+                        of which the first 64 are pair one; anything else throws "keyBlob must open to 64 or 128
+                        bytes".
     the wallet pair     asked for every new account from /api/sign/<n>/public-keys (2026-11-13, section 11; fetched
                         once per session until then): a signing server answers one of its pairs, picked at random,
                         and the account names that pair for life; a creation payload carries them as
                         walletKey and walletPostQuantumKey; the browser makes the other six signatures and
                         /api/sign/<n> adds the two. Every transfer, fund proposal and follow-up is signed by pair one
                         in the browser and by the wallet pair through /api/sign/<n>, the signer account's creation
-                        payload sent along (section 3), then posted to the validator.
+                        payload sent along (section 3), then posted to the validator. Since 2026-11-20 the
+                        passkey's answer for the thing goes along as well (the two rows after this one; section 3).
+    the fingerprint of a thing to sign (2026-11-20)
+                        the SHA-256 of the canonical bytes of its payload, the same bytes pair one signs and a
+                        signing server signs, as 64 lowercase hex characters (fingerprint, crypto.service).
+    the challenge of a signing passkey (2026-11-20)
+                        the SHA-256 of the fixed label anos/signing-passkey/v1: followed by the fingerprints, joined
+                        by commas (signingChallenge, crypto.service; the label is SIGNING_PASSKEY_LABEL there and
+                        in the signing server's src/sign.js, and a new rule for the challenge gets a new label).
+                        For one transfer that is one fingerprint. For "Sign all attestations" it is one per move.
+                        One answer covers at most 100 fingerprints. The passkey that opened the session answers it
+                        (askSigningPasskey, 8.9). The signing server works the challenge out again from the list
+                        that came with the request, after it has found the fingerprint of its own payload in that
+                        list. So an answer is good for exactly the things the person's tap built, and a payload
+                        changed afterwards has another fingerprint.
     the account envelope for reads
                         { payload: { accountId, path, timestamp, nonce, body }, signatures: { ecdsa, mldsa } }:
                         the pod envelope with accountId as the signer field, signed by pair one (P-256 r||s over
@@ -1167,7 +1365,12 @@ that does not open stops the log-in with "/unlock: this passkey's copy
 of the key blob key does not open", and no key is made in its place.
 blob1 opens under KEK_prf either way: the masterpod answers the blob1
 of the passkey that signed. The credential id of that passkey is kept
-for the tab (session.service, 8.3), and the Passkeys page marks it. The
+for the tab (session.service, 8.3), and the Passkeys page marks it.
+Since 2026-11-20 (4.11; section 11) a login of a vouched anoPod whose
+setup is complete ends by storing the first key blob, pair one alone,
+of each of its anos accounts that has none yet; the person sees nothing
+of it, and a failure there is passed over, so the login goes through
+either way. The
 platform's passkey picker is what says whether a passkey exists; with
 none, the authenticator's own message shows and the page suggests
 Create. Create goes to /create, Recover to /recover.
@@ -1681,7 +1884,9 @@ and shows its steps as a progress list:
 2. the break-glass seed deposited (section 6, breakglasskey);
 3. /api/sign/<n>: the two wallet signatures added;
 4. /create-anos-account with keyBlob (under the key blob key, section 7;
-   2026-11-08) and the signed creation; when the masterpod answers 403
+   2026-11-08), since 2026-11-20 also firstKeyBlob, the account's first
+   key blob with pair one alone (section 7; 4.11), and the signed
+   creation; when the masterpod answers 403
    account limit reached (4.4; 2026-11-10) the error under the steps is
    "This anoPod has reached the limit for new anos accounts. Try again
    later." in place of the route and its reason;
@@ -1828,14 +2033,18 @@ passkey, the one you log in with."; the buttons Back and "Yes, cancel
 the transfer", the second one red since 2026-11-12 (the box's `danger`,
 8.9). The first button reads Back in this box, where Cancel
 would read as the cancel itself. Back does nothing. "Yes, cancel the
-transfer" first asks for the passkey that opened the session (the
-passkey check, 8.9; 2026-11-19): a check that does not pass leaves the
-box open with its reason in red, and nothing is built. When it passes,
-Yes builds the
+transfer" builds the
 follow-up lockedTransferCancel for the transfer the box showed,
 { type: "lockedTransferCancel", transactionId, accountId } with signedAt
-added (crypto buildFollowUp, pair one from the keyBlob); /api/sign/<n> adds
-the wallet pair; /locked-transfer-cancel takes it (anos-api
+added (crypto buildFollowUp, pair one from the keyBlob), and then asks
+for the passkey that opened the session, for exactly that follow-up
+(the passkey check, 8.9; the check since 2026-11-19, and since
+2026-11-20, section 11, after the build and for what was built, the
+box's `approve`): a check that does not pass leaves the
+box open with its reason in red, and nothing is sent. When it passes,
+the box closes; /api/sign/<n> adds
+the wallet pair, with the passkey's answer sent along (section 3);
+/locked-transfer-cancel takes it (anos-api
 lockedTransferCancel); the page refreshes. While the cancel is on its
 way a progress bar shows under the row, with no words, as on the
 assisted transfer page, and the page's buttons are off; the bar and
@@ -1928,9 +2137,20 @@ only through a fund proposal that the guardians vote for."; since
 2026-11-19 (section 11), as the last line of every box, "To confirm,
 this phone or computer will ask for your passkey, the one you log in
 with."; the buttons
-Cancel and Send. Send in the box brings up the device's passkey sheet,
-for the passkey that opened the session (the passkey check, 8.9;
-2026-11-19). While the device asks, both buttons are off. A check that
+Cancel and Send. Since 2026-11-20 (section 11; the plan is
+forclaude/second-key-and-signing-passkey-plan-1.md) the page reads what
+the send needs from the moment the box opens: pair one from the keyBlob,
+and the account's latest transaction id from /get-account. For that
+moment, usually under a second, the box's Send is grey and a thin moving
+bar shows under the box's lines (the box's `ready`, 8.9). When the read
+fails, the box says "No latest transaction on the ledger yet" in red
+under the lines, Send stays grey, and Cancel closes the box. Once the
+read is back, Send in the box builds the transaction and signs it with
+pair one, at that click, and brings up the device's passkey sheet,
+for the passkey that opened the session, which answers for exactly that
+transaction (the passkey check, 8.9; the check since
+2026-11-19, for what was built since 2026-11-20: the box's `approve`).
+While the device asks, both buttons are off. A check that
 does not pass, as when the person closes the sheet, leaves the box open
 with its reason in red under the lines, and nothing is sent. When the
 passkey answers, the box closes and the send goes out as described
@@ -1953,7 +2173,8 @@ code holds a stake for that time, and a stake comes back by a fund
 proposal, as the second note says. A stake for moderator, attestor,
 validator or masterPod and every transfer keep the box described
 first. Cancel sends nothing and leaves the form as it was
-typed. Send in the box, once the passkey check has passed, empties the
+typed. Send in the box, once the transaction is built and the passkey
+check has passed (the build since 2026-11-20), empties the
 form at once, before the answer
 comes: Kind back to plain, Stake for back to daoVote, the recipient and
 the amount empty, the paste hint gone. The form stays empty whatever the
@@ -1964,12 +2185,18 @@ is what the box showed, not what the form holds. While the send is on
 its way the page shows a progress bar and "Sending…" under the form;
 then the outcome line as before, "accepted: <id>" or the refusal.
 previousTransactionId is /get-account's
-latestTransactionId, fetched right before building, after the box, and
-the date of a guarded or vault transfer is worked out there too, so the
+latestTransactionId, read when the box opens (since 2026-11-20; until
+then it was fetched right before building, after the box). The
+transaction is built at the click of the box's Send, and
+the date of a guarded or vault transfer is worked out there, at that
+click, so the
 time spent reading the box does not use up the lock's offset. The payload is
 signed by pair one (keyBlob opened for the signature and dropped),
-/api/sign/<n> adds the wallet pair, the validator gets it, the page
-refreshes. Send is disabled while the account has a pending transaction,
+/api/sign/<n> adds the wallet pair, with the passkey's answer sent
+along (section 3), the validator gets it, the page
+refreshes. When another send of the same account lands while the box is
+open, the id read at its opening is out of date; the validators refuse
+the one in the box, and the person sends again. Send is disabled while the account has a pending transaction,
 is the seller of an open escrow trade, holds an assisted transfer or has
 a transfer waiting out its lock (one held transaction per account; the
 validator refuses a second) or, on a guarded or vault account, while the
@@ -2139,7 +2366,10 @@ ask for your passkey, the one you log in with.", and its second button
 brings up the device's passkey sheet, for the passkey that opened the
 session (the passkey check, 8.9; 2026-11-19, section 11; until then each
 of the three asked for the username, typed into a text box under the
-notes, before its button worked). A check that does not pass, as when
+notes, before its button worked). Since 2026-11-20 (section 11) that
+button first has escrow-actions.service build the follow-up with pair
+one, and the passkey answers for exactly that follow-up (the box's
+`approve`, 8.9). A check that does not pass, as when
 the person closes the sheet, leaves the box open with its reason in red,
 and nothing is sent. Release: "Release 5 anos to the buyer?", the lines
 Amount and Buyer (the buyer's account id), the notes "Do this only when
@@ -2180,8 +2410,11 @@ the next send). The Yes of the
 Release, the Dispute or the Cancel box is sent by escrow-actions.service
 (8.3), as the page itself sent it until then.
 Yes builds the escrowSuccess, escrowCancel or escrowDispute follow-up
-(crypto buildFollowUp, pair one from the keyBlob), /api/sign/<n> adds the
-wallet pair, /escrow-signature takes it, then "Sent. ..." in green or
+(crypto buildFollowUp, pair one from the keyBlob) and, since 2026-11-20,
+asks the passkey for it while the box is still open (the service's
+approve). Once the box has closed, /api/sign/<n> adds the
+wallet pair, with the passkey's answer sent along (section 3), and
+/escrow-signature takes it (the service's send), then "Sent. ..." in green or
 the validator's refusal in plain words (not all accepted yet; the other
 side moved first, naming what they did; already in dispute; not this
 account's to sign; and, since 2026-11-11, section 11, the wait before
@@ -2243,14 +2476,17 @@ muted grey since 2026-11-19 (section 11), "To confirm, this phone or
 computer will ask for your passkey, the one you log in with.", then
 "Yes, cancel the transfer" or Back. Both cancel
 buttons are red (2026-11-12, section 11; the class `danger`, 8.9):
-"Cancel transfer" and "Yes, cancel the transfer". Yes first asks the
-device for the passkey that opened the session (the passkey check, 8.9;
-2026-11-19), straight from the click and before anything is built; a
-check that does not pass shows its sentence in red in the outcome line,
-the question stays, and nothing is signed. Then Yes builds the
+"Cancel transfer" and "Yes, cancel the transfer". Yes builds the
 assistedTransferCancel follow-up as the removed form did (crypto
-buildFollowUp, pair one from the keyBlob), /api/sign/<n> adds the wallet
-pair, /assisted-transfer-cancel takes it, then "Sent. The transfer is
+buildFollowUp, pair one from the keyBlob) and then asks the
+device for the passkey that opened the session, for exactly that
+follow-up (the passkey check, 8.9; the check since
+2026-11-19, and since 2026-11-20, section 11, after the build and for
+what was built); a
+check that does not pass shows its sentence in red in the outcome line,
+the question stays, and nothing is sent. Then /api/sign/<n> adds the wallet
+pair, with the passkey's answer sent along (section 3),
+/assisted-transfer-cancel takes it, then "Sent. The transfer is
 being cancelled; the anos stay in this account." in green or the
 validator's refusal in plain words (not all accepted yet; already being
 cancelled; no longer held; not this account's to cancel; and, since
@@ -2466,10 +2702,22 @@ amount as the form has it when Start is pressed. Its second note is the
 passkey line, "To confirm, this phone or computer will ask for your
 passkey, the one you log in with." Its buttons are Back and Yes. Back
 sends nothing and leaves the form as it was, and so does a box closed
-by a step back in the browser's history. Yes asks the device for the
-passkey that opened the session (the passkey check, 8.9), straight from
+by a step back in the browser's history. Since 2026-11-20 (section 11;
+the plan is forclaude/second-key-and-signing-passkey-plan-1.md) the
+Start box waits for the same read as the account page's Send box. From
+the moment the box opens the card reads pair one from the account's
+keyBlob and the account's latest transaction id from /get-account, and
+until that read is back Yes is grey and a thin moving bar shows under
+the notes (the box's `ready`, 8.9). A read that fails says "No latest
+transaction on the ledger yet" in red in the box, Yes stays grey, and
+Back closes the box. Once the read is back, Yes builds the
+escrowTransfer as the account page's Send does
+(buildAnosTransferTransaction with type escrowTransfer) and asks the
+device for the
+passkey that opened the session, for exactly that transfer (the passkey
+check, 8.9; the box's `approve`), straight from
 its click: a check that does not pass shows its sentence in red in the
-box, the box stays open, and nothing is read, built or signed. The
+box, the box stays open, and nothing is sent. The
 accounts and the amount are taken when Start is pressed, so what is
 sent is what the box asked about. Start does nothing while a box is
 open or a send is on its way. Until 2026-11-19 Start asked once in
@@ -2479,10 +2727,11 @@ and grey. With that line a phone screen less than 600 to 620 pixels
 high no longer showed Yes and Back, and the card cannot be scrolled, so
 the question went into the box before that build was committed (section
 11). Once the check has passed and the box has closed, the card
-builds the escrowTransfer as the account page's Send does (pair one
-from the account's keyBlob and the encryption key, /get-account for the
-latest transaction id, buildAnosTransferTransaction with type
-escrowTransfer, /api/sign/<n>, /anos-transfer). What follows the answer
+makes its fresh check for an earlier trade (the next paragraph) and then
+sends the escrowTransfer the box's Yes built: /api/sign/<n>, with the
+passkey's answer sent along (section 3), and /anos-transfer. Until
+2026-11-20 the card read the latest transaction id and built the
+transfer here, after the box. What follows the answer
 (rewritten 2026-11-10, section 11, from
 forclaude/wallet-trade-message-plan-1.md): an answer with a 4xx status is
 a refusal and shows the validator's reason as the account page shows it,
@@ -2546,9 +2795,13 @@ trade, "I have been paid: release the anos" (filled): it opens the
 Release box of the escrow trade page (8.9; `releaseBox` of
 src/app/escrow-boxes.ts) with the buyer's account id and the passkey
 line (2026-11-19, section 11; until then the username was typed in the
-box), Back sends nothing, and Yes asks for the passkey in the box and,
-when that passes, sends the release through
-escrow-actions.service (8.3). The card then checks the chat's trade
+box), Back sends nothing, and Yes asks for the passkey in the box,
+since 2026-11-20 (section 11) for the release itself, which that Yes
+builds first (escrow-actions.service's approve; the box's `approve`,
+8.9), and,
+when that passes, the card sends the release through
+escrow-actions.service (8.3), with the passkey's answer. The card then
+checks the chat's trade
 once. An answer that failed shows in the card's error line, as the
 refusal in plain words of the Escrow trade paragraph, only when after
 that check the card still shows this trade as held: an answer lost on
@@ -2589,12 +2842,20 @@ pay until this box says In escrow.", to the seller, grey, the first two
 of those sentences (until 2026-11-17 the card said "Could not check for
 a trade. Trying again." where its two buttons go). The Yes of the Start
 box runs one fresh check, after the passkey check has passed in the box
-(2026-11-19, section 11; the passkey is asked first because Safari opens
-the passkey sheet only for a tap, so it cannot wait behind a read) and
+(2026-11-19, section 11) and
 before
-anything is built or signed: when it cannot be read, nothing is sent and
+anything is sent to a signing server. Since 2026-11-20 (section 11) the
+order of the guards is: the read of the account's latest transaction id
+when the box opens; the build and the passkey at the box's Yes; then
+this fresh check; then the signing server. The transfer has to exist
+before the passkey can answer for it, so it is built before the check
+and no longer after it. The reason given on 2026-11-19 for asking the
+passkey first, that Safari opens the passkey sheet only for a tap, is
+out of date for every device that can use the wallet (the note of
+2026-11-20 in section 11). When the check cannot be read, nothing is sent and
 the card says "Could not check for an earlier trade, so nothing was sent.
-Try again."; when it finds a trade open or released, nothing is sent and
+Try again."; when it finds a trade open or released, nothing is sent,
+what was built is dropped, and
 the card says "Nothing was sent. This chat already has an escrow trade."
 and shows that trade. Three limits: the buyer's card can match a trade
 only when the seller's account id is in the chat, which the chat's
@@ -3027,14 +3288,18 @@ passkey, the one you log in with." Post checks each row ("Payout 2: the
 recipient must be an account id of 64 hex characters", "Payout 2: the
 amount must be anos with up to six decimals"; the recipient lower-cased,
 the amount as millionths, the reason trimmed, stakeFor only when picked),
-then asks the device for the passkey that opened the session (the
-passkey check, 8.9; 2026-11-19), so a row that is wrong is said before
-any passkey is asked, and a check that does not pass shows its sentence
-in the error line with nothing built or signed; then it
+so a row that is wrong is said before any passkey is asked; then it
 opens pair one of the chosen account for the signature and drops it,
 builds the fundProposal (crypto.buildFundProposal: the fund as accountId,
-the chosen account as guardianId, no previousTransactionId), has /api/sign/<n>
-add the wallet pair and posts /fund-proposal; a 202 opens
+the chosen account as guardianId, no previousTransactionId), and
+then asks the device for the passkey that opened the session, for
+exactly that proposal (the
+passkey check, 8.9; the check since 2026-11-19, and since 2026-11-20,
+section 11, after the build and for what was built), and a check that
+does not pass shows its sentence
+in the error line with nothing sent; then it has /api/sign/<n>
+add the wallet pair, with the passkey's answer sent along (section 3),
+and posts /fund-proposal; a 202 opens
 /dao/guardians/<transactionId>. The refusals in words: "a fund proposal is
 already open" (the validator's held check), the sentence above; "the
 proposer has no guardian vote", "This account has no guardian votes.";
@@ -3086,15 +3351,19 @@ passkey line under it, small and grey, since 2026-11-19 (section 11),
 "To confirm, this phone or computer will ask for your passkey, the one
 you log in with.", and with "Yes,
 vote for" and Back (a new pick in the select closes the question, which
-named the account). Yes first asks the device for the passkey that
-opened the session (the passkey check, 8.9; 2026-11-19): a check that
-does not pass shows its sentence in the red error line and leaves the
-question open, so Yes can be pressed again, where every other failure
-closes the question. Then Yes opens pair one of the selected account from its
+named the account). Yes opens pair one of the selected account from its
 keyBlob for the signature and drops it, builds the guardianVote
 follow-up (crypto.buildFollowUp: type guardianVote, the proposal's
-transactionId, the account as guardianId, the vote), has /api/sign/<n> add
-the wallet pair and posts /guardian-vote; a 202 shows "Your vote for is
+transactionId, the account as guardianId, the vote), and then asks the
+device for the passkey that
+opened the session, for exactly that vote (the passkey check, 8.9; the
+check since 2026-11-19, and since 2026-11-20, section 11, after the
+build and for what was built): a build or a check that
+does not pass shows its sentence in the red error line and leaves the
+question open, so Yes can be pressed again, where every later failure
+closes the question. Then Yes has /api/sign/<n> add
+the wallet pair, with the passkey's answer sent along (section 3), and
+posts /guardian-vote; a 202 shows "Your vote for is
 sent to the validators." in green (the thumb green, #2e7d32) and reads
 the proposal again, where the vote shows as waiting for approval until
 every validator accepted it, and the select moves to the next account
@@ -3180,7 +3449,10 @@ excepted, with the keyholder and anos calls included.
                             passkey, and for an added one it is that passkey's wrapped copy, opened (8.2, Landing);
                             since 2026-11-19 (section 11) the credential id and the PRF output also serve the
                             passkey check (8.9): the device is asked for that credential, and its answer is
-                            compared with the two the session kept
+                            compared with the two the session kept; since 2026-11-20 (section 11; 4.11) an account
+                            in the list carries firstKeyOnly beside keyBlob (AnosAccountItem), and the keyBlob the
+                            session keeps is the account's first key blob, pair one alone, once it has one, and
+                            the blob with both pairs only until then
     masterpod-api.service   the keyholder test app's api.service.ts, base path /api/masterpod, the two changed
                             routes and the four new ones added; the marketplace routes of 2026-11-06: getListing,
                             listingId on createChatRoom, mine and status any on listListings, no hpkeKey on
@@ -3200,7 +3472,10 @@ excepted, with the keyholder and anos calls included.
                             methods, listPasskeys (with the quiet flag) and addPasskey; Seen in chat (2026-11-19,
                             section 11; 4.10): seenPosition on RoomMember (optional: only an entry of a room's
                             members carries it, and a masterpod of before sends none) and one method,
-                            markMessagesSeen, always quiet
+                            markMessagesSeen, always quiet; the first key blob (2026-11-20, section 11; 4.11):
+                            listAnosAccounts sends { firstKeyBlobs: true } as its body, firstKeyBlob on
+                            CreateAnosAccountBody, and one method, storeFirstKeyBlob(accountId, firstKeyBlob),
+                            always quiet, which the login calls
     keyholder-api.service   the keyholder test app's, base path /api/keyholder/<n>
     anos-api.service        the anos test app's account-api.service.ts, base path /api/anos/<the session's
                             validator> (2026-11-10, below; /api/anos/<defaultValidator> until then),
@@ -3378,7 +3653,14 @@ excepted, with the keyholder and anos calls included.
                             sent; no kept public keys: every call of publicKeys() asks, since a signing server
                             answers one of its wallet pairs, picked at random, and the session keeps none; a
                             failure is thrown in the words signing.publicKeys(reason) and signing.sign(reason),
-                            as before
+                            as before; the passkey's answer (2026-11-20, section 11; section 3): sign takes a
+                            third argument, sign(transaction, signerAccountId, passkey), the SigningPasskey that
+                            askSigningPasskey made (8.9), and with an id the body is { transaction, creation:
+                            { payload }, passkey: { assertion, covers } }; every caller that names a signer hands
+                            one in, and a creation, sent without an id, carries none; a signing server's 503
+                            "masterpod unavailable" is no answer like its other 503, so the next signing server
+                            is asked, and when that 503 is what the last one asked answered, sign throws the
+                            sentence passkeyCheck.notChecked (8.8) in place of signing.sign(reason)
     crypto.service          the keyholder test app's crypto.service.ts plus the anos test app's (keys, the
                             builders, signing), plus section 7 and the public ledger id; wrapJson and
                             unwrapJson (2026-11-07); deriveKekKeys, the key blob under it and KeyBlobLostError
@@ -3387,7 +3669,12 @@ excepted, with the keyholder and anos calls included.
                             2026-11-08); the follow-up payloads that buildFollowUp signs, FollowUpPayload:
                             AttestationPayload, AssistedTransferCancelPayload, LockedTransferCancelPayload
                             (2026-11-11, section 11), GuardianVotePayload, EscrowSignaturePayload and
-                            EscrowVerdictPayload
+                            EscrowVerdictPayload; the first key blob and the signing passkey (2026-11-20, section
+                            11; section 7): wrapFirstKeyBlob, pair one's two secrets alone under the key blob
+                            key; pairOneFromKeyBlob opens both kinds of blob, 64 bytes inside or 128, and no
+                            longer goes through unwrapKeyBlob, which stays the reader of the blob with both
+                            pairs and is called by the login alone; fingerprint(payload) and
+                            signingChallenge(fingerprints); the constant SIGNING_PASSKEY_LABEL
     passkey.service         the keyholder test app's; since 2026-11-18 (section 11) register() hands back the new
                             credential's id and its transports with the registration and takes an exclude list,
                             the credential ids the anoPod already has, so a place that holds one of them refuses
@@ -3398,7 +3685,10 @@ excepted, with the keyholder and anos calls included.
                             (12.3), and the four others pass neither new argument; since 2026-11-19 (section 11)
                             the passkey check (passkey-check.ts, 8.9) is one more caller of the one-passkey
                             assert: the passkey that opened the session, by its credential id, with an empty
-                            transports list
+                            transports list; since 2026-11-20 (section 11) the assertion of that ask goes to a
+                            server too, for every button but two: askSigningPasskey hands it on, without its PRF
+                            results as assert() gives it back, to the signing server, and the masterpod checks
+                            it (section 3); nothing in the service changed for it
     shares.service          the deposit rule of section 6, one function: deposit(secret, shareType)
     account-creation.service
                             opening an anos account (2026-11-08): createAccount(type, onStep) runs the six steps
@@ -3421,7 +3711,14 @@ excepted, with the keyholder and anos calls included.
                             that answer, deciding nothing about it; plainReason(res), the validator's refusal
                             in plain words (8.2, Escrow trade), which the page had as its own until then; the
                             escrow trade page sends through it, and so does the Release of the pinned card of
-                            a marketplace chat (8.2, Chat)
+                            a marketplace chat (8.2, Chat); since 2026-11-20 (section 11) the one method is two:
+                            approve(action, accountId, transactionId), which the Yes of the page's confirmation
+                            box runs (the box's `approve`, 8.9), opens pair one and builds the follow-up as
+                            send did, asks the passkey for exactly that follow-up (askSigningPasskey) and
+                            resolves with an ApprovedEscrowAction, the account, the follow-up and the passkey's
+                            answer; and send(approved), which the page runs after the box, has /api/sign/<n>
+                            add the wallet pair, with the passkey's answer sent along, posts the follow-up to
+                            /escrow-signature and resolves to that answer
     sound.service           the wallet's one sound and its switch (2026-11-19, section 11; 8.1): on, a signal, true
                             while the sound is on, on this device, read once, when the wallet loads, from
                             localStorage under `anopod-wallet.sound`: 'off' there means off, anything else, or
@@ -3882,6 +4179,19 @@ it on or off on this phone or computer." None of the three is a
 function. The English is the plan's, letter for letter; the three Thai
 lines are the build chat's, by the glossary and by the Thai the file had
 for the same things, and no Thai reader has read them.
+The passkey's answer to the signing servers (2026-11-20, section 11):
+`passkeyCheck` gains one entry at its end, `notChecked`, "The passkey
+could not be checked just now, so nothing was sent. Try again in a
+moment." It is not one of the sentences of a check that did not pass in
+the wallet: signing.service throws it when no signing server signed
+because the masterpod gave no answer about the passkey (8.3), and the
+page shows it where it shows the other errors of that button. The
+English is the plan's, letter for letter. The Thai line is the build
+chat's, "ไม่สามารถตรวจสอบพาสคีย์ได้ในขณะนี้ จึงไม่ได้ส่งสิ่งใด ลองอีกครั้งในอีกสักครู่", in
+the words of the group's other lines ("ไม่สามารถ…ได้" as `failed` has it,
+"จึงไม่ได้ส่งสิ่งใด" after their "จึงไม่ได้ทำสิ่งใด") and with "ลองอีกครั้งในอีกสักครู่",
+which the file has wherever the English says "Try again in a moment.";
+no Thai reader has read it.
 
 ### 8.9 The confirmation box
 
@@ -3910,7 +4220,9 @@ on-surface-variant colour and the value beside it, in the id font when
 the first button; and `passkey` (since 2026-11-19, section 11; it took
 the place of `typed`, which stood here from 2026-11-12) and `danger`
 (since 2026-11-12), which
-are described two paragraphs down. A value too long for its
+are described two paragraphs down; and, since 2026-11-20 (section 11),
+`approve` and `ready`, which a caller may leave out as well and which
+are described there with `passkey`. A value too long for its
 column wraps at a space, and is cut inside a word only when the word
 alone is too long (`overflow-wrap: anywhere`); a value in the id font is
 cut anywhere, by the global rule for `code`, so a 64-character id wraps
@@ -3924,7 +4236,11 @@ once, or, in a box with `passkey`, once the passkey check has passed
 The box closes by those two buttons. In a box with `passkey`
 (2026-11-19, section 11) the second button does not close the box at
 once. Its click asks the device for the passkey that opened the session
-(the passkey check, two paragraphs down), straight from the click. While
+(the passkey check, two paragraphs down), straight from the click. Since
+2026-11-20 (section 11) the click runs the caller's own step for that,
+`approve`, when the box was given one: the step builds what is to be
+signed and then asks the passkey for exactly that. While the step runs
+and
 the device asks, both buttons are off. When the check passes, the box
 closes with true. When it does not, as when the person closes the
 device's passkey sheet, the box stays open, the reason shows under the
@@ -3943,7 +4259,14 @@ answer: `askConfirm` answers false, as for the first button, and
 `askChoice` answers null. The second
 button cannot be pressed for the first half second after the box opens
 (`CONFIRM_ARM_MS`, 500, in constants.ts), so that second click can never
-land on it. Nothing in the box has the focus when it opens (`autoFocus:
+land on it. In a box with `ready` (2026-11-20, section 11) the second
+button also cannot be pressed until what the box waits for is there:
+the button is grey meanwhile, and a thin moving bar shows under the
+notes (Material's progress bar, 12 px under the last line). When the
+wait fails, the bar goes, the reason shows under the notes in red, where
+a check that did not pass shows, and the button stays grey for as long
+as the box is open, so the first button is the way out. Nothing in the
+box has the focus when it opens (`autoFocus:
 'dialog'`: the focus goes to the box itself), so the Enter key answers
 nothing. The box is 480 px wide, or the screen's width less 32 px where
 that is narrower.
@@ -3961,12 +4284,18 @@ passkey before the box closes with true, as the paragraph above has it,
 and a check that did not pass shows its sentence as one red line under
 the notes (the class `error`, the theme's error colour), where the text
 box stood. Left out, the second button closes the box with true at
-once. The check is `checkSessionPasskey(services, words)` in
-src/app/passkey-check.ts, one function in a file of its own, as
+once. The check is in
+src/app/passkey-check.ts, a file of its own, as
 unlock.ts is; the component injects `CryptoService`, `PasskeyService`
-and `SessionService` and hands them over. It asks the device for the
+and `SessionService` and hands them over. Since 2026-11-20 (section 11;
+the plan is forclaude/second-key-and-signing-passkey-plan-1.md) the file
+has two functions over one ask, `checkSessionPasskey(services, words)`,
+the one function of 2026-11-19, and `askSigningPasskey(services, words,
+payloads)`; what differs between them is the challenge the passkey
+answers and where the answer goes, and both are described after the
+ask. It asks the device for the
 passkey that opened this session, that one alone: `PasskeyService`'s
-`assert` with a fresh random challenge of 32 bytes and `only`, the
+`assert` with the challenge and `only`, the
 credential id the session kept at Log in (`passkeyCredentialId`, 8.3)
 with an empty transports list, so the browser's `allowCredentials` is
 that one credential with no hint of where it lives. It passes when that
@@ -3980,19 +4309,67 @@ so nothing was done: <reason>": anything else the device or the browser
 said. "That was not the passkey you logged in with, so nothing was
 done.": another passkey answered. "This tab no longer has what the
 passkey step needs, so nothing was done. Log in again.": the session
-holds no credential id or no PRF output. Nothing goes to a server and
+holds no credential id or no PRF output.
+`askSigningPasskey` (2026-11-20) is the way of every box that gives
+`approve`, and of the six buttons that sign without a box and pass a
+signing server (below). The caller first builds what is to be signed
+and signs it with pair one. The challenge the passkey answers is then
+worked out from the fingerprints of those payloads (section 7), one
+payload for a transfer, a proposal or a follow-up, and several for
+"Sign all attestations", so the answer is good for exactly these and
+for nothing else. The function resolves with the answer and the
+fingerprints, `{ assertion, covers }`, and signing.service sends them to
+the signing server with each of those requests (8.3). The signing server
+has the masterpod check the answer before it signs (section 3, from the
+signing servers' own update on). So for these buttons the passkey is no
+longer the wallet's own lock alone: pair one without the person's
+passkey gets no signature from a signing server.
+`checkSessionPasskey` is left for two callers: the box before a new
+anos account, which gives `passkey` and no `approve`, and the
+moderator's Sign (below). It asks with a fresh random challenge of 32
+bytes, and it is the wallet-only check: there
+nothing goes to a server and
 nothing is kept. The check is the wallet's own, a lock on a button: it
 stops a slip of the finger and a second person holding the unlocked
 phone. It is not a check by the validators or the signing servers. The
 keys that sign also sign every read of a balance, every few seconds, so
 the key that opens them stays in the tab after Log in, and code that got
-into the wallet's page could go around the check. It must be called
-straight from the click that asks for it, before any other wait: Safari
-opens the passkey sheet only for a tap ("Face ID and Touch ID for the
+into the wallet's page could go around the check. Until 2026-11-20 every
+box and every button asked in this way, and the two sentences "Nothing
+goes to a server and nothing is kept." and "It must be called straight
+from the click that asks for it, before any other wait" stood here for
+all of them. The first holds for the two callers of
+`checkSessionPasskey` alone now. The second no longer holds as it
+stood. Its reason was that Safari opens the passkey sheet only for a tap
+("Face ID and Touch ID for the
 web require user gestures to function", and the gesture is carried
 through XHR and fetch for 10 seconds;
-webkit.org/blog/11312/meet-face-id-and-touch-id-for-the-web, read
-2026-11-19). `danger`, true or left out: with true the second button carries
+webkit.org/blog/11312/meet-face-id-and-touch-id-for-the-web, of 2020,
+read
+2026-11-19). That rule was taken away in iOS 17.4 and macOS 14.4, with a
+limit on requests that come too close together in its place (a reply
+marked Apple Staff, developer.apple.com/forums/thread/747036, March
+2024), and an iPhone needs iOS 18 for the wallet's passkeys, so no
+device that can use the wallet has the rule (the note of 2026-11-20 in
+section 11). The passkey is still asked from the click of the button,
+but not before every other wait: `approve` opens pair one and builds
+first, which are steps inside the browser, and in the Send box and the
+Start box a read from a validator comes before the button can be
+pressed (`ready`).
+`approve` (2026-11-20), a function or left out, with `passkey`: the
+caller's own step, `() => Promise<void>`, which the second button runs
+straight from its click in place of `checkSessionPasskey`. The caller
+builds what is to be signed there, asks the passkey for it with
+`askSigningPasskey`, and keeps both for after the box. While it runs,
+both buttons are off. When it resolves, the box closes with true. When
+it throws, the box stays open, the error's message shows under the notes
+in red, and the button works again.
+`ready` (2026-11-20), a promise or left out: what the second button
+waits for. Until it resolves the button is off and the moving bar shows
+under the notes. When it rejects, the error's message shows in red and
+the button stays off, so the first button is the way out. Left out, the
+button waits for `CONFIRM_ARM_MS` alone.
+`danger`, true or left out: with true the second button carries
 the class `danger`. That class is one rule in src/styles.css, the
 wallet's global style file. It sets five of Material's button variables
 to the theme's error colours: a filled button is red with the on-error
@@ -4038,7 +4415,14 @@ this trade", which sign nothing: the Send box, for every kind of send
 and every stake; the box before a new anos account, for Create anos
 account and for Retry; the cancel of a locked transfer; the Release,
 Dispute and Cancel boxes of an escrow trade, the card's Release among
-them; and the card's Start box. Each of these boxes ends its notes with
+them; and the card's Start box. Since 2026-11-20 (section 11) every box
+that gives `passkey` also gives `approve`, but the box before a new anos
+account, which keeps the wallet's own check: a new account needs no
+passkey answer at the signing server (decision 8 of
+forclaude/second-key-and-signing-passkey-plan-1.md). And two of them
+also give `ready`, the Send box and the card's Start box: the two that
+build a transfer on the account's latest transaction id, which is read
+from the moment the box opens. Each of these boxes ends its notes with
 the passkey line, "To
 confirm, this phone or computer will ask for your passkey, the one you
 log in with." (`passkeyCheck.note`). Each does nothing while a box is
@@ -4046,9 +4430,16 @@ already open.
 
 Seven more buttons sign with an account's key and open no box
 (2026-11-19, section 11). They ask in the page or asked nothing until
-then, and no new pop-up box was made for them: the passkey check is the
-first thing their click does, before anything is read from a server,
-built or signed, and the passkey line stands near the button. (An
+then, and no new pop-up box was made for them: the passkey line stands
+near the button, and the click asks for the passkey. Until 2026-11-20
+the passkey check was the first thing their click did, before anything
+was read from a server, built or signed. Since 2026-11-20 (section 11)
+six of the seven, the ones that end in a signing server's signature,
+ask with `askSigningPasskey`: the click opens pair one, builds what it
+signs, and then asks the passkey for exactly that, once, also where one
+click makes several signatures. The seventh, the moderator's Sign,
+passes no signing server and keeps `checkSessionPasskey`, the
+wallet-only check, as the first thing its click does. (An
 eighth was among them as that day's build first stood: Yes, under "Put
 the anos in escrow" in the pinned card of a marketplace chat. It asked
 in the card, and its question went into the Start box before the build
@@ -4060,7 +4451,8 @@ the attestation", "Sign the verdict" and "Sign all attestations" on the
 attestor's three case pages (13.3), the last one once for all its moves.
 And Sign on the moderator's recovery case page (12.3). A check that does
 not pass throws its sentence, and the page shows it where it shows every
-other failure of that button; nothing is signed. With the seven boxes
+other failure of that button; nothing is sent, and the moderator's Sign
+signs nothing. With the seven boxes
 that ask (the Send box, the box before a new anos account, the cancel
 of a locked transfer, Release, Dispute, Cancel and Start) that
 makes fourteen buttons, which is every place the wallet signs with an
@@ -4120,7 +4512,12 @@ Cloud machines.
   (forclaude/signing-server-plan-1.md, its step 2; section 3 here, and
   the signing server's own README, which is its spec). It still has no
   auth of its own: on the network only the two wallet servers can reach
-  it.
+  it. Since 2026-11-20 (4.11; the plan is
+  forclaude/second-key-and-signing-passkey-plan-1.md) a request for
+  anything but a new account has to carry a passkey's answer for the
+  exact thing to sign, and the signing server has the masterpod check
+  it, from the signing servers' own update on. That ties a signature to
+  the person's passkey; it is still no sign-in of whoever calls.
 - Keyholder discovery and ceremonies: the proxy's list is the truth.
 - A retry of a failed keyholder deposit: the step restarts with a new
   secret. A catch-up that gives a keyholder the shares it missed while
@@ -4307,6 +4704,20 @@ Cloud machines.
   own Back leaves the walk-through, and the person starts again at
   screen 1; and a person who taps "Yes, I still have it" by mistake
   has to tap Back to answer again.
+- From the second key and signing passkey plan
+  (forclaude/second-key-and-signing-passkey-plan-1.md, 2026-11-20, its
+  section 6): the screen where a person asks for their second key, with
+  the route that hands out the blob with both pairs (until it is built
+  nothing hands the second key out, and nobody can get it out, the
+  person included); the stronger lock on the second key, a second secret
+  from the passkey (as built the lock is the masterpod's rule, so a copy
+  of an open tab together with a copy of the masterpod's database is the
+  second key); signing servers that keep their own list of passkeys and
+  so do not have to believe the masterpod; and the masterpod's own
+  passkey check at a moderator's sign-off, which keeps the wallet-only
+  check until then (8.9). The first, the second and the fourth are lines
+  of the after-production list. That section of the plan has what else
+  is out and the known limits.
 - Several passkeys, push delivery, a custom theme, rate limits. Push
   delivery stays out since the sound of 2026-11-19 (8.1; section 11)
   too: that sound is made by the open page and plays only while the
@@ -4503,7 +4914,11 @@ that differed from the plan and why.
 - Pair one and pair two are kept as secrets (two P-256 scalars, two
   ML-DSA-87 seeds) and wrapped as the 156-byte keyBlob; pair one is opened
   from the blob for every signature, including the signed reads, and dropped
-  afterwards. The break-glass seed is deposited as `breakglasskey` and
+  afterwards. (Since 2026-11-20, 4.11 and that day's note: the 156-byte
+  blob with both pairs is kept at the masterpod, and the wallet is handed
+  and opens the account's first key blob, 92 bytes with pair one alone;
+  the blob with both pairs is opened only at a login, for an account that
+  has no first key blob yet.) The break-glass seed is deposited as `breakglasskey` and
   zeroed. Amounts are typed in anos with up to six decimals
   (`src/app/amounts.ts`) and travel as millionths.
 - The wallet page runs the six steps as a progress list; a failure before
@@ -12372,7 +12787,13 @@ own page on 2026-11-19
 and Touch ID for the web require user gestures to function", and the
 gesture is carried through XHR and fetch for 10 seconds. So the passkey
 is asked straight from the click of the button that signs, before any
-other wait.
+other wait. (Since 2026-11-20, the note "The first key blob, and the
+passkey's answer to the signing servers": for every button of the table
+below but two, "Create anos account" and the moderator's Sign, the thing
+is built first, the passkey answers for exactly what was built, and a
+signing server has the masterpod check that answer before it signs; and
+Safari's rule is out of date for every device that can use the wallet,
+so the passkey no longer has to come before every other wait.)
 
 The fourteen buttons, the table of the plan's section 2, with its
 seventh row as the build ended: the plan has that button, the Yes of
@@ -14237,6 +14658,331 @@ not touched, and no validator has to pull.
   working, under the form it was loaded with, until it is loaded
   again.
 
+### The first key blob, and the passkey's answer to the signing servers (2026-11-20)
+
+Built from `forclaude/second-key-and-signing-passkey-plan-1.md` (FINAL,
+2026-11-20), its step 2 of four, its section 2, one commit, on main at
+f4dd6a8, the working tree clean. Step 1, the masterpod, was built and
+committed the same day (masterpodsoftware bcf89c7). Steps 3, the
+signing server, and 4, the records, come after this one. Why, in the
+user's words of 2026-11-19: "only giving the user the first anos key
+when they log in, and not their second", the second key being "really
+just there so you can ensure you can leave a wallet"; and "Making so the
+signing server required the user to use their passkey before the signing
+server would sign the transaction." The aim: "a hacker who got a user's
+unencrypted data that exists while the user is using the site only get's
+the first key, and that the hacker can't use the first key alone to send
+anos. The hacker would also need control of the user's actual passkey."
+Wallet only: no line of `network/wallet.env` and no npm package; the
+proxy (`server/`), the validators, the doormen, the keyholders and the
+signing servers are not touched by this step.
+
+What it is. An anos account has three signing pairs, and the validators
+take any two. Pair one and pair two are the person's own; the third is
+the wallet pair, which the signing servers hold. The wallet got both of
+the person's pairs at every login, in one blob per account, and a
+signing server signed for whoever showed pair one's signatures, so a
+copy of what an open tab holds was enough to move the person's anos.
+The plan closes that in two halves, and neither works alone. This step
+is the wallet's part of both. First: at a login the wallet makes a
+small blob with pair one alone for each account that has none, the
+first key blob, and the masterpod stores it and from then on hands the
+wallet only that one (4.11). Second: at every button that ends in a
+signing server's signature, the thing is built first, the passkey
+answers for exactly what was built, and the answer goes to the signing
+server with the request (section 3; 8.9). The signing servers check
+that answer from their own step on. Until then nothing is enforced.
+
+The order of the deploys is the masterpod, the wallet, the signing
+servers, and nothing breaks in between. This wallet works with today's
+signing servers, which read only `transaction` and `creation` of a
+request. It works with a masterpod of before as well: that one says
+`firstKeyOnly` for no account, so the wallet opens the blob with both
+pairs as before and stores nothing.
+
+What a person sees. Nothing new on a normal day. In the Send box of an
+account's page and in the Start box of a marketplace chat's card, the
+box's button is grey for a moment after the box opens, usually under a
+second, with a thin moving bar under the box's lines; a read that fails
+says "No latest transaction on the ledger yet" in red in the box, and
+the button stays grey. And one new sentence, where a page shows its
+other errors: "The passkey could not be checked just now, so nothing
+was sent. Try again in a moment."
+
+- `src/app/i18n/en.ts` and `th.ts`: one entry at the end of the group
+  `passkeyCheck`, `notChecked`. The English is the plan's 2.1, letter
+  for letter. The Thai is the build chat's, written out in 8.8 with how
+  it was made; no Thai reader has read it.
+- `src/app/services/crypto.service.ts`, as the plan's 2.2 gives it: the
+  constant `SIGNING_PASSKEY_LABEL`; `wrapFirstKeyBlob`;
+  `pairOneFromKeyBlob`, which opens both kinds of blob and no longer
+  goes through `unwrapKeyBlob`; `fingerprint` and `signingChallenge`.
+  `unwrapKeyBlob` and `wrapKeyBlob` have the bodies they had.
+- `session.service.ts` and `masterpod-api.service.ts`, as 2.3:
+  `firstKeyOnly` on `AnosAccountItem`; `firstKeyBlob` on
+  `CreateAnosAccountBody`; `listAnosAccounts` sends
+  `{ firstKeyBlobs: true }`; the new method `storeFirstKeyBlob`.
+- `src/app/unlock.ts`, as 2.4: `unlockWithPasskey` ends with
+  `storeFirstKeyBlobs` for a vouched anoPod whose setup is complete;
+  the new function under it.
+- `account-creation.service.ts` and `balances.service.ts`, as 2.5: a
+  new account brings both blobs; the lost check opens with
+  `pairOneFromKeyBlob`.
+- `src/app/passkey-check.ts`, as 2.6: `checkSessionPasskey` hands its
+  body to `askSessionPasskey`; the interface `SigningPasskey`; the new
+  function `askSigningPasskey`.
+- `src/app/services/signing.service.ts`, as 2.7: `sign` takes the
+  passkey's answer as its third argument and sends it along; a 503
+  that says "masterpod unavailable" from the last signing server asked
+  is thrown as `passkeyCheck.notChecked`.
+- `src/app/components/confirm-dialog.component.ts`, as 2.8:
+  `ConfirmData.approve` and `ConfirmData.ready`; Material's progress
+  bar in the box; the signals `waiting` and `blocked`; the constructor
+  listens to `ready`; `yes()` runs `approve` when the box has one.
+- `src/app/pages/account.page.ts`, as 2.9: the types `BuiltSend` and
+  `MadeSend`; `askSend()` starts the read and gives the box `ready` and
+  `approve`; the new methods `readForSend()` and `build()`; `send()`
+  takes what the box made and reads and builds nothing;
+  `askCancelLocked()` gives `approve`.
+- `escrow-actions.service.ts` and `pages/escrow-trade.page.ts`, as
+  2.10: the service's one method is two, `approve` and `send`, with the
+  interface `ApprovedEscrowAction`; the page's new method `ask()`,
+  through which Release, Dispute and Cancel open their boxes, and
+  `act()` takes what `ask()` made. The question before a cancel and "Do
+  not cancel this trade" are opened as before.
+- `src/app/components/pinned-listing.component.ts`, as 2.11: `start()`
+  reads from the moment the box opens, gives the Start box `ready` and
+  `approve`, and sends what the box built after its fresh check for an
+  earlier trade; `release()` gives the Release box `approve`.
+- The six buttons that sign without a box, as 2.12:
+  `assisted-transfer.page.ts`, `guardian-new.page.ts`,
+  `guardian-proposal.page.ts`, `attesting-trade-case.page.ts`,
+  `attesting-dispute-case.page.ts` and `attesting-recovery-case.page.ts`.
+  In each the thing is built first and the passkey asked for it. On the
+  recovery case page every move's attestation is built, one answer is
+  asked for all of them, and each goes to the signing server with that
+  answer. `pages/moderation-case.page.ts` and `pages/wallet.page.ts`
+  are not touched: the moderator's Sign and the box of "Create anos
+  account" keep `checkSessionPasskey`.
+- The comments of the plan's 2.13, in those files and in
+  `escrow-boxes.ts` and `passkey.service.ts`, which got no code.
+- README: the lines of `unlock.ts`, `passkey-check.ts`,
+  `components/confirm-dialog.component.ts` and `passkey.service.ts`.
+- Spec: section 1 (the row of a signing server); section 3; 4.4 (three
+  lines that point to 4.11); the new 4.11; section 7 (the `keyBlob`
+  row, the new rows `firstKeyBlob`, the fingerprint and the challenge,
+  and the row of the wallet pair); 8.2 (Landing, "Wallet. Titled", "The
+  sender can cancel the locked transfer from its row", "Send: recipient
+  account id", "Escrow trade, at", "Assisted transfer, at", "The pinned
+  card", "The chat's trade", "New fund proposal, at" and "Fund
+  proposal, at"); 8.3 (the lines of `session.service`,
+  `masterpod-api.service`, `signing.service`, `crypto.service`,
+  `passkey.service` and `escrow-actions.service`); 8.8; 8.9; section 10
+  (the signing server's auth, and one new bullet); 13.3 (the three
+  bullets of the sign-offs); this note; and one dated clause in
+  brackets in each of two older notes, "Step 8, the wallet
+  (2026-10-25)" and "The passkey wherever the wallet signs with an
+  account's key (2026-11-19)". 12.3, the moderator's page, is not
+  touched.
+- Safari. The note of 2026-11-19 and several comments said that the
+  passkey has to be asked straight from the click, before any other
+  wait, because Safari opens the passkey sheet only for a tap. That
+  rule is of 2020 (webkit.org/blog/11312). A reply marked Apple Staff
+  on Apple's developer forum (developer.apple.com/forums/thread/747036,
+  March 2024) says the requirement was removed as of iOS 17.4 and macOS
+  14.4, with a limit on requests that come too close together in its
+  place. An iPhone needs iOS 18 for the wallet's passkeys. So no device
+  that can use the wallet has the rule, and nothing in this step is
+  shaped around it (the plan's decision 17, read by the planning chat
+  on 2026-11-19 and 2026-11-20; this build did not read the pages
+  again). The read of the account's latest transaction id when the box
+  opens stays for its other reason: the box's button then answers at
+  once. Not looked up: how Safari's limit behaves when a person sends
+  many times in a row. This step asks for the passkey as often as the
+  wallet did before it.
+- What follows from the plan's code, written here so that it is not
+  taken for a fault. A read that failed leaves the box's button grey
+  for as long as that box is open: the person closes the box and
+  presses Send again. The id is read when the box opens, so a send of
+  the same account that lands while the box is open makes the
+  validators refuse the one in the box. A transfer is dated at the
+  click of the box's button and waits at the passkey sheet from then;
+  the validators refuse a transfer dated more than 10 minutes from
+  their clock. In the escrow boxes and the Start box, what the build
+  throws (no key blob key in this tab, a lost account) now shows in
+  the box in red, where the page's outcome line or the card's error
+  line showed it. On the Fund proposal page a pair one that does not
+  open leaves the question open now, as a passkey step that did not
+  pass does, since both stand in the first `try`; the comment line in
+  that `try` is the plan's and names the passkey alone. The lost check
+  makes pair one's two keys for every account it tries, where it only
+  opened the blob before. A login of a vouched anoPod whose setup is
+  complete reads the account list itself and puts it into the session,
+  once, and once more after a store; before, the pages read it. The
+  store runs in all three editions.
+- Readings where the plan left a detail open. BUILD-DATE is 2026-11-20.
+  The Thai line is in the words of the group's other lines. A new
+  import line stands where the planning chat's tried copy has it, so
+  three of them are not in their file's order by path:
+  `../passkey-check` after `./log.service` in `signing.service.ts`, in
+  front of `./crypto.service` in `escrow-actions.service.ts`, and in
+  front of `../escrow-stage` in `pinned-listing.component.ts`. The
+  comments of 2.13 were brought in line with dated sentences ("Since
+  2026-11-20"); a sentence that said the opposite, the passkey first
+  and the build after it, was reworded, with its date of 2026-11-19
+  kept in a clause. The doc comment of `checkSessionPasskey` had no
+  list of callers: it gained one sentence that names the two that are
+  left, and lost the sentence on Safari. The class comment of
+  `signing.service.ts` and section 3 say that the signing servers read
+  the passkey's answer from their own step on, so that both are true
+  between the two deploys. Of "the three routes" 4.11 has the three the
+  wallet calls in full, and the fourth, which a signing server calls,
+  in short. Section 10's four new items are one bullet, in the form of
+  the other plans' bullets. In 8.9 the two sentences that no longer
+  hold as they stood are kept as a record of what stood there.
+- The checks. `npx ng build` from the wallet folder, into a scratch
+  folder (`--output-path`), clean, with no warnings, and the same main
+  file before and after the comments were written. The English entry
+  against the plan, letter for letter. `grep` under `src/`:
+  `checkSessionPasskey(` in three files, `askSigningPasskey(` in ten,
+  and every call of `signing.sign(` but the one of
+  `account-creation.service.ts` has three arguments. Every code block
+  of the plan's section 2 stands in the files, 28 fenced and 3 indented
+  ones, found by a script. A copy of f4dd6a8 patched by the planning
+  chat's two scripts was compared with the working tree before the
+  comments were written: equal but for the Thai line. After the
+  comments, every `.ts` file under `src/` gives the same JavaScript as
+  before them, with the comments stripped by the repo's own esbuild.
+- The throwaway run of the plan's 2.15, with nothing kept: the real
+  services of the working tree bundled for Node, with stand-ins for
+  Angular, the masterpod and the passkey; the planning chat's script,
+  unchanged. 25 results, all as its table says. A login with five
+  accounts makes the calls list, store, store, list. The session then
+  holds first key blobs of 92 bytes for the two and for the one that
+  had one, the old blob for the lost one and for the one whose blob
+  holds other keys than its creation names, and the blob with both
+  pairs of a stored account nowhere. Pair one out of a first key blob
+  and out of the old blob of the same account is the account's pair
+  one. Inside a first key blob are 64 bytes, pair one's two secrets.
+  `unwrapKeyBlob`, which a page of before has alone, throws "keyBlob
+  must open to 128 bytes, got 64" on one. The next login makes the one
+  call list. A login whose store is refused and a login whose list
+  throws both go through, and the login after that stores. The wallet's
+  fingerprint and challenge are those of the signing server's own rule
+  in a scratch copy of the plan's step 3, and the label is the same
+  string. `askSigningPasskey` asks once, of the passkey that opened the
+  session, with the challenge of that one fingerprint; an answer from
+  another passkey is `passkeyCheck.otherPasskey`. Against that scratch
+  signing server, with a made-up masterpod that says yes: a creation
+  with no passkey answer, a transfer with one, and three attestations
+  under one answer are signed; a fourth one is refused, and so is the
+  transfer with its amount changed.
+- A second throwaway run, the build's own: the real `SigningService`,
+  `LogService` and `ConfigService` behind the wallet's real proxy
+  (`server/app.js`), on 127.0.0.1, in front of scratch signing servers.
+  15 results. Signing server 1 cannot reach the masterpod and signing
+  server 2 can: the transfer is signed by 2, the session stays on 2,
+  and the body is the transaction, the creation's payload alone and
+  the passkey's answer. Neither reaches it: the new sentence, in
+  English and in Thai, after both were asked; a new account is still
+  signed. A signing server whose key store does not answer keeps its
+  own words, "the signing server: HTTP 503: kms unavailable". The
+  masterpod's no, a request without a passkey answer and an answer
+  given for another transfer each come back as "the signing server:
+  HTTP 400: <the reason>", asked once. An account that is not this
+  pod's sends nothing. And today's signing server (cd334e7, unpatched)
+  signs a transfer and three attestations that carry the passkey's
+  answer, and asks no masterpod.
+- The look, where. A development build in a scratch folder on this Mac,
+  served by a plain file server on 127.0.0.1 (a temporary entry in
+  `/Users/codex/.claude/launch.json`, taken out again; the file is byte
+  for byte what it was), in the Claude app's browser pane, in English
+  and in Thai, at 360x560, 375x667 and 430x932. A made-up session with
+  real keys, made by the wallet's own code in the page: a key blob key
+  and two accounts with first key blobs, so the page's own read, build
+  and pair one signature ran. The validators' reads were answered in
+  the page, and what a page hands to the signing service was kept
+  there and not sent. The device's answer was a stand-in on the
+  wallet's passkey service: no passkey was asked for, and the
+  browser's passkey call was never made. None of our servers was asked:
+  the request list shows the file server and Google's font files. Not
+  on a phone, not in Safari and not on the live wallet. The pane was
+  not on screen while the look ran, so the bar was not watched moving;
+  it is Material's indeterminate progress bar, the one the account page
+  shows while it loads.
+- The look, the Send box and the Start box, in their three states.
+  While the box waits: the second button is off and grey, the first
+  works, and the bar stands under the last line, 4 pixels high, 12
+  under the line, from edge to edge of the box's content; the box is
+  16 pixels taller than without it. Once the read is back the bar is
+  gone and the button works. With a read that failed: no bar, "No
+  latest transaction on the ledger yet" in red, one line in both
+  languages at every size, the second button off, and the first button
+  closes the box. In every state, language and size the box is whole
+  inside the screen, its content does not scroll, and the two buttons
+  stand on one row. The Send box at 360x560 is 337 pixels high while it
+  waits and 353 with the red line. The stake boxes, the tallest, were
+  looked at too in the two new states: 473 and 489 pixels in English
+  and 493 and 509 in Thai at 360x560, whole on that screen.
+- The look, the passkey, with the device's answer standing in. The
+  sheet closed: both buttons off while the device is asked, then the
+  box stays, the red line shows, and both work again. Another passkey:
+  its own red sentence. The session's passkey: the box closes, and the
+  page hands on what the box's button built: the transfer chained on
+  the id read when the box opened, signed by pair one, with a passkey
+  part whose one fingerprint is that transfer's, after one ask whose
+  challenge was the one of that fingerprint. The same for the cancel
+  of a locked transfer and for Release on the escrow trade page. The
+  box before a new anos account has neither `approve` nor `ready`,
+  asks with a random challenge, and hands no passkey part on.
+- Not tried. A real passkey, which belongs to the wallet's own address:
+  the first real try is the user's, on the live wallet. A phone, and
+  Safari. The masterpod's new routes over HTTP, a validator, Google's
+  key store and a signing machine. The masterpod's own check of an
+  answer the wallet made: the runs used a masterpod that says yes or
+  no. The six pages that sign without a box, and Dispute and Cancel of
+  an escrow trade, were not opened in the scratch page; their code is
+  the plan's and builds, and the run in Node covers the ask and the
+  three attestations under one answer.
+- Places this step left out of date that the plan does not name. The
+  build left them as they were, listed them in its report and asked.
+  The user, the same day: "You can fix those comments." So the eight
+  were brought in line before the commit, each with a sentence dated
+  2026-11-20 and with no line of code. In
+  `confirm-dialog.component.ts`, the comment over `ConfirmData`, whose
+  list of what opens the box did not name `approve` and `ready`, and
+  the comment of `passkeyError`, which also carries the reason of a
+  read that failed now. In `account.page.ts`, the class comment's
+  sentence on the cancel of a locked transfer ("on yes the
+  lockedTransferCancel follow-up is built"), and the comment of
+  `SendOrder` ("send() builds from it"). In `crypto.service.ts`, the
+  comments of `unwrapKeyBlob` and of `KeyBlobLostError`. In
+  `masterpod-api.service.ts`, the class comment's list of the routes
+  that came later, which did not name `/store-first-key-blob`. In
+  `unlock.ts`, the doc comment of `unlockWithPasskey`, which ended at
+  `/check-anopod-status`. In README, the line of
+  `escrow-actions.service.ts`, which named neither the two steps nor
+  the passkey. The build ran again afterwards, clean and with the same
+  main file, and every `.ts` file still gives the same JavaScript with
+  the comments stripped. Not among the eight, and left as they are: 4.4's
+  `key_blob` row and the
+  sentence under its routes, which say "under the encryption key" while
+  the key
+  blobs have been under the key blob key since 2026-11-08, older than
+  this step; and the three import lines named under the readings.
+- The deploy, as the plan's section 5 has it. The masterpod's step
+  first. Then this one, by the wallet's usual two lines, on wallet1 and
+  then on wallet2, one right after the other, with no setting in
+  `network/wallet.env` and no `npm ci`. Between the two a browser can
+  be served the new page by one server and then the old page by the
+  other; a person who logged in on the new page and then gets the old
+  one reads "reload the wallet" until wallet2 is updated. From then on
+  every login stores the first key blobs of that person's accounts, and
+  every send carries the passkey's answer, which today's signing
+  servers do not read. The way back, should it be needed, has an order
+  (the plan's section 5): never the wallet alone, since the wallet of
+  before cannot open a first key blob.
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`
@@ -15199,10 +15945,14 @@ refreshed by a button and every 15 s. Top to bottom:
   (section 11) the passkey line stands under the sentence on what the
   attestation is, over the button: "To confirm, this phone or computer
   will ask for your passkey, the one you log in with." "Sign the
-  attestation" first asks the device for the passkey that opened the
-  session (the passkey check, 8.9), once, before pair one is opened; a
+  attestation" opens pair one, builds the follow-up, and then asks the
+  device for the passkey that opened the
+  session, for exactly that follow-up (the passkey check, 8.9; the check
+  since 2026-11-19, and since 2026-11-20, section 11, after the build
+  and for what was built), once; the answer goes to `/api/sign/<n>` with
+  the follow-up (section 3); a
   check that does not pass shows its sentence in red under the button,
-  and nothing is signed.
+  and nothing is sent.
 - When the answer says decided and no `sent` event exists: Send to the
   validators, which posts both stored attestations (from the
   `attestationSigned` events) to the `/attestation` of the session's
@@ -15252,10 +16002,14 @@ refreshed by a button and every 15 s. Top to bottom:
   Since 2026-11-19 (section 11) the passkey line stands under the
   sentence on what a verdict does, over the form: "To confirm, this
   phone or computer will ask for your passkey, the one you log in with."
-  "Sign the verdict" first asks the device for the passkey that opened
-  the session (the passkey check, 8.9), once, before pair one is opened;
+  "Sign the verdict" opens pair one, builds the follow-up, and then asks
+  the device for the passkey that opened
+  the session, for exactly that follow-up (the passkey check, 8.9; the
+  check since 2026-11-19, and since 2026-11-20, section 11, after the
+  build and for what was built), once; the answer goes to
+  `/api/sign/<n>` with the follow-up (section 3);
   a check that does not pass shows its sentence in red under the button,
-  and nothing is signed.
+  and nothing is sent.
 - When decided: Send to the validators posts the two agreeing verdicts
   (from the `verdictSigned` events whose verdict is the decided one) to
   `/escrow-signature`, then `/mark-attestor-case-sent`; Retry on a
@@ -15298,11 +16052,15 @@ every 15 s, the trade case's frame. Top to bottom:
   every move once. Since 2026-11-19 (section 11) the passkey line stands
   under the sentence on what the attestations are, over the button: "To
   confirm, this phone or computer will ask for your passkey, the one you
-  log in with." "Sign all attestations" first asks the device for the
-  passkey that opened the session (the passkey check, 8.9), once, in
-  front of the loop that signs for each move: one click asks once,
+  log in with." "Sign all attestations" opens pair one, builds every
+  move's follow-up, and then asks the device for the
+  passkey that opened the session, once, for exactly those follow-ups
+  (the passkey check, 8.9; the check since 2026-11-19, and since
+  2026-11-20, section 11, after the build and for what was built), in
+  front of the loop that has each one signed at `/api/sign/<n>`, where
+  that one answer goes along every time (section 3): one click asks once,
   however many moves the case has. A check that does not pass shows its
-  sentence in red under the button, and nothing is signed.
+  sentence in red under the button, and nothing is sent.
 - When the answer says decided: Send to the validators posts the stored
   attestations the session's validator (8.3; the default validator until
   2026-11-10) does not hold yet (two per move once

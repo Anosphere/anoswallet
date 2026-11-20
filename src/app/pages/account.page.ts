@@ -18,21 +18,27 @@ import { CopyButtonComponent } from '../components/copy-button.component';
 import { ACCOUNT_POLL_MS, GUARDIAN_STAKE_STEP_ANOS, MILLIONTHS_PER_ANOS } from '../constants';
 import { escrowStageWords } from '../escrow-stage';
 import { lockedStageWords } from '../locked-stage';
+import { SigningPasskey, askSigningPasskey } from '../passkey-check';
 import { AccountAnswer, Accepted, AnosApiService, EscrowItem, HeldAssistedTransfer, HeldLockedTransfer, PendingItem } from '../services/anos-api.service';
 import { BalancesService } from '../services/balances.service';
 import { ConfigService } from '../services/config.service';
 import {
   AccountType,
+  AnosTransferTransaction,
   CryptoService,
+  FollowUp,
   KeyBlobLostError,
+  LockedTransferCancelPayload,
   PairOne,
   STAKE_PURPOSES,
   StakePurpose,
+  TransferToFundTransaction,
   TransferType,
 } from '../services/crypto.service';
 import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
 import { MasterpodApiService } from '../services/masterpod-api.service';
+import { PasskeyService } from '../services/passkey.service';
 import { AnosAccountItem, SessionService } from '../services/session.service';
 import { SigningService } from '../services/signing.service';
 import { shortId } from '../short-id';
@@ -65,11 +71,20 @@ interface Outcome {
  * 8.9): the transaction type, the amount in millionths, and either the
  * recipient's account id, with no purpose, or, for a transferToFund, the
  * stake's purpose, with no recipient. Taken from the form when the box
- * opens; send() builds from it, since the form is empty by then.
+ * opens. Since 2026-11-20 build() makes the transaction from it, at the
+ * click of the box's button, and send() takes it for the words of a
+ * refusal alone; until then send() built from it, since the form is
+ * empty by then.
  */
 type SendOrder =
   | { transactionType: string; amount: bigint; accountIdTo: string; stakePurpose: null }
   | { transactionType: string; amount: bigint; accountIdTo: null; stakePurpose: StakePurpose };
+
+/** What the Send box's button made (2026-11-20): the order as a transaction signed by pair one, a stake or a transfer. */
+type BuiltSend = { stake: TransferToFundTransaction } | { transfer: AnosTransferTransaction };
+
+/** A built send with the passkey's answer for it: what send() hands to a signing server. */
+type MadeSend = BuiltSend & { passkey: SigningPasskey };
 
 /**
  * One account (wallet spec 8.2, Account), in this order: the id in the
@@ -92,9 +107,15 @@ type SendOrder =
  * section 11): the amount in the title, the kind, this account, the
  * recipient's full id or the stake's purpose, and for a stake the line
  * about the fund. Since 2026-11-19 the box of every send and every stake
- * ends with the line that the passkey will be asked for, and its button
- * asks the device for the passkey that opened the session before
- * anything is sent (passkey-check.ts, wallet spec 8.9). A stake for
+ * ends with the line that the passkey will be asked for. Since 2026-11-20
+ * (forclaude/second-key-and-signing-passkey-plan-1.md) the page reads
+ * pair one and the account's latest transaction id when the box opens,
+ * and the box's button is grey, with a thin moving bar under the notes,
+ * until that read is back; at the click of that button the transaction
+ * is built and signed with pair one, and the device is asked for the
+ * passkey that opened the session, for exactly what was built
+ * (passkey-check.ts, wallet spec 8.9); the signing server is asked after
+ * the box, with the passkey's answer. A stake for
  * daoVote or guardian has a box of its own
  * (2026-11-12, section 11): a title that names the stake, a line on what
  * the stake gives and how long it is locked, the line about the fund, the
@@ -107,8 +128,9 @@ type SendOrder =
  * sent is what the box showed, and a progress bar with "Sending…" shows
  * under the form meanwhile. The amount starts empty and Stake for at
  * daoVote, so a fresh page and the form after a send are the same.
- * previousTransactionId is /get-account's latestTransactionId, fetched
- * right before building. The payload is signed by pair one (keyBlob opened
+ * previousTransactionId is /get-account's latestTransactionId, read when
+ * the box opens (2026-11-20; until then it was fetched right before
+ * building, after the box). The payload is signed by pair one (keyBlob opened
  * for the signature and dropped), /api/sign/<n> adds the wallet pair, the
  * validator gets it, the page refreshes. Send is disabled while the account
  * has a pending transaction, is the seller of an open escrow trade or holds
@@ -131,9 +153,11 @@ type SendOrder =
  * section 11): a Cancel transfer button under the row while the stage is
  * locked or due asks in the confirmation box, whose first button reads
  * Back there and whose second, "Yes, cancel the transfer", asks for the
- * passkey (2026-11-19); on yes the lockedTransferCancel follow-up is
- * built with
- * pair one, signed by /api/sign/<n> and posted to /locked-transfer-cancel,
+ * passkey (2026-11-19); since 2026-11-20 that button first builds the
+ * lockedTransferCancel follow-up with
+ * pair one, and the passkey answers for exactly that follow-up; after
+ * the box it is signed by /api/sign/<n>, with the passkey's answer sent
+ * along, and posted to /locked-transfer-cancel,
  * and the sent line or the refusal in plain words shows under the row. A
  * cancel pressed in the transfer's first minutes is refused by the
  * validators, and the line says when it can be cancelled. The row reads
@@ -379,6 +403,7 @@ export class AccountPage {
   private readonly anos = inject(AnosApiService);
   private readonly crypto = inject(CryptoService);
   private readonly signing = inject(SigningService);
+  private readonly passkey = inject(PasskeyService);
   private readonly config = inject(ConfigService);
   private readonly dialog = inject(MatDialog);
   protected readonly lang = inject(LanguageService);
@@ -578,7 +603,7 @@ export class AccountPage {
     this.pasteNote.set(null);
   }
 
-  /** The form's Send button (wallet spec 8.2, Account, and 8.9; 2026-11-10): the order is taken from the form and shown in the confirmation box, and nothing is sent until Send is pressed there and the passkey check has passed (2026-11-19, passkey-check.ts): the box's button asks the device for the passkey that opened the session, and the last note of every box says so. Cancel leaves the form as it was typed. Send in the box empties the form first and then sends the order, so what goes out is what the box showed. Nothing happens while a box is already open. A stake for daoVote or guardian has a box of its own (2026-11-12): the title names the stake ("Stake 100 anos for DAO votes?", "Stake 1000 anos as a guardian?"); the lines are the same; the notes are three, what the stake gives and how long it is locked, then the line about the fund, then the passkey line (until 2026-11-19 the third note said to type the username, and a text box for it stood under the notes); and the button reads Stake. For the other four purposes (moderator, attestor, validator, masterPod) the notes are the line about the fund and the passkey line, and for every transfer the passkey line alone. */
+  /** The form's Send button (wallet spec 8.2, Account, and 8.9; 2026-11-10): the order is taken from the form and shown in the confirmation box, and nothing is sent until Send is pressed there and the passkey check has passed (2026-11-19, passkey-check.ts), which the last note of every box announces. Since 2026-11-20 (forclaude/second-key-and-signing-passkey-plan-1.md) the read comes first and the passkey answers for what was built: when the box opens, pair one and the account's latest transaction id are read (readForSend), and the box's button is off, with a moving bar, until that read is back; a read that fails shows in the box in red and the button stays off. The box's button then builds the order as a transaction signed by pair one (build) and asks the device for the passkey that opened the session, for exactly that transaction (askSigningPasskey); what it made is kept for send(). Cancel leaves the form as it was typed. Send in the box empties the form first and then sends the order, so what goes out is what the box showed. Nothing happens while a box is already open. A stake for daoVote or guardian has a box of its own (2026-11-12): the title names the stake ("Stake 100 anos for DAO votes?", "Stake 1000 anos as a guardian?"); the lines are the same; the notes are three, what the stake gives and how long it is locked, then the line about the fund, then the passkey line (until 2026-11-19 the third note said to type the username, and a text box for it stood under the notes); and the button reads Stake. For the other four purposes (moderator, attestor, validator, masterPod) the notes are the line about the fund and the passkey line, and for every transfer the passkey line alone. */
   protected async askSend(): Promise<void> {
     const amount = anosToMillionths(this.amount());
     if (!this.item() || amount === null || this.dialog.openDialogs.length > 0) return;
@@ -599,6 +624,12 @@ export class AccountPage {
         : order.stakePurpose === 'guardian'
           ? { title: words.account.confirmStakeGuardianTitle(anos), note: words.account.stakeGuardianNote }
           : null;
+    // What the box waits for, read from now on: pair one and the account's latest transaction id.
+    let read = null as { pairOne: PairOne; previous: string } | null;
+    const ready = this.readForSend().then((value) => {
+      read = value;
+    });
+    let made = null as MadeSend | null;
     const confirmed = await askConfirm(this.dialog, {
       title: stakeBox ? stakeBox.title : words.account.confirmSendTitle(anos),
       lines: [
@@ -615,10 +646,34 @@ export class AccountPage {
           : [words.passkeyCheck.note],
       confirmLabel: stakeBox ? words.account.stake : words.common.send,
       passkey: true,
+      ready,
+      approve: async () => {
+        if (!read) throw new Error(words.common.noLatest);
+        const built = this.build(order, read.pairOne, read.previous);
+        const payload = 'stake' in built ? built.stake.payload : built.transfer.payload;
+        made = { ...built, passkey: await askSigningPasskey({ crypto: this.crypto, passkey: this.passkey, session: this.session }, words, [payload]) };
+      },
     });
-    if (!confirmed) return;
+    if (!confirmed || !made) return;
     this.resetForm();
-    await this.send(order);
+    await this.send(order, made);
+  }
+
+  /** What the Send box waits for (2026-11-20): pair one, opened from the keyBlob, and the account's latest transaction id from /get-account. askSend() starts it when the box opens, so the box's button can build and ask for the passkey with no wait in between. Rejects with common.noLatest when the read is refused or the account has no transaction yet. */
+  private async readForSend(): Promise<{ pairOne: PairOne; previous: string }> {
+    const pairOne = await this.pairOne();
+    const latest = await this.anos.getAccount(pairOne, this.accountId(), true);
+    if (!latest.ok || !latest.body.latestTransactionId) throw new Error(this.t().common.noLatest);
+    return { pairOne, previous: latest.body.latestTransactionId };
+  }
+
+  /** The order as a transaction signed by pair one (2026-11-20): a transferToFund when the order has a purpose, else a transfer of the order's type to the order's recipient, chained on `previous`. Run straight from the click of the box's button, with no wait in it. minutesAhead() and the date of a guarded or vault transfer are worked out here, at that click, so the time spent reading the box does not use up the lock's offset. */
+  private build(order: SendOrder, pairOne: PairOne, previous: string): BuiltSend {
+    if (order.stakePurpose !== null) return { stake: this.crypto.buildTransferToFund(pairOne, this.accountId(), previous, order.amount, order.stakePurpose) };
+    const ahead = this.minutesAhead();
+    if (ahead === null) throw new Error(this.t().account.lockNotLoaded);
+    const createdAt = new Date(Date.now() + ahead * 60_000);
+    return { transfer: this.crypto.buildAnosTransferTransaction(pairOne, this.accountId(), previous, order.accountIdTo, order.amount, order.transactionType as TransferType, createdAt) };
   }
 
   /** The form as a fresh page has it: Kind plain, Stake for daoVote, the recipient and the amount empty, the paste hint gone. askSend() runs it when Send is pressed in the box, or Stake in the box of a daoVote or guardian stake (2026-11-12), before the answer comes, and nothing fills the form again: it stays empty whether the send is accepted, refused or never answered. */
@@ -630,24 +685,15 @@ export class AccountPage {
     this.amount.set('');
   }
 
-  /** Builds, signs (pair one here, the wallet pair at /api/sign/<n>) and posts the order the confirmation box showed (2026-11-10). It never reads the form, which is empty by now: a transferToFund when the order has a purpose, else a transfer of the order's type to the order's recipient. minutesAhead() and the date of a guarded or vault transfer are worked out here, after the box, so the time spent reading the box does not use up the lock's offset. */
-  private async send(order: SendOrder): Promise<void> {
+  /** Sends the order the confirmation box showed (2026-11-10), as the box's button made it (2026-11-20; until then this method read the latest transaction id and built the transaction itself, after the box): the transaction, built and signed by pair one at that click (build), goes to /api/sign/<n> for the wallet pair, with the passkey's answer for it, and then to the validator, as a transferToFund when it is a stake and as a transfer otherwise. It never reads the form, which is empty by now, and it reads and builds nothing; the order is handed in for the refusal's words. */
+  private async send(order: SendOrder, made: MadeSend): Promise<void> {
     this.cancelOutcome.set(null);
     await this.act(this.sendOutcome, async () => {
-      const pairOne = await this.pairOne();
-      const latest = await this.anos.getAccount(pairOne, this.accountId(), true);
-      if (!latest.ok || !latest.body.latestTransactionId) throw new Error(this.t().common.noLatest);
-      const previous = latest.body.latestTransactionId;
       let res: ApiResponse<Accepted>;
-      if (order.stakePurpose !== null) {
-        const tx = await this.signing.sign(this.crypto.buildTransferToFund(pairOne, this.accountId(), previous, order.amount, order.stakePurpose), this.accountId());
-        res = await this.anos.transferToFund(tx);
+      if ('stake' in made) {
+        res = await this.anos.transferToFund(await this.signing.sign(made.stake, this.accountId(), made.passkey));
       } else {
-        const ahead = this.minutesAhead();
-        if (ahead === null) throw new Error(this.t().account.lockNotLoaded);
-        const createdAt = new Date(Date.now() + ahead * 60_000);
-        const tx = await this.signing.sign(this.crypto.buildAnosTransferTransaction(pairOne, this.accountId(), previous, order.accountIdTo, order.amount, order.transactionType as TransferType, createdAt), this.accountId());
-        res = await this.anos.anosTransfer(tx);
+        res = await this.anos.anosTransfer(await this.signing.sign(made.transfer, this.accountId(), made.passkey));
       }
       if (!res.ok) throw new Error(this.refusal(res, order));
       return this.t().account.accepted(res.body.transactionId);
@@ -663,12 +709,13 @@ export class AccountPage {
     return reason;
   }
 
-  /** The Cancel transfer button under the Locked transfer row (wallet spec 8.2, Account, and 8.9; 2026-11-11): the sender's cancel of the guarded or vault transfer waiting out its lock. It asks in the confirmation box, whose first button reads Back here, and nothing is sent until "Yes, cancel the transfer" is pressed there and the passkey check has passed (2026-11-19, passkey-check.ts): that button asks the device for the passkey that opened the session, and the box's second note says so. Then the lockedTransferCancel follow-up for the transfer the box showed is built with pair one, /api/sign/<n> adds the wallet pair and /locked-transfer-cancel takes it, with a progress bar under the row meanwhile (cancelBusy); the line under the row is the sent line or the refusal in the words of cancelRefusal, and the page refreshes. Nothing happens with no locked transfer or while a box is already open. */
+  /** The Cancel transfer button under the Locked transfer row (wallet spec 8.2, Account, and 8.9; 2026-11-11): the sender's cancel of the guarded or vault transfer waiting out its lock. It asks in the confirmation box, whose first button reads Back here, and nothing is sent until "Yes, cancel the transfer" is pressed there and the passkey check has passed (2026-11-19, passkey-check.ts), which the box's second note announces. Since 2026-11-20 that button first builds the lockedTransferCancel follow-up for the transfer the box showed, with pair one, and then asks the device for the passkey that opened the session, for exactly that follow-up (askSigningPasskey). After the box /api/sign/<n> adds the wallet pair, with the passkey's answer sent along, and /locked-transfer-cancel takes it, with a progress bar under the row meanwhile (cancelBusy); the line under the row is the sent line or the refusal in the words of cancelRefusal, and the page refreshes. Nothing happens with no locked transfer or while a box is already open. */
   protected async askCancelLocked(): Promise<void> {
     const waiting = this.locked();
     if (!waiting || this.dialog.openDialogs.length > 0) return;
     const words = this.t();
     const anos = millionthsToAnos(waiting.amount);
+    let made = null as { followUp: FollowUp<LockedTransferCancelPayload>; passkey: SigningPasskey } | null;
     const confirmed = await askConfirm(this.dialog, {
       title: words.account.confirmCancelTitle,
       lines: [
@@ -680,12 +727,16 @@ export class AccountPage {
       cancelLabel: words.common.back,
       danger: true,
       passkey: true,
+      approve: async () => {
+        const followUp = this.crypto.buildFollowUp<LockedTransferCancelPayload>(await this.pairOne(), { type: 'lockedTransferCancel', transactionId: waiting.transactionId, accountId: this.accountId() });
+        made = { followUp, passkey: await askSigningPasskey({ crypto: this.crypto, passkey: this.passkey, session: this.session }, words, [followUp.payload]) };
+      },
     });
-    if (!confirmed) return;
+    if (!confirmed || !made) return;
+    const { followUp, passkey } = made;
     this.cancelBusy.set(true);
     await this.act(this.cancelOutcome, async () => {
-      const pairOne = await this.pairOne();
-      const signed = await this.signing.sign(this.crypto.buildFollowUp(pairOne, { type: 'lockedTransferCancel', transactionId: waiting.transactionId, accountId: this.accountId() }), this.accountId());
+      const signed = await this.signing.sign(followUp, this.accountId(), passkey);
       const res = await this.anos.lockedTransferCancel(signed);
       if (!res.ok) throw new Error(this.cancelRefusal(res));
       return this.t().assisted.sentCancel;

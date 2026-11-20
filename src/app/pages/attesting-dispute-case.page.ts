@@ -13,7 +13,7 @@ import { millionthsToAnos } from '../amounts';
 import { CaseChatStartComponent } from '../components/case-chat-start.component';
 import { CASES_POLL_MS } from '../constants';
 import { imageObjectUrl } from '../images';
-import { checkSessionPasskey } from '../passkey-check';
+import { askSigningPasskey } from '../passkey-check';
 import { AnosApiService } from '../services/anos-api.service';
 import { AttestingService, attestingError } from '../services/attesting.service';
 import { BalancesService } from '../services/balances.service';
@@ -98,9 +98,11 @@ function accepted(result: SentResult): boolean {
  * holds none), the timeline, the evidence in two columns opened with the
  * case key (keyForCase under the case pair with the case id as aad, then the
  * file under the content key), Schedule, Verdict (the line that the
- * passkey will be asked for, and on "Sign the verdict" first the passkey
- * check, since 2026-11-19, passkey-check.ts; then the escrowVerdict
- * follow-up built as the account page builds one, then
+ * passkey will be asked for, and on "Sign the verdict" the escrowVerdict
+ * follow-up built as the account page builds one, then the passkey check
+ * for exactly that follow-up, passkey-check.ts, the check since
+ * 2026-11-19 and the build in front of it since 2026-11-20, then
+ * /api/sign/<n> with the passkey's answer, then
  * /sign-off-dispute-case), Send to the validators once the case is decided
  * (the two agreeing verdicts to /escrow-signature and
  * /mark-attestor-case-sent; run at once on the deciding attestor's page),
@@ -663,20 +665,24 @@ export class AttestingDisputeCasePage {
    * account, the wallet pair from /api/sign/<n>; then /sign-off-dispute-case.
    * When the answer says decided this signature decided the case and the
    * sending runs at once.
-   * Since 2026-11-19 the passkey check comes first (passkey-check.ts): the
-   * device is asked for the passkey that opened the session, straight from
-   * the click, before pair one is opened. A check that does not pass shows
-   * its sentence in red under the button, and nothing is signed.
+   * Since 2026-11-19 the passkey is asked for (passkey-check.ts), and
+   * since 2026-11-20 for what was built
+   * (forclaude/second-key-and-signing-passkey-plan-1.md): pair one is
+   * opened and the follow-up built first, then the device is asked for
+   * the passkey that opened the session, for exactly that follow-up
+   * (askSigningPasskey), and the answer goes to /api/sign/<n> with the
+   * follow-up. A check that does not pass shows
+   * its sentence in red under the button, and nothing is sent.
    */
   protected async sign(): Promise<void> {
     let decided = false;
     await this.act(this.verdictOutcome, async () => {
       const d = this.data();
       if (!d) throw new Error(this.t().common.caseNotLoaded);
-      await checkSessionPasskey({ crypto: this.crypto, passkey: this.passkey, session: this.session }, this.t());
       const { account, pairOne } = await this.attesting.pairOne();
       const followUp = this.crypto.buildFollowUp(pairOne, { type: 'escrowVerdict', transactionId: d.case.transactionId, arbitratorId: account.accountId, verdict: this.verdict() });
-      const signed = await this.signing.sign(followUp, account.accountId);
+      const passkey = await askSigningPasskey({ crypto: this.crypto, passkey: this.passkey, session: this.session }, this.t(), [followUp.payload]);
+      const signed = await this.signing.sign(followUp, account.accountId, passkey);
       const res = await this.masterpod.signOffDisputeCase(this.caseId(), signed);
       if (!res.ok) throw new Error(this.refusal(res, '/sign-off-dispute-case'));
       decided = res.body.status === 'decided';

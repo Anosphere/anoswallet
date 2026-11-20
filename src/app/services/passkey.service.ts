@@ -60,7 +60,11 @@ export interface Assertion {
  * the new one, for its PRF output. Since 2026-11-19 the passkey check
  * (passkey-check.ts, wallet spec 8.9) asks the assertion of one passkey
  * alone too: the one that opened the session, by its credential id, with
- * an empty transports list.
+ * an empty transports list. Since 2026-11-20
+ * (forclaude/second-key-and-signing-passkey-plan-1.md) the assertion of
+ * that ask goes to a server as well, for every button but two:
+ * askSigningPasskey hands it to the signing server with the request, and
+ * the masterpod checks it.
  */
 @Injectable({ providedIn: 'root' })
 export class PasskeyService {
@@ -113,8 +117,11 @@ export class PasskeyService {
    * (the third tap of an add and, since 2026-11-19, the passkey check,
    * passkey-check.ts). The assertion JSON is handed back without its prf
    * results, so a caller can send it to the masterpod, as the unlock flow
-   * sends it to /unlock. A caller that needs only the PRF output or the
-   * credential id sends it nowhere; the passkey check is one of those.
+   * sends it to /unlock, or, since 2026-11-20, to a signing server, which
+   * has the masterpod check it (askSigningPasskey in passkey-check.ts). A
+   * caller that needs only the PRF output or the
+   * credential id sends it nowhere; the wallet-only passkey check
+   * (checkSessionPasskey) is one of those.
    */
   async assert(challengeHex: string, only?: { id: Uint8Array; transports: string[] }): Promise<Assertion> {
     const { rpId } = await this.config.load();

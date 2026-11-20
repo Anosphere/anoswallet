@@ -10,17 +10,19 @@ import { RouterLink } from '@angular/router';
 import { anosToMillionths, millionthsToAnos } from '../amounts';
 import { ACCOUNT_POLL_MS, CARD_MESSAGES_PAGE, CARD_TRANSACTIONS_PAGE } from '../constants';
 import { releaseBox, startBox } from '../escrow-boxes';
+import { SigningPasskey, askSigningPasskey } from '../passkey-check';
 import { EscrowGuide, escrowGuide, stateOfStage } from '../escrow-stage';
 import { formatPrice, totalOf } from '../prices';
 import { AnosApiService, EscrowItem, TransactionItem } from '../services/anos-api.service';
 import { BalancesService } from '../services/balances.service';
 import { ChatService, piecesOf } from '../services/chat.service';
-import { CryptoService, PairOne } from '../services/crypto.service';
-import { EscrowActionsService } from '../services/escrow-actions.service';
+import { AnosTransferTransaction, CryptoService, PairOne } from '../services/crypto.service';
+import { ApprovedEscrowAction, EscrowActionsService } from '../services/escrow-actions.service';
 import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
 import { MarketplaceService } from '../services/marketplace.service';
 import { MasterpodApiService, RoomItem } from '../services/masterpod-api.service';
+import { PasskeyService } from '../services/passkey.service';
 import { SessionService } from '../services/session.service';
 import { SigningService } from '../services/signing.service';
 import { askConfirm } from './confirm-dialog.component';
@@ -69,9 +71,13 @@ type Found = 'open' | 'released' | 'none' | 'unread';
  * form (From, To, Amount, the total at the listing's price). The form's
  * Start opens the Start box (escrow-boxes.ts, wallet spec 8.9), the
  * wallet's pop-up box with the card's question and the line that the
- * passkey will be asked for; its Yes asks for the passkey (2026-11-19,
- * passkey-check.ts), and then the card builds the escrowTransfer as the
- * account page's Send does. Until 2026-11-19 the question stood in the
+ * passkey will be asked for. Since 2026-11-20
+ * (forclaude/second-key-and-signing-passkey-plan-1.md) the card reads
+ * pair one and the account's latest transaction id when the box opens,
+ * and the box's Yes is grey, with a thin moving bar, until that read is
+ * back; Yes then builds the escrowTransfer as the account page's Send
+ * does and asks for the passkey for exactly that transfer (the passkey
+ * since 2026-11-19, passkey-check.ts). Until 2026-11-19 the question stood in the
  * card, under the form, with Yes and Back; with the passkey line added
  * there, a short phone screen no longer showed those two buttons, so the
  * question went into the box
@@ -82,7 +88,9 @@ type Found = 'open' | 'released' | 'none' | 'unread';
  * Cancel are, and for the seller the button of step 4, "I have been paid:
  * release the anos". It opens the Release box (escrow-boxes.ts, wallet
  * spec 8.9), whose Yes asks for the passkey (2026-11-19; until then the
- * box asked for the username), and then sends the release
+ * box asked for the username), since 2026-11-20 for the release itself,
+ * which that Yes builds first (escrow-actions.service.ts, approve); and
+ * then the card sends the release
  * through escrow-actions.service.ts. In any other open stage the link
  * reads "See the trade". "How a trade works" opens and closes a panel
  * with the four steps, the step the trade is at in bold, and four lines
@@ -307,6 +315,7 @@ export class PinnedListingComponent {
   private readonly anos = inject(AnosApiService);
   private readonly crypto = inject(CryptoService);
   private readonly signing = inject(SigningService);
+  private readonly passkey = inject(PasskeyService);
   private readonly actions = inject(EscrowActionsService);
   private readonly dialog = inject(MatDialog);
   private readonly destroyRef = inject(DestroyRef);
@@ -514,21 +523,26 @@ export class PinnedListingComponent {
    * while the box is open. Nothing happens while a box is open or
    * something is on its way. Back sends nothing and leaves the form as it
    * was, and so does a box closed by a step back in the browser's
-   * history, which askConfirm answers as Back. The box's Yes asks the
-   * device for the passkey that opened the session (passkey-check.ts),
-   * straight from its click, because Safari opens the passkey sheet only
-   * for a tap. A check that does not pass shows its sentence in the box,
-   * which stays open, and nothing is read, built or signed. Once the
-   * check has passed and the box has closed, the passkey still stands in
+   * history, which askConfirm answers as Back. Since 2026-11-20
+   * (forclaude/second-key-and-signing-passkey-plan-1.md) the card reads
+   * what the box waits for from the moment the box opens: pair one from
+   * the account's keyBlob, and /get-account for the account's latest
+   * transaction id. Until that read is back the box's Yes is off, with a
+   * moving bar; a read that fails shows in the box in red and leaves Yes
+   * off. The box's Yes then builds the escrowTransfer the way the account
+   * page's Send builds it (buildAnosTransferTransaction with type
+   * escrowTransfer) and asks the device for the passkey that opened the
+   * session, for exactly that transfer (askSigningPasskey in
+   * passkey-check.ts). A passkey step that does not pass shows its
+   * sentence in the box, which stays open, and nothing is sent. Once it
+   * has passed and the box has closed, the passkey still stands in
    * front of the check for an earlier trade, as it did in the card. Then
    * the last guard against sending twice (2026-11-10): one fresh check
-   * before anything is built. A check that cannot be read sends nothing;
+   * before anything is sent. A check that cannot be read sends nothing;
    * a trade open or
-   * released in this chat sends nothing either, and the card shows it. Then
-   * the escrowTransfer the way the account page's Send builds it: pair one
-   * from the account's keyBlob and the encryption key, /get-account for the
-   * latest transaction id, buildAnosTransferTransaction with type
-   * escrowTransfer, /api/sign/<n>, /anos-transfer. A 4xx answer is a refusal
+   * released in this chat sends nothing either, the card shows it, and
+   * what was built is dropped. Then /api/sign/<n>, with the passkey's
+   * answer sent along, and /anos-transfer. A 4xx answer is a refusal
    * (refusal). After any other answer, accepted or lost on the way (no
    * network, a 502 or 504: the validator stores the trade before it
    * answers), one more check shows the trade and posts its message (tell);
@@ -546,13 +560,32 @@ export class PinnedListingComponent {
       return;
     }
     this.boxOpen = true;
+    const words = this.t();
+    // What the box waits for, read from now on: pair one and the account's latest transaction id.
+    let read = null as { pairOne: PairOne; previous: string } | null;
+    const ready = (async () => {
+      const pairOne = await this.pairOne(from);
+      const latest = await this.anos.getAccount(pairOne, from, true);
+      if (!latest.ok || !latest.body.latestTransactionId) throw new Error(words.common.noLatest);
+      read = { pairOne, previous: latest.body.latestTransactionId };
+    })();
+    let made = null as { transfer: AnosTransferTransaction; passkey: SigningPasskey } | null;
     let confirmed: boolean;
     try {
-      confirmed = await askConfirm(this.dialog, startBox(this.t(), anos, this.otherName()));
+      confirmed = await askConfirm(this.dialog, {
+        ...startBox(words, anos, this.otherName()),
+        ready,
+        approve: async () => {
+          if (!read) throw new Error(words.common.noLatest);
+          const transfer = this.crypto.buildAnosTransferTransaction(read.pairOne, from, read.previous, to, amount, 'escrowTransfer', new Date());
+          made = { transfer, passkey: await askSigningPasskey({ crypto: this.crypto, passkey: this.passkey, session: this.session }, words, [transfer.payload]) };
+        },
+      });
     } finally {
       this.boxOpen = false;
     }
-    if (!confirmed) return;
+    if (!confirmed || !made) return;
+    const { transfer, passkey } = made;
     await this.run(async () => {
       const found = await this.poll();
       if (found === 'unread') throw new Error(this.t().pinned.notSentUnread);
@@ -560,10 +593,7 @@ export class PinnedListingComponent {
         this.starting.set(false);
         throw new Error(this.t().pinned.notSentAlready);
       }
-      const pairOne = await this.pairOne(from);
-      const latest = await this.anos.getAccount(pairOne, from, true);
-      if (!latest.ok || !latest.body.latestTransactionId) throw new Error(this.t().common.noLatest);
-      const tx = await this.signing.sign(this.crypto.buildAnosTransferTransaction(pairOne, from, latest.body.latestTransactionId, to, amount, 'escrowTransfer', new Date()), from);
+      const tx = await this.signing.sign(transfer, from, passkey);
       const res = await this.anos.anosTransfer(tx);
       if (!res.ok && res.status >= 400 && res.status < 500) throw new Error(this.refusal(res));
       const after = await this.poll();
@@ -584,30 +614,42 @@ export class PinnedListingComponent {
    * forclaude/wallet-trade-guide-plan-1.md): the Release box of the escrow
    * trade page (escrow-boxes.ts, wallet spec 8.9), with the buyer's account
    * id; its Yes asks for the passkey (2026-11-19; until then the username
-   * was typed in the box). Nothing happens while the box is open or
+   * was typed in the box). Since 2026-11-20 that Yes runs approve() of
+   * escrow-actions.service.ts as this pod's account in the trade: the
+   * release is built with pair one, and the passkey is asked for exactly
+   * that release. Nothing happens while the box is open or
    * something is on its way. Back sends nothing, and so does a box closed
    * by a step back in the browser's history, which askConfirm answers as
    * Back. On Yes, once the passkey check has passed in the box, the
-   * release is sent through escrow-actions.service.ts as
-   * this pod's account in the trade, and one check follows. An answer that
+   * release is sent through escrow-actions.service.ts (send), with the
+   * passkey's answer, and one check follows. An answer that
    * failed shows in the error line, in the validator's plain words, only
    * when after that check the card still shows this trade as held: an
    * answer lost on the way whose release landed shows no error, as at
-   * Start. Anything thrown before the send (no key blob key in this tab,
-   * the signing servers) shows in the error line as it is.
+   * Start. What is thrown while the release is built (no key blob key in
+   * this tab) shows in the box in red, as a passkey step that did not
+   * pass does; what is thrown after the box (the signing servers) shows
+   * in the error line as it is.
    */
   protected async release(open: EscrowItem): Promise<void> {
     if (this.boxOpen || this.busy()) return;
     this.boxOpen = true;
+    let approved = null as ApprovedEscrowAction | null;
     let confirmed: boolean;
     try {
-      confirmed = await askConfirm(this.dialog, releaseBox(this.t(), millionthsToAnos(open.amount), open.accountIdTo));
+      confirmed = await askConfirm(this.dialog, {
+        ...releaseBox(this.t(), millionthsToAnos(open.amount), open.accountIdTo),
+        approve: async () => {
+          approved = await this.actions.approve('release', this.tradeAccount(), open.transactionId);
+        },
+      });
     } finally {
       this.boxOpen = false;
     }
-    if (!confirmed) return;
+    if (!confirmed || !approved) return;
+    const release = approved;
     await this.run(async () => {
-      const res = await this.actions.send('release', this.tradeAccount(), open.transactionId);
+      const res = await this.actions.send(release);
       await this.poll();
       const shown = this.trade();
       if (!res.ok && shown !== null && shown.transactionId === open.transactionId && shown.stage === 'held') throw new Error(this.actions.plainReason(res));
