@@ -217,6 +217,8 @@ export interface SecurityRecords {
 export interface RoomMember {
   anopodId: string;
   username: string;
+  /** The highest message position this member has seen in the room (2026-11-19, masterpod spec 21). Only an entry of a room's `members` carries it: the invited and a listing's owner do not, and a masterpod of before sends none. */
+  seenPosition?: number;
 }
 
 /** The listing a room is about, as /list-chat-rooms gives it (2026-11-06): the quantity in millionths and the price per anos, decimal strings; the owner by id and username. */
@@ -938,6 +940,11 @@ export class MasterpodApiService {
 
   sendMessage(chatRoomId: string, message: string): Promise<ApiResponse<{ messageId: string; position: number }>> {
     return this.signed('/send-message', { chatRoomId, message });
+  }
+
+  /** Tells the masterpod how far this pod has read in a room (2026-11-19, masterpod spec 21). Always quiet: it is a report, not something the person did. A masterpod of before answers 404. */
+  markMessagesSeen(chatRoomId: string, position: number): Promise<ApiResponse<{ chatRoomId: string; seenPosition: number }>> {
+    return this.signed('/mark-messages-seen', { chatRoomId, position }, true);
   }
 
   getChatPublicKeys(anopodIds: string[]): Promise<ApiResponse<{ keys: ChatKeyItem[] }>> {

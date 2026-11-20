@@ -52,6 +52,9 @@ const GROUP_MINUTES = 5;
 /** A message that arrives scrolls the thread down only when the reader is this close to the bottom. */
 const FOLLOW_PX = 120;
 
+/** "Seen by" names the people who have seen a message up to this many of them; above it, it says how many they are. */
+const SEEN_NAMES = 3;
+
 /**
  * One conversation (wallet spec 8.2, Chat), at /chat/:chatRoomId inside the
  * chat page's pane: a header with the back arrow (on a phone), the avatar
@@ -83,6 +86,16 @@ const FOLLOW_PX = 120;
  * started or released; and for them an account id in any other message
  * has no copy button. A guest reads the messages as they are, with the
  * copy button (2026-11-19, forclaude/wallet-chat-and-passkey-plan-1.md).
+ * Under this pod's own messages stands a word (2026-11-19, the same
+ * plan): "Seen" under the newest one that another member has seen, "Seen
+ * by" with the usernames when the room has more than one other member,
+ * and "Sent" under the newest one while nobody has seen it yet. The
+ * members' seen positions come with /list-chat-rooms. While the
+ * conversation is on the screen the page tells the masterpod how far
+ * this pod has read (/mark-messages-seen, masterpod spec 21): after
+ * opening, after each poll and after a send, and never from a hidden
+ * tab. The seen mark of the sentence further up is another thing: this
+ * device's own list, for the unread dot.
  */
 @Component({
   selector: 'app-chat-room-page',
@@ -195,6 +208,9 @@ const FOLLOW_PX = 120;
                       </span>
                     }
                   </div>
+                  @if (marks().get(m.messageId); as mark) {
+                    <span class="mark">{{ mark }}</span>
+                  }
                 }
                 <span class="time">{{ item.group.time }}</span>
               </div>
@@ -254,6 +270,7 @@ const FOLLOW_PX = 120;
     .plain { white-space: pre-wrap; }
     .state { display: inline-flex; align-items: center; margin-left: 6px; font-size: 11px; color: var(--mat-sys-on-surface-variant); vertical-align: bottom; }
     .tick { font-size: 14px; width: 14px; height: 14px; }
+    .mark { font-size: 11px; color: var(--mat-sys-on-surface-variant); margin: 0 8px 2px; }
     .sender { font-size: 11px; color: var(--mat-sys-on-surface-variant); margin: 0 0 2px 8px; }
     .time { font-size: 11px; color: var(--mat-sys-on-surface-variant); margin: 2px 8px 0; }
     .composer { display: flex; gap: 8px; align-items: flex-end; padding: 8px 12px; border-top: 1px solid var(--mat-sys-outline-variant); }
@@ -369,11 +386,46 @@ export class ChatRoomPage {
     return found.sort((a, b) => b.position - a.position);
   });
 
+  /**
+   * The word under this pod's own messages (2026-11-19), by message id.
+   * "Seen" under the newest one that another member has seen, by the seen
+   * positions of /list-chat-rooms; with more than one other member, "Seen
+   * by" and the usernames of those who have, and above SEEN_NAMES of them
+   * how many they are. "Sent" under the newest one when nobody has seen it
+   * yet, a person who is only invited so far among them. A message drawn
+   * as a grey line carries none. Empty in a room with nobody else in it
+   * and nobody invited, and while no member carries a seen position, this
+   * pod among them: a masterpod of before.
+   */
+  protected readonly marks = computed(() => {
+    const marks = new Map<string, string>();
+    const room = this.room();
+    if (!room || room.members.every((m) => m.seenPosition === undefined)) return marks;
+    const me = this.session.anopodId();
+    const others = room.members.filter((m) => m.anopodId !== me);
+    if (others.length === 0 && room.invited.length === 0) return marks;
+    const mine = this.messages().filter((m) => m.mine && !m.pending && !m.notice);
+    if (mine.length === 0) return marks;
+    const words = this.t().chatRoom;
+    const newest = mine[mine.length - 1];
+    const seen = [...mine].reverse().find((m) => others.some((o) => (o.seenPosition ?? 0) >= m.position));
+    if (seen) {
+      const readers = others.filter((o) => (o.seenPosition ?? 0) >= seen.position).map((o) => o.username);
+      marks.set(seen.messageId, others.length === 1 ? words.seen : readers.length > SEEN_NAMES ? words.seenByCount(readers.length) : words.seenBy(readers.join(', ')));
+    }
+    if (seen !== newest) marks.set(newest.messageId, words.sent);
+    return marks;
+  });
+
   /** The room the thread shows, whether its opening read is done, and the positions of the oldest and newest shown. */
   private openedFor: string | null = null;
   private ready = false;
   private oldest = 0;
   private newest = 0;
+  /** The newest position this page told the masterpod it has seen, for the room it shows; 0 when none. */
+  private toldSeen = 0;
+  /** True once the masterpod answered 404 to /mark-messages-seen: a masterpod of before. This page then tells nothing more for as long as it lives. */
+  private seenOff = false;
   private pendingCount = 0;
 
   constructor() {
@@ -384,7 +436,7 @@ export class ChatRoomPage {
       this.openedFor = room.chatRoomId;
       untracked(() => void this.open(room));
     });
-    const timer = setInterval(() => void this.poll(true), MESSAGES_POLL_MS);
+    const timer = setInterval(() => void this.poll(true).then(() => this.tellSeen()), MESSAGES_POLL_MS);
     inject(DestroyRef).onDestroy(() => clearInterval(timer));
   }
 
@@ -417,6 +469,7 @@ export class ChatRoomPage {
     this.messages.set([]);
     this.oldest = 0;
     this.newest = 0;
+    this.toldSeen = 0;
     this.canLoadOlder.set(false);
     this.showInvite.set(false);
     this.showMembers.set(false);
@@ -438,6 +491,7 @@ export class ChatRoomPage {
     this.ready = true;
     this.session.markSeen(room.chatRoomId, this.newest);
     this.scrollToBottom();
+    void this.tellSeen();
   }
 
   /** The page before the oldest shown; the reader stays on the message they were looking at. */
@@ -479,6 +533,26 @@ export class ChatRoomPage {
     if (this.oldest === 0) this.oldest = shown[0].position;
     this.session.markSeen(room.chatRoomId, this.newest);
     if (follow) this.scrollToBottom();
+  }
+
+  /**
+   * Tells the masterpod how far this pod has read in the room (2026-11-19,
+   * masterpod spec 21): the newest position shown, when it is above what
+   * this page told before, and only while the page is on the screen
+   * (document.visibilityState is visible), so a chat left open in a
+   * hidden tab does not say Seen. A call that fails is made again at the
+   * timer's next tick. A 404, a masterpod of before, ends the telling.
+   */
+  private async tellSeen(): Promise<void> {
+    const room = this.room();
+    if (!room || !this.ready || this.seenOff || this.openedFor !== room.chatRoomId) return;
+    if (document.visibilityState !== 'visible' || this.newest <= this.toldSeen) return;
+    const position = this.newest;
+    this.toldSeen = position;
+    const res = await this.api.markMessagesSeen(room.chatRoomId, position);
+    if (res.ok) return;
+    if (res.status === 404) this.seenOff = true;
+    else if (this.openedFor === room.chatRoomId && this.toldSeen === position) this.toldSeen = 0;
   }
 
   /** The messages decrypted with the room key and split into pieces; the two reasons a text cannot show, as before. For the two traders of a marketplace chat (2026-11-19) each message also says what it is when the pinned card posted it (`notice`, from tradeMessageKind); null for every other message. */
@@ -546,6 +620,7 @@ export class ChatRoomPage {
       this.messages.update((list) => list.map((m) => (m === pending ? sent : m)));
       this.session.markSeen(room.chatRoomId, res.body.position);
       await this.poll(false);
+      void this.tellSeen();
       return res;
     });
   }

@@ -534,6 +534,49 @@ The proxy forwards the request as any masterpod path (section 2);
 nothing in server/ changed. The wallet's side is the two recovery pages
 (12.3), passkey.service (8.3) and masterpod-api.service (12.4).
 
+### 4.10 Seen in chat
+
+Added 2026-11-19 (forclaude/wallet-chat-and-passkey-plan-1.md; section
+11): the masterpod keeps how far each member of a chat has read, so the
+wallet can say "Sent" and "Seen" under a person's own messages. Until
+then nothing said whether the other person had seen a message: each
+device kept its own list, for its unread dot (8.2, Unread). The
+masterpod's side is its own spec's section 21, which holds the rule, the
+column and the checks in full. The masterpod gained three things there.
+One column, seen_position on chat_room_members: the highest message
+position the member has seen in the room, 0 until that member's wallet
+reports one. One route, /mark-messages-seen, by which a member's own
+wallet reports it. And one field more in the answer of /list-chat-rooms:
+every member of a room reads how far every other member has read. A seen
+position is never lowered and never above the room's newest message. The
+masterpod keeps the number alone, with no time beside it, and still
+learns nothing of what a message says. No table, no env variable and no
+npm package.
+
+    POST /mark-messages-seen (setup), new
+    body { chatRoomId: hex, position: integer }; position is the highest message position the caller's wallet
+           has shown, a whole number from 1 to 9007199254740991
+    checks, in order: the shape (400 bad request shape); chatRoomId 32 bytes (400 invalid chatRoomId); position a
+           whole number in that range (400 invalid position, and a body without a position gets the same); the
+           caller a member of the room (403 not a member, and a room that does not exist gets the same)
+    writes: the caller's own chat_room_members row, seen_position raised to position, or to the room's newest
+           message position when position is above it; a position at or below what the row holds changes
+           nothing; no notification and nothing else
+    answer: 200 { chatRoomId: hex, seenPosition: number }, what the row holds afterwards
+
+    POST /list-chat-rooms (setup), one field more
+    answer: every entry of a room's members is { anopodId, username, seenPosition: number }, 0 until that
+           member's wallet reports one; the entries of invited and the owner of a listing stay
+           { anopodId, username }; nothing else in the answer changes
+    a masterpod of before: answers /mark-messages-seen with 404 { error: "Not Found", path }, as it answers any
+           route it does not have, and sends no seenPosition; the wallet then stops reporting from that page and
+           shows neither "Sent" nor "Seen" (8.2, Chat)
+
+The proxy forwards the new route as any masterpod path (section 2);
+nothing in server/ changed. The wallet's side is the conversation (8.2,
+Chat, the paragraphs "One conversation" and "Unread") and
+masterpod-api.service (8.3).
+
 ## 5. Validator changes (anossoftware)
 
 ### 5.1 A nonces table and two variables
@@ -2147,8 +2190,40 @@ round button. A sent message shows at once as a pale bubble with
 "Sending" where the tick goes; /send-message's answer gives it its id
 and position and the bubble turns normal with a small tick; a refusal
 removes the bubble, puts the text back in the box and shows the error
-line. The room is marked seen (Unread, below) when it opens and when
-new messages show. "You are not in this chat." for a room that is not in
+line. Under this pod's own messages stands a word, in small grey letters
+under the bubble (2026-11-19, section 11; the masterpod's side is 4.10).
+"Seen" stands under the newest of this pod's messages that another
+member of the room has seen, by the seen positions that come with
+/list-chat-rooms: a member has seen a message when that member's seen
+position is at or above the message's position. In a room with more than
+one other member it reads "Seen by mai, joy", with the usernames of
+those who have seen it, for up to three names; with more it reads "Seen
+by 4 people". "Sent" stands under this pod's newest message while no
+other member has seen it, and so also while the other person is only
+invited and has not accepted yet: the first message of every marketplace
+chat is written at that moment. Both words can show at once, "Seen"
+under an older message and "Sent" under the newest. A message that is
+still on its way carries no word, and a message drawn as a grey line
+carries none: the word then stands under this pod's newest bubble. No
+word shows in a room with nobody else in it and nobody invited, and none
+while no member of the room carries a seen position, which is a
+masterpod of before (4.10). The small tick in each bubble stays. The
+words are as fresh as the shell's 5-second read of the room list. The
+room is marked seen (Unread, below) when it opens and when
+new messages show. While the conversation is on the screen the page also
+tells the masterpod how far this pod has read (/mark-messages-seen,
+4.10; 2026-11-19, section 11): the newest position shown, after the
+thread opens, after each 3-second poll and after a send, and only when
+it is above what the page told before. It tells only while the page is
+visible (the browser's document.visibilityState is "visible"): a chat
+left open in a hidden tab reports nothing, so the others do not read
+"Seen" for it. The call is quiet and shows nothing. One that fails is
+made again at the next poll. After a 404, the answer of a masterpod of
+before, the page tells nothing more for as long as it lives: on a phone
+until the person goes back to the list of chats, and on a computer,
+where a click on another chat keeps the same page, until the person
+opens another page of the wallet or loads it again. "You are
+not in this chat." for a room that is not in
 the list.
 
 The pinned card (2026-11-06, section 11), in a private room about a
@@ -2473,7 +2548,10 @@ the right of the Chat entry in the side navigation, and the room's row
 shows a dot and a bold title. The count is per device: a new phone shows
 every room with messages as unread until each is opened once. A count of
 messages is not possible, since positions count across all rooms
-(2026-11-05, section 11).
+(2026-11-05, section 11). The unread dot is still this device's own
+list: what the masterpod keeps since 2026-11-19 (4.10) is what the other
+members of a room see, the words "Sent" and "Seen" of the paragraph "One
+conversation", above.
 
 Marketplace (rebuilt for the phone 2026-11-06, section 11; the plan is
 forclaude/wallet-marketplace-plan-1.md): four screens. Browse, at
@@ -2952,7 +3030,10 @@ excepted, with the keyholder and anos calls included.
                             given; the passkeys (2026-11-18, section 11; 4.8): addPasskey among the purposes of
                             challenge(), wrappedKeyBlobKey on UnlockAnswer (optional: a masterpod of before sends
                             no field), the types AddedPasskeyItem, PasskeyList and AddPasskeyBody, and two
-                            methods, listPasskeys (with the quiet flag) and addPasskey
+                            methods, listPasskeys (with the quiet flag) and addPasskey; Seen in chat (2026-11-19,
+                            section 11; 4.10): seenPosition on RoomMember (optional: only an entry of a room's
+                            members carries it, and a masterpod of before sends none) and one method,
+                            markMessagesSeen, always quiet
     keyholder-api.service   the keyholder test app's, base path /api/keyholder/<n>
     anos-api.service        the anos test app's account-api.service.ts, base path /api/anos/<the session's
                             validator> (2026-11-10, below; /api/anos/<defaultValidator> until then),
@@ -3596,6 +3677,16 @@ thing and stays. The English is the plan's, letter for letter; the five
 Thai lines are the build chat's, by the glossary and by the Thai the
 file had for the same things, with "Log in" named by the label
 `landing.unlock` gives it, and no Thai reader has read them.
+Sent and Seen (2026-11-19, section 11): `chatRoom` gains four entries
+after `sending`, the words under a person's own messages in a
+conversation (8.2, Chat). `sent` and `seen` are the two words. `seenBy`
+and `seenByCount` are functions, for a room with more than one other
+member: `seenBy` takes the usernames as one string, "Seen by mai, joy",
+and `seenByCount` takes how many people they are, "Seen by 4 people".
+Each file has more than one entry named `sending`; the one meant is
+`chatRoom`'s. The English is the plan's, letter for letter; the four
+Thai lines are the build chat's, by the glossary and by the Thai the
+file had for the same things, and no Thai reader has read them.
 
 ### 8.9 The confirmation box
 
@@ -12640,6 +12731,258 @@ only: one style line, and no word of the dictionaries changes.
   not on screen while the look ran. The same style rule,
   `min-width: min(…, 100%)` on a box that may grow, is in the birth
   record form since 2026-11-18.
+
+### Sent and Seen (2026-11-19)
+
+Built from `forclaude/wallet-chat-and-passkey-plan-1.md` (FINAL,
+2026-11-19), its step 4 of six, its section 4, one commit, on main at
+9298884, the working tree clean. Why, in the user's words of 2026-11-19,
+on the chat of the production wallet: "It's unclear as to whether or not
+there is a read notification." Asked which of two things was meant:
+"Yes, we want to know if the other person has seen the message." And of
+the two words, as the planning chat had put them: "I like your
+sugesstions". The masterpod's part is step 3 of the plan, built the same
+day (masterpodsoftware 45fb549, its spec's section 21): it keeps how far
+each member of a chat has read. This step is the wallet's part: the
+words "Sent" and "Seen" under a person's own messages, and the report to
+the masterpod while a chat is on the screen. One new call to the
+masterpod; no line of `network/wallet.env` and no npm package; the
+validators, the doormen, the keyholders, the signing servers and the
+proxy (`server/`) are not touched. The tick in a bubble, "Sending", the
+unread dot and `session.markSeen` are as they were. Either order of the
+two deploys is safe (the plan's section 7).
+
+- `src/app/services/masterpod-api.service.ts`, as the plan's 4.1 gives
+  it: `RoomMember` gains the optional `seenPosition`, and
+  `markMessagesSeen(chatRoomId, position)` stands after `sendMessage()`.
+  It posts `/mark-messages-seen` and is always quiet, so it writes no
+  line into the Log page.
+- `src/app/pages/chat-room.page.ts`, as the plan's 4.2 gives it: the
+  constant `SEEN_NAMES` (3) after `FOLLOW_PX`; the two fields `toldSeen`
+  and `seenOff` after `newest`; `toldSeen = 0` in `open()`, and
+  `void this.tellSeen();` as its last line; the timer, which calls
+  `tellSeen()` after each poll; the same line in `send()` after its
+  poll; the method `tellSeen()` after `poll()`; the computed `marks`
+  after `accountIds`; in the template, after a bubble's closing tag, the
+  word in a `span` of the class `mark`; the style line `.mark`; and the
+  class comment.
+- `src/app/i18n/en.ts` and `th.ts`: four entries in `chatRoom` after
+  `sending`: `sent`, `seen`, and the functions `seenBy` and
+  `seenByCount`. The English is the plan's 4.3, letter for letter.
+- The four Thai lines, the build chat's, in full. No Thai reader has
+  read them; "Thai read by a Thai reader" stands on the after-production
+  list.
+  `chatRoom.sent`: "ส่งแล้ว".
+  `chatRoom.seen`: "เห็นแล้ว".
+  `chatRoom.seenBy`: "เห็นแล้วโดย ${names}".
+  `chatRoom.seenByCount`: "เห็นแล้ว ${count} คน".
+  How they were made, from the glossary and style of
+  `forclaude/wallet-languages-plan-1.md` 1.6 and from the Thai the file
+  had: "Sent" is "ส่งแล้ว", as the file's own "Sent." has it
+  (`assisted.sentCancel`, the three sentences of `escrow.sent`). "Seen" is
+  "เห็นแล้ว", with the verb the file uses for what a person sees on a
+  page (`vouching.what4`). It is not "อ่านแล้ว", read: the word says
+  that the chat was open on a visible page, not that the person read
+  the message (the plan's known limits). "By" a person is "โดย", as
+  `chatNew.byAndMembers` has it, and a number of people is "${count}
+  คน", as that entry and `myRecoveryCase.signed` count them. All three
+  "Seen" lines begin with the same word. No line ends in a full stop,
+  and a Latin word or a number has a space on each side.
+- README: nothing, as the plan says. Spec: 4.10, new; 8.2, Chat (the
+  paragraph "One conversation": the two words and the telling; the
+  paragraph "Unread": one sentence); 8.3 (the line of
+  `masterpod-api.service`); 8.8; and this note.
+- What follows from the plan's code, written here so that it is not
+  taken for a fault. Every opening of a conversation reports once, also
+  when nothing is new: the page keeps what it told only for as long as
+  it lives, and the masterpod changes nothing for a position at or
+  below the one it holds. A person's own send is reported too. The word
+  stands under a bubble: a message drawn as a grey line carries none,
+  and when this pod's newest message is one, the word stands under its
+  newest bubble. In a room with more than one other member the "Seen
+  by" line names those who have seen the newest of this pod's messages
+  that anyone has seen; the others are not named, and no "Sent" stands
+  under that message. A message that is on its way moves no word. The
+  words are as fresh as two polls: the reader's page reports within 3
+  seconds of a message showing, and the writer's wallet reads the room
+  list every 5 seconds. After a 404 the page tells nothing more for as
+  long as it lives. On a phone that is until the person goes back to
+  the list of chats. On a computer the list and the conversation stand
+  side by side, and a click on another chat keeps the same page: only
+  the route's parameter changes. So there nothing is told from any chat
+  until the person opens another page of the wallet or loads it again.
+  And while the three masterpod servers are updated one after the
+  other, an answer of /list-chat-rooms from a server that is not
+  updated yet carries no seen position: the words go away until the
+  next answer that carries them, so for that time they can come and go.
+- Readings where the plan left a detail open. BUILD-DATE is 2026-11-19.
+  The two fields stand right after `newest`, and the style line `.mark`
+  after `.tick`. The class comment's new sentences stand at its end,
+  and the last of them tells the two things apart that are both called
+  seen: the mark of the room on this device, for the unread dot, and
+  the report to the masterpod. In 8.2 the plan puts the two words after
+  "the bubble turns normal with a small tick", which is the middle of a
+  sentence: they stand after that sentence, so that it is not cut in
+  two. The plan's section 7 says that after a 404 a wallet "reports
+  nothing more until that chat is opened again"; by the plan's code that
+  holds on a phone, and 8.2 says what holds on a computer (the point
+  above). The plan file is as it was. In 4.10 the route's block has the
+  checks in the masterpod's order, from its spec's 21.3.
+- The look, where. A development build of a scratch copy of the working
+  tree, served by a plain file server on 127.0.0.1 (a temporary entry
+  in `/Users/codex/.claude/launch.json`, taken out again; the file is
+  byte for byte what it was), in the Claude app's browser pane. The
+  sizes: 360, 375, 390 and 430 pixels wide at 600 high, in English and
+  in Thai; the short screens 360x560 and 375x553; 360x640; 360x740 for
+  the pictures of a chat with a card; 1024x600 once. A made-up session
+  was set through the `ng` debug tools, the way of the note "Who buys
+  and who sells" above: an anoPod id, a username, a status, an account
+  and up to fifteen chats. The messages were real ciphertexts (the
+  wallet's own `newRoomKey` and `encryptText`), and the masterpod's
+  answers were given in the browser by functions set on the API
+  service: the room list, the messages, a send, and
+  `/mark-messages-seen`, whose calls were written down. The members'
+  seen positions were set by hand. So the page drew the words with its
+  own code. The card's result was set by hand to "read everything, no
+  trade". None of our servers was asked: the request list shows the
+  file server and Google's font files. No masterpod, no passkey and no
+  phone was part of it. The pane says it is Chrome on an Android phone
+  at these widths and draws Thai with this Mac's Thai font. The pane
+  was not on screen while the look ran; the pictures and the measures
+  do not need it.
+- The look, a word's place. A word is 11 pixels, in the grey of the
+  time, in a line 20 pixels high. It stands 2 pixels under its bubble,
+  and its right end is 8 pixels inside the bubble's right edge, as the
+  time's is. The next bubble of the group follows after 4 pixels, the
+  group's time after 6. So each word makes the thread 24 pixels taller.
+  "Seen" is 24 pixels wide and "Sent" 22; "เห็นแล้ว" is 36 and
+  "ส่งแล้ว" 30.
+- The look, the five threads of the plan's 4.5, at the four widths in
+  both languages. A chat of two: "Seen" under an older message of this
+  pod and "Sent" under its newest, each one line, with the two messages
+  in one group and in two groups. A chat of three with two usernames of
+  32 ordinary characters, "somchai_the_anos_trader_bangkok1" and
+  "mai_from_chiang_mai_north_thai22": "Seen by" with both names takes
+  two lines at every width in English. In Thai, "เห็นแล้วโดย" with
+  both names takes three lines at 360 and 375 and two at 390 and 430.
+  The line breaks at its spaces inside the group's width, which is 80
+  percent of the thread, 242 pixels at 360, and nothing is cut. With
+  one of the two having seen the message the line names that one: one
+  line at every width in English, and in Thai two lines at 360 and one
+  from 375. A chat of five, a public room: "Seen by 4 people", one
+  line, 83 pixels; "เห็นแล้ว 4 คน", 61. With three of the four it
+  names them, "Seen by mai, somchai, joy", one line, 125 pixels, in
+  Thai 142. A marketplace chat whose other person is only invited:
+  "Sent" under the first message, with the card over the thread and
+  "mai (invited)" in the title. A marketplace chat whose newest own
+  message is a grey line: the word stands under this pod's newest
+  bubble, "Seen" when the other trader's position is at or above it and
+  "Sent" when it is not, and the grey line carries none. Besides the
+  five: no word in a chat whose members carry no seen position, and
+  none in a room with this pod alone.
+- The look, cut: only with the widest username the rules allow, 32
+  times the letter m, beside a second of 32 times w. The line is then
+  three lines, "Seen by" and a name on each of the next two, 311 pixels
+  wide. That is wider than its group, and it grows to the left. At 360
+  pixels it begins 5 pixels left of the thread's frame, so the first
+  letter of each of its lines is cut by about 5 pixels. At 375 its left
+  end is 2 pixels into the thread's padding and nothing is cut, and at
+  390 and 430 it is well inside. Both languages alike. In the same chat the
+  name over the other person's bubble runs past the thread's right
+  edge, and the thread can be pushed sideways, at 360, 375 and 390:
+  that is older than this step, the same to the pixel in a build of
+  9298884. Nothing was changed for it.
+- The look, nothing else moves. With the words and without them (the
+  same chats with no seen positions), at 360x560, in six of the threads
+  and both languages: the header, the card, the thread's own box and
+  the message box have the same place and size. The words are inside
+  the thread, which scrolls. And a wallet of this step on a masterpod
+  of before draws a conversation as the commit before did: a build of
+  9298884 beside this one, thirteen threads with no seen positions, at
+  360 and 430 pixels wide, both languages, every part in the same place
+  (11 to 21 parts a thread).
+- The look, right after a send. In a thread that fills its frame, at
+  360x600, with the made-up masterpod answering after 300 milliseconds
+  and at once: the new bubble shows with "Sending", then gets its tick
+  and "Sent" under it, and the thread stays at its end. The time under
+  the new bubble is whole, 12 pixels over the frame's lower edge: the
+  page's own read after a send brings the thread down. "Seen" stays
+  under the message before.
+- The look, two cases where the last line goes under the frame's edge.
+  Both need a thread that fills its frame and a reader at its end. A
+  word that comes, or a line that grows, with no new message does not
+  bring the thread down. One: a second long username joins the "Seen
+  by" line and the line becomes two; the time under the newest message
+  then stands 7.5 pixels under the edge (360, English). Two: the words
+  come for the first time while the chat is open, which is a masterpod
+  updated at that moment: 11.5 pixels under the edge. A scroll or the
+  next message brings it back. Nothing was changed for it.
+- The look, a short screen. In a marketplace chat the card leaves the
+  thread little room, as before this step. At 360 pixels wide, in
+  English, for a buyer who has not sent an account yet (the card is 246
+  pixels), the thread has 135 pixels at 360x600 and 95 at 360x560; for
+  a buyer who has (the card is 285), 96 and 56. The words stand in that
+  room. A
+  buyer's first message, its "Sent" and its time are whole at 360x600,
+  360x640 and 375x553, and at 360x560 the bubble loses 1 pixel at its
+  top. After "Send my account" the grey line is the newest thing: at
+  360x600 the bubble over it shows 8 of its 36 pixels, with its "Sent"
+  and its time whole, and at 360x560 the bubble and its word are above
+  the frame until the thread is scrolled. With a word the thread's
+  content is 24 pixels taller than before.
+- Tried in the scratch page besides the look, since the look does not
+  show the telling. A stand-in wrote down every call of
+  `markMessagesSeen` and answered as set by hand. One call when a
+  conversation opens, with the newest position shown; none in the 7
+  seconds after it; one more when a message from the other person
+  arrived, with that message's position; one after this pod's own send.
+  With the answer 404: one call, then none when a message arrived, none
+  after a click from that chat straight to another (the same page), and
+  one again from a page opened anew. With a call that fails (status 0):
+  the same call again at each 3-second tick, three in 7 seconds, and no
+  more after the first that succeeded. With the page hidden
+  (`document.visibilityState` set to hidden by hand, since the pane
+  says visible also while it is off screen): no call at the opening and
+  none when a message arrived, though the page drew it, and one call at
+  the next tick once visible. And the words follow the positions: with
+  the other member's position raised by hand to this pod's newest
+  message, "Sent" turned to "Seen" at the wallet's next read of the
+  room list, 3.4 seconds later, and the "Seen" under the older message
+  went.
+- A place the plan does not name that this step left out of date, left
+  as it is and put to the user: the class comment of
+  `src/app/services/masterpod-api.service.ts` lists where the service's
+  routes came from, up to the DAO routes of 2026-11-08, and does not
+  name this one. It names neither the case chats nor the passkey routes
+  that came after that date.
+- Checked. `git status` showed a clean tree at 9298884 at the start,
+  and this step's five files and no others before the build and at the
+  end: `src/app/services/masterpod-api.service.ts`,
+  `src/app/pages/chat-room.page.ts`, `src/app/i18n/en.ts`,
+  `src/app/i18n/th.ts` and this file. `npx ng build` from the web_app
+  folder: clean, no warnings (2.27 MB initial total,
+  `main-5ZQUFXMU.js`, and `styles-EMD3RG3N.css`, the style file of
+  before). The plan's section 4 has nine indented blocks; each was
+  looked for in the files with the build's date in the place of
+  BUILD-DATE, line for line and with its indentation, and all nine are
+  there. The four English entries were compared with the plan's lines
+  letter for letter: the same. Both language files have the same 26
+  keys in the same order in `chatRoom`. Not checked: a phone; the live
+  wallet; iPhone Safari (no style rule is new to the wallet: the word
+  is styled as the time is); a real session; a real masterpod, whose
+  route, whose 404 and whose seen positions were stand-ins in the
+  browser; two real wallets side by side; the moderator and attestor
+  editions (one codebase; the scratch page was the wallet edition); the
+  Thai by a Thai reader. The run-through is the user's, on the live
+  wallet, after both deploys (the plan's section 7): with two anoPods,
+  one writes and reads "Sent"; the other opens the chat, and within
+  about ten seconds the first reads "Seen"; with the second wallet in a
+  hidden tab, "Sent" stays. The user deploys the wallet servers by
+  section 10 of `forclaude/wallet-deploy-plan-1.md`, wallet1 and then
+  wallet2, with no setting in `network/wallet.env` and no `npm ci`.
+  Until the masterpod has its step, a wallet of this step shows neither
+  word, and each conversation page makes one call that the masterpod
+  answers with 404.
 
 ## 12. Recovery and the moderator edition
 
