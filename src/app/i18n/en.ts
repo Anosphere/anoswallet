@@ -281,6 +281,9 @@ export const en = {
     passkeysLine: 'See your passkeys, or add a spare',
     ledgerIdTitle: 'Public ledger id',
     ledgerIdLine: 'Check the birth record you gave at setup',
+    soundOn: 'Sound: on',
+    soundOff: 'Sound: off',
+    soundLine: 'A short sound when a chat message or a chat request arrives while the wallet is open. Tap to turn it on or off on this phone or computer.',
   },
   accountPasskeys: {
     title: 'Passkeys',

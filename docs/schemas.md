@@ -900,7 +900,7 @@ as in the test apps; a new tab unlocks again.
     /vouching                find seeds, send requests, wait
     /identity                the public ledger id: why, the form, the review
     /setup                   keys, the backup code, the deposits, complete-setup
-    /account                 your account: a plain list of rows, Account recovery, Passkeys and Public ledger id
+    /account                 your account: a plain list of rows, Account recovery, Passkeys, Public ledger id and Sound
     /account/recovery        the Account recovery page: Recovery selfie and Recovery details, with what is on file
     /account/recovery/selfie    the account recovery walkthrough, opened at the selfie
     /account/recovery/details   the walkthrough opened at the ID
@@ -970,6 +970,49 @@ reads those lists every 15 seconds, in that edition only, and the number
 clears when the page is opened (work-badge.service, 8.3). It shows at
 the right of the entry in the side panel and on the entry's Home tile,
 since both draw the one list.
+
+The sound (2026-11-19, section 11; the plan is
+forclaude/wallet-chat-and-passkey-plan-1.md, its step 5). The wallet has
+one sound: two short notes, the second higher, made by the browser's own
+sound engine with no sound file (sound.service, 8.3). The shell rings it
+from its 5-second poll (8.2, Notifications), once setup is complete,
+when an answer of /list-chat-rooms holds something new since the answer
+before. New is a newest message by someone else in a room that was in
+the answer before, or an invite to this pod or a join request on one of
+its rooms that was not in it. A message in the conversation that is the
+page on the screen rings nothing: that is the address /chat/<that room>
+while the page is visible (the browser's document.visibilityState is
+"visible"), so the same conversation in a hidden tab does ring. This
+pod's own messages ring nothing. The first answer of a session rings for
+nothing, so Log in is silent whatever waits, and so does a room that is
+new to the list. One answer rings once at most, however much is new in
+it. What the shell has rung for is kept in RAM, for the pod of the
+session, and is forgotten when the session closes. Only this poll rings:
+the chat pages' own reads of the room list do not, and the other
+notifications have no sound.
+
+When the sound cannot ring. A browser lets a page make sound only after
+the person has touched the page, so the sound engine is made at the
+first click, end of a touch or key press in the tab, and nothing plays
+before it; a person with an open session has tapped Log in. The sound
+plays only while the wallet's page is running. A phone with another app
+in front, or a locked phone, plays nothing: the phone's browser freezes
+the page. On a computer a hidden tab plays it up to about a minute late
+(Chrome's rule for a hidden tab's timers). On an iPhone, Safari stops a
+page's sound when it leaves the screen; the wallet starts the engine
+again when the page is back, and at the next tap if Safari refuses that,
+so after coming back the sound may need one tap before it plays again.
+Something new that comes while the engine is stopped is not rung for
+later. Whether the iPhone's silent switch mutes the sound was not
+checked. A sound or a banner while the wallet is not open would need
+push notifications, which are not built (section 10).
+
+The sound's switch is the fourth row of the Account page (8.2, Account),
+"Sound: on" or "Sound: off". The sound is on until the person turns it
+off, and the choice is kept on that phone or computer, in localStorage
+under `anopod-wallet.sound`, for the device and not per pod. Turning it
+on plays the sound once, so the person hears what it is. While it is off
+the shell still keeps track of what is new, and rings nothing.
 
 The next-step rule, applied after an unlock and after each step
 finishes:
@@ -1177,7 +1220,7 @@ complete, after DAO. Since 2026-11-18 (section 11; the plan is
 forclaude/wallet-account-page-plan-1.md) the page is a plain list under
 its title, with no subtitle and no sentence: one row per thing, each
 with an icon, a title and one line, and a new row goes under the last
-one. Three rows. "Account recovery", with the icon lock_reset (the one
+one. Four rows. "Account recovery", with the icon lock_reset (the one
 the Cases page gives a recovery case) and the line "Your recovery
 selfie and details", opens the Account recovery page, /account/recovery
 (below). "Passkeys" (2026-11-18, section 11), with a key icon and the
@@ -1185,7 +1228,19 @@ line "See your passkeys, or add a spare", opens the Passkeys page,
 /account/passkeys (below). "Public ledger id" (2026-11-18, section 11),
 with the icon fingerprint (the one the case pages give a shared lookup
 id) and the line "Check the birth record you gave at setup", opens the
-Public ledger id page, /account/ledger-id (below). No row has a
+Public ledger id page, /account/ledger-id (below). "Sound: on"
+(2026-11-19, section 11), with the icon volume_up and the line "A short
+sound when a chat message or a chat request arrives while the wallet is
+open. Tap to turn it on or off on this phone or computer.", is the
+switch of the wallet's sound (8.1). It is a button where the other three
+are links, and it opens no page. A style rule of the page takes the
+browser's own button look off it, the outline and the centred words, so
+it is drawn as the three link rows are: Material does that only inside
+an action list, and this row stands in the nav list. A tap turns the
+sound off: the title
+then reads "Sound: off" and the icon is volume_off. The next tap turns
+it on again and plays the sound once. The choice is kept on the device
+(sound.service, 8.3). No row has a
 condition of its own: Account is in the navigation only once setup is
 complete. A pod that reaches the Passkeys page earlier by its address
 sees the masterpod's refusal there, and one that reaches the Public
@@ -2149,7 +2204,10 @@ Recovery case", and with one other person the row still shows that
 person's avatar. The
 rooms are the latest /list-chat-rooms answer kept in the session, which
 the shell's 5-second poll refreshes once setup is complete; the list
-refreshes it once when it opens. "No chat keys in this tab: unlock
+refreshes it once when it opens. Since 2026-11-19 (section 11) the
+shell's poll also rings the wallet's sound for what is new in that
+answer, a message from someone else or a chat request (8.1); the list's
+own read rings nothing. "No chat keys in this tab: unlock
 again." shows without chat keys.
 
 One conversation, at /chat/:chatRoomId: a header with the avatar or icon,
@@ -2960,7 +3018,11 @@ above.
 
 Notifications: the list, newest first, mark read; the 5-second poll
 runs while a session is open and updates the status (vouched, counts),
-and the chat rooms with them once setup is complete. The chat kinds
+and the chat rooms with them once setup is complete. Since 2026-11-19
+(section 11) the poll also rings the wallet's sound when its read of the
+chat rooms holds a new message from someone else or a new chat request
+(8.1). A notification by itself rings nothing: a chat request rings
+because it is in the answer of /list-chat-rooms. The chat kinds
 link: chatInvite and joinRequest to /chat/requests; inviteAccepted,
 inviteDeclined and joinApproved to the room, /chat/:chatRoomId
 (2026-11-05, section 11). The kind recoveryCaseScheduled (2026-11-12,
@@ -3255,6 +3317,24 @@ excepted, with the keyholder and anos calls included.
                             in plain words (8.2, Escrow trade), which the page had as its own until then; the
                             escrow trade page sends through it, and so does the Release of the pinned card of
                             a marketplace chat (8.2, Chat)
+    sound.service           the wallet's one sound and its switch (2026-11-19, section 11; 8.1): on, a signal, true
+                            while the sound is on, on this device, read once, when the wallet loads, from
+                            localStorage under `anopod-wallet.sound`: 'off' there means off, anything else, or
+                            nothing, means on, and a browser that refuses the read gives on; the key is the
+                            device's and not a pod's, so it holds no anoPod id and a Lock leaves it;
+                            setOn(value), the switch of the Account page (8.2, Account): it sets the signal,
+                            removes the key for on and writes 'off' for off, and for on it calls chime();
+                            chime(), the sound: two sine notes, 880 Hz for 0.12 seconds and 1174.66 Hz for 0.22
+                            seconds, the second starting 0.14 seconds after the first, each coming in within
+                            0.01 seconds to a gain of 0.2 and fading out; it plays nothing while the switch is
+                            off, while there is no engine yet, or while the engine's state is not "running";
+                            the engine is the browser's AudioContext, made at the first click, touchend or
+                            keydown of the tab, which the service listens for on the document in the capture
+                            phase, since a browser lets a page make sound only after the person has touched it;
+                            the engine is resumed at each such event while it is not running, and when the
+                            page becomes visible again (visibilitychange); a browser without an AudioContext,
+                            or one that refuses, leaves the wallet silent, and nothing is shown; the shell
+                            calls chime() from its poll (app.ts, ring; 8.1)
     log.service             the activity log
 
 Keys are regenerated from blobs at each unlock; nothing secret touches
@@ -3687,6 +3767,16 @@ Each file has more than one entry named `sending`; the one meant is
 `chatRoom`'s. The English is the plan's, letter for letter; the four
 Thai lines are the build chat's, by the glossary and by the Thai the
 file had for the same things, and no Thai reader has read them.
+The sound (2026-11-19, section 11): `accountHome` gains three entries
+after `ledgerIdLine`, the fourth row of the Account page (8.2, Account).
+`soundOn` and `soundOff` are the row's title while the sound is on and
+while it is off, "Sound: on" and "Sound: off". `soundLine` is the line
+under the title, the same in both states: "A short sound when a chat
+message or a chat request arrives while the wallet is open. Tap to turn
+it on or off on this phone or computer." None of the three is a
+function. The English is the plan's, letter for letter; the three Thai
+lines are the build chat's, by the glossary and by the Thai the file had
+for the same things, and no Thai reader has read them.
 
 ### 8.9 The confirmation box
 
@@ -4112,7 +4202,12 @@ Cloud machines.
   own Back leaves the walk-through, and the person starts again at
   screen 1; and a person who taps "Yes, I still have it" by mistake
   has to tap Back to answer again.
-- Several passkeys, push delivery, a custom theme, rate limits.
+- Several passkeys, push delivery, a custom theme, rate limits. Push
+  delivery stays out since the sound of 2026-11-19 (8.1; section 11)
+  too: that sound is made by the open page and plays only while the
+  wallet's page is running, where push delivery would bring a sound or a
+  banner while the wallet is not open, and on an iPhone it needs the
+  wallet added to the Home Screen.
 
 ## 11. Build notes
 
@@ -12996,6 +13091,309 @@ two deploys is safe (the plan's section 7).
   Until the masterpod has its step, a wallet of this step shows neither
   word, and each conversation page makes one call that the masterpod
   answers with 404.
+
+### The sound (2026-11-19)
+
+Built from `forclaude/wallet-chat-and-passkey-plan-1.md` (FINAL,
+2026-11-19), its step 5 of six, its section 5, one commit, on main at
+3821a49, the working tree clean. Why, in the user's words of 2026-11-19,
+on the chat of the production wallet: "How difficult to give chats/
+marketplace sound notifications?" The planning chat offered the small
+version: a short sound while the wallet is open, and no push
+notifications. And of how it rings, as the planning chat had put it: "I
+like your sugesstions". Wallet only: no route, no line of
+`network/wallet.env`, no npm package and no sound file; the masterpod,
+the validators, the doormen, the keyholders, the signing servers and the
+proxy (`server/`) are not touched. The step needs none of the plan's
+steps before it. The unread dot, its count and the 5-second poll's three
+reads are as they were.
+
+- `src/app/services/sound.service.ts`, new, as the plan's 5.1 gives it:
+  the key `anopod-wallet.sound`, the signal `on`, the engine `context`,
+  the four listeners of the constructor, `setOn()`, `chime()`, `wake()`,
+  and the functions `note()`, `readSwitch()` and `writeSwitch()`. A
+  class comment stands over `@Injectable`.
+- `src/app/app.ts`, as the plan's 5.2 gives it: the type `RoomsAnswer`
+  and `SoundService` imported, `sound` injected, the field `heard`
+  beside `polling`, the new first lines of `poll()`, the line
+  `if (rooms?.ok) this.ring(rooms.body);` after the one that keeps the
+  rooms, and the method `ring()` after `poll()`. The class comment and
+  the comment over the timer name the sound.
+- `src/app/pages/account-home.page.ts`, as the plan's 5.3 gives it:
+  `SoundService` injected as `sound`, the fourth row, a `button` with
+  `mat-list-item`, inside the `mat-nav-list` under the Public ledger id
+  row, the two style rules with the button named in each, and the class
+  comment. And one thing the plan does not have, on the user's word: a
+  third style rule, which takes the browser's own button look off the
+  row (the finding of the look, below).
+- `src/app/i18n/en.ts` and `th.ts`: three entries in `accountHome` after
+  `ledgerIdLine`: `soundOn`, `soundOff` and `soundLine`. The English is
+  the plan's 5.3, letter for letter.
+- The three Thai lines, the build chat's, in full. No Thai reader has
+  read them; "Thai read by a Thai reader" stands on the after-production
+  list.
+  `accountHome.soundOn`: "เสียง: เปิด".
+  `accountHome.soundOff`: "เสียง: ปิด".
+  `accountHome.soundLine`: "เสียงสั้น ๆ เมื่อมีข้อความแชทหรือคำขอแชทเข้ามาขณะที่กระเป๋าเงินเปิดอยู่ แตะเพื่อเปิดหรือปิดเสียงบนโทรศัพท์หรือคอมพิวเตอร์เครื่องนี้".
+  How they were made, from the glossary and style of
+  `forclaude/wallet-languages-plan-1.md` 1.6 and from the Thai the file
+  had: "sound" is "เสียง", a word the file did not have yet. "On" and
+  "off" are "เปิด" and "ปิด", the glossary's words for Open and Close,
+  which is how Thai says a sound is on or off. "A chat request" is
+  "คำขอแชท", as `home.chatRequests` has it, and "a chat message" is
+  "ข้อความแชท", from the glossary's two words. "While the wallet is
+  open" is "ขณะที่กระเป๋าเงินเปิดอยู่", as `common.refreshesWhileOpen`
+  says "while the trade is open". "This phone or computer" is
+  "โทรศัพท์หรือคอมพิวเตอร์เครื่องนี้", as `passkeyCheck.note` has it.
+  "Tap" is "แตะ", as the Passkeys page has it. "Arrives" is "เข้ามา",
+  comes in. "Turn it on or off" names the sound again, "เปิดหรือปิดเสียง",
+  since Thai does not say "it" for a thing. "Short" is "สั้น ๆ", with a
+  space on each side of the repeat mark, as the file writes "เพื่อน ๆ".
+  No line ends in a full stop.
+- README: the line of `app.ts, app.html` ends "the notification poll and
+  its sound", and a line for `sound.service.ts` stands at the end of the
+  services. Spec: 8.1 (the `/account` line of the route list, and three
+  new paragraphs in front of the next-step rule: the sound, when it
+  cannot ring, and the switch), 8.2 (the paragraph "Account": four rows;
+  the paragraphs "Chat" and "Notifications": the poll also rings), 8.3
+  (a new line for `sound.service`, with the localStorage key), 8.8, 10
+  (push delivery stays out) and this note.
+- What a browser lets a page do, as the plan has it from the makers' own
+  pages, read by the planning chats on 2026-11-19; this build read none
+  of them again. Which events let a page start sound: the HTML standard
+  (html.spec.whatwg.org, "activation triggering input event") lists
+  `keydown`, `mousedown`, `pointerdown` only when it comes from a mouse,
+  `pointerup` when it does not, and `touchend`. WebKit's page for the
+  iPhone (webkit.org/blog/6784/new-video-policies-for-ios, 2016) asks
+  for "a handler for a touchend, click, doubleclick, or keydown event".
+  Chrome's page (developer.chrome.com/blog/autoplay) says an engine made
+  before the person touched the page starts suspended and has to be
+  resumed afterwards, and advises to "stick to "click" for the time
+  being". So the service listens for `click`, `touchend` and `keydown`,
+  and not for `pointerdown`: under a finger that event comes before the
+  touch counts. When a page stops running: a frozen page's "JavaScript
+  timers and fetch callbacks don't run"
+  (developer.chrome.com/docs/web-platform/page-lifecycle-api), and a
+  hidden tab's timers are checked once a second, and once a minute after
+  five minutes hidden
+  (developer.chrome.com/blog/timer-throttling-in-chrome-88). Push
+  notifications on an iPhone are for "Home Screen web apps", since iOS
+  16.4 (webkit.org/blog/13878). That Safari pauses a page's sound engine
+  when it leaves the screen was found in WebKit's bug tracker, in its
+  engineers' words, not on a policy page.
+- What follows from the plan's code, written here so that it is not
+  taken for a fault. Log in is silent whatever waits: the first answer
+  of a session only tells the shell what is there. A room that is new to
+  the list is silent too: its invite rang when it came. This pod's own
+  message is silent, also one written on another device. The chat on the
+  screen is silent only while its page is visible; the same chat in a
+  hidden tab rings. One answer rings once, however much is new in it,
+  so the sound comes at most once in 5 seconds. A read of the room list
+  that fails changes nothing: what is new rings with the next read that
+  works. But something new that comes while the sound cannot play is not
+  rung for later: the shell counts it as rung. That holds while the
+  switch is off, before the first tap of the tab, and while the phone's
+  browser has stopped the engine. The messages the pinned card posts
+  into a marketplace chat (8.2, Chat) are messages, so a buyer's "Send
+  my account" and a started or released trade ring on the other side. A
+  chat about an attestor case rings like any other, and all three
+  editions have the sound. The switch is the device's: two anoPods on
+  one phone share it, and one anoPod on two phones has two.
+- Readings where the plan left a detail open. BUILD-DATE is 2026-11-19.
+  The class comment of the service stands over `@Injectable`, where
+  every service of the wallet has it, and not over the imports. So the
+  plan's block for the whole file is in the file in two runs: its first
+  five lines, then the comment, then its other 77 lines. With the
+  comment taken out the file is the plan's block, line for line. In
+  `app.ts` the import of the sound service stands after the session
+  service's, by the order of the paths, `sound` is injected after
+  `navigation`, and `heard` stands right under `polling` with no empty
+  line between them. In the page, `sound` is injected after `t`. In 8.1
+  the three paragraphs stand after the one on the Moderation and
+  Attesting numbers. In 8.3 the new line stands in front of
+  `log.service`, and in the README after `escrow-actions.service.ts`.
+  In 10 the sentence is added to the bullet that names push delivery.
+  8.1 also says what follows from the code and what the plan's section 8
+  lists as known limits.
+- The look, where. A development build of a scratch copy of the working
+  tree, and beside it a build of the commit before (3821a49), served by
+  a plain file server on 127.0.0.1 (a temporary entry in
+  `/Users/codex/.claude/launch.json`, taken out again; the file is byte
+  for byte what it was), in the Claude app's browser pane. The sizes:
+  360, 375, 390 and 430 pixels wide at 600 high, the short screen
+  360x560, and 1024x600 once, in English and in Thai, with the sound on
+  and off. A made-up session was set through the `ng` debug tools (an
+  anoPod id, a username, a status with setup complete), and the
+  masterpod's answers were given in the browser by functions set on the
+  API service. The row was pressed by a click event from a script. Then
+  iPhone Safari in the simulator on this Mac (iPhone 17e, 390 by 699
+  points, iOS 27), from a probe page, in English and in Thai. None of
+  our servers was asked, no passkey and no phone was part of it. The
+  pane says it is Chrome on an Android phone at the phone widths and
+  draws Thai with this Mac's Thai font. The pane was not on screen while
+  the look ran; the pictures and the measures do not need it.
+- The look, no sound was heard. The pane lets a page make sound with no
+  touch at all: its own engine answered "running" on a page nobody had
+  touched. So a silent stand-in was put in the place of `AudioContext`
+  before any click: the browser's own engine that draws into memory and
+  not to the speakers (`OfflineAudioContext`). The service ran on it
+  unchanged. The first real hearing is the user's, on the live wallet.
+- THE FINDING of the look: built as the plan's 5.3 has it, the fourth
+  row was drawn as the browser's own button, not as a row of the list.
+  Its words stood in the middle of the row, title and line alike, and an
+  outline ran around it, rounded like a pill: 2 pixels wide and dark in
+  the pane's Chrome, 1 pixel and faint in iPhone Safari. Its icon and
+  its words stood 2 pixels in from where the other rows have theirs (1
+  pixel in Safari), so the title's box began at 58 pixels and was 218
+  wide at 360, where a link row's begins at 56 and is 222 wide. At every
+  size, in both languages, on and off. The cause: Angular Material takes
+  the browser's button look away only inside a `mat-action-list` (its
+  style rule is `mat-action-list button`). A `button` with
+  `mat-list-item` inside a `mat-nav-list`, which is what the plan's 5.3
+  writes, keeps the border and the centred text a browser gives every
+  button. The plan's code had been built and never seen in a browser
+  before this look. The row worked: a press turned the sound off and on.
+- The finding, the rule. One style rule of the page for the button row,
+  Material's own reset for a button in an action list, word for word:
+  `button[mat-list-item] { background: none; color: inherit; border:
+  none; font: inherit; outline: inherit; -webkit-tap-highlight-color:
+  transparent; text-align: start; }`. It was first tried, not built: put
+  into the scratch page as a style sheet, written the way Angular scopes
+  a rule of the page, with the page measured as built and with the rule,
+  at the six sizes in both languages, on and off, and in iPhone Safari
+  in both languages. With the rule the row is a link row in every part:
+  the same words drawn as a copy of a link row have the same icon place
+  (16 and 16 pixels), the same title box (at 56, 222 wide at 360), the
+  same line box, the same lines of text and the same height, and the
+  same border, colours, fonts and alignment. The three rows above it and
+  the card's place and width did not move. (At 1024 wide in Thai the
+  first measure ran while the side menu was still settling after the
+  change of language; made again a few seconds later it showed the same
+  as the others.) The build's first report put it to the user with a
+  picture, as built beside with the rule, and left the wallet as the
+  plan has it: nothing is changed for a finding of the look without the
+  user's word. The user, the same day: "yes, add the style line." So the
+  rule is in the page's styles, as its third rule, with a comment line
+  over it that says why, before this step was committed and in its
+  commit. No other line of code changed with it.
+- The finding, the look again, on the real build with the rule in it: a
+  fresh development build of the working tree, on another port, so that
+  nothing came from the pane's cache, and the rule was read back from
+  the row itself (no border, its words at the start, the list's font
+  and colour). At 360, 375, 390 and 430 pixels wide at 600 high and at
+  360x560, in both languages, on and off, the row equals the same words
+  as a link row in every part, nothing is cut and no page scrolls
+  sideways. In iPhone Safari in the simulator, in both languages, the
+  same: the row is 123.5 points high, as the link row with those words,
+  and the card 413. At 1024x600 the row equals a link row too. There the
+  pane, which was not on screen, did not move the page aside for the
+  side menu, so the list was 958 pixels wide and every row took one
+  line; in the first look's Thai run the page had moved, the list was
+  718 wide and the line took two lines. So a computer's true layout was
+  not seen.
+- The look, the row as it is committed. Nothing is cut and no page
+  scrolls sideways at any size. The line takes five lines in English at
+  360 wide and four at 375, 390 and 430; in Thai four lines at 360, 375
+  and 390 and three at 430. The row is 143.5 pixels high with five
+  lines, 123.5 with four and 103.5 with three, where a row with one
+  line is 64. The whole card shows without scrolling at 360x560: its
+  lower edge is at 505 pixels. Between on and off only the icon and the
+  title differ: "Sound: on" is 76 pixels wide and "Sound: off" 78,
+  "เสียง: เปิด" 70 and "เสียง: ปิด" 64. The Thai line breaks inside a
+  word at some widths: in the pane's Chrome "คำ" stands at the end of
+  one line and "ขอแชท" on the next, and in iPhone Safari "แช" and "ท".
+  That is each browser's own Thai line breaking, which the wallet does
+  not steer.
+- The look, the three rows above. Against the build of the commit
+  before, at 360 and 430 pixels wide in both languages: the card's place
+  and width and every part of the three rows are the same, as first
+  built and again with the rule in. The card is taller by the fourth
+  row.
+- The look, the switch. One press: the title reads "Sound: off", the
+  icon is `volume_off`, and localStorage holds `off` under
+  `anopod-wallet.sound`. The page loaded again: the row reads "Sound:
+  off" from the start, and no engine is made. The next press: "Sound:
+  on", `volume_up`, the key gone, and two notes made on the stand-in,
+  880 and 1174.66 Hz. That press was the first touch of that page, so
+  turning the sound on plays it also as the first thing a person does
+  after a load. Seen as first built, and again on the real build with
+  the rule in.
+- Tried in the scratch page besides the look, since the look does not
+  show the ring. The made-up masterpod's room list was changed by hand
+  and the shell's own `poll()` was run once per change, 25 times, with
+  the calls of `chime()` and the notes made on the stand-in counted. All
+  25 were as the plan says. Nothing rang: for the first answer of a
+  session, with a message from someone else, an own message and an
+  invite in it; for the same answer again; for an own message; for a
+  message in the chat that was on the screen; for an invite that went
+  away together with a room new to the list; while the read failed; with
+  no session; for the first answer of the next session, though a message
+  had come meanwhile; and for another anoPod set in the same tab with no
+  check in between. One chime, two notes, each time: for a message from
+  someone else on the Home page; for one in another chat while the first
+  was on the screen; for one in the open chat with the page hidden
+  (`document.visibilityState` set by hand, since the pane says visible
+  also while it is off screen); for a new invite; for a new join
+  request; for the next message in the room that had been new; for two
+  messages and an invite in one answer; and for the read that worked
+  after the one that failed. `chime()` was called and no note was made:
+  before the first click of the page, with the switch off, and with the
+  engine's state set to "suspended" by hand. Each time the same answer
+  read again rang nothing, so what came then is not rung for later. A
+  click while the engine was stopped asked it once to start again.
+- Tried, the sound drawn and measured, not heard. The service's own
+  `chime()` ran on a fresh stand-in, and the engine drew one second into
+  memory. Two stretches of sound and silence between them: 880 Hz from
+  the start, at its top of 0.19 after 0.01 seconds, below a hundredth of
+  the top by 0.08 seconds; then 1174.66 Hz from 0.14 seconds, at its top
+  of 0.20 at 0.15 seconds, below a hundredth by 0.28 seconds. Full
+  loudness would be 1. So the sound is about a third of a second long
+  and soft, and the browser's engine takes every call of `note()` as
+  written. That is Chrome's engine in the pane; Safari's was not asked.
+- Places this step leaves out of date that the plan does not name: none
+  found. One is older than this step, so not counted: `README.md` says
+  "nothing touches browser storage", while the seen chat positions
+  (2026-11-05), the marketplace filters (2026-11-06) and the seen work
+  ids (2026-11-12) are in localStorage already, and the sound's switch
+  joins them. It holds no secret.
+- Checked. `git status` showed a clean tree at 3821a49 at the start, and
+  this step's seven files and no others before the build and at the
+  end: six changed (`README.md`, this file, `src/app/app.ts`,
+  `src/app/i18n/en.ts`, `src/app/i18n/th.ts`,
+  `src/app/pages/account-home.page.ts`) and
+  `src/app/services/sound.service.ts` new. `npx ng build` from the
+  web_app folder: clean, no warnings (2.27 MB initial total,
+  `main-RB7WUUQN.js` with the third style rule in, `main-37DKR5YC.js`
+  before it, and `styles-EMD3RG3N.css`, the style file of before; run
+  four times in all, and one run stopped on the fetch of Google's font
+  style sheet over the internet, as a run of the passkey step did). The
+  plan's section 5 has six indented blocks; each was looked
+  for in the files with the build's date in the place of BUILD-DATE,
+  line for line and with its indentation. Five are there as written, and
+  the sixth, the whole sound service, is there when the class comment is
+  taken out (the readings above). The three English entries were
+  compared with the plan's lines letter for letter: the same. Both
+  language files have the same eight keys in the same order in
+  `accountHome`. The blocks and the entries were compared again after
+  the third style rule went in, with the same result. Not checked: a
+  phone; the live wallet; a computer's layout with the side menu beside
+  the page; the sound heard by anyone; Safari's sound engine, and
+  whether Safari starts the engine again when the wallet comes back to
+  the screen; whether the iPhone's silent switch mutes the sound; a real
+  session and a real masterpod,
+  whose room lists were made up in the browser; a hidden tab's late
+  sound on a computer; the moderator and attestor editions (one
+  codebase; the scratch page was the wallet edition); the Thai by a Thai
+  reader. The run-through is the user's, on the live wallet (the plan's
+  section 7): with the wallet open on any page, a message from another
+  anoPod plays the two notes; with that chat open on the screen it stays
+  silent; on an iPhone, leave Safari, come back, tap once, and a new
+  message plays again; the row on the Your account page turns the sound
+  off and on, and plays it once when turned on. The user deploys the
+  wallet servers by section 10 of `forclaude/wallet-deploy-plan-1.md`,
+  wallet1 and then wallet2, with no setting in `network/wallet.env` and
+  no `npm ci`. A wallet page loaded before the deploy has no sound until
+  it is loaded again.
 
 ## 12. Recovery and the moderator edition
 

@@ -58,7 +58,7 @@ server/
   app.js                   createApp(config): /api/config, the forwarders, the build
   config.js                the variables with their local defaults
 src/app/
-  app.ts, app.html         the shell: toolbar, side navigation by status, the notification poll
+  app.ts, app.html         the shell: toolbar, side navigation by status, the notification poll and its sound
   app.routes.ts            the routes of spec 8.1; session.guard.ts sends anyone without a session to /
   constants.ts             the PRF salt label, the polling intervals
   amounts.ts               anos <-> millionths
@@ -94,6 +94,7 @@ src/app/
     chat.service.ts       what the chat pages share: the room keys, a room's title, from the reader's own side for a listing chat, and the chats about an attestor case: the room, the invites, Start chat, Invite again (spec 8.3)
     work-badge.service.ts the numbers on the Attesting and Moderation menu entries: the things on each page that this device has not seen yet, read every 15 seconds in that edition, the seen ids kept on the device (spec 8.1, 8.3)
     escrow-actions.service.ts   a release, a cancel or a dispute of an escrow trade: the follow-up built with pair one, signed and posted to /escrow-signature, and the validator's refusal in plain words (spec 8.3)
+    sound.service.ts       the wallet's one sound, two short notes, and its switch, kept on the device (spec 8.1, 8.3)
 docs/                      schemas.md (the spec, build notes in section 11), public-ledger-id.md, build-plan.md
 proxy.conf.json            ng serve forwards /api to the proxy
 ```
