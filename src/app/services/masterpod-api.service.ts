@@ -768,7 +768,10 @@ export interface ExistingEvidence {
  * changed routes and the four new ones added, then the recovery routes of
  * masterpod 12.4, the attesting routes of masterpod 13.4, the wallet
  * memory routes of wallet spec 4.6 and 4.7 (2026-11-07), the break-glass
- * routes of masterpod 14.4 and the DAO routes of masterpod 15 (2026-11-08)),
+ * routes of masterpod 14.4 and the DAO routes of masterpod 15 (2026-11-08),
+ * and after them the two passkey routes of masterpod 19 (2026-11-18) and
+ * the report of how far a chat was read, /mark-messages-seen, of masterpod
+ * 21 (2026-11-19); the read of one listing, /get-listing, is of 2026-11-06),
  * so no page builds URLs or envelopes. The session service holds the session and signs.
  */
 @Injectable({ providedIn: 'root' })

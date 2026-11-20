@@ -12949,12 +12949,25 @@ two deploys is safe (the plan's section 7).
   message, "Sent" turned to "Seen" at the wallet's next read of the
   room list, 3.4 seconds later, and the "Seen" under the older message
   went.
-- A place the plan does not name that this step left out of date, left
-  as it is and put to the user: the class comment of
-  `src/app/services/masterpod-api.service.ts` lists where the service's
-  routes came from, up to the DAO routes of 2026-11-08, and does not
-  name this one. It names neither the case chats nor the passkey routes
-  that came after that date.
+- A place the plan does not name that this step left out of date: the
+  class comment of `src/app/services/masterpod-api.service.ts`, which
+  lists where the service's routes came from. It ended with the DAO
+  routes of 2026-11-08 and did not name this step's route. The build
+  left it as it was and put it to the user. Brought in line on the
+  user's word of 2026-11-19 ("go ahead and fix that comment"), after
+  this step's commit (bd3edc4) and in a commit of its own: a comment
+  only, no line of code. The list now also names the two passkey routes
+  of masterpod 19 (2026-11-18), the report of how far a chat was read,
+  `/mark-messages-seen`, of masterpod 21, and one older route it had
+  never named, the read of one listing, `/get-listing`, of 2026-11-06.
+  With them it covers all 92 routes the service calls: the 33 of the
+  test app's file it names first, and the 59 added since, counted
+  against that file. This bullet said at first that the comment named
+  neither the case chats nor the passkey routes. That was wrong for the
+  case chats: on 2026-11-12 they added no route to the service, only a
+  type, two fields and a parameter of `createChatRoom`. `npx ng build`
+  ran again after the change, clean, with the same two files, since a
+  comment does not reach the build.
 - Checked. `git status` showed a clean tree at 9298884 at the start,
   and this step's five files and no others before the build and at the
   end: `src/app/services/masterpod-api.service.ts`,
