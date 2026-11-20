@@ -27,7 +27,11 @@ import { createProxyMiddleware } from 'http-proxy-middleware';
  *
  * Every answer of this program carries the page's three safety headers,
  * the Angular build's files and the answers under /api alike
- * (PAGE_HEADERS; 2026-11-19, wallet spec 2).
+ * (PAGE_HEADERS; 2026-11-19, wallet spec 2). The page also gets its
+ * content security policy (PAGE_POLICY), which says where a wallet page
+ * may take its scripts, style rules, fonts and pictures from; whether a
+ * browser holds a page to it or only reports is said where createApp
+ * sets it.
  *
  * Every proxy is mounted at the root with a pathFilter, so it sees the full
  * path (an app.use('/prefix') mount would strip the prefix before the
@@ -60,6 +64,29 @@ const PAGE_HEADERS = Object.freeze({
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'no-referrer',
 });
+
+/**
+ * The page's content security policy (wallet spec 2): the monitor's, with
+ * blob: added for pictures. Scripts run only from this program's own
+ * files. 'unsafe-inline' for styles is what Angular Material needs. The
+ * two Google hosts are the fonts. Pictures are the build's own files,
+ * data: addresses (a selfie inside an answer) and blob: addresses (a
+ * picture opened in the browser: images.ts, the camera, the recovery
+ * page). Every call goes to /api on this address. script-src 'self' needs
+ * a build that writes no script into the page itself: inlineCritical is
+ * false in angular.json.
+ */
+const PAGE_POLICY = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com",
+  "img-src 'self' data: blob:",
+  "connect-src 'self'",
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join('; ');
 
 /**
  * The headers of every answer under /api, this program's own and a
@@ -166,9 +193,13 @@ export function createApp(config) {
   const app = express();
   app.disable('x-powered-by');
 
-  // The page's safety headers on every answer (PAGE_HEADERS).
+  // The page's safety headers on every answer (PAGE_HEADERS), and with
+  // them the page's content security policy (PAGE_POLICY) in its
+  // report-only form: the browser blocks nothing and writes into its
+  // console what the policy would have blocked.
   app.use((req, res, next) => {
     res.set(PAGE_HEADERS);
+    res.set('Content-Security-Policy-Report-Only', PAGE_POLICY);
     next();
   });
 
