@@ -12,8 +12,18 @@ import { createProxyMiddleware } from 'http-proxy-middleware';
  * relying-party id, the three lock numbers and the deposit floor (wallet
  * spec 2); everything else under
  * /api is forwarded to a backend with its prefix stripped, bodies
- * streamed, headers as received, the backend's status and body returned
- * unchanged; the rest is the Angular build. Nothing is logged but 502s.
+ * streamed, the backend's status and body returned unchanged; the rest is
+ * the Angular build. Nothing is logged but 502s.
+ *
+ * The headers do not go through as received (2026-11-19, wallet spec 2).
+ * Out to a backend go three of the browser's headers, the body's type, its
+ * length and the Origin, and no other (KEPT_REQUEST_HEADERS). Back to the
+ * browser come the backend's status, its body and one header, the length
+ * (KEPT_ANSWER_HEADERS): the content type is written here, JSON or plain
+ * text (ownAnswerHeaders), and every answer under /api carries this
+ * program's own three headers (API_HEADERS). Connection is the proxy
+ * library's own on every call: "close", or "keep-alive" on a call to a
+ * validator (below).
  *
  * Every proxy is mounted at the root with a pathFilter, so it sees the full
  * path (an app.use('/prefix') mount would strip the prefix before the
@@ -25,13 +35,56 @@ import { createProxyMiddleware } from 'http-proxy-middleware';
  * up the encryption again. The proxy closes a connection that sat unused
  * for config.validatorIdleMs, 10 seconds, before the doorman closes it
  * after its own 15, and keeps at most config.validatorIdleConnections, 32,
- * unused ones per validator. For this one header does not go through as
- * received: Connection, on a call to a validator, is set to keep-alive.
+ * unused ones per validator. For this the Connection header, on a call to
+ * a validator, is set to keep-alive.
  * nginx in front of this proxy sends "Connection: close" with every call,
  * and passed on it would tell the doorman to close after its answer. The
  * masterpod, the keyholders and the signing servers get a new connection
  * for every call.
  */
+
+/**
+ * The headers of every answer under /api, this program's own and a
+ * backend's (wallet spec 2). An answer under /api is data for the wallet's
+ * own code and never a page: the browser may not guess its type, may not
+ * keep it, and, should a person open such an address, runs nothing in it
+ * and gives it none of the wallet's rights (sandbox).
+ */
+const API_HEADERS = Object.freeze({
+  'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'; sandbox",
+  'X-Content-Type-Options': 'nosniff',
+  'Cache-Control': 'no-store',
+});
+
+/**
+ * The request headers that are left on a call before it is forwarded
+ * (wallet spec 2). A backend gets three of the browser's headers: the
+ * body's type, its length, and the Origin. Every other one stops here,
+ * the cookies, the address of the page the person is on (Referer) and
+ * the name of their browser among them. Connection stays for the proxy
+ * library, which never passes it on as it came: it writes "close", or
+ * "keep-alive" on a call to a validator (the comment of forward).
+ */
+const KEPT_REQUEST_HEADERS = new Set(['content-type', 'content-length', 'origin', 'connection']);
+
+/** The one header of a backend's answer that goes back to the browser as it came. */
+const KEPT_ANSWER_HEADERS = new Set(['content-length']);
+
+/**
+ * Called with a backend's answer before the proxy library copies its
+ * headers to the browser: takes every header off it but the length, and
+ * writes the content type itself, JSON when the backend said JSON and
+ * plain text for anything else. So a backend cannot set a cookie, send
+ * the browser to another address, or have its answer drawn as a page
+ * under the wallet's address. The status and the body are not touched.
+ */
+function ownAnswerHeaders(proxyRes) {
+  const json = /^application\/json\s*(;|$)/i.test(proxyRes.headers['content-type'] ?? '');
+  for (const name of Object.keys(proxyRes.headers)) {
+    if (!KEPT_ANSWER_HEADERS.has(name)) delete proxyRes.headers[name];
+  }
+  proxyRes.headers['content-type'] = json ? 'application/json; charset=utf-8' : 'text/plain; charset=utf-8';
+}
 
 /** 502 { error: "<who> unavailable" } when a backend does not answer. */
 function unavailable(who) {
@@ -50,7 +103,8 @@ function unavailable(who) {
  * changeOrigin the Host header, and with it the TLS server name, become the
  * target's, so the masterpod's certificate for api.anocloud.com and the
  * doormen's certificates for their addresses verify; the browser's Origin
- * header is forwarded as received.
+ * header is forwarded as received. Of the browser's other headers only the
+ * body's type and its length go with it (KEPT_REQUEST_HEADERS).
  *
  * `agent`, when given (the validators), is the agent the calls go out
  * through, one of the two createApp makes. It keeps a connection open after
@@ -73,7 +127,7 @@ function forward(config, target, who, prefix, replacement = '', method = null, a
     timeout: config.proxyTimeoutMs,
     pathFilter: (path, req) => prefix.test(path) && (method === null || req.method === method),
     pathRewrite: (path) => path.replace(prefix, replacement) || '/',
-    on: { error: unavailable(who) },
+    on: { error: unavailable(who), proxyRes: ownAnswerHeaders },
     ...(agent === null ? {} : { agent, headers: { connection: 'keep-alive' } }),
   });
 }
@@ -94,6 +148,12 @@ export function createApp(config) {
   const app = express();
   app.disable('x-powered-by');
 
+  // The headers of every answer under /api (API_HEADERS).
+  app.use('/api', (req, res, next) => {
+    res.set(API_HEADERS);
+    next();
+  });
+
   // No express.json in front of the proxies: bodies stream through as they
   // are, so a 70 MB bucket request passes untouched.
   app.get('/api/config', (req, res) => {
@@ -113,6 +173,15 @@ export function createApp(config) {
   });
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok' });
+  });
+
+  // What is forwarded takes only the kept request headers with it. The two
+  // routes above are answered before this and read no header.
+  app.use('/api', (req, res, next) => {
+    for (const name of Object.keys(req.headers)) {
+      if (!KEPT_REQUEST_HEADERS.has(name)) delete req.headers[name];
+    }
+    next();
   });
 
   // The validators' two agents (the comment of forward), one for http

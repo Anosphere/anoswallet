@@ -109,15 +109,40 @@ Routes
 
 Behaviour
 - Bodies are streamed, never parsed: no express.json in front of the
-  proxy, so a 70 MB bucket request passes through as it is. Headers go
-  through as received, the browser's Origin included, so the backends'
-  CORS rules see http://localhost:4200 as they do today. The one
-  exception is the Connection header on a call to a validator, which
-  the proxy sets to keep-alive (2026-11-11, the point on the
-  connections below).
-- The backend's status and body come back unchanged. A backend that does
-  not answer: 502 { error: "<masterpod | validator n | keyholder n |
-  signing server n> unavailable" }. Proxy timeout 120 seconds.
+  proxy, so a 70 MB bucket request passes through as it is. Of the
+  browser's headers a backend gets three: Content-Type, Content-Length
+  and Origin (2026-11-19, section 11; until then every header went
+  through as received). Every other header of the browser stops at the
+  proxy, the cookies, the Referer (the address of the wallet page the
+  person is on), the browser's name and the person's languages among
+  them. The Origin goes through as received, so the backends' CORS
+  rules see http://localhost:4200 as they do today. The Connection
+  header is the one the proxy library writes itself, for each side:
+  "close" to the masterpod, a keyholder and a signing server,
+  "keep-alive" to a validator (2026-11-11, the point on the connections
+  below), and back to its caller what the caller sent. nginx in front
+  of the proxy sends "close" with every call, so since 2026-11-19 the
+  proxy answers nginx "close" after a call to a validator too, where it
+  handed on the doorman's "keep-alive". nginx closed that connection
+  itself either way.
+- The backend's status and body come back unchanged. Of its headers the
+  browser gets one, Content-Length (2026-11-19, section 11; until then
+  every header of the answer came back as the backend sent it). Every
+  other header of the backend is dropped, and the proxy writes
+  Content-Type itself: "application/json; charset=utf-8" when the
+  backend said application/json, "text/plain; charset=utf-8" for
+  anything else. So a backend cannot set a cookie, and a browser never
+  draws a backend's answer as a page. A redirect from a backend comes
+  back with its status and without its target, and the wallet's code
+  treats it as any failed call. Every answer under /api carries three
+  headers, the proxy's own answers too (/api/config, /api/health, the
+  404s and the 502): "Content-Security-Policy: default-src 'none';
+  frame-ancestors 'none'; sandbox", "X-Content-Type-Options: nosniff"
+  and "Cache-Control: no-store". They say: this is data, do not guess
+  its type, do not keep it, and if a person opens the address, run
+  nothing in it and give it none of the wallet's rights. A backend that
+  does not answer: 502 { error: "<masterpod | validator n | keyholder n
+  | signing server n> unavailable" }. Proxy timeout 120 seconds.
 - The connections to the validators stay open (2026-11-11, section 11).
   A call to a validator goes to its doorman on a connection that is
   open and waiting when there is one, so it does not open a connection
@@ -8284,7 +8309,10 @@ the doormen, the masterpod, the keyholders or the signing server.
   outgoing call. So an agent alone would change nothing: the doorman
   would still be told to close after every call. With http-proxy's
   `headers` option the outgoing call says `keep-alive`. It is the one
-  header that does not go through as received.
+  header that does not go through as received. (Since 2026-11-19,
+  `forclaude/wallet-headers-plan-1.md`: of the browser's headers only
+  the body's type, its length and the Origin go through as received,
+  and Connection is still set this way.)
 - The 32. A connection is unused while no call is on it: it is open
   and waiting for the next call. At most 32 such connections are kept
   per validator, in each wallet process; one more that becomes free is
@@ -8329,6 +8357,10 @@ the doormen, the masterpod, the keyholders or the signing server.
   carries the doorman's `Connection: keep-alive`, where it carried
   `close`, because http-proxy hands the backend's header on, and the
   proxy no longer closes nginx's connection itself after such a call.
+  (Since 2026-11-19, `forclaude/wallet-headers-plan-1.md`, its decision
+  7: the doorman's header is dropped with the backend's other headers,
+  so the proxy answers nginx `close` after a call to a validator too,
+  and closes that connection itself.)
   After a call to another backend it answers `close` and closes it, as
   before. nginx keeps no connections to the proxy (the site has no
   `upstream` block with `keepalive`) and closes each one when the
@@ -13394,6 +13426,194 @@ reads are as they were.
   wallet1 and then wallet2, with no setting in `network/wallet.env` and
   no `npm ci`. A wallet page loaded before the deploy has no sound until
   it is loaded again.
+
+### The proxy sends its own headers (2026-11-19)
+
+Built from `forclaude/wallet-headers-plan-1.md` (FINAL, 2026-11-19), its
+step 1 of four, its section 1, one commit, on main at f58c65c, the
+working tree clean. Why, in the user's words of 2026-11-19: "Let's start
+looking at low hanging fruit security upgrades. I believe are content
+headers are a great starting point. Are the current headers set
+correctly?" The look of that day found two things in the proxy. It
+handed a backend's answer headers to the browser as they came. And it
+sent every header of the person's browser out to each backend it calls.
+A validator's doorman is a machine the project does not own. Whoever
+runs one, or breaks into one, could answer
+`https://wallet.anocloud.com/api/anos/<n>/<anything>` with a web page.
+A person who opened that link saw the wallet's real address, the page's
+script ran as the wallet, and the phone offered the wallet's passkey to
+it. The keyholders sit behind the same doormen and the same proxy.
+Honest backends answer only JSON, so nothing was wrong unless a doorman
+turned bad. This step closes it, in the proxy only. There is no route,
+no line of `network/wallet.env`, no npm package and no change under
+`src/` or `deploy/`. The validators, the doormen, the masterpod, the
+keyholders and the signing servers are not touched, and no validator
+has to pull. The page's own safety headers and its content security
+policy are the plan's steps 2 to 4 and are not in this build.
+
+- `server/app.js`, as the plan's 1.1 gives it. In front of the comment
+  of `unavailable`: the constants `API_HEADERS`, `KEPT_REQUEST_HEADERS`
+  and `KEPT_ANSWER_HEADERS` and the function `ownAnswerHeaders`, each
+  with its comment. In `forward` the `on` option gains
+  `proxyRes: ownAnswerHeaders`; nothing else in `forward` changed, and
+  its `headers: { connection: 'keep-alive' }` stays. In `createApp` two
+  small pieces of middleware on `/api`. The first, right after
+  `app.disable('x-powered-by')`, sets `API_HEADERS` on the answer. The
+  second, after the route `/api/health` and in front of the validators'
+  two agents, takes every header off a call but the four of
+  `KEPT_REQUEST_HEADERS`. The comment at the top of the file says what
+  goes out, what comes back, and that Connection is the proxy library's
+  own; the comment of `forward` gains one sentence.
+- What goes out (the plan's decision 3). A backend gets three of the
+  browser's headers: Content-Type, Content-Length and Origin. Every
+  other one stops at the proxy. Until now each backend got them all:
+  the cookies, the Referer (the address of the wallet page the person
+  is on, which holds account, chat room, case and listing ids), the
+  browser's name and the person's languages. Each doorman's nginx
+  writes the Referer and the browser's name of a call into its log;
+  from the wallet it now gets neither. No backend's own code reads a
+  header of a call; their middleware reads the three that are kept.
+- What comes back (decisions 4, 5 and 6). The status and the body, not
+  touched, and Content-Length. Every other header of the backend is
+  dropped, and the proxy writes Content-Type itself: JSON when the
+  backend said `application/json`, plain text for anything else. Every
+  answer under `/api`, the proxy's own too, carries the three headers
+  of `API_HEADERS`. A redirect comes back with its status and without
+  its target. The wallet's code reads only the status and the body of
+  an answer (`src/app/services/log.service.ts`), so nothing changes
+  under `src/`.
+- How. http-proxy sends its `proxyRes` event before it copies the
+  answer's headers to the browser, so the function takes them off the
+  backend's answer and the library copies what is left. On the way out
+  the library copies `req.headers` onto the outgoing call, so taking
+  them off `req.headers` in front of the forwards is enough. The two
+  routes the proxy answers itself stand in front of that middleware.
+- Connection (decision 7) is set as before. The proxy library writes it
+  itself: `close` to the masterpod, a keyholder and a signing server,
+  `keep-alive` to a validator. That is why it stays on the call, as
+  the fourth name in `KEPT_REQUEST_HEADERS`, and the kept connections
+  of 2026-11-11 do not change. One thing changes on the side of nginx.
+  After a call to a validator the proxy now answers nginx `close`, as
+  after every other call, where it handed on the doorman's
+  `keep-alive`, and it closes that connection itself. nginx closed it
+  either way.
+- Accepted by the plan. Its decision 8: a backend's ETag no longer
+  reaches the browser, so the two small GET answers that had one,
+  `/api/sign/<n>/public-keys` and the health answers, are always sent
+  in full. Its decision 9: a page under another address can no longer
+  read an answer through the wallet's `/api`, because the backends'
+  CORS headers are dropped with the rest. No page does: each of the
+  three wallet names calls its own `/api`.
+- What follows from the plan's code, written here so that it is not
+  taken for a fault. What the proxy does in each case was seen in the
+  run below. A body sent in pieces has no length, so the backend sees
+  `Transfer-Encoding: chunked` in its place, written by Node in the
+  proxy; an answer in pieces comes back in pieces the same way. The
+  Date of an answer is the proxy's own. The proxy's own answers
+  (`/api/config`, `/api/health`, its 404s and the 502) still carry
+  the ETag that Express writes for them, now beside `no-store`. A
+  type such as `application/problem+json` or `text/json` comes back
+  as plain text; no backend sends one, and Angular reads the body as
+  JSON whatever the type says. An HTML answer comes back as plain
+  text, so the error pages that nginx and HAProxy write on the way
+  do, and the masterpod's `GET /` stays plain text; the wallet reads
+  only their status. A 204 comes back as a 204 with the plain text
+  type and no body. Accept-Encoding stops at the proxy, so a backend
+  that compresses when it is asked to is no longer asked; a backend
+  that compressed unasked would arrive unreadable, because its
+  Content-Encoding is dropped with the rest, and no backend does. A
+  path in capitals (`/API/anos/1/...`) gets the proxy's own 404 with
+  the three headers, since Express takes `/api` in any case and the
+  forwards do not. A caller that asks to keep its connection, as a
+  browser straight on port 4300 does, is now answered `keep-alive`
+  after every forwarded call; until now a call to the masterpod, a
+  keyholder or a signing server answered it `close` and closed.
+- Readings where the plan left a detail open. The wording of the two
+  comments, of the two points of section 2, of the two dated clauses
+  in the note of 2026-11-11 and of the README is this build's. The
+  empty lines around the new pieces are those of the planning chat's
+  own trial file, which the built file equals but for the three
+  comment places. In section 2 the whole of decision 7 stands in the
+  first point, the side of nginx included, and the point on the
+  connections is as it was. In the README the one clause became two
+  sentences, and "A backend that does not answer" now begins a
+  sentence of its own.
+- Places this step leaves out of date that the plan does not name:
+  three, all in older notes of this section, left as they are and put
+  to the user. The note "Step 4, the web app scaffold" (2026-10-25)
+  says of its check "with the browser's Origin passed through (CORS
+  header `http://localhost:4200` came back)"; the Origin still goes
+  out, the backend's CORS header no longer comes back. In the note of
+  2026-11-11 the point "Spec" names "the one exception to "Headers go
+  through as received"", and the point "Checked" says "After a
+  validator call the proxy answered nginx `Connection: keep-alive` and
+  left that connection open".
+- Checked. `git status --short` showed a clean tree at f58c65c at the
+  start, and this step's three files and no others at the end:
+  `server/app.js`, this file and `README.md`. `node --check
+  server/app.js` passes. The four code blocks of the plan's 1.1 were
+  looked for in `server/app.js` by a script: each is there once, line
+  for line. Then one throwaway run on loopback, on the user's Mac,
+  Node v24.22.0, with express 5.3.0, http-proxy-middleware 3.0.10 and
+  http-proxy 1.18.1 from `node_modules`: the real `createApp` of the
+  working tree in front of five made-up backends (a masterpod, two
+  validators, a keyholder, a signing server) and one address where
+  nothing listens. The script is in the build chat's scratchpad and
+  nothing of it is in the repo. No dev server and no `ng serve` ran,
+  and no real server was called. Each call came in the way nginx sends
+  it: HTTP/1.1, the Host of the wallet's name, `Connection: close`,
+  and a new connection for every call. 92 checks, all as expected. The
+  four the plan asks for:
+  1. A made-up web page (`text/html`, two cookies and thirteen other
+     headers of its own) asked for as `/api/anos/1/page` came back 200
+     as `text/plain; charset=utf-8`, with no cookie and none of those
+     thirteen, under the three headers of `API_HEADERS`. Its length
+     and its 98 bytes were unchanged.
+  2. Of a call that carried thirty headers, a validator, a keyholder,
+     the masterpod and a signing server each saw five: Content-Type,
+     Content-Length and Origin as the browser sent them, and Host and
+     Connection, which the proxy writes itself. A GET with no body saw
+     three. The cookie, the Referer, the browser's name, the languages
+     and 21 more did not arrive.
+  3. A body of 8 MB arrived whole, once sent with its length, once in
+     pieces with no length, and once to a validator on a kept
+     connection; so did a body of 70 MB. An answer of 4 MB came back
+     whole, once with its length and once in pieces.
+  4. Three calls to a validator one after the other went down one
+     connection, and the validator was told `keep-alive`. Two calls
+     to the masterpod, to a keyholder and to a signing server opened
+     two connections each, told `close`.
+  Besides the four: a redirect came back 302 with no Location; a
+  backend's JSON refusal (400) came back with its status, its body
+  and the JSON type, and a backend's own 404 with its status and
+  body; seventeen content types gave JSON for the four spellings of
+  `application/json` and plain text for every other, `text/html`,
+  `image/svg+xml` and no type among them; the proxy's own
+  eight answers (`/api/config`, `/api/health`, `/api`, an unknown
+  path, an unknown validator, keyholder and signing server, and the
+  502 for the address where nothing listens) carried the three
+  headers; of fourteen paths written in odd ways none reached a
+  backend around the two pieces of middleware; after a call from a
+  caller that said `close` the proxy answered `close` and closed the
+  connection, for a validator as for the others; the page (`/`, a
+  deep link, `index.html`) carried none of the three headers, as this
+  step leaves it. The file of f58c65c went through the same script:
+  36 of the 92 checks were as expected, and the 56 others are what
+  this step changes. There the made-up page came back as `text/html`
+  with both cookies, and each backend saw all thirty headers. Not
+  run: nginx (it is not on this Mac), TLS (the made-up backends were
+  plain http), a real backend, a browser, a wallet server. The
+  run-through is the user's, after the deploy (the plan's section 5):
+  the wallet works as before, a log in, the balances on Home, a chat,
+  one send; and this line, from any machine, shows `content-type:
+  application/json; charset=utf-8`, `content-security-policy:
+  default-src 'none'; frame-ancestors 'none'; sandbox`,
+  `x-content-type-options: nosniff` and `cache-control: no-store`,
+  and no `vary` and no `etag`:
+  `curl -s -D - -o /dev/null https://wallet.anocloud.com/api/masterpod/health`
+  Only the wallet has something to deploy, wallet1 and then wallet2,
+  with no setting in `network/wallet.env` and no `npm ci`. A wallet
+  page that was open before the deploy keeps working.
 
 ## 12. Recovery and the moderator edition
 

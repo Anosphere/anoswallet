@@ -31,9 +31,15 @@ The one origin the browser talks to. `GET /api/config` tells the browser
 how many validators, keyholders and signing servers there are and the
 three lock numbers; `/api/masterpod/<path>`, `/api/anos/<n>/<path>`,
 `/api/keyholder/<n>/<path>`, `POST /api/sign/<n>` and
-`GET /api/sign/<n>/public-keys` are forwarded with the prefix cut, bodies
-streamed, the browser's Origin kept, the backend's answer returned
-unchanged; a backend that does not answer is `502 { error: "<who>
+`GET /api/sign/<n>/public-keys` are forwarded with the prefix cut and
+bodies streamed. Out to a backend go three of the browser's headers, the
+body's type, its length and the Origin, and no other. Back come the
+backend's status, its body and the body's length: the proxy writes the
+content type itself, JSON or plain text, and sends three headers of its
+own with every answer under `/api` (a content security policy that
+allows nothing, `nosniff` and `no-store`), so a backend's answer is never
+drawn as a page under the wallet's address. A backend that does not
+answer is `502 { error: "<who>
 unavailable" }`. The connections to the validators stay open between
 calls: the proxy closes one that sat unused for 10 seconds and keeps at
 most 32 unused ones per validator (`validatorIdleMs` and
