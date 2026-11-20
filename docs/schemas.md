@@ -4344,8 +4344,11 @@ that differed from the plan and why.
   and a signature when a rig instance runs on 3300), a signed `/get-account`
   to validator 3 through it answered 200 with the browser's Origin passed
   through (CORS header `http://localhost:4200` came back); deep links serve
-  `index.html`. The unlock through ng serve against the user's masterpod
-  waits for the masterpod to be reset and restarted (step 3).
+  `index.html`. (Since 2026-11-19, `forclaude/wallet-headers-plan-1.md`:
+  the browser's Origin still goes out to the backend, and the backend's
+  CORS header no longer comes back through the proxy.) The unlock through
+  ng serve against the user's masterpod waits for the masterpod to be
+  reset and restarted (step 3).
 
 ### Step 5, create, vouching, notifications, the seed inbox (2026-10-25)
 
@@ -8386,6 +8389,10 @@ the doormen, the masterpod, the keyholders or the signing server.
   the wallet's newest commit.
 - Spec: 2 (Behaviour: the one exception to "Headers go through as
   received", and the new point on the connections) and this note.
+  (Since 2026-11-19, `forclaude/wallet-headers-plan-1.md`: that point
+  of section 2 no longer reads "Headers go through as received"; it
+  names the three headers a backend gets, and Connection as the one
+  the proxy library writes itself.)
   README, "The proxy (server/)": one sentence. The older notes above
   stand as the record of what was built then.
 - Checked. `node --check server/app.js` and
@@ -8417,7 +8424,10 @@ the doormen, the masterpod, the keyholders or the signing server.
   line in the log, and the next call was answered. After a validator
   call the proxy answered nginx `Connection: keep-alive` and left that
   connection open; after a masterpod call it answered `close` and
-  closed it. The stand-in connections have no clock and no encryption.
+  closed it. (Since 2026-11-19, `forclaude/wallet-headers-plan-1.md`,
+  its decision 7: after a validator call too the proxy answers nginx
+  `close` and closes that connection.) The stand-in connections have
+  no clock and no encryption.
   So three things were not run here: the 10 seconds themselves, a
   machine that cannot be reached, and TLS. The plan's own tries of
   2026-11-11, on the user's Mac against a stand-in backend, cover the
@@ -13539,15 +13549,21 @@ policy are the plan's steps 2 to 4 and are not in this build.
   sentences, and "A backend that does not answer" now begins a
   sentence of its own.
 - Places this step leaves out of date that the plan does not name:
-  three, all in older notes of this section, left as they are and put
-  to the user. The note "Step 4, the web app scaffold" (2026-10-25)
-  says of its check "with the browser's Origin passed through (CORS
-  header `http://localhost:4200` came back)"; the Origin still goes
-  out, the backend's CORS header no longer comes back. In the note of
-  2026-11-11 the point "Spec" names "the one exception to "Headers go
-  through as received"", and the point "Checked" says "After a
-  validator call the proxy answered nginx `Connection: keep-alive` and
-  left that connection open".
+  three, all in older notes of this section. The build's first report
+  listed them as left and put them to the user. The note "Step 4, the
+  web app scaffold" (2026-10-25) says of its check "with the browser's
+  Origin passed through (CORS header `http://localhost:4200` came
+  back)"; the Origin still goes out, the backend's CORS header no
+  longer comes back. In the note of 2026-11-11 the point "Spec" names
+  "the one exception to "Headers go through as received"", and the
+  point "Checked" says "After a validator call the proxy answered
+  nginx `Connection: keep-alive` and left that connection open". Put
+  right on the user's word of 2026-11-19 ("go ahead and update the
+  comments"), after this step was committed (dffb5a2), in a commit of
+  its own: each of the three has a dated clause in brackets beside it,
+  beginning "Since 2026-11-19" and naming the plan's file, as the
+  plan's two have. The old words stay; where a clause stands in the
+  middle of a line, the words after it moved on to the next lines.
 - Checked. `git status --short` showed a clean tree at f58c65c at the
   start, and this step's three files and no others at the end:
   `server/app.js`, this file and `README.md`. `node --check
