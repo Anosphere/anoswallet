@@ -7,7 +7,7 @@ import { InviteItem, MasterpodApiService, RoomItem, RoomListing, RoomMember, Roo
 import { Bytes } from './passkey.service';
 import { SessionService } from './session.service';
 
-/** A piece of a shown message: plain text, or an account id, which shows in code font with a copy button (wallet spec 8.5). */
+/** A piece of a shown message: plain text, or an account id, which shows in code font with a copy button (wallet spec 8.5), the button not for the two traders of a marketplace chat (2026-11-19). */
 export interface Piece {
   text: string;
   accountId: boolean;
@@ -45,7 +45,10 @@ const DAY_MS = 86_400_000;
  * chat and Invite again. And, for the attestor in a marketplace chat
  * (wallet spec 8.2, Chat; 2026-11-12): whether this pod is one of the two
  * traders of such a chat, the other trader, and the attestors who have a
- * chat with this pod about a case.
+ * chat with this pod about a case. And since 2026-11-19
+ * (forclaude/wallet-chat-and-passkey-plan-1.md) a listing chat's trade in
+ * a few words from the reader's own side (tradeWords), which the room's
+ * title carries.
  */
 @Injectable({ providedIn: 'root' })
 export class ChatService {
@@ -114,9 +117,11 @@ export class ChatService {
    * The room's title, in the app's language: a public room's name; an old
    * listing room's "Sell 50 anos for THB"; a private room's other people, the
    * invited marked, or "Just you", and for a private room about a listing
-   * (2026-11-06) the listing's words after them: "somchai · Selling 100 anos
-   * for THB"; for a private room about an attestor case (2026-11-12) the
-   * case's kind in words after them: "attestorjoy · Assisted transfer case".
+   * (2026-11-06) the trade in a few words after them, from the reader's own
+   * side since 2026-11-19 (tradeWords): "mai · You are selling 100 anos",
+   * where it read "mai · Selling 100 anos for THB"; for a private room
+   * about an attestor case (2026-11-12) the case's kind in words after
+   * them: "attestorjoy · Assisted transfer case".
    */
   title(room: RoomItem): string {
     const rooms = this.lang.words().rooms;
@@ -130,14 +135,38 @@ export class ChatService {
     const names = [...this.otherMembers(room).map((m) => m.username), ...room.invited.map((m) => rooms.invited(m.username))];
     const people = names.length > 0 ? names.join(', ') : rooms.justYou;
     if (room.caseKind) return `${people} · ${rooms.caseChat[room.caseKind]}`;
-    return room.listing ? `${people} · ${this.listingWords(room.listing)}` : people;
+    return room.listing ? `${people} · ${this.tradeWords(room)}` : people;
   }
 
-  /** A listing in a few words, in the app's language, for a room's title and a request (2026-11-06): "Selling 100 anos for THB". */
+  /** A listing in a few words, in the app's language (2026-11-06): "Selling 100 anos for THB". Since 2026-11-19 for a request, and for a room's title only where tradeWords finds no seller. */
   listingWords(listing: RoomListing): string {
     const rooms = this.lang.words().rooms;
     const anos = millionthsToAnos(listing.quantity);
     return listing.side === 'sell' ? rooms.selling(anos, listing.currency) : rooms.buying(anos, listing.currency);
+  }
+
+  /**
+   * A listing chat's trade in a few words from the reader's own side
+   * (2026-11-19): "You are selling 100 anos" for the seller, "You are
+   * buying 100 anos" for the buyer, and for a guest, who is neither, "mai
+   * is selling 100 anos" with the seller's username. The seller is the
+   * owner of a sell listing and the other trader of a buy listing, as in
+   * marketplace.service's mySide. Empty for a room without a listing.
+   */
+  tradeWords(room: RoomItem): string {
+    const listing = room.listing;
+    if (!listing) return '';
+    const rooms = this.lang.words().rooms;
+    const anos = millionthsToAnos(listing.quantity);
+    if (this.isTrader(room)) {
+      const owner = listing.owner.anopodId === this.session.anopodId();
+      return (listing.side === 'sell') === owner ? rooms.youSelling(anos) : rooms.youBuying(anos);
+    }
+    const seller =
+      listing.side === 'sell'
+        ? listing.owner.username
+        : [...room.members, ...room.invited].find((m) => m.anopodId === room.creatorAnopodId)?.username;
+    return seller ? rooms.theySelling(seller, anos) : this.listingWords(listing);
   }
 
   /** Direct for a private room with exactly one other person, member or invited; else group, public or marketplace. */

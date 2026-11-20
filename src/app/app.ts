@@ -11,9 +11,10 @@ import { map } from 'rxjs';
 import { NOTIFICATIONS_POLL_MS } from './constants';
 import { ConfigService } from './services/config.service';
 import { LanguageService } from './services/language.service';
-import { MasterpodApiService } from './services/masterpod-api.service';
+import { MasterpodApiService, RoomsAnswer } from './services/masterpod-api.service';
 import { NavigationService } from './services/navigation.service';
 import { SessionService } from './services/session.service';
+import { SoundService } from './services/sound.service';
 
 /**
  * The shell (wallet spec 8 and 8.1): a toolbar and a side navigation on a
@@ -29,7 +30,11 @@ import { SessionService } from './services/session.service';
  * is a link to Home once setup is complete. The toolbar's words come from
  * the dictionary (wallet spec 8.8), and the language service is created
  * here, so the page's `lang` attribute follows the language from the
- * start.
+ * start. Since 2026-11-19 the shell also rings the wallet's one sound
+ * (sound.service.ts; wallet spec 8.1): its 5-second poll plays it once
+ * when the room list holds a new message from someone else, unless that
+ * conversation is the page on the screen, or a new invite or join
+ * request.
  */
 @Component({
   selector: 'app-root',
@@ -45,6 +50,7 @@ export class App {
   private readonly router = inject(Router);
   private readonly api = inject(MasterpodApiService);
   private readonly navigation = inject(NavigationService);
+  private readonly sound = inject(SoundService);
 
   /** True on a narrow screen: the navigation hides behind the menu button. */
   protected readonly handset = toSignal(
@@ -59,15 +65,23 @@ export class App {
     void this.config.load().catch(() => undefined);
     // The notification poll (wallet spec 8.2): while a session is open, the
     // notifications and the status (vouched, the counts) every 5 seconds,
-    // and the chat rooms with them once setup is complete (8.2, Chat).
+    // and the chat rooms with them once setup is complete (8.2, Chat). The
+    // poll also rings: the answer with the chat rooms goes to ring(), which
+    // plays the wallet's sound for what is new in it (8.1).
     const timer = setInterval(() => void this.poll(), NOTIFICATIONS_POLL_MS);
     inject(DestroyRef).onDestroy(() => clearInterval(timer));
   }
 
   private polling = false;
+  /** What the shell has rung for already, for the pod of this session: each room's newest position, and the ids of the invites and join requests. Null with no session, and until the first answer of one. */
+  private heard: { anopodId: string; positions: Map<string, number>; requests: Set<string> } | null = null;
 
   private async poll(): Promise<void> {
-    if (!this.session.hasSession() || this.polling) return;
+    if (!this.session.hasSession()) {
+      this.heard = null;
+      return;
+    }
+    if (this.polling) return;
     this.polling = true;
     try {
       const [notifications, status, rooms] = await Promise.all([
@@ -79,9 +93,40 @@ export class App {
       if (notifications.ok) this.session.notifications.set(notifications.body.notifications);
       if (status.ok) this.session.status.set(status.body);
       if (rooms?.ok) this.session.chatRooms.set(rooms.body);
+      if (rooms?.ok) this.ring(rooms.body);
     } finally {
       this.polling = false;
     }
+  }
+
+  /**
+   * The sound (2026-11-19, wallet spec 8.1): one chime when this answer of
+   * /list-chat-rooms holds something new since the one before. New is: a
+   * newest message by someone else in a room the shell already knew,
+   * unless that conversation is the page on the screen; or an invite or
+   * a join request it did not know. The first answer of a session rings
+   * for nothing, and so does a room that is new to the list.
+   */
+  private ring(answer: RoomsAnswer): void {
+    const me = this.session.anopodId();
+    if (me === null) return;
+    const before = this.heard !== null && this.heard.anopodId === me ? this.heard : null;
+    const onScreen = document.visibilityState === 'visible' ? this.router.url : '';
+    const positions = new Map<string, number>();
+    const requests = new Set<string>();
+    let news = false;
+    for (const room of answer.rooms) {
+      positions.set(room.chatRoomId, room.lastPosition);
+      const known = before?.positions.get(room.chatRoomId);
+      if (known === undefined || room.lastMessage === null || room.lastPosition <= known) continue;
+      if (room.lastMessage.senderAnopodId !== me && onScreen !== `/chat/${room.chatRoomId}`) news = true;
+    }
+    for (const id of [...answer.invites.map((i) => i.inviteId), ...answer.joinRequests.map((r) => r.joinRequestId)]) {
+      requests.add(id);
+      if (before !== null && !before.requests.has(id)) news = true;
+    }
+    this.heard = { anopodId: me, positions, requests };
+    if (news) this.sound.chime();
   }
 
   protected navigated(): void {

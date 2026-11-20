@@ -15,7 +15,7 @@ import { LanguageService } from '../services/language.service';
  * never alone. The box reads the dictionary itself for the step label
  * only. On the escrow trade page it stands first, under the Back link,
  * while the trade is open; the pinned card of a marketplace chat
- * (pinned-listing.component.ts) draws it too, under the listing's line,
+ * (pinned-listing.component.ts) draws it too, under the listing's two lines,
  * with and without a trade.
  */
 @Component({

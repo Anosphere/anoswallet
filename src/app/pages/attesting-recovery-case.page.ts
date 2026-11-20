@@ -13,6 +13,7 @@ import { millionthsToAnos } from '../amounts';
 import { CaseChatStartComponent } from '../components/case-chat-start.component';
 import { CASES_POLL_MS } from '../constants';
 import { imageObjectUrl } from '../images';
+import { checkSessionPasskey } from '../passkey-check';
 import { AnosApiService, AssistedTransferItem } from '../services/anos-api.service';
 import { AttestingService, attestingError } from '../services/attesting.service';
 import { BalancesService } from '../services/balances.service';
@@ -32,6 +33,7 @@ import {
   SecurityRecords,
   SentResult,
 } from '../services/masterpod-api.service';
+import { PasskeyService } from '../services/passkey.service';
 import { SessionService } from '../services/session.service';
 import { SigningService } from '../services/signing.service';
 import { REVIEW_STATUSES, STATUS_ICONS } from './attesting.page';
@@ -135,7 +137,10 @@ function storedAttestations(events: CaseEvent[]): StoredAttestation[] {
  * attestations in its slots, or "not listed on this validator"); the
  * timeline; Schedule; the recovery case's lookup id; the two buckets (the
  * trade page's pull, pointed at /list-break-glass-case-security-records);
- * Sign all attestations (one attestation follow-up per move, built as the
+ * Sign all attestations (the line that the passkey will be asked for, and
+ * on the button first the passkey check, once for all the moves, since
+ * 2026-11-19, passkey-check.ts; then one attestation follow-up per move,
+ * built as the
  * account page builds one and signed by the wallet pair, then
  * /sign-off-break-glass-case with every move once); Send to the validators
  * once the case is decided (the stored attestations the validator does not
@@ -321,6 +326,7 @@ function storedAttestations(events: CaseEvent[]): StoredAttestation[] {
             @if (signOffs().length > 0) { {{ t().tradeCase.signedSoFar(signOffs().join(', ')) }} }
           </p>
           <p class="muted">{{ t().recoveryCase.attestText }}</p>
+          <p class="muted">{{ t().passkeyCheck.note }}</p>
           <div class="form">
             <button mat-flat-button type="button" (click)="attest()" [disabled]="busy() || final() || !attesting.accountId() || d.moves.length === 0">{{ t().recoveryCase.signAll }}</button>
           </div>
@@ -416,6 +422,7 @@ export class AttestingRecoveryCasePage {
   private readonly keyholders = inject(KeyholderApiService);
   private readonly anos = inject(AnosApiService);
   private readonly signing = inject(SigningService);
+  private readonly passkey = inject(PasskeyService);
   private readonly config = inject(ConfigService);
   private readonly crypto = inject(CryptoService);
   protected readonly lang = inject(LanguageService);
@@ -704,6 +711,11 @@ export class AttestingRecoveryCasePage {
    * transactionId the move's, the wallet pair from /api/sign/<n>; then
    * /sign-off-break-glass-case with every move once. When the answer says
    * decided this sign-off decided the case and the sending runs at once.
+   * Since 2026-11-19 the passkey check comes first (passkey-check.ts): the
+   * device is asked for the passkey that opened the session, straight from
+   * the click, once, in front of the loop that signs for each move. A
+   * check that does not pass shows its sentence in red under the button,
+   * and nothing is signed.
    */
   protected async attest(): Promise<void> {
     let decided = false;
@@ -711,6 +723,7 @@ export class AttestingRecoveryCasePage {
       const d = this.data();
       if (!d) throw new Error(this.t().common.caseNotLoaded);
       if (d.moves.length === 0) throw new Error(this.t().recoveryCase.noMoves);
+      await checkSessionPasskey({ crypto: this.crypto, passkey: this.passkey, session: this.session }, this.t());
       const { account, pairOne } = await this.attesting.pairOne();
       const attestations: BreakGlassAttestation[] = [];
       for (const move of d.moves) {

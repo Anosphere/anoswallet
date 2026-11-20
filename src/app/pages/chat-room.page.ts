@@ -17,6 +17,7 @@ import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
 import { MasterpodApiService, MessageItem, Profile, RoomItem, RoomMember } from '../services/masterpod-api.service';
 import { SessionService } from '../services/session.service';
+import { TradeMessageKind, tradeMessageKind } from '../trade-messages';
 import { REVIEW_STATUSES } from './attesting.page';
 
 /** A decrypted message of the room, split into its pieces; `pending` while this pod's own message is on its way. */
@@ -28,6 +29,8 @@ interface ShownMessage {
   pieces: Piece[];
   mine: boolean;
   pending: boolean;
+  /** For the two traders of a marketplace chat (2026-11-19): what the message is when the pinned card posted it, and the thread then draws a grey line in its place; null for every other message, and always for a guest and in every other room. */
+  notice: TradeMessageKind | null;
 }
 
 /** Messages by one sender within GROUP_MINUTES of each other on one day: the name once on top (someone else's, in a room that is not direct), the time once below. */
@@ -40,14 +43,17 @@ interface Group {
   time: string;
 }
 
-/** What the thread draws: a day line, or a group of bubbles. */
-type ThreadItem = { kind: 'day'; key: string; label: string } | { kind: 'group'; key: string; group: Group };
+/** What the thread draws: a day line, a group of bubbles, or, for the two traders of a marketplace chat (2026-11-19), a grey line in the place of a message the pinned card posted. */
+type ThreadItem = { kind: 'day'; key: string; label: string } | { kind: 'group'; key: string; group: Group } | { kind: 'notice'; key: string; text: string };
 
 /** Messages this close in time by one sender share a group. */
 const GROUP_MINUTES = 5;
 
 /** A message that arrives scrolls the thread down only when the reader is this close to the bottom. */
 const FOLLOW_PX = 120;
+
+/** "Seen by" names the people who have seen a message up to this many of them; above it, it says how many they are. */
+const SEEN_NAMES = 3;
 
 /**
  * One conversation (wallet spec 8.2, Chat), at /chat/:chatRoomId inside the
@@ -72,7 +78,24 @@ const FOLLOW_PX = 120;
  * the open dispute case of the chat's trade, and with one the menu has
  * Invite an attestor: a panel with the attestors on that case, each with
  * Invite, which brings the attestor into the chat, where they read
- * everything (2026-11-12).
+ * everything (2026-11-12). The two traders of such a chat read each of
+ * the three messages the card posts (trade-messages.ts) as a short grey
+ * line with no account id: "You sent your account for this trade." or
+ * "mai sent their account for this trade." for the buyer's account,
+ * "Trade update. Look at the box at the top of this chat." for a trade
+ * started or released; and for them an account id in any other message
+ * has no copy button. A guest reads the messages as they are, with the
+ * copy button (2026-11-19, forclaude/wallet-chat-and-passkey-plan-1.md).
+ * Under this pod's own messages stands a word (2026-11-19, the same
+ * plan): "Seen" under the newest one that another member has seen, "Seen
+ * by" with the usernames when the room has more than one other member,
+ * and "Sent" under the newest one while nobody has seen it yet. The
+ * members' seen positions come with /list-chat-rooms. While the
+ * conversation is on the screen the page tells the masterpod how far
+ * this pod has read (/mark-messages-seen, masterpod spec 21): after
+ * opening, after each poll and after a send, and never from a hidden
+ * tab. The seen mark of the sentence further up is another thing: this
+ * device's own list, for the unread dot.
  */
 @Component({
   selector: 'app-chat-room-page',
@@ -150,6 +173,8 @@ const FOLLOW_PX = 120;
         @for (item of thread(); track item.key) {
           @if (item.kind === 'day') {
             <div class="day"><span>{{ item.label }}</span></div>
+          } @else if (item.kind === 'notice') {
+            <div class="notice"><span>{{ item.text }}</span></div>
           } @else {
             <div class="group" [class.mine]="item.group.mine">
               @if (item.group.showSender) {
@@ -164,7 +189,10 @@ const FOLLOW_PX = 120;
                     <span class="text">
                       @for (piece of m.pieces; track $index) {
                         @if (piece.accountId) {
-                          <code>{{ piece.text }}</code><app-copy-button [text]="piece.text" [label]="t().common.copyAccountId" />
+                          <code>{{ piece.text }}</code>
+                          @if (!trader()) {
+                            <app-copy-button [text]="piece.text" [label]="t().common.copyAccountId" />
+                          }
                         } @else {
                           <span class="plain">{{ piece.text }}</span>
                         }
@@ -180,6 +208,9 @@ const FOLLOW_PX = 120;
                       </span>
                     }
                   </div>
+                  @if (marks().get(m.messageId); as mark) {
+                    <span class="mark">{{ mark }}</span>
+                  }
                 }
                 <span class="time">{{ item.group.time }}</span>
               </div>
@@ -225,6 +256,8 @@ const FOLLOW_PX = 120;
     .older { align-self: center; }
     .day { display: flex; justify-content: center; margin: 8px 0 0; }
     .day span { font-size: 12px; color: var(--mat-sys-on-surface-variant); background: var(--mat-sys-surface-container); border-radius: 10px; padding: 2px 10px; }
+    .notice { display: flex; justify-content: center; }
+    .notice span { font-size: 12px; color: var(--mat-sys-on-surface-variant); text-align: center; }
     .group { display: flex; align-items: flex-end; gap: 8px; max-width: 80%; align-self: flex-start; }
     .group.mine { align-self: flex-end; }
     .face { margin-bottom: 18px; }
@@ -237,6 +270,7 @@ const FOLLOW_PX = 120;
     .plain { white-space: pre-wrap; }
     .state { display: inline-flex; align-items: center; margin-left: 6px; font-size: 11px; color: var(--mat-sys-on-surface-variant); vertical-align: bottom; }
     .tick { font-size: 14px; width: 14px; height: 14px; }
+    .mark { font-size: 11px; color: var(--mat-sys-on-surface-variant); margin: 0 8px 2px; }
     .sender { font-size: 11px; color: var(--mat-sys-on-surface-variant); margin: 0 0 2px 8px; }
     .time { font-size: 11px; color: var(--mat-sys-on-surface-variant); margin: 2px 8px 0; }
     .composer { display: flex; gap: 8px; align-items: flex-end; padding: 8px 12px; border-top: 1px solid var(--mat-sys-outline-variant); }
@@ -269,6 +303,11 @@ export class ChatRoomPage {
   protected readonly room = computed(() => this.session.chatRooms()?.rooms.find((r) => r.chatRoomId === this.chatRoomId()) ?? null);
   protected readonly isCreator = computed(() => this.room()?.creatorAnopodId === this.session.anopodId());
   protected readonly canInvite = computed(() => this.isCreator() && this.room()?.type !== 'marketplace');
+  /** True for the two traders of a marketplace chat (2026-11-19): they read the card's messages as grey lines, and an account id in a message has no copy button. */
+  protected readonly trader = computed(() => {
+    const room = this.room();
+    return room !== null && this.chat.isTrader(room);
+  });
   protected readonly messages = signal<ShownMessage[]>([]);
   protected readonly canLoadOlder = signal(false);
   protected readonly showInvite = signal(false);
@@ -297,7 +336,7 @@ export class ChatRoomPage {
     return [...found.values()];
   });
 
-  /** The messages as the thread draws them: a day line before each day, the messages of one sender within GROUP_MINUTES in one group. */
+  /** The messages as the thread draws them: a day line before each day, the messages of one sender within GROUP_MINUTES in one group, and for the two traders of a marketplace chat (2026-11-19) a grey line in the place of each message the pinned card posted, which ends the group before it. */
   protected readonly thread = computed<ThreadItem[]>(() => {
     const room = this.room();
     if (!room) return [];
@@ -311,6 +350,11 @@ export class ChatRoomPage {
         items.push({ kind: 'day', key: `day-${day}`, label: this.chat.dayLabel(m.createdAt) });
         lastDay = day;
         group = null;
+      }
+      if (m.notice) {
+        items.push({ kind: 'notice', key: m.messageId, text: this.noticeText(room, m) });
+        group = null;
+        continue;
       }
       const previous = group ? group.messages[group.messages.length - 1] : null;
       if (group && previous && group.senderAnopodId === m.senderAnopodId && minutesBetween(previous.createdAt, m.createdAt) < GROUP_MINUTES) {
@@ -342,11 +386,46 @@ export class ChatRoomPage {
     return found.sort((a, b) => b.position - a.position);
   });
 
+  /**
+   * The word under this pod's own messages (2026-11-19), by message id.
+   * "Seen" under the newest one that another member has seen, by the seen
+   * positions of /list-chat-rooms; with more than one other member, "Seen
+   * by" and the usernames of those who have, and above SEEN_NAMES of them
+   * how many they are. "Sent" under the newest one when nobody has seen it
+   * yet, a person who is only invited so far among them. A message drawn
+   * as a grey line carries none. Empty in a room with nobody else in it
+   * and nobody invited, and while no member carries a seen position, this
+   * pod among them: a masterpod of before.
+   */
+  protected readonly marks = computed(() => {
+    const marks = new Map<string, string>();
+    const room = this.room();
+    if (!room || room.members.every((m) => m.seenPosition === undefined)) return marks;
+    const me = this.session.anopodId();
+    const others = room.members.filter((m) => m.anopodId !== me);
+    if (others.length === 0 && room.invited.length === 0) return marks;
+    const mine = this.messages().filter((m) => m.mine && !m.pending && !m.notice);
+    if (mine.length === 0) return marks;
+    const words = this.t().chatRoom;
+    const newest = mine[mine.length - 1];
+    const seen = [...mine].reverse().find((m) => others.some((o) => (o.seenPosition ?? 0) >= m.position));
+    if (seen) {
+      const readers = others.filter((o) => (o.seenPosition ?? 0) >= seen.position).map((o) => o.username);
+      marks.set(seen.messageId, others.length === 1 ? words.seen : readers.length > SEEN_NAMES ? words.seenByCount(readers.length) : words.seenBy(readers.join(', ')));
+    }
+    if (seen !== newest) marks.set(newest.messageId, words.sent);
+    return marks;
+  });
+
   /** The room the thread shows, whether its opening read is done, and the positions of the oldest and newest shown. */
   private openedFor: string | null = null;
   private ready = false;
   private oldest = 0;
   private newest = 0;
+  /** The newest position this page told the masterpod it has seen, for the room it shows; 0 when none. */
+  private toldSeen = 0;
+  /** True once the masterpod answered 404 to /mark-messages-seen: a masterpod of before. This page then tells nothing more for as long as it lives. */
+  private seenOff = false;
   private pendingCount = 0;
 
   constructor() {
@@ -357,7 +436,7 @@ export class ChatRoomPage {
       this.openedFor = room.chatRoomId;
       untracked(() => void this.open(room));
     });
-    const timer = setInterval(() => void this.poll(true), MESSAGES_POLL_MS);
+    const timer = setInterval(() => void this.poll(true).then(() => this.tellSeen()), MESSAGES_POLL_MS);
     inject(DestroyRef).onDestroy(() => clearInterval(timer));
   }
 
@@ -368,6 +447,13 @@ export class ChatRoomPage {
   /** The members' usernames, then the invited as "(invited)". */
   protected membersLine(room: RoomItem): string {
     return [...room.members.map((m) => m.username), ...room.invited.map((m) => this.t().rooms.invited(m.username))].join(', ');
+  }
+
+  /** The grey line a trader reads in place of a message the pinned card posted (2026-11-19): for the buyer's account, who sent it; for the news of the trade, where to look. It never says that anos are in escrow: only the card's status box says that, and it reads the validators. */
+  private noticeText(room: RoomItem, m: ShownMessage): string {
+    const words = this.t().chatRoom;
+    if (m.notice === 'trade') return words.tradeUpdate;
+    return m.mine ? words.youSentAccount : words.theySentAccount(this.senderName(room, m.senderAnopodId));
   }
 
   /** Enter sends; Shift+Enter is left to the textarea, a new line. */
@@ -383,6 +469,7 @@ export class ChatRoomPage {
     this.messages.set([]);
     this.oldest = 0;
     this.newest = 0;
+    this.toldSeen = 0;
     this.canLoadOlder.set(false);
     this.showInvite.set(false);
     this.showMembers.set(false);
@@ -404,6 +491,7 @@ export class ChatRoomPage {
     this.ready = true;
     this.session.markSeen(room.chatRoomId, this.newest);
     this.scrollToBottom();
+    void this.tellSeen();
   }
 
   /** The page before the oldest shown; the reader stays on the message they were looking at. */
@@ -447,7 +535,27 @@ export class ChatRoomPage {
     if (follow) this.scrollToBottom();
   }
 
-  /** The messages decrypted with the room key and split into pieces; the two reasons a text cannot show, as before. */
+  /**
+   * Tells the masterpod how far this pod has read in the room (2026-11-19,
+   * masterpod spec 21): the newest position shown, when it is above what
+   * this page told before, and only while the page is on the screen
+   * (document.visibilityState is visible), so a chat left open in a
+   * hidden tab does not say Seen. A call that fails is made again at the
+   * timer's next tick. A 404, a masterpod of before, ends the telling.
+   */
+  private async tellSeen(): Promise<void> {
+    const room = this.room();
+    if (!room || !this.ready || this.seenOff || this.openedFor !== room.chatRoomId) return;
+    if (document.visibilityState !== 'visible' || this.newest <= this.toldSeen) return;
+    const position = this.newest;
+    this.toldSeen = position;
+    const res = await this.api.markMessagesSeen(room.chatRoomId, position);
+    if (res.ok) return;
+    if (res.status === 404) this.seenOff = true;
+    else if (this.openedFor === room.chatRoomId && this.toldSeen === position) this.toldSeen = 0;
+  }
+
+  /** The messages decrypted with the room key and split into pieces; the two reasons a text cannot show, as before. For the two traders of a marketplace chat (2026-11-19) each message also says what it is when the pinned card posted it (`notice`, from tradeMessageKind); null for every other message. */
   private async shown(room: RoomItem, items: MessageItem[]): Promise<ShownMessage[]> {
     const hasKey = (await this.chat.roomKeyOf(room)) !== null;
     const me = this.session.anopodId();
@@ -462,6 +570,7 @@ export class ChatRoomPage {
         pieces: piecesOf(text),
         mine: m.senderAnopodId === me,
         pending: false,
+        notice: this.chat.isTrader(room) ? tradeMessageKind(text) : null,
       });
     }
     return list;
@@ -489,6 +598,7 @@ export class ChatRoomPage {
         pieces: piecesOf(text),
         mine: true,
         pending: true,
+        notice: null,
       };
       this.messages.update((list) => [...list, pending]);
       this.messageText.set('');
@@ -510,6 +620,7 @@ export class ChatRoomPage {
       this.messages.update((list) => list.map((m) => (m === pending ? sent : m)));
       this.session.markSeen(room.chatRoomId, res.body.position);
       await this.poll(false);
+      void this.tellSeen();
       return res;
     });
   }

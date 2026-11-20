@@ -13,6 +13,7 @@ import { millionthsToAnos } from '../amounts';
 import { CaseChatStartComponent } from '../components/case-chat-start.component';
 import { CASES_POLL_MS } from '../constants';
 import { imageObjectUrl } from '../images';
+import { checkSessionPasskey } from '../passkey-check';
 import { AnosApiService } from '../services/anos-api.service';
 import { AttestingService, attestingError } from '../services/attesting.service';
 import { BalancesService } from '../services/balances.service';
@@ -30,6 +31,7 @@ import {
   Profile,
   SentResult,
 } from '../services/masterpod-api.service';
+import { PasskeyService } from '../services/passkey.service';
 import { SessionService } from '../services/session.service';
 import { SigningService } from '../services/signing.service';
 import { REVIEW_STATUSES, STATUS_ICONS } from './attesting.page';
@@ -95,7 +97,9 @@ function accepted(result: SentResult): boolean {
  * session's chat keys, or asked from a holder; Share to an attestor who
  * holds none), the timeline, the evidence in two columns opened with the
  * case key (keyForCase under the case pair with the case id as aad, then the
- * file under the content key), Schedule, Verdict (the escrowVerdict
+ * file under the content key), Schedule, Verdict (the line that the
+ * passkey will be asked for, and on "Sign the verdict" first the passkey
+ * check, since 2026-11-19, passkey-check.ts; then the escrowVerdict
  * follow-up built as the account page builds one, then
  * /sign-off-dispute-case), Send to the validators once the case is decided
  * (the two agreeing verdicts to /escrow-signature and
@@ -275,6 +279,7 @@ function accepted(result: SentResult): boolean {
             <p class="muted">{{ t().disputeCase.verdictsSoFar(signOffs().join(', ')) }}</p>
           }
           <p class="muted">{{ t().disputeCase.verdictText }}</p>
+          <p class="muted">{{ t().passkeyCheck.note }}</p>
           <div class="form">
             <mat-form-field appearance="outline">
               <mat-label>{{ t().common.verdict }}</mat-label>
@@ -377,6 +382,7 @@ export class AttestingDisputeCasePage {
   private readonly masterpod = inject(MasterpodApiService);
   private readonly anos = inject(AnosApiService);
   private readonly signing = inject(SigningService);
+  private readonly passkey = inject(PasskeyService);
   private readonly crypto = inject(CryptoService);
   protected readonly lang = inject(LanguageService);
   protected readonly t = this.lang.words;
@@ -657,12 +663,17 @@ export class AttestingDisputeCasePage {
    * account, the wallet pair from /api/sign/<n>; then /sign-off-dispute-case.
    * When the answer says decided this signature decided the case and the
    * sending runs at once.
+   * Since 2026-11-19 the passkey check comes first (passkey-check.ts): the
+   * device is asked for the passkey that opened the session, straight from
+   * the click, before pair one is opened. A check that does not pass shows
+   * its sentence in red under the button, and nothing is signed.
    */
   protected async sign(): Promise<void> {
     let decided = false;
     await this.act(this.verdictOutcome, async () => {
       const d = this.data();
       if (!d) throw new Error(this.t().common.caseNotLoaded);
+      await checkSessionPasskey({ crypto: this.crypto, passkey: this.passkey, session: this.session }, this.t());
       const { account, pairOne } = await this.attesting.pairOne();
       const followUp = this.crypto.buildFollowUp(pairOne, { type: 'escrowVerdict', transactionId: d.case.transactionId, arbitratorId: account.accountId, verdict: this.verdict() });
       const signed = await this.signing.sign(followUp, account.accountId);

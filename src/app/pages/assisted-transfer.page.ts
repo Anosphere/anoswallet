@@ -7,12 +7,14 @@ import { RouterLink } from '@angular/router';
 import { millionthsToAnos } from '../amounts';
 import { assistedStageWords } from '../assisted-stage';
 import { ACCOUNT_POLL_MS } from '../constants';
+import { checkSessionPasskey } from '../passkey-check';
 import { AnosApiService, HeldAssistedTransfer } from '../services/anos-api.service';
 import { ConfigService } from '../services/config.service';
 import { CryptoService, KeyBlobLostError, PairOne } from '../services/crypto.service';
 import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
 import { MasterpodApiService, MyTradeCase } from '../services/masterpod-api.service';
+import { PasskeyService } from '../services/passkey.service';
 import { SessionService } from '../services/session.service';
 import { SigningService } from '../services/signing.service';
 
@@ -37,7 +39,10 @@ interface Outcome {
  * /list-my-cases matched by transaction id (a dismissal's reason from
  * /get-my-case, asked once per case). Two buttons: Go to the case when
  * there is one, and Cancel transfer while the stage is attesting or
- * writing, which asks once before the assistedTransferCancel follow-up is
+ * writing, which asks once, with the line that the passkey will be asked
+ * for under the question; "Yes, cancel the transfer" asks the device for
+ * the passkey that opened the session first (2026-11-19,
+ * passkey-check.ts), before the assistedTransferCancel follow-up is
  * built with pair one, signed by /api/sign/<n> and posted to
  * /assisted-transfer-cancel, the path the old paste form took. The page
  * refreshes every 5 seconds while the transfer is held. A transfer seen
@@ -79,6 +84,7 @@ interface Outcome {
 
           @if (asking()) {
             <p class="question">{{ t().assisted.askCancel(millionthsToAnos(held.amount)) }}</p>
+            <p class="muted">{{ t().passkeyCheck.note }}</p>
             <div class="row">
               <button mat-flat-button type="button" class="danger" (click)="confirm()" [disabled]="busy()">{{ t().assisted.yesCancel }}</button>
               <button mat-button type="button" (click)="asking.set(false)" [disabled]="busy()">{{ t().common.back }}</button>
@@ -140,6 +146,7 @@ export class AssistedTransferPage {
   private readonly anos = inject(AnosApiService);
   private readonly crypto = inject(CryptoService);
   private readonly signing = inject(SigningService);
+  private readonly passkey = inject(PasskeyService);
   private readonly config = inject(ConfigService);
   protected readonly lang = inject(LanguageService);
   protected readonly t = this.lang.words;
@@ -290,13 +297,14 @@ export class AssistedTransferPage {
     this.dismissReason.set(typeof reason === 'string' ? (this.t().dismissReasons[reason] ?? reason) : null);
   }
 
-  /** Builds, signs and posts the assistedTransferCancel follow-up, then refreshes. */
+  /** "Yes, cancel the transfer". First the passkey check (2026-11-19, passkey-check.ts): the device is asked for the passkey that opened the session, straight from this click; a check that does not pass shows its sentence in the outcome line in red, the question stays, and nothing is built or signed. Then it builds, signs and posts the assistedTransferCancel follow-up, then refreshes. */
   protected async confirm(): Promise<void> {
     const transfer = this.transfer();
     if (!this.asking() || !transfer) return;
     this.busy.set(true);
     this.outcome.set(null);
     try {
+      await checkSessionPasskey({ crypto: this.crypto, passkey: this.passkey, session: this.session }, this.t());
       const pairOne = await this.pairOne();
       const signed = await this.signing.sign(this.crypto.buildFollowUp(pairOne, { type: 'assistedTransferCancel', transactionId: transfer.transactionId, accountId: this.accountId() }), this.accountId());
       const res = await this.anos.assistedTransferCancel(signed);

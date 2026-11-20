@@ -217,6 +217,8 @@ export interface SecurityRecords {
 export interface RoomMember {
   anopodId: string;
   username: string;
+  /** The highest message position this member has seen in the room (2026-11-19, masterpod spec 21). Only an entry of a room's `members` carries it: the invited and a listing's owner do not, and a masterpod of before sends none. */
+  seenPosition?: number;
 }
 
 /** The listing a room is about, as /list-chat-rooms gives it (2026-11-06): the quantity in millionths and the price per anos, decimal strings; the owner by id and username. */
@@ -766,7 +768,10 @@ export interface ExistingEvidence {
  * changed routes and the four new ones added, then the recovery routes of
  * masterpod 12.4, the attesting routes of masterpod 13.4, the wallet
  * memory routes of wallet spec 4.6 and 4.7 (2026-11-07), the break-glass
- * routes of masterpod 14.4 and the DAO routes of masterpod 15 (2026-11-08)),
+ * routes of masterpod 14.4 and the DAO routes of masterpod 15 (2026-11-08),
+ * and after them the two passkey routes of masterpod 19 (2026-11-18) and
+ * the report of how far a chat was read, /mark-messages-seen, of masterpod
+ * 21 (2026-11-19); the read of one listing, /get-listing, is of 2026-11-06),
  * so no page builds URLs or envelopes. The session service holds the session and signs.
  */
 @Injectable({ providedIn: 'root' })
@@ -938,6 +943,11 @@ export class MasterpodApiService {
 
   sendMessage(chatRoomId: string, message: string): Promise<ApiResponse<{ messageId: string; position: number }>> {
     return this.signed('/send-message', { chatRoomId, message });
+  }
+
+  /** Tells the masterpod how far this pod has read in a room (2026-11-19, masterpod spec 21). Always quiet: it is a report, not something the person did. A masterpod of before answers 404. */
+  markMessagesSeen(chatRoomId: string, position: number): Promise<ApiResponse<{ chatRoomId: string; seenPosition: number }>> {
+    return this.signed('/mark-messages-seen', { chatRoomId, position }, true);
   }
 
   getChatPublicKeys(anopodIds: string[]): Promise<ApiResponse<{ keys: ChatKeyItem[] }>> {

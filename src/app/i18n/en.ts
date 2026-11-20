@@ -198,6 +198,13 @@ export const en = {
     noPrfOutput: 'The authenticator returned no PRF output; this passkey or platform does not support PRF',
     noCredential: 'The browser returned no public-key credential',
   },
+  passkeyCheck: {
+    note: 'To confirm, this phone or computer will ask for your passkey, the one you log in with.',
+    notFinished: 'The passkey step was not finished, so nothing was done. Press the button to try again.',
+    otherPasskey: 'That was not the passkey you logged in with, so nothing was done.',
+    failed: (reason: string) => `The passkey could not be used, so nothing was done: ${reason}`,
+    noSession: 'This tab no longer has what the passkey step needs, so nothing was done. Log in again.',
+  },
   shares: {
     noIdentity: 'no public ledger id in RAM: unlock again',
     floorNotReached: (stored: number, keyholders: number, needed: number, keyholder: number, reason: string) =>
@@ -274,6 +281,9 @@ export const en = {
     passkeysLine: 'See your passkeys, or add a spare',
     ledgerIdTitle: 'Public ledger id',
     ledgerIdLine: 'Check the birth record you gave at setup',
+    soundOn: 'Sound: on',
+    soundOff: 'Sound: off',
+    soundLine: 'A short sound when a chat message or a chat request arrives while the wallet is open. Tap to turn it on or off on this phone or computer.',
   },
   accountPasskeys: {
     title: 'Passkeys',
@@ -413,7 +423,6 @@ export const en = {
     stakeDaoNote: 'A DAO stake gives you one vote for each anos. It is locked for one month since your last vote.',
     stakeGuardianNote: 'A guardian stake gives you one vote on fund proposals for each 1,000 anos. It is locked for one year since your last vote.',
     confirmStakeNote: 'A stake stays with the fund. It comes back only through a fund proposal that the guardians vote for.',
-    stakeTypeNote: 'To confirm, type your username below.',
     stake: 'Stake',
     sending: 'Sending…',
     escrowOpen: 'An escrow trade is open. This account can send again when it closes.',
@@ -599,7 +608,6 @@ export const en = {
     openText: 'This trade is open. This wallet does not know this stage, so it offers nothing to do with it.',
   },
   escrowBoxes: {
-    typeNote: 'To confirm, type your username below.',
     cannotBeUndone: 'It cannot be undone.',
     releaseTitle: (anos: string) => `Release ${anos} anos to the buyer?`,
     releaseNote: 'Do this only when the money is in your own bank account. A picture of a payment slip is not proof.',
@@ -739,6 +747,10 @@ export const en = {
     invited: '(invited)',
     loadOlder: 'Load older messages',
     sending: 'Sending',
+    sent: 'Sent',
+    seen: 'Seen',
+    seenBy: (names: string) => `Seen by ${names}`,
+    seenByCount: (count: number) => `Seen by ${count} people`,
     noMessages: 'No messages yet.',
     message: 'Message',
     loading: 'Loading the chat.',
@@ -746,6 +758,9 @@ export const en = {
     cannotDecrypt: '(cannot decrypt)',
     noRoomKey: '(no room key)',
     notOpen: 'This chat is not open',
+    youSentAccount: 'You sent your account for this trade.',
+    theySentAccount: (name: string) => `${name} sent their account for this trade.`,
+    tradeUpdate: 'Trade update. Look at the box at the top of this chat.',
   },
   rooms: {
     publicRoom: 'Public room',
@@ -756,6 +771,9 @@ export const en = {
     justYou: 'Just you',
     selling: (anos: string, currency: string) => `Selling ${anos} anos for ${currency}`,
     buying: (anos: string, currency: string) => `Buying ${anos} anos for ${currency}`,
+    youSelling: (anos: string) => `You are selling ${anos} anos`,
+    youBuying: (anos: string) => `You are buying ${anos} anos`,
+    theySelling: (name: string, anos: string) => `${name} is selling ${anos} anos`,
     caseChat: { trade: 'Assisted transfer case', dispute: 'Escrow dispute case', recovery: 'Recovery case' },
   },
   marketplace: {
@@ -801,7 +819,10 @@ export const en = {
     nobody: 'Nobody has connected yet.',
   },
   pinned: {
-    summary: (side: string, anos: string, price: string, total: string) => `${side} ${anos} anos · ${price} each · ${total}`,
+    youSell: (anos: string, name: string) => `You are selling ${anos} anos to ${name}`,
+    youBuy: (anos: string, name: string) => `You are buying ${anos} anos from ${name}`,
+    sellTerms: (price: string, name: string, total: string) => `${price} each · ${name} pays you ${total}`,
+    buyTerms: (price: string, name: string, total: string) => `${price} each · you pay ${name} ${total}`,
     seeTrade: 'See the trade',
     closeListing: 'Close the listing',
     noAccounts: 'This anoPod has no anos account yet.',
@@ -814,6 +835,7 @@ export const en = {
     them: 'them',
     finished: 'This trade is finished. To trade again, start a new chat.',
     cancelled: 'Cancelled: the seller kept the anos.',
+    // The chat page knows this message by these words (trade-messages.ts). A change of the words needs the old words kept there.
     shareMessage: (accountId: string) => `Please send the anos to this account: ${accountId}`,
     pickAccounts: 'Pick the accounts and an amount in anos',
     notSentUnread: 'Could not check for an earlier trade, so nothing was sent. Try again.',
@@ -821,8 +843,10 @@ export const en = {
     refused: (reason: string) => `The validator refused the trade: ${reason}`,
     alreadyHeld: 'This account already has an escrow trade or a transfer waiting on the validators. Finish that first, or use another account.',
     noAnswer: 'The validators did not answer. If the trade started, it will show here in a moment. If it does not, try again.',
+    // The chat page knows this message by these words (trade-messages.ts). A change of the words needs the old words kept there.
     startedMessage: (anos: string, from: string, to: string, transactionId: string) =>
       `Escrow trade started: ${anos} anos from ${from} to ${to}. Transaction ${transactionId}.`,
+    // The chat page knows this message by these words (trade-messages.ts). A change of the words needs the old words kept there.
     releasedMessage: (anos: string, from: string, to: string, transactionId: string) =>
       `Escrow trade released: ${anos} anos from ${from} to ${to}. Transaction ${transactionId}.`,
     sendAccount: 'Send my account',
@@ -1472,7 +1496,6 @@ export const en = {
     clear: 'Clear',
     copy: 'Copy',
     username: 'Username',
-    yourUsername: 'Your username',
     selfie: 'selfie',
     noneYet: 'None yet.',
     reading: 'Reading…',

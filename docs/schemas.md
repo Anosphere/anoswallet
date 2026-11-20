@@ -534,6 +534,49 @@ The proxy forwards the request as any masterpod path (section 2);
 nothing in server/ changed. The wallet's side is the two recovery pages
 (12.3), passkey.service (8.3) and masterpod-api.service (12.4).
 
+### 4.10 Seen in chat
+
+Added 2026-11-19 (forclaude/wallet-chat-and-passkey-plan-1.md; section
+11): the masterpod keeps how far each member of a chat has read, so the
+wallet can say "Sent" and "Seen" under a person's own messages. Until
+then nothing said whether the other person had seen a message: each
+device kept its own list, for its unread dot (8.2, Unread). The
+masterpod's side is its own spec's section 21, which holds the rule, the
+column and the checks in full. The masterpod gained three things there.
+One column, seen_position on chat_room_members: the highest message
+position the member has seen in the room, 0 until that member's wallet
+reports one. One route, /mark-messages-seen, by which a member's own
+wallet reports it. And one field more in the answer of /list-chat-rooms:
+every member of a room reads how far every other member has read. A seen
+position is never lowered and never above the room's newest message. The
+masterpod keeps the number alone, with no time beside it, and still
+learns nothing of what a message says. No table, no env variable and no
+npm package.
+
+    POST /mark-messages-seen (setup), new
+    body { chatRoomId: hex, position: integer }; position is the highest message position the caller's wallet
+           has shown, a whole number from 1 to 9007199254740991
+    checks, in order: the shape (400 bad request shape); chatRoomId 32 bytes (400 invalid chatRoomId); position a
+           whole number in that range (400 invalid position, and a body without a position gets the same); the
+           caller a member of the room (403 not a member, and a room that does not exist gets the same)
+    writes: the caller's own chat_room_members row, seen_position raised to position, or to the room's newest
+           message position when position is above it; a position at or below what the row holds changes
+           nothing; no notification and nothing else
+    answer: 200 { chatRoomId: hex, seenPosition: number }, what the row holds afterwards
+
+    POST /list-chat-rooms (setup), one field more
+    answer: every entry of a room's members is { anopodId, username, seenPosition: number }, 0 until that
+           member's wallet reports one; the entries of invited and the owner of a listing stay
+           { anopodId, username }; nothing else in the answer changes
+    a masterpod of before: answers /mark-messages-seen with 404 { error: "Not Found", path }, as it answers any
+           route it does not have, and sends no seenPosition; the wallet then stops reporting from that page and
+           shows neither "Sent" nor "Seen" (8.2, Chat)
+
+The proxy forwards the new route as any masterpod path (section 2);
+nothing in server/ changed. The wallet's side is the conversation (8.2,
+Chat, the paragraphs "One conversation" and "Unread") and
+masterpod-api.service (8.3).
+
 ## 5. Validator changes (anossoftware)
 
 ### 5.1 A nonces table and two variables
@@ -857,7 +900,7 @@ as in the test apps; a new tab unlocks again.
     /vouching                find seeds, send requests, wait
     /identity                the public ledger id: why, the form, the review
     /setup                   keys, the backup code, the deposits, complete-setup
-    /account                 your account: a plain list of rows, Account recovery, Passkeys and Public ledger id
+    /account                 your account: a plain list of rows, Account recovery, Passkeys, Public ledger id and Sound
     /account/recovery        the Account recovery page: Recovery selfie and Recovery details, with what is on file
     /account/recovery/selfie    the account recovery walkthrough, opened at the selfie
     /account/recovery/details   the walkthrough opened at the ID
@@ -927,6 +970,49 @@ reads those lists every 15 seconds, in that edition only, and the number
 clears when the page is opened (work-badge.service, 8.3). It shows at
 the right of the entry in the side panel and on the entry's Home tile,
 since both draw the one list.
+
+The sound (2026-11-19, section 11; the plan is
+forclaude/wallet-chat-and-passkey-plan-1.md, its step 5). The wallet has
+one sound: two short notes, the second higher, made by the browser's own
+sound engine with no sound file (sound.service, 8.3). The shell rings it
+from its 5-second poll (8.2, Notifications), once setup is complete,
+when an answer of /list-chat-rooms holds something new since the answer
+before. New is a newest message by someone else in a room that was in
+the answer before, or an invite to this pod or a join request on one of
+its rooms that was not in it. A message in the conversation that is the
+page on the screen rings nothing: that is the address /chat/<that room>
+while the page is visible (the browser's document.visibilityState is
+"visible"), so the same conversation in a hidden tab does ring. This
+pod's own messages ring nothing. The first answer of a session rings for
+nothing, so Log in is silent whatever waits, and so does a room that is
+new to the list. One answer rings once at most, however much is new in
+it. What the shell has rung for is kept in RAM, for the pod of the
+session, and is forgotten when the session closes. Only this poll rings:
+the chat pages' own reads of the room list do not, and the other
+notifications have no sound.
+
+When the sound cannot ring. A browser lets a page make sound only after
+the person has touched the page, so the sound engine is made at the
+first click, end of a touch or key press in the tab, and nothing plays
+before it; a person with an open session has tapped Log in. The sound
+plays only while the wallet's page is running. A phone with another app
+in front, or a locked phone, plays nothing: the phone's browser freezes
+the page. On a computer a hidden tab plays it up to about a minute late
+(Chrome's rule for a hidden tab's timers). On an iPhone, Safari stops a
+page's sound when it leaves the screen; the wallet starts the engine
+again when the page is back, and at the next tap if Safari refuses that,
+so after coming back the sound may need one tap before it plays again.
+Something new that comes while the engine is stopped is not rung for
+later. Whether the iPhone's silent switch mutes the sound was not
+checked. A sound or a banner while the wallet is not open would need
+push notifications, which are not built (section 10).
+
+The sound's switch is the fourth row of the Account page (8.2, Account),
+"Sound: on" or "Sound: off". The sound is on until the person turns it
+off, and the choice is kept on that phone or computer, in localStorage
+under `anopod-wallet.sound`, for the device and not per pod. Turning it
+on plays the sound once, so the person hears what it is. While it is off
+the shell still keeps track of what is new, and rings nothing.
 
 The next-step rule, applied after an unlock and after each step
 finishes:
@@ -1134,7 +1220,7 @@ complete, after DAO. Since 2026-11-18 (section 11; the plan is
 forclaude/wallet-account-page-plan-1.md) the page is a plain list under
 its title, with no subtitle and no sentence: one row per thing, each
 with an icon, a title and one line, and a new row goes under the last
-one. Three rows. "Account recovery", with the icon lock_reset (the one
+one. Four rows. "Account recovery", with the icon lock_reset (the one
 the Cases page gives a recovery case) and the line "Your recovery
 selfie and details", opens the Account recovery page, /account/recovery
 (below). "Passkeys" (2026-11-18, section 11), with a key icon and the
@@ -1142,7 +1228,19 @@ line "See your passkeys, or add a spare", opens the Passkeys page,
 /account/passkeys (below). "Public ledger id" (2026-11-18, section 11),
 with the icon fingerprint (the one the case pages give a shared lookup
 id) and the line "Check the birth record you gave at setup", opens the
-Public ledger id page, /account/ledger-id (below). No row has a
+Public ledger id page, /account/ledger-id (below). "Sound: on"
+(2026-11-19, section 11), with the icon volume_up and the line "A short
+sound when a chat message or a chat request arrives while the wallet is
+open. Tap to turn it on or off on this phone or computer.", is the
+switch of the wallet's sound (8.1). It is a button where the other three
+are links, and it opens no page. A style rule of the page takes the
+browser's own button look off it, the outline and the centred words, so
+it is drawn as the three link rows are: Material does that only inside
+an action list, and this row stands in the nav list. A tap turns the
+sound off: the title
+then reads "Sound: off" and the icon is volume_off. The next tap turns
+it on again and plays the sound once. The choice is kept on the device
+(sound.service, 8.3). No row has a
 condition of its own: Account is in the navigation only once setup is
 complete. A pod that reaches the Passkeys page earlier by its address
 sees the masterpod's refusal there, and one that reaches the Public
@@ -1452,12 +1550,21 @@ account": a type select (spending,
 guarded, vault, assisted) and Create anos account, which first asks in
 the confirmation box (8.9; 2026-11-10, section 11): the title "Open a new
 spending account?", with the type from the select, the line "The account
-is added to the ledger and stays there for good.", and the buttons Cancel
-and Create anos account. Cancel makes nothing. Retry asks the same way,
-since it is the same button; Resubmit does not ask, since it makes no new
-account. While the encryption key or the key blob key is not in RAM the
+is added to the ledger and stays there for good.", since 2026-11-19
+(section 11) a second line, "To confirm, this phone or computer will ask
+for your passkey, the one you log in with.", and the buttons Cancel
+and Create anos account. Cancel makes nothing. Create anos account in the
+box brings up the device's passkey sheet, for the passkey that opened the
+session (the passkey check, 8.9; 2026-11-19): while the device asks, both
+buttons are off; when the check does not pass, as when the person closes
+the sheet, the box stays, says why in red under the two lines, and
+nothing is made; when the passkey answers, the box closes. Retry asks the
+same way, with the box and the passkey, since it is the same button;
+Resubmit does not ask, and asks for no passkey, since it makes no new
+account and signs nothing new. While the encryption key or the key blob
+key is not in RAM the
 button shows that key's sentence and no box. Create anos account in the
-box runs
+box, once the passkey check has passed, runs
 account-creation.service's createAccount (8.3; since 2026-11-08 the steps
 live there, so the recovery's finish opens accounts the same way, 12.3)
 with the type the box showed, the select keeping its value,
@@ -1610,10 +1717,16 @@ It does not show while the stage is waiting, when the validators would
 refuse the cancel, nor while it is cancelling. The button asks in the
 confirmation box (8.9): the title "Cancel this transfer?"; Amount, "12
 anos"; To, the receiver's full account id; the note "The 12 anos stay in
-this account. It cannot be undone."; the buttons Back and "Yes, cancel
+this account. It cannot be undone."; since 2026-11-19 (section 11) a
+second note, "To confirm, this phone or computer will ask for your
+passkey, the one you log in with."; the buttons Back and "Yes, cancel
 the transfer", the second one red since 2026-11-12 (the box's `danger`,
 8.9). The first button reads Back in this box, where Cancel
-would read as the cancel itself. Back does nothing. Yes builds the
+would read as the cancel itself. Back does nothing. "Yes, cancel the
+transfer" first asks for the passkey that opened the session (the
+passkey check, 8.9; 2026-11-19): a check that does not pass leaves the
+box open with its reason in red, and nothing is built. When it passes,
+Yes builds the
 follow-up lockedTransferCancel for the transfer the box showed,
 { type: "lockedTransferCancel", transactionId, accountId } with signedAt
 added (crypto buildFollowUp, pair one from the keyBlob); /api/sign/<n> adds
@@ -1706,8 +1819,17 @@ account's name and short id ("Spending account 1 · a1b2c3d4…e5f6", the
 short id kept whole where the line wraps); To,
 the recipient's full account id, or for a stake Stake for, the purpose;
 for a stake one more line, "A stake stays with the fund. It comes back
-only through a fund proposal that the guardians vote for."; the buttons
-Cancel and Send. A stake for daoVote or guardian has a box of its own
+only through a fund proposal that the guardians vote for."; since
+2026-11-19 (section 11), as the last line of every box, "To confirm,
+this phone or computer will ask for your passkey, the one you log in
+with."; the buttons
+Cancel and Send. Send in the box brings up the device's passkey sheet,
+for the passkey that opened the session (the passkey check, 8.9;
+2026-11-19). While the device asks, both buttons are off. A check that
+does not pass, as when the person closes the sheet, leaves the box open
+with its reason in red under the lines, and nothing is sent. When the
+passkey answers, the box closes and the send goes out as described
+below. A stake for daoVote or guardian has a box of its own
 (2026-11-12, section 11), so that it does not read like an ordinary
 send. Its title: "Stake 100 anos for DAO votes?" or "Stake 1000 anos as
 a guardian?". Its lines: the same three, Kind, From and Stake for. Its
@@ -1715,17 +1837,19 @@ notes, three, in this order: "A DAO stake gives you one vote for each
 anos. It is locked for one month since your last vote." or "A guardian
 stake gives you one vote on fund proposals for each 1,000 anos. It is
 locked for one year since your last vote."; then the line about the
-fund, as above; then "To confirm, type your username below." Under the
-notes a text box, "Your username" (the box's `typed`, 8.9). The buttons
-are Cancel and Stake, and Stake stays off until the anoPod's username
-is in the text box, compared without regard to capital letters and to
-spaces around it. Stake does what Send does in the other boxes. The
+fund, as above; then the passkey line, "To confirm, this phone or
+computer will ask for your passkey, the one you log in with." (since
+2026-11-19, section 11; until then the third note asked for the
+username, which was typed into a text box under the notes). The buttons
+are Cancel and Stake, and Stake asks for the passkey as Send does (the
+box's `passkey`, 8.9). Stake does what Send does in the other boxes. The
 month and the year are the user's words (the plan's decision 11): no
 code holds a stake for that time, and a stake comes back by a fund
 proposal, as the second note says. A stake for moderator, attestor,
 validator or masterPod and every transfer keep the box described
 first. Cancel sends nothing and leaves the form as it was
-typed. Send in the box empties the form at once, before the answer
+typed. Send in the box, once the passkey check has passed, empties the
+form at once, before the answer
 comes: Kind back to plain, Stake for back to daoVote, the recipient and
 the amount empty, the paste hint gone. The form stays empty whatever the
 answer is, accepted, refused or no answer at all, so the same send cannot
@@ -1904,17 +2028,24 @@ cancel the trade". On this page red is Dispute's alone; until
 an outlined "Dispute" beside it, and each button asked once in place.
 Nothing is asked in place any more: each button opens the confirmation
 box (8.9) with one of the five boxes of src/app/escrow-boxes.ts, and
-Release, Dispute and Cancel each ask for the username there before
-their button works. Release: "Release 5 anos to the buyer?", the lines
+Release, Dispute and Cancel each ask for the passkey there: the box's
+last note is the passkey line, "To confirm, this phone or computer will
+ask for your passkey, the one you log in with.", and its second button
+brings up the device's passkey sheet, for the passkey that opened the
+session (the passkey check, 8.9; 2026-11-19, section 11; until then each
+of the three asked for the username, typed into a text box under the
+notes, before its button worked). A check that does not pass, as when
+the person closes the sheet, leaves the box open with its reason in red,
+and nothing is sent. Release: "Release 5 anos to the buyer?", the lines
 Amount and Buyer (the buyer's account id), the notes "Do this only when
 the money is in your own bank account. A picture of a payment slip is
-not proof.", "It cannot be undone." and "To confirm, type your username
-below.", the text box "Your username", Back and "Yes, release the
-anos". Dispute: "Dispute this trade?", the notes "Use this when the
+not proof.", "It cannot be undone." and the passkey line, Back and "Yes,
+release the anos", which asks for the passkey. Dispute: "Dispute this
+trade?", the notes "Use this when the
 other side does not answer, or something is wrong.", "Attestors will
 decide the trade. After this, neither side can release or cancel it."
-and the note about the username, the text box, Back and "Yes, dispute",
-red. The cancel asks a question first: "Have you sent any money to the
+and the passkey line, Back and "Yes, dispute",
+red, which asks for the passkey. The cancel asks a question first: "Have you sent any money to the
 seller?", the note "If you cancel, the anos go back to the seller.",
 and the buttons "No, I have not paid" and "Yes, I have paid". After
 "Yes, I have paid": "Do not cancel this trade", the notes "If you
@@ -1925,9 +2056,11 @@ red "Something is wrong: dispute", which opens the Dispute box; nothing
 is cancelled on this path. After "No, I have not paid": "Cancel this
 trade?", the line Amount, the notes "The 5 anos go back to the
 seller.", "Only cancel when you have not sent any money. If you have
-paid, do not cancel.", "It cannot be undone." and the note about the
-username, the text box, Back and "Yes, cancel the trade", which is not
-red. Back in any box sends nothing, and a button of the page does
+paid, do not cancel.", "It cannot be undone." and the passkey line, Back
+and "Yes, cancel the trade", which is not
+red and asks for the passkey. The question before a cancel and "Do not
+cancel this trade" ask for no passkey: neither signs anything. Back in
+any box sends nothing, and a button of the page does
 nothing while a box is open or a send is on its way. A box that closes
 without one of its two buttons, which a step back or forward in the
 browser's history does (8.9), answers nothing (2026-11-17, section 11,
@@ -2000,9 +2133,16 @@ once per case), "another reason" when the event has none. The buttons:
 "Go to the case" (to /cases/:caseId) when there is a case, and "Cancel
 transfer" while the stage is attesting or writing, which asks once in
 place ("Cancel this transfer? The 5 anos stay in this account. It cannot
-be undone."), then "Yes, cancel the transfer" or Back. Both cancel
+be undone."), with the passkey line under the question in the page's
+muted grey since 2026-11-19 (section 11), "To confirm, this phone or
+computer will ask for your passkey, the one you log in with.", then
+"Yes, cancel the transfer" or Back. Both cancel
 buttons are red (2026-11-12, section 11; the class `danger`, 8.9):
-"Cancel transfer" and "Yes, cancel the transfer". Yes builds the
+"Cancel transfer" and "Yes, cancel the transfer". Yes first asks the
+device for the passkey that opened the session (the passkey check, 8.9;
+2026-11-19), straight from the click and before anything is built; a
+check that does not pass shows its sentence in red in the outcome line,
+the question stays, and nothing is signed. Then Yes builds the
 assistedTransferCancel follow-up as the removed form did (crypto
 buildFollowUp, pair one from the keyBlob), /api/sign/<n> adds the wallet
 pair, /assisted-transfer-cancel takes it, then "Sent. The transfer is
@@ -2037,14 +2177,26 @@ else the room's creation). A row shows the other person's avatar (8.6)
 for a private room with one other person, member or invited, else the
 kind's icon (group, public, storefront); the title; the newest message
 decrypted as one line, "You: " before this pod's own, "No messages yet"
-without one, "(cannot read)" when it will not open; and the time (today
+without one, "(cannot read)" when it will not open, and, for the two
+traders of a marketplace chat, the grey line's words in the place of a
+message the pinned card posted, with no "You: " before them (2026-11-19,
+section 11; the words are in the paragraph "One conversation", below);
+and the time (today
 the time, yesterday "Yesterday", within six days the weekday, else the
 date); an unread room (below) has a dot under the time and a bold
 title. A room's title: a public room's name; an old listing room's "Sell
 50 anos for THB" from the listing summary the masterpod sends; a private
 room's other people, the invited as "mai (invited)", or "Just you", and
-for a private room about a listing (2026-11-06) the listing's words after
-them, "somchai · Selling 100 anos for THB". A private room about an
+for a private room about a listing (2026-11-06) the trade in a few words
+after them, from the reader's own side (2026-11-19, section 11; until
+then the listing's words, "somchai · Selling 100 anos for THB"). The
+seller reads "mai · You are selling 100 anos". The buyer reads "somchai ·
+You are buying 100 anos". A guest, who is neither of the two traders,
+reads "mai, somchai · somchai is selling 100 anos", with the seller's
+username. The seller is the owner of a sell listing and the other trader
+of a buy listing, the person who made the room; when that person is
+neither a member of the room nor invited to it any more, a guest reads
+the listing's words, as before. A private room about an
 attestor case (2026-11-12, section 11) has the case's kind in words after
 its people: "attestorjoy · Assisted transfer case", or "Escrow dispute
 case", or "Recovery case". The invited mark stays, "somchai (invited) ·
@@ -2052,7 +2204,10 @@ Recovery case", and with one other person the row still shows that
 person's avatar. The
 rooms are the latest /list-chat-rooms answer kept in the session, which
 the shell's 5-second poll refreshes once setup is complete; the list
-refreshes it once when it opens. "No chat keys in this tab: unlock
+refreshes it once when it opens. Since 2026-11-19 (section 11) the
+shell's poll also rings the wallet's sound for what is new in that
+answer, a message from someone else or a chat request (8.1); the list's
+own read rings nothing. "No chat keys in this tab: unlock
 again." shows without chat keys.
 
 One conversation, at /chat/:chatRoomId: a header with the avatar or icon,
@@ -2076,15 +2231,57 @@ that is not a direct chat, the sender's avatar and name once on top; the
 time once under the group's last bubble; a day line ("Today",
 "Yesterday", else the date) between days. A run of exactly 64 hex
 characters with no hex character on either side (an account id) shows in
-code font with a copy button (8.5) after it; the rest of the text shows
-as written, line breaks kept. The message box at the bottom grows to
+code font with a copy button (8.5) after it, but with no copy button for
+the two traders of a marketplace chat (2026-11-19, section 11); the rest
+of the text shows as written, line breaks kept. The two traders of a
+marketplace chat read each message the pinned card posted (the three
+paragraphs below) as a short grey line in the middle of the thread, with
+no account id (2026-11-19, section 11; the plan is
+forclaude/wallet-chat-and-passkey-plan-1.md): for the buyer's account
+"You sent your account for this trade." to the pod that sent it and "mai
+sent their account for this trade." to the other, and for a trade
+started or released "Trade update. Look at the box at the top of this
+chat."; a guest in such a chat reads the messages as they are. The
+message box at the bottom grows to
 five lines; Enter sends and Shift+Enter makes a new line; Send is a
 round button. A sent message shows at once as a pale bubble with
 "Sending" where the tick goes; /send-message's answer gives it its id
 and position and the bubble turns normal with a small tick; a refusal
 removes the bubble, puts the text back in the box and shows the error
-line. The room is marked seen (Unread, below) when it opens and when
-new messages show. "You are not in this chat." for a room that is not in
+line. Under this pod's own messages stands a word, in small grey letters
+under the bubble (2026-11-19, section 11; the masterpod's side is 4.10).
+"Seen" stands under the newest of this pod's messages that another
+member of the room has seen, by the seen positions that come with
+/list-chat-rooms: a member has seen a message when that member's seen
+position is at or above the message's position. In a room with more than
+one other member it reads "Seen by mai, joy", with the usernames of
+those who have seen it, for up to three names; with more it reads "Seen
+by 4 people". "Sent" stands under this pod's newest message while no
+other member has seen it, and so also while the other person is only
+invited and has not accepted yet: the first message of every marketplace
+chat is written at that moment. Both words can show at once, "Seen"
+under an older message and "Sent" under the newest. A message that is
+still on its way carries no word, and a message drawn as a grey line
+carries none: the word then stands under this pod's newest bubble. No
+word shows in a room with nobody else in it and nobody invited, and none
+while no member of the room carries a seen position, which is a
+masterpod of before (4.10). The small tick in each bubble stays. The
+words are as fresh as the shell's 5-second read of the room list. The
+room is marked seen (Unread, below) when it opens and when
+new messages show. While the conversation is on the screen the page also
+tells the masterpod how far this pod has read (/mark-messages-seen,
+4.10; 2026-11-19, section 11): the newest position shown, after the
+thread opens, after each 3-second poll and after a send, and only when
+it is above what the page told before. It tells only while the page is
+visible (the browser's document.visibilityState is "visible"): a chat
+left open in a hidden tab reports nothing, so the others do not read
+"Seen" for it. The call is quiet and shows nothing. One that fails is
+made again at the next poll. After a 404, the answer of a masterpod of
+before, the page tells nothing more for as long as it lives: on a phone
+until the person goes back to the list of chats, and on a computer,
+where a click on another chat keeps the same page, until the person
+opens another page of the wallet or loads it again. "You are
+not in this chat." for a room that is not in
 the list.
 
 The pinned card (2026-11-06, section 11), in a private room about a
@@ -2093,11 +2290,18 @@ the room's two traders only (2026-11-12, section 11: the person who made
 the room by pressing Connect, and the listing's owner; anyone else in
 the room is a guest and gets no card, and "the other person" in this
 paragraph and the two after it is the other trader, never a guest; 8.7,
-and the paragraph on the attestor in a marketplace chat, below): the
-listing in one line, "Selling 100 anos · 35.50 THB each · 3,550 THB",
-with the other person's avatar (8.6) and Closed when the listing is
-closed; the roles from the listing (the owner of a sell listing and the
-other person of a buy listing are the seller). Under that line the card
+and the paragraph on the attestor in a marketplace chat, below): two
+lines (2026-11-19, section 11; until then the listing in one line,
+"Selling 100 anos · 35.50 THB each · 3,550 THB", with the other person's
+avatar). The first line is the trade in one sentence from the reader's
+own side, with the other person's username and no avatar: "You are
+selling 500 anos to mai" for the seller, "You are buying 500 anos from
+somchai" for the buyer, and Closed when the listing is closed. The line
+under it, smaller and grey, is the listing's price and who pays whom how
+much: "2.00 THB each · mai pays you 1,000 THB" for the seller, "2.00 THB
+each · you pay somchai 1,000 THB" for the buyer. The roles come from the
+listing (the owner of a sell listing and the
+other person of a buy listing are the seller). Under those lines the card
 is the trade guide (rewritten 2026-11-17, section 11; the plan is
 forclaude/wallet-trade-guide-plan-1.md): it walks both sides through the
 four steps of a trade, the same list for both, one button at a time. The
@@ -2135,7 +2339,10 @@ once one of this pod's accounts is in the chat; until 2026-11-17 it was
 "Share an account". It opens a menu of this pod's accounts (the id
 shortened, the type); one tap posts "Please send the anos to this
 account: <the account id>" into the chat, encrypted like any message, so
-the thread shows the id in code font with its copy button (8.5). The
+the thread shows the id in code font with its copy button (8.5); since
+2026-11-19 (section 11) the two traders read a grey line in its place,
+"You sent your account for this trade." or "mai sent their account for
+this trade.", and a guest reads the message as it is. The
 seller's button, with no trade: "Put the anos in escrow" (filled), shown
 once the other person has posted an account id; until 2026-11-17 it was
 "Start the escrow trade", shown from the first and disabled with the
@@ -2144,10 +2351,30 @@ opens a small form in the card, From
 (this pod's spending accounts; one is fixed, more is a select), To (the
 other person's account ids in the chat, newest first; one is fixed),
 Amount in anos (the listing's quantity at first), the total at the
-listing's price, Start and Cancel; Start asks once in place ("Put 100
-anos into escrow for somchai? You release them once you have been paid.
-Only the buyer can cancel; either side can dispute.", Yes or Back), and
-Yes builds the escrowTransfer as the account page's Send does (pair one
+listing's price, Start and Cancel. Start opens the confirmation box
+(8.9) with the Start box (`startBox` of src/app/escrow-boxes.ts;
+2026-11-19, section 11). The box's title is "Put the anos in escrow",
+the words of the card's button. Its first note is the question, "Put
+100 anos into escrow for somchai? You release them once you have been
+paid. Only the buyer can cancel; either side can dispute.", for the
+amount as the form has it when Start is pressed. Its second note is the
+passkey line, "To confirm, this phone or computer will ask for your
+passkey, the one you log in with." Its buttons are Back and Yes. Back
+sends nothing and leaves the form as it was, and so does a box closed
+by a step back in the browser's history. Yes asks the device for the
+passkey that opened the session (the passkey check, 8.9), straight from
+its click: a check that does not pass shows its sentence in red in the
+box, the box stays open, and nothing is read, built or signed. The
+accounts and the amount are taken when Start is pressed, so what is
+sent is what the box asked about. Start does nothing while a box is
+open or a send is on its way. Until 2026-11-19 Start asked once in
+place: the question stood in the card, under the form, with Yes or
+Back. The build of that day first put the passkey line under it, small
+and grey. With that line a phone screen less than 600 to 620 pixels
+high no longer showed Yes and Back, and the card cannot be scrolled, so
+the question went into the box before that build was committed (section
+11). Once the check has passed and the box has closed, the card
+builds the escrowTransfer as the account page's Send does (pair one
 from the account's keyBlob and the encryption key, /get-account for the
 latest transaction id, buildAnosTransferTransaction with type
 escrowTransfer, /api/sign/<n>, /anos-transfer). What follows the answer
@@ -2160,14 +2387,18 @@ waiting on the validators. Finish that first, or use another account.").
 After any other answer the card checks the chat's trade once more
 (below), and that check posts the message "Escrow trade started: 100 anos
 from <my account id> to <their account id>. Transaction <id>."; Yes does
-not post it. The validator stores a trade before it answers, so an answer
+not post it. Since 2026-11-19 (section 11) the two traders read a grey
+line in its place, "Trade update. Look at the box at the top of this
+chat.", and a guest reads the message as it is. The validator stores a trade before it answers, so an answer
 lost on the way (no network, the proxy's 502, the doorman's 502 or 504)
 may hide a trade that started: found open, it has started and no error
 shows; otherwise the card says "The validators did not answer. If the
 trade started, it will show here in a moment. If it does not, try again."
 and the form stays for another try. A trade the check finds, open or
-released, closes the form, so its question does not come back by itself
-once that trade is cancelled.
+released, closes the form, so the form does not come back by itself
+once that trade is cancelled. A Start box that is open at that moment
+stays open; its Yes then meets the fresh check of the next paragraph,
+which sends nothing.
 
 The chat's trade (rewritten 2026-11-10, section 11, from
 forclaude/wallet-finished-trade-plan-1.md): the card reads it from the
@@ -2208,8 +2439,10 @@ quantity, "The listing says 100 anos, but only 40 are in escrow. Pay
 only for those." Then the row of buttons. For the seller of a held
 trade, "I have been paid: release the anos" (filled): it opens the
 Release box of the escrow trade page (8.9; `releaseBox` of
-src/app/escrow-boxes.ts) with the buyer's account id and the username to
-type, Back sends nothing, and Yes sends the release through
+src/app/escrow-boxes.ts) with the buyer's account id and the passkey
+line (2026-11-19, section 11; until then the username was typed in the
+box), Back sends nothing, and Yes asks for the passkey in the box and,
+when that passes, sends the release through
 escrow-actions.service (8.3). The card then checks the chat's trade
 once. An answer that failed shows in the card's error line, as the
 refusal in plain words of the Escrow trade paragraph, only when after
@@ -2249,7 +2482,11 @@ with "How a trade works" as the row's only button: to the buyer, amber,
 "The wallet could not reach the validators. It is trying again. Do not
 pay until this box says In escrow.", to the seller, grey, the first two
 of those sentences (until 2026-11-17 the card said "Could not check for
-a trade. Trying again." where its two buttons go). The Yes of Start runs one fresh check before
+a trade. Trying again." where its two buttons go). The Yes of the Start
+box runs one fresh check, after the passkey check has passed in the box
+(2026-11-19, section 11; the passkey is asked first because Safari opens
+the passkey sheet only for a tap, so it cannot wait behind a read) and
+before
 anything is built or signed: when it cannot be read, nothing is sent and
 the card says "Could not check for an earlier trade, so nothing was sent.
 Try again."; when it finds a trade open or released, nothing is sent and
@@ -2276,7 +2513,9 @@ itself, in the seller's name, encrypted with the room key like any other:
 "Escrow trade started: 100 anos from <my account id> to <their account
 id>. Transaction <id>." for an open trade, "Escrow trade released: 100
 anos from <my account id> to <their account id>. Transaction <id>." for
-one already released. This is the only place the message is posted. So a
+one already released. Since 2026-11-19 (section 11) the two traders read
+a grey line in the place of either, "Trade update. Look at the box at
+the top of this chat.", and a guest reads the message as it is. This is the only place the message is posted. So a
 lost answer to the transfer, a /send-message that failed, a tab closed in
 between and a trade started from the account page's Send (escrow kind) to
 an account named in the chat all end with the chat told, the next time
@@ -2367,7 +2606,10 @@ the right of the Chat entry in the side navigation, and the room's row
 shows a dot and a bold title. The count is per device: a new phone shows
 every room with messages as unread until each is opened once. A count of
 messages is not possible, since positions count across all rooms
-(2026-11-05, section 11).
+(2026-11-05, section 11). The unread dot is still this device's own
+list: what the masterpod keeps since 2026-11-19 (4.10) is what the other
+members of a room see, the words "Sent" and "Seen" of the paragraph "One
+conversation", above.
 
 Marketplace (rebuilt for the phone 2026-11-06, section 11; the plan is
 forclaude/wallet-marketplace-plan-1.md): four screens. Browse, at
@@ -2673,10 +2915,17 @@ fund proposal can be open at a time."; Post proposal, disabled while
 busy, without a guardian account, or while a proposal is open, "A fund
 proposal is already open. Wait until it is decided." shown as the reason
 (a refused quiet read shows in red instead, and Post stays enabled: the
-validator refuses with words). Post checks each row ("Payout 2: the
+validator refuses with words). Over the button, above the red error
+line, stands the passkey line in the page's muted grey since 2026-11-19
+(section 11): "To confirm, this phone or computer will ask for your
+passkey, the one you log in with." Post checks each row ("Payout 2: the
 recipient must be an account id of 64 hex characters", "Payout 2: the
 amount must be anos with up to six decimals"; the recipient lower-cased,
 the amount as millionths, the reason trimmed, stakeFor only when picked),
+then asks the device for the passkey that opened the session (the
+passkey check, 8.9; 2026-11-19), so a row that is wrong is said before
+any passkey is asked, and a check that does not pass shows its sentence
+in the error line with nothing built or signed; then it
 opens pair one of the chosen account for the signature and drops it,
 builds the fundProposal (crypto.buildFundProposal: the fund as accountId,
 the chosen account as guardianId, no previousTransactionId), has /api/sign/<n>
@@ -2727,9 +2976,16 @@ for" / "You voted against" with the colored thumb, or, while the status
 is open and the account is neither the proposer nor in the votes, two
 big outlined buttons side by side, the green thumb_up "For" and the red
 thumb_down "Against", the DAO page's pair; either asks in place, "Vote
-for with 3 votes from a1b2c3d4…e5f6? It cannot be undone." with "Yes,
+for with 3 votes from a1b2c3d4…e5f6? It cannot be undone.", with the
+passkey line under it, small and grey, since 2026-11-19 (section 11),
+"To confirm, this phone or computer will ask for your passkey, the one
+you log in with.", and with "Yes,
 vote for" and Back (a new pick in the select closes the question, which
-named the account). Yes opens pair one of the selected account from its
+named the account). Yes first asks the device for the passkey that
+opened the session (the passkey check, 8.9; 2026-11-19): a check that
+does not pass shows its sentence in the red error line and leaves the
+question open, so Yes can be pressed again, where every other failure
+closes the question. Then Yes opens pair one of the selected account from its
 keyBlob for the signature and drops it, builds the guardianVote
 follow-up (crypto.buildFollowUp: type guardianVote, the proposal's
 transactionId, the account as guardianId, the vote), has /api/sign/<n> add
@@ -2762,7 +3018,11 @@ above.
 
 Notifications: the list, newest first, mark read; the 5-second poll
 runs while a session is open and updates the status (vouched, counts),
-and the chat rooms with them once setup is complete. The chat kinds
+and the chat rooms with them once setup is complete. Since 2026-11-19
+(section 11) the poll also rings the wallet's sound when its read of the
+chat rooms holds a new message from someone else or a new chat request
+(8.1). A notification by itself rings nothing: a chat request rings
+because it is in the answer of /list-chat-rooms. The chat kinds
 link: chatInvite and joinRequest to /chat/requests; inviteAccepted,
 inviteDeclined and joinApproved to the room, /chat/:chatRoomId
 (2026-11-05, section 11). The kind recoveryCaseScheduled (2026-11-12,
@@ -2812,7 +3072,10 @@ excepted, with the keyholder and anos calls included.
                             the credential id, hex, of the passkey that opened the session, set by the unlock flow
                             and by Create, null again at close, which the Passkeys page marks "In use now"; since
                             the same day the key blob key is derived from the PRF output only for the main
-                            passkey, and for an added one it is that passkey's wrapped copy, opened (8.2, Landing)
+                            passkey, and for an added one it is that passkey's wrapped copy, opened (8.2, Landing);
+                            since 2026-11-19 (section 11) the credential id and the PRF output also serve the
+                            passkey check (8.9): the device is asked for that credential, and its answer is
+                            compared with the two the session kept
     masterpod-api.service   the keyholder test app's api.service.ts, base path /api/masterpod, the two changed
                             routes and the four new ones added; the marketplace routes of 2026-11-06: getListing,
                             listingId on createChatRoom, mine and status any on listListings, no hpkeKey on
@@ -2829,7 +3092,10 @@ excepted, with the keyholder and anos calls included.
                             given; the passkeys (2026-11-18, section 11; 4.8): addPasskey among the purposes of
                             challenge(), wrappedKeyBlobKey on UnlockAnswer (optional: a masterpod of before sends
                             no field), the types AddedPasskeyItem, PasskeyList and AddPasskeyBody, and two
-                            methods, listPasskeys (with the quiet flag) and addPasskey
+                            methods, listPasskeys (with the quiet flag) and addPasskey; Seen in chat (2026-11-19,
+                            section 11; 4.10): seenPosition on RoomMember (optional: only an entry of a room's
+                            members carries it, and a masterpod of before sends none) and one method,
+                            markMessagesSeen, always quiet
     keyholder-api.service   the keyholder test app's, base path /api/keyholder/<n>
     anos-api.service        the anos test app's account-api.service.ts, base path /api/anos/<the session's
                             validator> (2026-11-10, below; /api/anos/<defaultValidator> until then),
@@ -2954,7 +3220,11 @@ excepted, with the keyholder and anos calls included.
     chat.service            what the chat pages share (2026-11-05): room keys (roomKeyOf, wrapFor), decryptMessage,
                             piecesOf, a room's title, kind, icon and other person, the order by activity, shortWhen,
                             timeOf and dayLabel, requestedRooms, refreshRooms; listingWords, a listing in a few
-                            words for a title or a request (2026-11-06); the case chats (2026-11-12, section
+                            words for a request (2026-11-06), and for a title only where tradeWords finds no
+                            seller; tradeWords(room), a listing chat's trade in a few words from the reader's
+                            own side, for a title (2026-11-19, section 11): "You are selling 100 anos" for the
+                            seller, "You are buying 100 anos" for the buyer, and for a guest "mai is selling
+                            100 anos", with the seller's username; the case chats (2026-11-12, section
                             11): the title of a room about a case; caseRoomWith(caseId, anopodId), the
                             attestor's side: the room about the case that this pod created with the person in
                             it, a member first, else invited, and when there is none the newest room about the
@@ -3020,7 +3290,10 @@ excepted, with the keyholder and anos calls included.
                             and can be asked of one passkey alone (its id and transports as the allowed list),
                             the third tap of an add (8.2, Passkeys); of the five callers of before, the
                             registration of a recovery case's passkey passes the exclude list since 2026-11-18
-                            (12.3), and the four others pass neither new argument
+                            (12.3), and the four others pass neither new argument; since 2026-11-19 (section 11)
+                            the passkey check (passkey-check.ts, 8.9) is one more caller of the one-passkey
+                            assert: the passkey that opened the session, by its credential id, with an empty
+                            transports list
     shares.service          the deposit rule of section 6, one function: deposit(secret, shareType)
     account-creation.service
                             opening an anos account (2026-11-08): createAccount(type, onStep) runs the six steps
@@ -3044,6 +3317,24 @@ excepted, with the keyholder and anos calls included.
                             in plain words (8.2, Escrow trade), which the page had as its own until then; the
                             escrow trade page sends through it, and so does the Release of the pinned card of
                             a marketplace chat (8.2, Chat)
+    sound.service           the wallet's one sound and its switch (2026-11-19, section 11; 8.1): on, a signal, true
+                            while the sound is on, on this device, read once, when the wallet loads, from
+                            localStorage under `anopod-wallet.sound`: 'off' there means off, anything else, or
+                            nothing, means on, and a browser that refuses the read gives on; the key is the
+                            device's and not a pod's, so it holds no anoPod id and a Lock leaves it;
+                            setOn(value), the switch of the Account page (8.2, Account): it sets the signal,
+                            removes the key for on and writes 'off' for off, and for on it calls chime();
+                            chime(), the sound: two sine notes, 880 Hz for 0.12 seconds and 1174.66 Hz for 0.22
+                            seconds, the second starting 0.14 seconds after the first, each coming in within
+                            0.01 seconds to a gain of 0.2 and fading out; it plays nothing while the switch is
+                            off, while there is no engine yet, or while the engine's state is not "running";
+                            the engine is the browser's AudioContext, made at the first click, touchend or
+                            keydown of the tab, which the service listens for on the document in the capture
+                            phase, since a browser lets a page make sound only after the person has touched it;
+                            the engine is resumed at each such event while it is not running, and when the
+                            page becomes visible again (visibilitychange); a browser without an AudioContext,
+                            or one that refuses, leaves the wallet silent, and nothing is shown; the shell
+                            calls chime() from its poll (app.ts, ring; 8.1)
     log.service             the activity log
 
 Keys are regenerated from blobs at each unlock; nothing secret touches
@@ -3080,8 +3371,10 @@ it is given (navigator.clipboard.writeText) and shows "copied" next to
 the icon for two seconds, or "could not copy" when the browser refuses.
 It sits after the account id in the Account title, in the footer of each
 account card on the Wallet page (2026-11-06, section 11), after an
-account id in a chat message, and in a history row's details beside the
-other side's id and the transaction id (2026-11-06). The case pages of
+account id in a chat message, but not for the two traders of a
+marketplace chat (2026-11-19, section 11), and in a history row's
+details beside the other side's id and the transaction id (2026-11-06).
+The case pages of
 sections 12 and 13 keep their own copy code.
 
 ### 8.6 The avatar
@@ -3093,8 +3386,9 @@ else a round disc in the primary-container colour with the first letter
 of the username. The profile comes from profile-cache.service (8.3), one
 /get-anopod-profile per pod per tab. In the chat list, the conversation
 header, the members panel and the chat requests; since 2026-11-06 also on
-the listing cards (24 px), the listing page (56 px), the people who
-connected and the pinned listing card (8.7), and on Home beside the
+the listing cards (24 px), the listing page (56 px) and the people who
+connected (8.7; the pinned listing card drew one too until 2026-11-19,
+section 11), and on Home beside the
 greeting (56 px); since 2026-11-08 on the cards of the Vouch requests
 page (72 px) and beside the proposer on the DAO proposal page (40 px);
 since 2026-11-12 (section 11) in the person's chats about an attestor
@@ -3145,13 +3439,24 @@ src/app/components/:
   "Share an account" until 2026-11-17; Escrow trade started and, since
   2026-11-10, Escrow trade released, the last two from its check)
   encrypted with the room key, and the thread's
-  poll shows them. It exports `FoundAccountId`. Since 2026-11-10 the card
+  poll shows them: since 2026-11-19 (section 11) to the two traders as
+  short grey lines with no account id, and to a guest as they are. The
+  conversation page and the chat list know the three messages by their
+  words, in every language of the wallet, through `tradeMessageKind` of
+  src/app/trade-messages.ts: it makes its patterns from the three
+  dictionary sentences (`pinned.shareMessage`, `pinned.startedMessage`
+  and `pinned.releasedMessage`, 8.8) and answers `account`, `trade` or
+  null for a whole text, so a change of those words needs the old words
+  kept in that file. What the card reads from the chat is as it was: it
+  finds the account ids in every message, the ones drawn as a grey line
+  too. It exports `FoundAccountId`. Since 2026-11-10 the card
   also reads the room's messages itself for their account ids (8.2,
   Chat): the page's computed holds the ids of the newest 50 messages and
   of what arrived since, which is not the whole chat. Since 2026-11-12
   (section 11, step 6) the card is drawn for the room's two traders only
   (chat.service's `isTrader`, 8.3) and goes by the other trader: `other`,
-  whose avatar and username the card shows, is `otherTrader(room)`, the
+  whose username the card shows (until 2026-11-19 the avatar too), is
+  `otherTrader(room)`, the
   other of the room's creator and the listing's owner, and the form's To
   list takes the account ids that trader posted, so a guest's messages
   never feed the trade form. Only when the other trader is neither a
@@ -3171,7 +3476,11 @@ src/app/components/:
   a held trade it opens the Release box (`releaseBox` of
   src/app/escrow-boxes.ts, with `askConfirm`, 8.9) and sends the release
   through `EscrowActionsService` (8.3), and it calls `escrowStageWords`
-  no more.
+  no more. Since 2026-11-19 (section 11) the Start of the seller's form
+  opens the Start box of the same file (`startBox`, with `askConfirm`),
+  and the card holds no question of its own for it: its signal
+  `confirmStart` is gone, and one field, `boxOpen`, keeps Start and the
+  Release button from opening a second box.
 
 Two more small components, for the chat on an attestor case (2026-11-12,
 section 11; the plan is forclaude/wallet-case-chats-plan-1.md), under
@@ -3211,7 +3520,7 @@ src/app/components/ too:
 - escrow-strip.component.ts (`<app-escrow-strip [guide]>`): the status
   box, drawn by the escrow trade page first under its Back link while
   the trade is open (8.2, Escrow trade) and by the pinned card of a
-  marketplace chat under the listing's line, with and without a trade
+  marketplace chat under the listing's two lines, with and without a trade
   (8.2, Chat). `guide` is an `EscrowGuide`
   `{ tone, icon, headline, text, step }` and the box draws what it is
   given: a Material icon (hidden from screen readers), the headline at
@@ -3239,7 +3548,9 @@ marketplace chat gives all five, 8.2, Chat), while escrow-boxes.ts
 holds the five boxes as five functions, `releaseBox`, `disputeBox`,
 `paidQuestionBox`, `doNotCancelBox` and `cancelBox`, each answering the
 `ConfirmData` that `askConfirm` takes (8.9), so every page that opens
-one of them opens the same box.
+one of them opens the same box. A sixth function stands with them since
+2026-11-19 (section 11), `startBox(words, anos, name)`: the Start box of
+the pinned card (8.2, Chat), which the escrow trade page does not open.
 
 ### 8.8 The languages
 
@@ -3410,6 +3721,62 @@ has a new first sentence, "If your passkey is gone for good, we can
 get you back in." The English is the plan's, letter for letter; the
 Thai is the build chat's, by the glossary, and no Thai reader has
 read it.
+Who buys and who sells, and the card's messages as grey lines
+(2026-11-19, section 11): ten new entries in three sections, and one
+gone. In `pinned`, `summary` is gone and four functions stand in its
+place: `youSell` and `youBuy`, the card's first line for the seller and
+for the buyer, and `sellTerms` and `buyTerms`, the line under it.
+`rooms` gains three functions after `buying`: `youSelling`, `youBuying`
+and `theySelling`, the trade in a chat's title for the seller, the buyer
+and a guest. `rooms.selling` and `rooms.buying` stay, for the Chat
+requests page, and `market.selling` and `market.buying` stay, for the
+listing cards and the listing page. `chatRoom` gains three entries after
+`notOpen`, the grey lines: `youSentAccount`, `theySentAccount`, a
+function, and `tradeUpdate`. The three sentences the card posts,
+`pinned.shareMessage`, `pinned.startedMessage` and
+`pinned.releasedMessage`, keep their words in both files, and a comment
+line stands over each: the chat page knows the message by those words
+(src/app/trade-messages.ts, 8.7), so a change of the words needs the old
+words kept there. The English is the plan's, letter for letter; the ten
+Thai lines are the build chat's, by the glossary and by the Thai the
+file had for the same things, and no Thai reader has read them.
+The passkey wherever the wallet signs with an account's key
+(2026-11-19, section 11): one new section, and three entries gone. The
+new section, `passkeyCheck`, stands after `passkey` and in front of
+`shares`: five entries, one of them a function (`failed`). `note` is the
+passkey line, "To confirm, this phone or computer will ask for your
+passkey, the one you log in with.", which stands in every box that asks
+for the passkey and near every button that asks without a box (8.9).
+`notFinished`, `otherPasskey`, `failed` and `noSession` are the four
+sentences of a check that did not pass, and each says "so nothing was
+done". Three entries are gone from both files, with the typed username:
+`escrowBoxes.typeNote` and `account.stakeTypeNote`, both "To confirm,
+type your username below.", and `common.yourUsername`, the label of the
+text box. Nothing else used them. `accountLedgerId.typed` is another
+thing and stays. The English is the plan's, letter for letter; the five
+Thai lines are the build chat's, by the glossary and by the Thai the
+file had for the same things, with "Log in" named by the label
+`landing.unlock` gives it, and no Thai reader has read them.
+Sent and Seen (2026-11-19, section 11): `chatRoom` gains four entries
+after `sending`, the words under a person's own messages in a
+conversation (8.2, Chat). `sent` and `seen` are the two words. `seenBy`
+and `seenByCount` are functions, for a room with more than one other
+member: `seenBy` takes the usernames as one string, "Seen by mai, joy",
+and `seenByCount` takes how many people they are, "Seen by 4 people".
+Each file has more than one entry named `sending`; the one meant is
+`chatRoom`'s. The English is the plan's, letter for letter; the four
+Thai lines are the build chat's, by the glossary and by the Thai the
+file had for the same things, and no Thai reader has read them.
+The sound (2026-11-19, section 11): `accountHome` gains three entries
+after `ledgerIdLine`, the fourth row of the Account page (8.2, Account).
+`soundOn` and `soundOff` are the row's title while the sound is on and
+while it is off, "Sound: on" and "Sound: off". `soundLine` is the line
+under the title, the same in both states: "A short sound when a chat
+message or a chat request arrives while the wallet is open. Tap to turn
+it on or off on this phone or computer." None of the three is a
+function. The English is the plan's, letter for letter; the three Thai
+lines are the build chat's, by the glossary and by the Thai the file had
+for the same things, and no Thai reader has read them.
 
 ### 8.9 The confirmation box
 
@@ -3435,7 +3802,9 @@ on-surface-variant colour and the value beside it, in the id font when
 `code` is true; `notes`, each a paragraph under the lines;
 `confirmLabel`, the words on the second button; since 2026-11-11
 (section 11), `cancelLabel`, which a caller may leave out: the words on
-the first button; and, since 2026-11-12, `typed` and `danger`, which
+the first button; and `passkey` (since 2026-11-19, section 11; it took
+the place of `typed`, which stood here from 2026-11-12) and `danger`
+(since 2026-11-12), which
 are described two paragraphs down. A value too long for its
 column wraps at a space, and is cut inside a word only when the word
 alone is too long (`overflow-wrap: anywhere`); a value in the id font is
@@ -3443,9 +3812,21 @@ cut anywhere, by the global rule for `code`, so a 64-character id wraps
 on a phone (2026-11-10, section 11: at first every value was cut
 anywhere). The two buttons, at the right: the first, which closes with
 false and reads Cancel (`common.cancel`), or the caller's `cancelLabel`
-when one is given; and the caller's button, which closes with true.
+when one is given; and the caller's button, which closes with true: at
+once, or, in a box with `passkey`, once the passkey check has passed
+(the next paragraph).
 
-The box closes by those two buttons. A click outside it and the
+The box closes by those two buttons. In a box with `passkey`
+(2026-11-19, section 11) the second button does not close the box at
+once. Its click asks the device for the passkey that opened the session
+(the passkey check, two paragraphs down), straight from the click. While
+the device asks, both buttons are off. When the check passes, the box
+closes with true. When it does not, as when the person closes the
+device's passkey sheet, the box stays open, the reason shows under the
+notes in red, and both buttons work again, so the second can be pressed
+once more and the first still closes the box with false. A box that was
+closed meanwhile, by a step back in the browser's history, stays closed
+with no answer. A click outside it and the
 Escape key do nothing (`disableClose`), so the second click of a double
 click on the page's button cannot close the box or answer it. One more
 thing closes it (put right on 2026-11-17, section 11; until then this
@@ -3464,15 +3845,49 @@ that is narrower.
 
 Two more fields, each of which a caller may leave out (2026-11-12,
 section 11; the plan is forclaude/wallet-case-chats-plan-1.md, its step
-5). `typed`, `{ label, expected }`: the box shows one text box under the
-notes, an outlined field with the caller's label, as wide as the box,
-with the browser's suggestions and its capital first letter turned off
-(`autocomplete="off"`, `autocapitalize="none"`). The second button then
-stays off until what is typed equals `expected`, both trimmed and in
-small letters, and the half second has passed. The text box stands in
-no form, so the Enter key in it answers nothing. The focus still goes
-to the box itself when it opens, so the person taps the text box to
-type. `danger`, true or left out: with true the second button carries
+5). The first of them was `typed`, `{ label, expected }`, until
+2026-11-19: one text box under the notes, for the anoPod's username, and
+the second button stayed off until it was typed. It is gone (section 11;
+the plan is forclaude/wallet-chat-and-passkey-plan-1.md, its step 2):
+no box has a text box any more, no box asks for a typed username, and
+the component no longer draws a form field. In its place stands
+`passkey`, true or left out. With true the second button asks for the
+passkey before the box closes with true, as the paragraph above has it,
+and a check that did not pass shows its sentence as one red line under
+the notes (the class `error`, the theme's error colour), where the text
+box stood. Left out, the second button closes the box with true at
+once. The check is `checkSessionPasskey(services, words)` in
+src/app/passkey-check.ts, one function in a file of its own, as
+unlock.ts is; the component injects `CryptoService`, `PasskeyService`
+and `SessionService` and hands them over. It asks the device for the
+passkey that opened this session, that one alone: `PasskeyService`'s
+`assert` with a fresh random challenge of 32 bytes and `only`, the
+credential id the session kept at Log in (`passkeyCredentialId`, 8.3)
+with an empty transports list, so the browser's `allowCredentials` is
+that one credential with no hint of where it lives. It passes when that
+passkey answered: the credential id of the answer and its PRF output are
+the ones the session kept at Log in. Otherwise it throws one of four
+sentences of the dictionary's group `passkeyCheck` (8.8). "The passkey
+step was not finished, so nothing was done. Press the button to try
+again.": the person closed the device's passkey sheet or it ran out of
+time (the browser's `NotAllowedError`). "The passkey could not be used,
+so nothing was done: <reason>": anything else the device or the browser
+said. "That was not the passkey you logged in with, so nothing was
+done.": another passkey answered. "This tab no longer has what the
+passkey step needs, so nothing was done. Log in again.": the session
+holds no credential id or no PRF output. Nothing goes to a server and
+nothing is kept. The check is the wallet's own, a lock on a button: it
+stops a slip of the finger and a second person holding the unlocked
+phone. It is not a check by the validators or the signing servers. The
+keys that sign also sign every read of a balance, every few seconds, so
+the key that opens them stays in the tab after Log in, and code that got
+into the wallet's page could go around the check. It must be called
+straight from the click that asks for it, before any other wait: Safari
+opens the passkey sheet only for a tap ("Face ID and Touch ID for the
+web require user gestures to function", and the gesture is carried
+through XHR and fetch for 10 seconds;
+webkit.org/blog/11312/meet-face-id-and-touch-id-for-the-web, read
+2026-11-19). `danger`, true or left out: with true the second button carries
 the class `danger`. That class is one rule in src/styles.css, the
 wallet's global style file. It sets five of Material's button variables
 to the theme's error colours: a filled button is red with the on-error
@@ -3497,7 +3912,9 @@ src/app/escrow-boxes.ts (8.7): Release, Dispute, the question before a
 cancel, "Do not cancel this trade" and Cancel; and, since the same day
 (section 11), the pinned card of a marketplace chat (8.2, Chat), whose
 "I have been paid: release the anos" opens the Release box of that
-file. All of them open it with `askConfirm`, but for one box: the
+file, and whose Start, in the seller's form, opens the Start box of
+that file since 2026-11-19 (section 11). All of them open it with
+`askConfirm`, but for one box: the
 escrow trade page opens its question before a cancel with `askChoice`,
 since that box's first button, "No, I have not paid", is an answer of
 its own, and a box closed without a button must not be read as it. The
@@ -3505,15 +3922,57 @@ third, the fourth and the fifth
 place give `cancelLabel`, the first two keep Cancel: the cancel of a
 locked transfer gives Back (`common.back`), since Cancel there would
 read as the cancel itself, and so do four of the escrow trade's boxes,
-the card's Release among them,
-while its question before a cancel gives "No, I have not paid". The
+the card's Release among them, and the card's Start box,
+while the question before a cancel gives "No, I have not paid". The
 third and the fourth place give `danger`: the cancel of a locked transfer, and of
 the escrow trade's boxes the two whose second button disputes, Dispute
 ("Yes, dispute") and "Do not cancel this trade" ("Something is wrong:
-dispute"). `typed` comes from the Send form, only for a stake for
-daoVote or guardian, and from the Release, Dispute and Cancel boxes of
-the escrow trade page and the card's Release: the label "Your username" and the anoPod's
-username. Each does nothing while a box is already open.
+dispute"). Every box gives `passkey` (2026-11-19, section 11) but two of
+the escrow trade's five, the question before a cancel and "Do not cancel
+this trade", which sign nothing: the Send box, for every kind of send
+and every stake; the box before a new anos account, for Create anos
+account and for Retry; the cancel of a locked transfer; the Release,
+Dispute and Cancel boxes of an escrow trade, the card's Release among
+them; and the card's Start box. Each of these boxes ends its notes with
+the passkey line, "To
+confirm, this phone or computer will ask for your passkey, the one you
+log in with." (`passkeyCheck.note`). Each does nothing while a box is
+already open.
+
+Seven more buttons sign with an account's key and open no box
+(2026-11-19, section 11). They ask in the page or asked nothing until
+then, and no new pop-up box was made for them: the passkey check is the
+first thing their click does, before anything is read from a server,
+built or signed, and the passkey line stands near the button. (An
+eighth was among them as that day's build first stood: Yes, under "Put
+the anos in escrow" in the pinned card of a marketplace chat. It asked
+in the card, and its question went into the Start box before the build
+was committed; 8.2, Chat.) "Yes, cancel the transfer" on the assisted
+transfer page. "Post
+proposal" on the New fund proposal page, after the rows are checked.
+"Yes, vote for" and "Yes, vote against" on the Fund proposal page. "Sign
+the attestation", "Sign the verdict" and "Sign all attestations" on the
+attestor's three case pages (13.3), the last one once for all its moves.
+And Sign on the moderator's recovery case page (12.3). A check that does
+not pass throws its sentence, and the page shows it where it shows every
+other failure of that button; nothing is signed. With the seven boxes
+that ask (the Send box, the box before a new anos account, the cancel
+of a locked transfer, Release, Dispute, Cancel and Start) that
+makes fourteen buttons, which is every place the wallet signs with an
+account's key: twelve calls in ten files hand what they built to
+`SigningService.sign` (8.3), and the moderator's sign-off signs with
+pair one itself (`CryptoService.signSignOff`). What asks for no passkey:
+every request to the masterpod, which is signed with the keys of the
+log-in (a chat message, "Send my account" in the card, a listing and its
+close, a DAO proposal, a support and a vote on one, and an attestor's or
+a moderator's Schedule, "Share the case key" and Dismiss); a read, which
+an account's keys sign too (a balance, a history, a trade, and an
+attestor's or a moderator's Pull key); a button that signs nothing new
+(Resubmit on the Wallet page, and "Send to the validators" and Retry on
+the attestors' case pages, which post what was signed before); and the
+run at the end of a recovery (12.3), which opens its new accounts
+through account-creation.service and moves the anos with the break-glass
+keys.
 
 ## 9. Configuration, and running it on this machine
 
@@ -3743,7 +4202,12 @@ Cloud machines.
   own Back leaves the walk-through, and the person starts again at
   screen 1; and a person who taps "Yes, I still have it" by mistake
   has to tap Back to answer again.
-- Several passkeys, push delivery, a custom theme, rate limits.
+- Several passkeys, push delivery, a custom theme, rate limits. Push
+  delivery stays out since the sound of 2026-11-19 (8.1; section 11)
+  too: that sound is made by the open page and plays only while the
+  wallet's page is running, where push delivery would bring a sound or a
+  banner while the wallet is not open, and on an iPhone it needs the
+  wallet added to the Home Screen.
 
 ## 11. Build notes
 
@@ -11442,6 +11906,1495 @@ The forty Thai lines, as `th.ts` has them:
   10 of `forclaude/wallet-deploy-plan-1.md`, wallet1 and then wallet2,
   with no setting in `network/wallet.env` and no `npm ci`.
 
+### Who buys and who sells, and the card's messages as grey lines (2026-11-19)
+
+Built from `forclaude/wallet-chat-and-passkey-plan-1.md` (FINAL,
+2026-11-19), its step 1 of six, its section 1, one commit, on main at
+fc5ef0c, the merge of pull request 32, the working tree clean. Why, in
+the user's words of 2026-11-19, on the marketplace chat of the
+production wallet. The card "shows a picture of the other person and
+then selling 500 anos for 2 thb each. It makes it seem to me like
+they're doing the opposite what they're doing." And: Share account
+"throws it into the chat with a copy button. This is confusing and
+could lead to someone sending people coins from their wallet not in
+escrow. Same when the other side sends to escrow, it throws a chunk of
+lines into the chat." Of the sentence from the reader's own side: "I
+like it." Of keeping the messages posted and no longer showing them as
+they are: "B sounds like the much easier way." Wallet only: no route,
+no line of `network/wallet.env` and no npm package; the masterpod, the
+validators, the doormen, the keyholders, the signing servers and the
+proxy (`server/`) are not touched. The card posts the same three
+messages with the same words, and `share()`, `tell()`, `check()` and
+every rule by which the card finds the chat's trade have the code they
+had: they guard against a second send.
+
+- `src/app/i18n/en.ts` and `th.ts`. In `pinned`, `summary` is gone and
+  `youSell`, `youBuy`, `sellTerms` and `buyTerms` stand in its place;
+  the comment line "The chat page knows this message by these words
+  (trade-messages.ts). A change of the words needs the old words kept
+  there." stands over `shareMessage`, `startedMessage` and
+  `releasedMessage`, in English in both files, and the three keep their
+  words. In `rooms`, `youSelling`, `youBuying` and `theySelling` after
+  `buying`. In `chatRoom`, `youSentAccount`, `theySentAccount` and
+  `tradeUpdate` after `notOpen`. The English is the plan's 1.1, letter
+  for letter.
+- The ten Thai lines, the build chat's, in full. No Thai reader has
+  read them; "Thai read by a Thai reader" stands on the
+  after-production list.
+  `pinned.youSell`: "คุณกำลังขาย ${anos} anos ให้ ${name}".
+  `pinned.youBuy`: "คุณกำลังซื้อ ${anos} anos จาก ${name}".
+  `pinned.sellTerms`: "${price} ต่อ anos · ${name} จ่ายเงินให้คุณ ${total}".
+  `pinned.buyTerms`: "${price} ต่อ anos · คุณจ่ายเงินให้ ${name} ${total}".
+  `rooms.youSelling`: "คุณกำลังขาย ${anos} anos".
+  `rooms.youBuying`: "คุณกำลังซื้อ ${anos} anos".
+  `rooms.theySelling`: "${name} กำลังขาย ${anos} anos".
+  `chatRoom.youSentAccount`: "คุณส่งบัญชีของคุณสำหรับการซื้อขายนี้แล้ว".
+  `chatRoom.theySentAccount`: "${name} ส่งบัญชีของตนสำหรับการซื้อขายนี้แล้ว".
+  `chatRoom.tradeUpdate`: "ความคืบหน้าการซื้อขาย ดูกล่องที่ด้านบนของแชทนี้".
+  How they were made, from the glossary and style of
+  `forclaude/wallet-languages-plan-1.md` 1.6 and from the Thai the file
+  had: "each" is "ต่อ anos", as `pinned.summary` had it. "Pays" is
+  "จ่ายเงินให้", as `escrowGuide.buyerHeld` and `pinned.steps` have it.
+  "Their account" is "บัญชีของตน", as the staff pages write "ของตน".
+  "The box" is "กล่อง", as `escrowGuide` has "กล่องนี้". "You are selling"
+  is "คุณกำลังขาย", with "กำลัง", where `rooms.selling` has the plain
+  "ขาย": the plain verb can be read as a sale that is done, and the line
+  is there to say what is going on. "Trade update" is
+  "ความคืบหน้าการซื้อขาย", the trade's progress: the glossary has no word
+  for "update", and its list of transliterated words does not hold one.
+  No sentence ends in a full stop, and a Latin word or a number has a
+  space on each side.
+- `src/app/trade-messages.ts`, new, as the plan's 1.2 gives it, with a
+  file comment over the imports. `tradeMessageKind(text)` answers
+  `account`, `trade` or null for a whole text, trimmed. Its patterns are
+  made from the three dictionary sentences of every language, so the
+  file holds no words of its own. The four placeholders are written as
+  the escapes `\u0001` to `\u0004`, not as control characters.
+- `src/app/services/chat.service.ts`: the last line of `title()` calls
+  the new `tradeWords(room)`, which stands after `listingWords()`, as
+  the plan's 1.3 gives it. `listingWords()` has the body it had. The
+  comments the plan names: the class comment, `title()`,
+  `listingWords()` and `Piece`. `piecesOf` and `ACCOUNT_ID_IN_TEXT` are
+  as they were.
+- `src/app/components/pinned-listing.component.ts`: the template's
+  first block and the paragraph `terms` under it, the two computed
+  `headline` and `terms` in the place of `summary`, the style line
+  `.terms`, and `AvatarComponent` out of the imports, as the plan's 1.4
+  gives them. `other` and `otherName` stay. The class comment's sentence
+  on the first line is rewritten to the two lines. No other line of the
+  file changed.
+- `src/app/pages/chat-room.page.ts`, as the plan's 1.5 gives it: the
+  import, `ShownMessage.notice`, the third kind of `ThreadItem`, the
+  computed `trader`, `notice` in `shown()` and in `send()`, the block in
+  `thread`, the method `noticeText()`, the template's `notice` branch,
+  the copy button inside `@if (!trader())`, the two style lines and the
+  class comment. `accountIds` is as it was.
+- `src/app/pages/chat.page.ts`, as the plan's 1.6 gives it: the import,
+  the signal `notices`, `preview()`, the two lines and the last line in
+  `decryptPreviews()`, the class comment and the comment of `preview()`.
+- README: the line of `trade-messages.ts` after `escrow-boxes.ts`, and
+  the words "from the reader's own side for a listing chat" in the line
+  of `chat.service.ts`.
+- Spec: 8.2, Chat (the paragraph "Chat": the title and the preview; the
+  paragraph "One conversation": the copy button and the grey lines; the
+  paragraph "The pinned card": the two lines, "Under those lines", the
+  buyer's button and what follows Start; the paragraph "The chat's
+  message about its trade"), 8.3 (the line of `chat.service`), 8.5, 8.6,
+  8.7 (the bullets of `pinned-listing.component.ts` and of
+  `escrow-strip.component.ts`), 8.8 and this note. The line of
+  `marketplace.service` in 8.3 is as it was: `sideWords` stays, for the
+  listing cards and the listing page.
+- What follows from the plan's code, written here so that it is not
+  taken for a fault. A message is known by its words, so the card's
+  messages posted before this step are grey lines too. A person's own
+  message shows as a bubble while it is on its way, and a card sentence
+  typed by hand turns into a grey line with the next read. A grey line
+  ends a group of bubbles: the bubbles before it get their time, and the
+  ones after it start a new group. In the chat list the grey words have
+  no "You: " in front. A guest's title needs the seller's username: for
+  a buy listing that is the person who made the room, and when that
+  person is neither a member nor invited any more the title falls back
+  to the listing's words.
+- Readings where the plan left a detail open. BUILD-DATE is 2026-11-19.
+  The file comment of `trade-messages.ts` is the build's wording. The
+  style line `.terms` stands after `.summary`, the two `.notice` lines
+  after `.day span`, and the import of `trade-messages` after the
+  session service's in both pages, by the order of the paths. The
+  comment of `Piece` has the plan's words with "the button" in front
+  ("the button not for the two traders of a marketplace chat"), so that
+  the code font is not read as taken away: a trader still sees an id in
+  code font. The card's class comment ends its new sentence on the
+  second line, so the sentence after it, "Under it the card is the
+  trade guide", stays as it was and stays true. In 8.2 the three
+  wordings of a title are three sentences, with the fallback of the
+  point above; the preview's sentence says that no "You: " stands
+  before the grey words; "One conversation" has the grey lines as one
+  sentence, and what knows the messages is in 8.7. In 8.6 the card
+  leaves the list as "the pinned listing card drew one too until
+  2026-11-19".
+- The look, where. A development build in a scratch folder on this Mac,
+  served by a plain file server on 127.0.0.1 (a temporary entry in
+  `/Users/codex/.claude/launch.json`, taken out again; the file is byte
+  for byte what it was), in the Claude app's browser pane, at 360, 375,
+  390 and 430 pixels wide, in English and in Thai. A made-up session
+  was set through the `ng` debug tools: an anoPod id, a username, a
+  status, two accounts and twelve chats. The messages were real
+  ciphertexts: each chat got a room key from the wallet's own
+  `newRoomKey`, each message went through its `encryptText`, and the
+  masterpod's answers (the room list, the messages, a send, the
+  notifications, the status, the accounts, a profile) were given in the
+  browser by functions set on the API service. So the pages opened,
+  recognised and drew the messages with their own code, the Thai
+  sentences in an English wallet and the other way round. The card
+  cannot read the validators without keys; its result was set by hand
+  to "read everything, no trade". None of our servers was asked: the
+  request list shows the file server and Google's font files. Not on a
+  phone and not on the live wallet, and no passkey was asked. The pane
+  says it is Chrome on an Android phone at these widths and draws Thai
+  with this Mac's Thai font. The pane was not on screen while the look
+  ran; the pictures and the measures do not need it.
+- The look, the card. The card has 302 pixels for its lines at 360,
+  317 at 375, 332 at 390 and 372 at 430. No picture stands on it. With
+  the usernames "mai" and "somchai" the first line is one line at every
+  size in both languages, for the seller ("You are selling 500 anos to
+  mai") and for the buyer ("You are buying 500 anos from somchai"), on
+  a sell listing and on a buy listing. The second line is one line in
+  English at every size. In Thai the buyer's second line takes two
+  lines at 360 ("2.00 THB ต่อ anos · คุณจ่ายเงินให้ somchai 1,000", then
+  "THB") and one from 375; the seller's is one line at every size. With
+  a username of 32 ordinary characters
+  ("somchai_the_anos_trader_bangkok1") each of the two lines takes two
+  lines at every size in both languages, and nothing is cut. Closed
+  stands at the right of the first line, beside both of its lines when
+  it has two; it touches no word and does not pass the edge. The card
+  is taller than at the commit before, measured in a build of fc5ef0c
+  at 360: 245.7 pixels against 239.7 for a seller with no trade (the
+  old line took two lines beside the avatar), 344.5 against 298.5 with
+  the 32-character name, and 237.3 against 211.3 for the Thai buyer. So
+  the thread has 6 to 46 pixels less.
+- The look, cut on the card: only with the widest username the rules
+  allow, 32 times the letter m. That name alone is 390 pixels wide in
+  the first line. It runs past the card's inner edge and is cut at the
+  chat's frame: by 88 pixels at 360, 73 at 375, 58 at 390 and 18 at 430
+  in the first line, and by 63, 48 and 33 pixels at 360, 375 and 390 in
+  the second line, which fits at 430. Both languages alike. The status
+  box under the two lines cuts the same name the same way in its
+  sentence, and that box is older than this step. Nothing was changed
+  for it.
+- The look, the thread. A grey line is 12 pixels, in the grey of the
+  day line's words, with no box, in the middle of the thread (0 pixels
+  off centre), 8 pixels from the item above and the item below, as any
+  two items are. One line at every size in both languages with a short
+  username: "mai sent their account for this trade." is 193 pixels
+  wide, "You sent your account for this trade." 193, "Trade update.
+  Look at the box at the top of this chat." 278, which leaves 24 at
+  360; the Thai three are 210, 207 and 247. A trader's thread held no
+  account id in code font and no copy button, where the build of
+  fc5ef0c drew seven ids with seven buttons for the same chat. A guest
+  in a chat of two other people read the messages as they are: four
+  ids, four copy buttons, no grey line, and no card. With the 32 m's
+  the grey account line takes two lines and runs 17 pixels past the
+  thread's inner edge at 360, 10 at 375 and 2 at 390, and at 360 the
+  thread can be pushed 5 pixels sideways; at 430 it fits.
+- The look, the chat list: lines that are cut. A row's title and its
+  preview are one line each and end in three dots when they do not fit,
+  as before this step. They share one width, which the time beside them
+  sets. Beside a time of today, such as "11:58 AM", it is 171 pixels in
+  English and 192 in Thai at 360, 186 and 207 at 375, 201 and 222 at
+  390, 241 and 262 at 430; a row of another day has a little more or
+  less (169 to 202 in English at 360, 184 to 195 in Thai). The numbers
+  that follow are for a row of today. The titles: "mai · You are selling
+  500 anos" needs 187 pixels and is cut at 360 (it reads "mai · You are
+  selling 500 …") and by one pixel at 375, and is whole at 390 and 430.
+  "somchai · You
+  are buying 500 anos" needs 218 and is cut at 360, 375 and 390 (at 360
+  it reads "somchai · You are buying …", the amount gone), and is whole
+  at 430. In Thai the first needs 170 and is whole at every size; the
+  second needs 193 and is cut at 360, whole from 375. A title with the
+  32-character name shows the name and none of the trade's words, at
+  every size. A guest's title ("mai, somchai · somchai is selling 500
+  anos", 268 pixels) is cut at 360, 375 and 390, and in Thai at 430
+  too. The titles of the
+  commit before were cut the same way: "mai · Selling 500 anos for THB"
+  needed 190 pixels and "somchai · Selling 500 anos for THB" 220, in
+  Thai 169 and 200. The previews: "Trade update. Look at the box at the
+  top of this chat." needs 301 pixels and is cut at every size (at 360
+  it reads "Trade update. Look at the b…"); "You sent your account for
+  this trade." needs 209 and is cut at 360, 375 and 390, whole at 430.
+  In Thai the trade line needs 268 and is cut at every size, and the
+  account line needs 225 and is cut at 360, 375 and 390. No preview
+  holds an account id; at the commit before the same row read "You:
+  Escrow trade released: 500 anos from 1111…". Nothing was changed for
+  it.
+- The look, the conversation's title: cut more often than the list's,
+  since the back arrow, the avatar and the menu button leave it 146
+  pixels at 360, 161 at 375, 176 at 390 and 216 at 430. "mai · You are
+  selling 500 anos" is cut at 360, 375 and 390 (at 360 it reads "mai ·
+  You are selling …") and whole at 430; with "somchai" it is cut at all
+  four, by 2 pixels at 430. In Thai the first is cut at 360 and 375,
+  the second at 360, 375 and 390. The old titles were cut the same way.
+  The card under the title says the whole sentence. Nothing was changed
+  for it.
+- The look, the rest. No page scrolls sideways at any size. A row of
+  the list is 68 pixels high, as before. At 1024 pixels, looked at once,
+  the list and the conversation stand side by side and nothing is cut
+  on the card.
+- Tried in the scratch page besides the look, with the chat open as
+  the seller. An account id the other trader typed by hand ("My other
+  account is …, use that one") arrived as a bubble with the id in code
+  font and no copy button, and the card's To list took it as the
+  newest. The share sentence typed by hand and sent with the page's own
+  Send became the grey line "You sent your account for this trade.". A
+  released sentence from the other side arrived by the page's 3-second
+  read as the grey trade line.
+- Seen in passing, in the scratch page only, and outside this step.
+  Twice the page stopped answering right after the chat list opened.
+  The likely cause, not proven: a made-up session has no keys, so every
+  read of a person's profile for a picture fails at once, with nothing
+  sent; `profile-cache.service.ts` forgets a read that failed for
+  another reason than a 404, and `avatar.component.ts` asks again when
+  the page is drawn again. Measured: one picture asked 100 times in a
+  row and then stopped, in the build of fc5ef0c too. With the profile
+  reads answered in the browser by a 404, so that the letter shows, the
+  list opened every time, more than ten times, and the whole look was
+  made that way. This step touches neither file. On the live wallet
+  such a read goes to the masterpod and fails only when the masterpod
+  or the network cannot be reached; whether a picture then asks again
+  and again was not tried.
+- Brought in line on the user's word of 2026-11-19 ("Yes, update
+  them"), before this step was committed and in its commit: five
+  comments in four files that the step left out of date and the plan
+  does not name. The build's first report had listed them as left. In
+  `src/app/components/escrow-strip.component.ts` the class comment said
+  the card draws the box "under the listing's line" and now says "under
+  the listing's two lines". In `src/app/components/avatar.component.ts`
+  the class comment listed "the pinned listing card" among the places
+  with an avatar and now says that the card drew one until 2026-11-19.
+  In `src/app/components/copy-button.component.ts` the class comment
+  said the button is next to account ids "in chat" and now adds "but
+  not for the two traders of a marketplace chat". In
+  `src/app/pages/chat-room.page.ts` the comment of `thread` named the
+  day line and the groups and now names the grey line too, and the
+  comment of `shown()` now names `notice`. No line of code changed with
+  them.
+- Checked. `git status` showed a clean tree at the start, and this
+  step's nine files and no others before the build and before the
+  first report: eight changed, and `src/app/trade-messages.ts` new.
+  With the five comments brought in line it shows twelve: the three
+  component files joined. `npx ng build` from the web_app folder:
+  clean, no warnings (2.26 MB initial total, `main-ZKMT5IIL.js`,
+  `styles-EMD3RG3N.css`, the style file of before; run again after the
+  five comments, with the same two files, since a comment does not
+  reach the build). The plan's section 1 has 19 indented blocks; each
+  was looked for in the files with the build's date in the place of
+  BUILD-DATE, line for line and with its indentation, and all 19 are
+  there, the English entries among them, before the five comments and
+  after them. Both language files have the same keys in
+  the same order in the three sections, 36 in `pinned`, 12 in `rooms`
+  and 22 in `chatRoom`. `tradeMessageKind` was bundled with the two
+  dictionaries into the build's scratch folder and run in Node, 27
+  cases: `account` for the English and the Thai share sentence of a
+  made-up id, in capitals and with spaces around it too; `trade` for
+  the four started and released sentences, with amounts of six
+  decimals, 0.5 and a large one; null for "Hi, is this still
+  available?", a bare account id, a share sentence with a word after it
+  or before it, an id of 63 and of 65 characters, an amount in words or
+  with a comma, a line added after a sentence, and the grey line's own
+  words. All right; the check was not kept. Not checked: a phone; the
+  live wallet; iPhone Safari; a real session, with a room key the
+  masterpod hands out and the card's own read of the validators; a real
+  trade from the first message to the release; the moderator and
+  attestor editions (one codebase; the scratch page was the wallet
+  edition); the Thai by a Thai reader. The run-through is the user's,
+  with two anoPods and a listing (the plan's section 7): each side's
+  own sentence on the card, in the title and in the chat list; "Send my
+  account" and one grey line on each side; "Put the anos in escrow"
+  with the buyer's account in its form; the grey trade line after the
+  start and after the release; a trade that was under way before the
+  deploy; an attestor invited into the chat. The user deploys the
+  wallet servers after this step, by section 10 of
+  `forclaude/wallet-deploy-plan-1.md`, wallet1 and then wallet2, with
+  no setting in `network/wallet.env` and no `npm ci`.
+
+### The passkey wherever the wallet signs with an account's key (2026-11-19)
+
+Built from `forclaude/wallet-chat-and-passkey-plan-1.md` (FINAL,
+2026-11-19), its step 2 of six, its section 2, one commit, on main at
+11196f5, which is step 1 of the same plan, the working tree clean. Why,
+in the user's words of 2026-11-19: "Before releasing coins out of escrow
+the user is prompted to type in their username. We might want to change
+this instead to using their passkey to confirm? The username thing is
+confusing people. And having a biometric lock is helpful anyway on that
+step." Then: "Yes, passkey on all." Then: "And while we're at it, I
+think each transaction send should require a passkey use. I think that
+makes it more safe." And, asked which buttons: "Yeah, let's do the
+passkey on each of those as well. Basically, we'll be replacing type
+user name with the passkey prompt." And of a new anos account: "I want
+them to both click ok, and also put in the passkey next. That way we
+prevent accidental sign ups." Wallet only: no route, no line of
+`network/wallet.env` and no npm package; the masterpod, the validators,
+the doormen, the keyholders, the signing servers and the proxy
+(`server/`) are not touched.
+
+What it is. Wherever the wallet signs with an account's key, the button
+first asks the device for the passkey that opened the session, and goes
+on only when that passkey answers. It is a lock on the button, checked
+by the wallet itself. It stops a slip of the finger and a second person
+holding the unlocked phone. It is not a check by the validators or the
+signing servers: the keys that sign also sign every read of a balance,
+every few seconds, so the key that opens them stays in the tab after
+Log in, and this step cannot take it away. Code that got into the
+wallet's page could go around the check. Safari's rule, read on WebKit's
+own page on 2026-11-19
+(webkit.org/blog/11312/meet-face-id-and-touch-id-for-the-web): "Face ID
+and Touch ID for the web require user gestures to function", and the
+gesture is carried through XHR and fetch for 10 seconds. So the passkey
+is asked straight from the click of the button that signs, before any
+other wait.
+
+The fourteen buttons, the table of the plan's section 2, with its
+seventh row as the build ended: the plan has that button, the Yes of
+the chat card's Start, asking in the card, and it got a box of its own
+before the commit, on the user's word (the plan's decision 12, added
+that day; the bullet "The card's Start in the pop-up box", below). So
+the first seven ask in the confirmation box. Six of them did so before,
+and their box gained the passkey. The other seven asked in the page or
+asked nothing, and there the passkey is the first thing the click does.
+
+| The button that brings up the passkey sheet | Where it is | What is signed |
+| --- | --- | --- |
+| Send, or Stake, in the box | the Send form of an account's page | every transfer and every stake |
+| "Yes, cancel the transfer", in the box | "Cancel transfer" under the Locked transfer row of an account's page | the cancel of a guarded or vault transfer |
+| "Create anos account", in the box | "Create anos account", and Retry, on the Wallet page | a new anos account |
+| "Yes, release the anos", in the box | the escrow trade page, and "I have been paid: release the anos" in the chat's card | the release |
+| "Yes, dispute", in the box | the escrow trade page | the dispute |
+| "Yes, cancel the trade", in the box | the escrow trade page | the buyer's cancel |
+| Yes, in the box | Start, in the form of "Put the anos in escrow" in the chat's card | the escrow transfer |
+| "Yes, cancel the transfer" | the assisted transfer page | the cancel of an assisted transfer |
+| "Post proposal" | the New fund proposal page | a guardian's fund proposal |
+| "Yes, vote for", "Yes, vote against" | the Fund proposal page | a guardian's vote |
+| "Sign the attestation" | the attestor's trade case page | one attestation |
+| "Sign the verdict" | the attestor's dispute case page | one verdict |
+| "Sign all attestations" | the attestor's recovery case page | one attestation for each move |
+| Sign | the moderator's recovery case page | the sign-off |
+
+One click asks once, however many signatures it makes. What asks for no
+passkey is in 8.9.
+
+- `src/app/i18n/en.ts` and `th.ts`. A new section `passkeyCheck` after
+  `passkey`, five entries: `note`, `notFinished`, `otherPasskey`,
+  `failed`, a function, and `noSession`. Three entries are gone from
+  both files: `escrowBoxes.typeNote`, `account.stakeTypeNote` and
+  `common.yourUsername`. The English is the plan's 2.1, letter for
+  letter.
+- The five Thai lines, the build chat's, in full. No Thai reader has
+  read them; "Thai read by a Thai reader" stands on the after-production
+  list.
+  `passkeyCheck.note`: "เพื่อยืนยัน โทรศัพท์หรือคอมพิวเตอร์เครื่องนี้จะขอพาสคีย์ของคุณ ซึ่งเป็นพาสคีย์ที่คุณใช้เข้าสู่ระบบ".
+  `passkeyCheck.notFinished`: "ขั้นตอนพาสคีย์ไม่เสร็จสิ้น จึงไม่ได้ทำสิ่งใด กดปุ่มเพื่อลองอีกครั้ง".
+  `passkeyCheck.otherPasskey`: "นั่นไม่ใช่พาสคีย์ที่คุณใช้เข้าสู่ระบบ จึงไม่ได้ทำสิ่งใด".
+  `passkeyCheck.failed`: "ไม่สามารถใช้พาสคีย์ได้ จึงไม่ได้ทำสิ่งใด: ${reason}".
+  `passkeyCheck.noSession`: "แท็บนี้ไม่มีสิ่งที่ขั้นตอนพาสคีย์ต้องใช้อีกต่อไป จึงไม่ได้ทำสิ่งใด เข้าสู่ระบบอีกครั้ง".
+  How they were made, from the glossary and style of
+  `forclaude/wallet-languages-plan-1.md` 1.6 and from the Thai the file
+  had. "To confirm" is "เพื่อยืนยัน", as the two entries that went had
+  it. "Log in" is "เข้าสู่ระบบ", the label `landing.unlock` gives it, used
+  as a verb in all three places. "This phone or computer" is
+  "โทรศัพท์หรือคอมพิวเตอร์เครื่องนี้", after `findPasskey.s2Question`,
+  which has "โทรศัพท์หรือคอมพิวเตอร์เครื่องอื่น" for another one. "Will
+  ask for" is "จะขอ", as `setup.unlockHint` has it. "The passkey step"
+  is "ขั้นตอนพาสคีย์", with the glossary's word for a step. "Press" is
+  "กด", as `vouching.what2` has it, where a tap is "แตะ". "That was not"
+  is "นั่นไม่ใช่", as `accountPasskeys.notNew` has it. "Could not be
+  used" follows the glossary's "ไม่สามารถ…ได้". "No longer" is
+  "อีกต่อไป", as `assisted.noLongerHeld` has it. Two readings of the
+  build's own. "So nothing was done" is "จึงไม่ได้ทำสิ่งใด" in all four
+  sentences, with the written "สิ่งใด" the file uses for "nothing",
+  where `pinned.notSentUnread` says "จึงยังไม่ได้ส่งอะไร" for "so nothing
+  was sent". And "was not finished" is "ไม่เสร็จสิ้น", not "ยังไม่เสร็จ",
+  which would read as still going on. No sentence ends in a full stop.
+- `src/app/passkey-check.ts`, new, as the plan's 2.2 gives it, with a
+  file comment over the imports: one function,
+  `checkSessionPasskey(services, words)`, and the interface of the three
+  services it is handed. `passkey.service.ts` got no code; its class
+  comment names the new caller of the one-passkey assert.
+- `src/app/components/confirm-dialog.component.ts`, as the plan's 2.3
+  gives it: `ConfirmData.passkey` in the place of `typed`; the red line
+  in the place of the text box; both buttons off while the device asks;
+  the injected dialog ref and the three services; `asking` and
+  `passkeyError` in the place of `typedText` and `typedOk`; the method
+  `yes()`; the style `.error` in the place of `.typed`; `FormsModule`,
+  `MatFormFieldModule` and `MatInputModule` out of the imports, and
+  `computed` out of the import from `@angular/core`. `askConfirm` and
+  `askChoice` have the bodies and the comments they had.
+- `src/app/escrow-boxes.ts`: `releaseBox`, `disputeBox` and `cancelBox`
+  lost the parameter `username`, end their notes with
+  `passkeyCheck.note` and give `passkey: true`. `paidQuestionBox` and
+  `doNotCancelBox` are as they were. A sixth function, `startBox`, came
+  before the commit (the bullet "The card's Start in the pop-up box").
+- The pages that open a box, as the plan's 2.5 gives them.
+  `src/app/pages/escrow-trade.page.ts`: the four calls without the
+  username. `src/app/components/pinned-listing.component.ts`,
+  `release()`: the call without the username.
+  `src/app/pages/account.page.ts`: in `askSend()` the three lists of
+  notes, each ending with the passkey line, and `passkey: true` in the
+  place of `typed`; in `askCancelLocked()` the second note and
+  `passkey: true`. `src/app/pages/wallet.page.ts`, `askCreate()`: the
+  second note and `passkey: true`. `resubmit()` and
+  `src/app/services/account-creation.service.ts` are not touched.
+- The buttons that sign without a box, as the plan's 2.6 gives them:
+  eight as first built, seven as committed, since the first of 2.6, the
+  card's Start, asks in a box now (the bullet "The card's Start in the
+  pop-up box"). Each of the seven files got the two imports, the
+  injected `PasskeyService`, the check line and the passkey line in the
+  template. The card had them too as first built, with the check line
+  in `start()` after the line that throws `pickAccounts` and before the
+  check for an earlier trade; they left the card again when the box
+  came. The assisted transfer
+  page's `confirm()`: the first line inside the `try`. The New fund
+  proposal page's `post()`: after the rows are checked; that page got
+  `SessionService` too. The Fund proposal page's `confirm()`: a block of
+  its own in front of the method's `try`, which leaves the question
+  open. The three attestor pages: after the line that throws
+  `caseNotLoaded`, on the recovery case page after the line that throws
+  `noMoves`. The moderator's page: the first line of the function handed
+  to `act`. In the card, `share()`, `tell()` and every rule by which the
+  card finds the chat's trade have the code they had; `check()` lost
+  two lines that closed the question in the card, when the question
+  left the card, and nothing else.
+- README: the line of `passkey-check.ts` after `unlock.ts`; the line of
+  `confirm-dialog.component.ts`; "and of the passkey check" in the line
+  of `passkey.service.ts`.
+- Spec: 8.2 (the paragraphs "Wallet. Titled", "The sender can cancel the
+  locked transfer from its row", "Send: recipient account id", "Escrow
+  trade, at", "Assisted transfer, at", "The pinned card", "The chat's
+  trade", "New fund proposal, at" and "Fund proposal, at"), 8.3 (the
+  lines of `session.service` and `passkey.service`), 8.8, 8.9 (the whole
+  section), 12.3 (the bullet "Sign off"), 13.3 (the three bullets of the
+  sign-offs) and this note. Nothing in 8.7 changed: its lines on
+  `releaseBox` and `escrow-boxes.ts` do not speak of the username.
+- What follows from the plan's code, written here so that it is not
+  taken for a fault. In a box, the first button is off too while the
+  device asks, so a person closes the device's passkey sheet first and
+  the box after it. A box that a step back in the browser's history
+  closed while the device asked stays closed, and its answer is dropped:
+  nothing is sent. The passkey line is the last note of a box, so in the
+  stake box it stands where the note about the username stood. At the
+  card's Start the passkey comes before the check for an earlier trade,
+  so a seller can give the passkey and then read "Nothing was sent. This
+  chat already has an escrow trade."; the plan's decision 11 puts the
+  passkey first because Safari opens the sheet only for a tap, and it
+  is so in the Start box as it was in the card. On the New fund
+  proposal page a wrong row is said before any passkey is asked. On the
+  Fund proposal page a check that did not pass leaves the question open,
+  where every other failure closes it. The fourth sentence, `noSession`,
+  is a guard: every session that can sign with an account's key came
+  through Log in, or through setup's own unlock, and holds both things
+  the check needs.
+- Readings where the plan left a detail open. BUILD-DATE is 2026-11-19.
+  The file comment of `passkey-check.ts` is the build's wording and
+  stands over the imports, as in `trade-messages.ts`. The plan's 2.2
+  says the class comment of `passkey.service.ts` "gains the third user
+  of the one-passkey assert". In the code the passkey check is the
+  second caller of `assert` with `only`; the first is the third tap of
+  an add. The comment gained one sentence that begins "Since
+  2026-11-19", and no sentence of before was reworded. In the comments
+  the plan names, the passkey was added in dated sentences. One older
+  sentence was reworded, in the doc comment of the card's `start()`:
+  "one fresh check first" reads "one fresh check before anything is
+  built", since the passkey check is first now. In 8.2 the three
+  sentences on the typed username left the stake box's text, and one
+  clause in brackets says what stood there until 2026-11-19. Each new
+  import stands in its place by its path, and the injected `passkey`
+  after `signing` (after `crypto` on the moderator's page, which has no
+  `signing`).
+- The look, where. A development build in a scratch folder on this Mac,
+  served by a plain file server on 127.0.0.1 (a temporary entry in
+  `/Users/codex/.claude/launch.json`, taken out again; the file is byte
+  for byte what it was), in the Claude app's browser pane, in English
+  and in Thai, at 360, 375, 390 and 430 pixels wide. The screens were
+  360x640, 375x667, 390x844 and 430x932, and two short ones for the
+  boxes and the card, 360x560 and 375x553. A made-up session was set
+  through the `ng` debug tools: an anoPod id, a username, a status and
+  three accounts. Each box was opened by its page's own method, with
+  the form's values set by hand. The four staff pages were reached too:
+  the edition was set by hand as `/api/config` would give it, and the
+  case reads were answered in the browser. None of our servers was
+  asked: the request list shows the file server and Google's font
+  files. Not on a phone and not on the live wallet. The pane was not on
+  screen while the look ran, so no box was watched opening; the measures
+  and the pictures do not need it.
+- The look, no passkey. The passkey itself cannot be tried in that
+  build: a passkey belongs to the wallet's own address. So the device's
+  answer was a stand-in, set on the wallet's passkey service in the
+  scratch page: the person closed the sheet, another passkey answered,
+  the device said something else, or the session's passkey answered. No
+  passkey was asked for and the browser's passkey call was never made.
+  The first real try is the user's, on the live wallet.
+- The look, the seven boxes: the Send box, a DAO stake box (and the
+  guardian stake box, which is its size), the cancel of a locked
+  transfer, "Open a new spending account?", Release, Dispute and Cancel.
+  A box is the screen's width less 32 pixels. At the four sizes every
+  box is whole inside the screen, its content does not scroll, nothing
+  runs past an edge, and the two buttons stand on one row; the widest
+  pair is Back with "Yes, cancel the transfer", 64 and 197 pixels. No
+  box has a text box. The passkey line is two lines in English in every
+  box at every width. In Thai it is three lines at 360 and two from 375.
+  The tallest box is the stake box: 457 pixels in English and 477 in
+  Thai at 360.
+- The look, the red line in a box, with the device's answer standing in.
+  While the device is asked both buttons are off. Then the box stays
+  open, the red line stands under the notes, and both buttons work
+  again; a second press asks again, and the first button closes the box
+  with nothing sent and the form as it was. "The passkey step was not
+  finished, so nothing was done. Press the button to try again." is
+  three lines at 360 and 375 and two at 390 and 430; the Thai is two
+  lines at every width. The longest sentence the code can make from the
+  dictionary is "The passkey could not be used, so nothing was done: The
+  authenticator returned no PRF output; this passkey or platform does
+  not support PRF": four lines at 360 and 375, three at 390 and 430, and
+  three in Thai. With it the stake box is 549 pixels at 360, still whole
+  on a 360x640 screen. On the two short screens every box is whole with
+  the first red sentence. With the longest one the stake box's content
+  scrolls inside the box, by 12 pixels at 360x560 in both languages and
+  by 17 at 375x553 in English, so the end of the red line is under the
+  box's lower edge until the person scrolls it.
+- The look, the eight buttons without a box, as first built (the card's
+  line and its Yes are gone again: the bullet "The card's Start in the
+  pop-up box"). The passkey line is two
+  lines at every width in both languages, in the page's grey, and does
+  not pass its card or page. In the chat's card: 13 pixels, 8 pixels
+  under the question and 8 over Yes and Back. On the assisted transfer
+  page: 14 pixels, 14 under the question and 14 over the buttons. On the
+  New fund proposal page: 14 pixels, over the red error line and the
+  button, 22 pixels over the button with no error. On the Fund proposal
+  page: 13 pixels, 14 under the question and 13 over the buttons, for
+  "vote for" and for "vote against". On the attestor's three case pages:
+  14 pixels, 14 under the sentence above it and 14 over the button or
+  the form. On the moderator's page: 14 pixels, under the heading "Sign
+  off" when nobody has signed and under the line of who signed when
+  somebody has, 14 over the form. Each button was pressed with the
+  device's answer standing in for a closed sheet: the red sentence shows
+  where that page shows its errors, two lines in English at every width,
+  two in Thai at 360 to 390 and one at 430; the question stays open on
+  the card, on the assisted transfer page and on the Fund proposal page;
+  "Sign all attestations" asked once for a case with two moves.
+- The look, cut, as first built: the chat's card on a short screen.
+  This was the one place where the step's new line pushed something out
+  of sight, and it was mended before the commit (the bullet "The card's
+  Start in the pop-up box"). What the look found: the
+  chat's frame is as high as the screen less 88 pixels and cuts what
+  does not fit; the card in it does not scroll. With the seller's form
+  and the question of Start open, the card is 48 pixels taller than at
+  the commit before: the passkey line's two lines and its gap. Measured
+  with the other trader named "somchai" and a price of 2.00 THB, in a
+  build of 11196f5 and in this build. The card: 434 pixels before and
+  482 now at 360, 415 before and 463 now at 375, 390 and 430, in both
+  languages. The least height of the screen at which Yes is whole: 570
+  before and 618 now at 360, 551 before and 599 now at 375, 390 and 430.
+  On the four sizes of the look Yes is whole, before and now. On the two
+  short screens it is not. At 360x560 Yes lost its lower 10 pixels
+  before, with 30 of its 40 showing, and none of it shows now. At
+  375x553 Yes was whole before, with 2 pixels to spare, and none of it
+  shows now. Back stands beside Yes and goes the same way. A seller on
+  such a screen cannot reach Yes in the card; the Send form of the
+  account page, with the kind escrow, still makes the same transfer. The
+  red line of a check that did not pass stands at the card's end, under
+  the buttons, and needs 46 pixels more: a screen 664 high at 360 and
+  645 at 375 to 430 (625 in Thai at 430, where it is one line), so on a
+  360x640 screen its lower 25 pixels are cut. The message box under the
+  thread was partly cut while the
+  question was open before this step too, on a 360x640 screen 37 of its
+  74 pixels showed; now none of it shows there, and 35 show at 375x667.
+  Which phones show less than 600 or 620 pixels of height with their
+  browser's bars was not measured: no phone was part of the look. The
+  known limit of 2026-11-17 says of the card only that the thread has
+  less room on a small phone. Nothing was changed for it at first.
+- The look, two ways to reach what is cut, tried in scratch copies only
+  after the user asked whether a scrolling card would break anything
+  else. Eighteen states of the card were walked: both sides with and
+  without an account in the chat, the seller's form, the question, the
+  question with the red line, a held trade, a released one, a cancelled
+  one, the panel "How a trade works" open, a long and the widest
+  username. Each state was drawn as it is and with each rule, and every
+  part's place was compared, in English and Thai, at 360x640, 375x553,
+  430x932 and 1024x700. Then in iPhone Safari in the simulator, an
+  iPhone 17e, 390 points wide with 699 points of height showing. The
+  first way lets the card itself scroll (`min-height: 0` and
+  `overflow-y: auto` on the card's element). On a tall screen nothing
+  moves. On a short one the message box then always shows and the card
+  gets the room that is left, so the card is squeezed. At 360x640, where
+  Yes shows today, the card shows 397 of its 482 pixels and Yes is under
+  its lower edge until the card is scrolled. At 375x553 the form's Start
+  and Cancel, whole today, lose 28 of their 40 pixels. The second way
+  lets the whole conversation scroll (`overflow-y: auto` on the
+  conversation page's element). With it nothing moves, in any state at
+  any size: every part stands where it stands today, and where something
+  lies below the frame the conversation scrolls by just that much, 86
+  pixels in the question state at 360x640 and 153 at 375x553. So Yes,
+  the red line, the end of the panel and the message box can be pulled
+  up. One thing shows with it: the chat's top bar, with the back arrow
+  and the title, scrolls away with the rest while the conversation is
+  pulled down. Safari behaved as the pane did for both ways. With the
+  second way, at its 699 points, the question state scrolls 5 pixels,
+  the question with the red line 51 and a held trade with the panel
+  open 97; before any scroll every number is the one of the page as it
+  is, and scrolled to the end the message box is whole. No finger was
+  part of it: the page did the scrolling. Neither rule is in the repo.
+  The user took neither: the next bullet.
+- The card's Start in the pop-up box, built before the commit, in the
+  same working tree, on the user's word (the plan's decision 12, added
+  after FINAL on 2026-11-19, and its section 9). The user had not
+  followed "let the whole conversation scroll", and asked: "why we
+  don't just have the passkey stuff be a popup, because it doesn't
+  actually have to be in the same box as everything else." Nothing
+  technical kept the question in the card. It stood there by one
+  sentence of the plan's decision 11 ("A button that asks in the page
+  today keeps asking in the page"), and the same card already opens the
+  confirmation box for its Release. It was put to the user after a
+  trial in scratch copies, with a picture of both ways on a 375x553
+  screen. The user: "Allright, let's do both." The second of the two is
+  the Recipient box of the account page: a commit of its own, after
+  this one.
+  What changed. `src/app/escrow-boxes.ts`: a sixth function,
+  `startBox(words, anos, name)`, with the title `pinned.startTrade`
+  ("Put the anos in escrow"), no lines, the notes
+  `pinned.askStart(anos, name)` and `passkeyCheck.note`, Back and Yes
+  (`common.back`, `common.yes`) and `passkey: true`.
+  `src/app/components/pinned-listing.component.ts`: in the template the
+  question, its passkey line and its Yes and Back are gone, and the
+  form ends with Start and Cancel alone. `start()` is the Start
+  button's own method now: nothing while a box is open or a send is on
+  its way; the accounts and the amount from the form; `askConfirm` with
+  the Start box; and after a yes the run that was there, the fresh
+  check, pair one, the signing, the send and the check after it. The
+  signal `confirmStart` is gone with its six writes, two of them in
+  `check()`. The `checkSessionPasskey` line, its import and the injected
+  `PasskeyService` are gone, since the box asks. No word of either
+  dictionary changed, so no Thai was written. Comments in those two
+  files, in `passkey-check.ts` and in `confirm-dialog.component.ts`;
+  README (the lines of `escrow-boxes.ts` and of the confirmation box);
+  8.2 ("The pinned card", "The chat's trade"), 8.7 (the card, and the
+  functions of `escrow-boxes.ts`) and 8.9 (the places that use the box,
+  and seven buttons without a box where it said eight). The step is
+  still twenty files.
+  What stays as it was: the order of the guards, the passkey, then the
+  fresh check for an earlier trade, then the build; `share()`, `tell()`
+  and the rules by which the card finds the chat's trade; every other
+  state of the card. What is new in what a person meets: the form
+  cannot be typed in while the box is open, so what is sent is what the
+  box asked about (under the question in the card the form stayed
+  open); and a trade found while the box is open closes the form
+  behind it, the box stays, and its Yes then reads "Nothing was sent.
+  This chat already has an escrow trade." in the card. A red line of
+  before stays in the card until Yes, as it did.
+  The look: a development build of a scratch copy of the working tree,
+  beside a build of the step as first built, served as before (a
+  temporary launch entry, taken out again), the pane hidden, the
+  device's answer a stand-in, at 360x560, 375x553, 360x640, 375x667,
+  390x844, 430x932 and 1024x700, in English and Thai. The card never
+  grows past its form: 366 pixels at 360 wide and 347 from 375, where
+  the card with the question was 482 and 463. Start and Cancel are
+  whole from a screen 503 pixels high at 360 wide and 483 from 375,
+  with 58 pixels to spare at 360x560 and 70 at 375x553; Yes in the card
+  needed 618 and 599. The box is 328 by 273 at 360 wide in both
+  languages, 343 by 253 at 375, 358 by 253 at 390, 398 by 253 at 430
+  and 480 by 233 at 1024: whole inside the screen at every size, its
+  content does not scroll, and Back and Yes stand on one row (64 and 71
+  pixels, in Thai 76 and 64). The question is four lines in English at
+  360 and three from 375, and three in Thai; the passkey line is as in
+  the other boxes. With the sheet closed both buttons are off while the
+  device is asked, then the box stays with the red line: 345 pixels
+  high at 360 in English and 325 in Thai, 325 and 305 at 375, and with
+  the longest red sentence 365 and 345 at 360, 345 and 325 at 375,
+  still whole on the two short screens. Back closes the box with
+  nothing checked, nothing asked of the device and the form as it was.
+  With another passkey, and with no passkey id in the session, the box
+  stays with its sentence and nothing is checked. With the session's
+  passkey the box closes, one fresh check runs, and the card goes on to
+  pair one, which a made-up session cannot open. With a trade found the
+  card says so and the form closes; with a check that cannot be read
+  the card says so and the form stays. A second press of Start opens no
+  second box.
+  Every other state of the card stands where it stood. Fourteen states
+  were walked in both builds: both sides with and without an account in
+  the chat, the form, a held trade for each side, a released one, the
+  question before "Close the listing", a cancelled one, and the panel
+  "How a trade works" open in four of them. At 360x560 in English and
+  Thai, 375x553 in English, 430x932 in Thai and 1024x700 in English,
+  every part has the same place in both builds, to a twentieth of a
+  pixel. One walk first showed an empty part of the message box, of no
+  height, 5 pixels lower in thirteen states; walked again in the other
+  build's order it showed none. It is the noise between two page loads
+  that the build's own walk met too.
+  What it does not mend. A send that fails after the box shows as the
+  card's red line under Start and Cancel, as before. Three lines of it,
+  as "The validators did not answer. ..." is in English at 360 and 375,
+  need a screen 568 pixels high at 360 and 549 at 375, so at 360x560
+  the last 8 pixels of the line are cut; under the question it needed
+  664 and 645. With the longest username the rules allow, 32
+  characters, the card's own lines wrap, the form is 446 pixels at 360
+  and Start loses 22 of its 40 pixels at 360x560; that is the form as
+  it was before this step. In the box such a name wraps onto a line of
+  its own. 32 times "m", the widest name there can be, is 128 pixels
+  past the box's inner edge and the box's content scrolls sideways,
+  where the card cuts that name at its edge.
+  Tried and not chosen: the question as the box's title, as the Release
+  box has it. A title does not wrap inside a word, and a 32-character
+  username ran past the box's right edge. Not looked at in iPhone
+  Safari: the box is the one that six buttons already open, and no
+  style rule is new. Which phones are as short as 560 pixels is still
+  not measured: this Mac has no simulator of 375 points or less.
+- Tried in the scratch page besides the look, with the device's answer
+  standing in. The check asked the passkey service for the session's
+  credential id alone, with an empty transports list and a challenge of
+  64 hex characters. Another passkey's answer: "That was not the passkey
+  you logged in with, so nothing was done.", the box stays. The
+  session's passkey's answer: the Send box closed, the form emptied, and
+  the send went on to its next step, which a made-up session cannot
+  take. A session with no passkey id: "This tab no longer has what the
+  passkey step needs, so nothing was done. Log in again.", the box
+  stays. On the New fund proposal page a wrong row showed its own
+  sentence and the device was not asked.
+- Seen in passing, in the scratch page, and older than this step: a box
+  of the style `.wide`, which has `min-width: 360px`, is wider than its
+  card on a narrow phone. On the account page it is the box "Recipient
+  account id", with the paste button at its right end: 66 pixels past
+  the card's inner edge at 360, 51 at 375 and 36 at 390, and the page
+  scrolls sideways; at 430 it fits. The four staff case pages have the
+  same style on the box "Meeting link (https)" and on the Note boxes,
+  and scroll sideways at 360, 375 and 390. The account page has had the
+  rule since the testnet copy. It is the kind of fault the birth record
+  form had until 2026-11-18. On no list; nothing was changed in this
+  step. The account page's box is mended in the next note, in a commit
+  of its own; the staff pages are as they were.
+- Brought in line on the user's word of 2026-11-19 ("go ahead and fix
+  the older comments"), before this step was committed and in its
+  commit: two comments that the step left out of date and the plan does
+  not name. The build's first report had listed them as left. In
+  `src/app/services/session.service.ts` the comment of
+  `passkeyCredentialId` said only that the Passkeys page marks it, and
+  now names the passkey check too. In
+  `src/app/services/passkey.service.ts` the doc comment of `assert()`
+  said "any passkey of this site" and that the assertion goes to
+  `/unlock`. It now says that with `only` one passkey alone is asked, by
+  the third tap of an add and by the passkey check, and that a caller
+  which needs only the PRF output or the credential id sends the
+  assertion nowhere. No line of code changed with them. On the same
+  word, outside this repo, the two lines on the username check in
+  `after_production_todos/details/trade-card-limits.md` were brought in
+  line, in a commit of that folder. Left as they are: the build notes of
+  2026-11-12 and 2026-11-17 in this section, which tell of the typed
+  username as records of their day.
+- Checked. `git status` showed a clean tree at the start, and this
+  step's nineteen files and no others before the build and before the
+  first report: eighteen changed, and `src/app/passkey-check.ts` new.
+  With the two comments brought in line it shows twenty:
+  `src/app/services/session.service.ts` joined. The Start box changed
+  files among the twenty and added none. `npx ng
+  build` from the web_app folder: clean, no warnings (`main-V3BAOOPP.js`,
+  2.26 MB, and `styles-EMD3RG3N.css`, the style file of before; run
+  again after the last comment and this note, with the same two files).
+  With the Start box: clean, no warnings, `main-MK7OARLU.js`, 2.26 MB,
+  and the same style file, twice; one run between the two stopped on
+  the same fetch of Google's font style sheet.
+  The very first run stopped before it built anything, on the fetch of
+  Google's font style sheet over the internet; the next run was clean.
+  The plan's section 2 has 11 indented blocks; each was looked
+  for in the files with the build's date in the place of BUILD-DATE,
+  line for line and with its indentation, and all 11 are there, the
+  five English entries among them. With the Start box ten of the 11
+  stand in the files as section 2 has them; the eleventh, the comment
+  of `ConfirmData.passkey`, names the Start box too in its last
+  sentence, as the plan's section 9 has it. Both language files have the same
+  five keys in the same order in the new section. Under `src/` the
+  searches find no `yourUsername`, no `typeNote`, no `stakeTypeNote`, no
+  `typedText`, no `typedOk` and no `data.typed`, and no line with
+  `typed:` in the three files the plan names; `accountLedgerId.typed`
+  stays. `checkSessionPasskey(` was in ten files as first built:
+  `passkey-check.ts`, the confirmation box and the eight of 2.6. It is
+  in nine as committed: the card's own line went when its Start got the
+  box. Twelve calls in ten files hand
+  what they built to `SigningService.sign`, as the plan counted. Not
+  checked: a passkey; a phone; the live wallet; iPhone Safari, where
+  the passkey sheet needs the tap; a passkey kept on another device,
+  asked by its id with no hint of where it lives; a real session with
+  real keys, so nothing was sent or signed; a real trade; a real case in
+  the attestor and the moderator edition; the Thai by a Thai reader.
+- After this step everything the wallet signs with an account's key
+  passes the passkey check, so it is the first thing to try on real
+  devices (the plan's section 7): on an iPhone in Safari, on an Android
+  phone in Chrome, on a computer that holds the passkey, and on a
+  computer whose passkey is on a phone. A small send between two of the
+  person's own accounts; the same again with the sheet closed; a DAO
+  stake box, which has no username field; "Create anos account", tried
+  to the end only when a new account is wanted; an escrow trade's start,
+  release, dispute and cancel; when there is one, the cancel of a locked
+  and of an assisted transfer; when the role and the case are there, a
+  guardian's proposal and vote, an attestor's sign-off and a moderator's
+  Sign. If a device does not bring up its passkey sheet at all, nobody
+  on that kind of device can send, open an anos account, vote as a
+  guardian or sign off a case. The way back is the wallet's commit
+  before this step, 11196f5, by the same deploy lines: section 10 of
+  `forclaude/wallet-deploy-plan-1.md`, wallet1 and then wallet2, with no
+  setting in `network/wallet.env` and no `npm ci`. A box opened on a
+  wallet page loaded before the deploy still asks for the username,
+  until the page is loaded again.
+
+### The Recipient box of the Send form fits its card (2026-11-19)
+
+One small fix, built on the user's word in the talking chat of the note
+above ("Allright, let's do both."; the second of its two questions
+asked whether to fix this as a small commit of its own or to put a line
+on the after-production list), with no plan file, one commit, on top of
+the commit of the note above. Why: on a phone 360 pixels wide the box
+"Recipient account id" in the Send form of an account's page was 66
+pixels wider than the room its card has. It ran past the card's right
+edge and 33 pixels past the screen, the paste button at its right end
+was out of sight, and the page slid sideways by 37 pixels. The look of
+the note above saw it; the rule is as old as the testnet copy. Wallet
+only: one style line, and no word of the dictionaries changes.
+
+- `src/app/pages/account.page.ts`: `.wide` has
+  `min-width: min(360px, 100%)` where it had `min-width: 360px`, with a
+  one-line comment that says why. The page has one box of that class,
+  the Recipient box. It is 360 pixels wide at the least, as before, or
+  as wide as the Send form where the form is narrower. On a phone the
+  form has the screen's width less 66 pixels. So the box is 294 pixels
+  wide on a 360 pixel screen, where it was 360 and 66 past the card;
+  309 at 375, where it was 51 past; 324 at 390, where it was 36 past;
+  and 346 at 412, where it was 14 past. From 426 pixels up nothing
+  changes: at 430 the box is 364 wide as before, and at 1024 it is 518.
+- Unchanged: the place and the size of every other part of the Send
+  form (Kind, Stake for, Amount, the Send button) and of the page, at
+  every width, but for one thing that follows from the narrower box.
+  The hint under the box after a paste that found no id, "Nothing on
+  the clipboard looks like an account id.", is two lines in English at
+  360 and 390, where it was one, and the Amount box and the Send button
+  stand 16 pixels lower while it shows. In Thai it stays one line. The
+  room to type in is 234 pixels at 360; it was 300, with its right end
+  and the paste button out of sight. An account id is longer than the
+  box either way and scrolls inside it, as before.
+- Left as they are: the five other pages whose class `.wide` has
+  `min-width: 360px`. They are the attestors' page, with its account
+  box, and the attestors' three case pages and the moderator's case
+  page, with "Meeting link (https)" and the Note boxes. The four case
+  pages scroll sideways at 360, 375 and 390 pixels, as the note above
+  says; the attestors' page was not looked at. Not asked for here, and
+  on no list.
+- Spec: this note, and one sentence of the note above ("Seen in
+  passing").
+- Checked. `git status` showed the twenty files of the note above and
+  no others: `src/app/pages/account.page.ts` and this file are among
+  them, so the two commits share those two files, and the commit line
+  handed to the user puts the first commit's part of both in first.
+  That line was tried on a scratch clone first: nothing was left over,
+  the first commit's two shared files were the copies kept for it, the
+  clone's files were this folder's, and the first commit built alone,
+  clean.
+  `npx ng build` from the web_app folder: clean, no warnings
+  (`main-BEMKDMNL.js`, 2.26 MB, and `styles-EMD3RG3N.css`, the style
+  file of before). Then the look, the way of the note above: a
+  development build of a scratch copy of the working tree, served by a
+  plain file server on 127.0.0.1, in the Claude app's browser pane; the
+  temporary entry in `/Users/codex/.claude/launch.json` is out again,
+  and the file is byte for byte what it was. The rule was first tried
+  in the scratch page, set by hand on the box, before the file was
+  edited; then it was built in and looked at again, and the old rule
+  was put back by hand for the comparison in the same page. The sizes:
+  360, 375, 390, 412, 430 and 1024 pixels wide, in English and in Thai,
+  with and without the hint, on a spending account, and at 360 on a
+  guarded and an assisted account too. At every size the box is inside
+  its card, its label is whole ("Recipient account id" is 154 pixels,
+  the Thai label 92), the paste button is inside the box, and the page
+  does not scroll sideways. Old against new, part by part: only the box
+  and what is inside it differ at 360 to 412, and with the hint the 16
+  pixels said above; nothing differs at 430 and 1024. Set by hand, the
+  rule was tried at 320 pixels too: the box is 254 wide there, inside
+  its card. The pane is Chrome, so the page was also opened in real
+  iPhone Safari, in the iOS simulator on this Mac (iPhone 17e, iOS 27,
+  390 by 699 points), started with no window, with a made-up session
+  set by a probe script: the box is 324 pixels wide in a card with room
+  for 324, and the page does not scroll sideways; with the old rule put
+  back by hand it is 360 wide, 36 past the card and 3 past the screen,
+  and the page scrolls sideways by 7. Those are Chrome's numbers. One
+  thing the look met: right after the rebuild the pane showed the old
+  build once, from its cache. The built file was fetched again, and the
+  new rule was seen in force on the box, before any number was taken.
+  Not checked: a phone; the live wallet; a screen less than 390 points
+  wide in Safari, since this Mac has no such simulator. The pane was
+  not on screen while the look ran. The same style rule,
+  `min-width: min(…, 100%)` on a box that may grow, is in the birth
+  record form since 2026-11-18.
+
+### Sent and Seen (2026-11-19)
+
+Built from `forclaude/wallet-chat-and-passkey-plan-1.md` (FINAL,
+2026-11-19), its step 4 of six, its section 4, one commit, on main at
+9298884, the working tree clean. Why, in the user's words of 2026-11-19,
+on the chat of the production wallet: "It's unclear as to whether or not
+there is a read notification." Asked which of two things was meant:
+"Yes, we want to know if the other person has seen the message." And of
+the two words, as the planning chat had put them: "I like your
+sugesstions". The masterpod's part is step 3 of the plan, built the same
+day (masterpodsoftware 45fb549, its spec's section 21): it keeps how far
+each member of a chat has read. This step is the wallet's part: the
+words "Sent" and "Seen" under a person's own messages, and the report to
+the masterpod while a chat is on the screen. One new call to the
+masterpod; no line of `network/wallet.env` and no npm package; the
+validators, the doormen, the keyholders, the signing servers and the
+proxy (`server/`) are not touched. The tick in a bubble, "Sending", the
+unread dot and `session.markSeen` are as they were. Either order of the
+two deploys is safe (the plan's section 7).
+
+- `src/app/services/masterpod-api.service.ts`, as the plan's 4.1 gives
+  it: `RoomMember` gains the optional `seenPosition`, and
+  `markMessagesSeen(chatRoomId, position)` stands after `sendMessage()`.
+  It posts `/mark-messages-seen` and is always quiet, so it writes no
+  line into the Log page.
+- `src/app/pages/chat-room.page.ts`, as the plan's 4.2 gives it: the
+  constant `SEEN_NAMES` (3) after `FOLLOW_PX`; the two fields `toldSeen`
+  and `seenOff` after `newest`; `toldSeen = 0` in `open()`, and
+  `void this.tellSeen();` as its last line; the timer, which calls
+  `tellSeen()` after each poll; the same line in `send()` after its
+  poll; the method `tellSeen()` after `poll()`; the computed `marks`
+  after `accountIds`; in the template, after a bubble's closing tag, the
+  word in a `span` of the class `mark`; the style line `.mark`; and the
+  class comment.
+- `src/app/i18n/en.ts` and `th.ts`: four entries in `chatRoom` after
+  `sending`: `sent`, `seen`, and the functions `seenBy` and
+  `seenByCount`. The English is the plan's 4.3, letter for letter.
+- The four Thai lines, the build chat's, in full. No Thai reader has
+  read them; "Thai read by a Thai reader" stands on the after-production
+  list.
+  `chatRoom.sent`: "ส่งแล้ว".
+  `chatRoom.seen`: "เห็นแล้ว".
+  `chatRoom.seenBy`: "เห็นแล้วโดย ${names}".
+  `chatRoom.seenByCount`: "เห็นแล้ว ${count} คน".
+  How they were made, from the glossary and style of
+  `forclaude/wallet-languages-plan-1.md` 1.6 and from the Thai the file
+  had: "Sent" is "ส่งแล้ว", as the file's own "Sent." has it
+  (`assisted.sentCancel`, the three sentences of `escrow.sent`). "Seen" is
+  "เห็นแล้ว", with the verb the file uses for what a person sees on a
+  page (`vouching.what4`). It is not "อ่านแล้ว", read: the word says
+  that the chat was open on a visible page, not that the person read
+  the message (the plan's known limits). "By" a person is "โดย", as
+  `chatNew.byAndMembers` has it, and a number of people is "${count}
+  คน", as that entry and `myRecoveryCase.signed` count them. All three
+  "Seen" lines begin with the same word. No line ends in a full stop,
+  and a Latin word or a number has a space on each side.
+- README: nothing, as the plan says. Spec: 4.10, new; 8.2, Chat (the
+  paragraph "One conversation": the two words and the telling; the
+  paragraph "Unread": one sentence); 8.3 (the line of
+  `masterpod-api.service`); 8.8; and this note.
+- What follows from the plan's code, written here so that it is not
+  taken for a fault. Every opening of a conversation reports once, also
+  when nothing is new: the page keeps what it told only for as long as
+  it lives, and the masterpod changes nothing for a position at or
+  below the one it holds. A person's own send is reported too. The word
+  stands under a bubble: a message drawn as a grey line carries none,
+  and when this pod's newest message is one, the word stands under its
+  newest bubble. In a room with more than one other member the "Seen
+  by" line names those who have seen the newest of this pod's messages
+  that anyone has seen; the others are not named, and no "Sent" stands
+  under that message. A message that is on its way moves no word. The
+  words are as fresh as two polls: the reader's page reports within 3
+  seconds of a message showing, and the writer's wallet reads the room
+  list every 5 seconds. After a 404 the page tells nothing more for as
+  long as it lives. On a phone that is until the person goes back to
+  the list of chats. On a computer the list and the conversation stand
+  side by side, and a click on another chat keeps the same page: only
+  the route's parameter changes. So there nothing is told from any chat
+  until the person opens another page of the wallet or loads it again.
+  And while the three masterpod servers are updated one after the
+  other, an answer of /list-chat-rooms from a server that is not
+  updated yet carries no seen position: the words go away until the
+  next answer that carries them, so for that time they can come and go.
+- Readings where the plan left a detail open. BUILD-DATE is 2026-11-19.
+  The two fields stand right after `newest`, and the style line `.mark`
+  after `.tick`. The class comment's new sentences stand at its end,
+  and the last of them tells the two things apart that are both called
+  seen: the mark of the room on this device, for the unread dot, and
+  the report to the masterpod. In 8.2 the plan puts the two words after
+  "the bubble turns normal with a small tick", which is the middle of a
+  sentence: they stand after that sentence, so that it is not cut in
+  two. The plan's section 7 says that after a 404 a wallet "reports
+  nothing more until that chat is opened again"; by the plan's code that
+  holds on a phone, and 8.2 says what holds on a computer (the point
+  above). The plan file is as it was. In 4.10 the route's block has the
+  checks in the masterpod's order, from its spec's 21.3.
+- The look, where. A development build of a scratch copy of the working
+  tree, served by a plain file server on 127.0.0.1 (a temporary entry
+  in `/Users/codex/.claude/launch.json`, taken out again; the file is
+  byte for byte what it was), in the Claude app's browser pane. The
+  sizes: 360, 375, 390 and 430 pixels wide at 600 high, in English and
+  in Thai; the short screens 360x560 and 375x553; 360x640; 360x740 for
+  the pictures of a chat with a card; 1024x600 once. A made-up session
+  was set through the `ng` debug tools, the way of the note "Who buys
+  and who sells" above: an anoPod id, a username, a status, an account
+  and up to fifteen chats. The messages were real ciphertexts (the
+  wallet's own `newRoomKey` and `encryptText`), and the masterpod's
+  answers were given in the browser by functions set on the API
+  service: the room list, the messages, a send, and
+  `/mark-messages-seen`, whose calls were written down. The members'
+  seen positions were set by hand. So the page drew the words with its
+  own code. The card's result was set by hand to "read everything, no
+  trade". None of our servers was asked: the request list shows the
+  file server and Google's font files. No masterpod, no passkey and no
+  phone was part of it. The pane says it is Chrome on an Android phone
+  at these widths and draws Thai with this Mac's Thai font. The pane
+  was not on screen while the look ran; the pictures and the measures
+  do not need it.
+- The look, a word's place. A word is 11 pixels, in the grey of the
+  time, in a line 20 pixels high. It stands 2 pixels under its bubble,
+  and its right end is 8 pixels inside the bubble's right edge, as the
+  time's is. The next bubble of the group follows after 4 pixels, the
+  group's time after 6. So each word makes the thread 24 pixels taller.
+  "Seen" is 24 pixels wide and "Sent" 22; "เห็นแล้ว" is 36 and
+  "ส่งแล้ว" 30.
+- The look, the five threads of the plan's 4.5, at the four widths in
+  both languages. A chat of two: "Seen" under an older message of this
+  pod and "Sent" under its newest, each one line, with the two messages
+  in one group and in two groups. A chat of three with two usernames of
+  32 ordinary characters, "somchai_the_anos_trader_bangkok1" and
+  "mai_from_chiang_mai_north_thai22": "Seen by" with both names takes
+  two lines at every width in English. In Thai, "เห็นแล้วโดย" with
+  both names takes three lines at 360 and 375 and two at 390 and 430.
+  The line breaks at its spaces inside the group's width, which is 80
+  percent of the thread, 242 pixels at 360, and nothing is cut. With
+  one of the two having seen the message the line names that one: one
+  line at every width in English, and in Thai two lines at 360 and one
+  from 375. A chat of five, a public room: "Seen by 4 people", one
+  line, 83 pixels; "เห็นแล้ว 4 คน", 61. With three of the four it
+  names them, "Seen by mai, somchai, joy", one line, 125 pixels, in
+  Thai 142. A marketplace chat whose other person is only invited:
+  "Sent" under the first message, with the card over the thread and
+  "mai (invited)" in the title. A marketplace chat whose newest own
+  message is a grey line: the word stands under this pod's newest
+  bubble, "Seen" when the other trader's position is at or above it and
+  "Sent" when it is not, and the grey line carries none. Besides the
+  five: no word in a chat whose members carry no seen position, and
+  none in a room with this pod alone.
+- The look, cut: only with the widest username the rules allow, 32
+  times the letter m, beside a second of 32 times w. The line is then
+  three lines, "Seen by" and a name on each of the next two, 311 pixels
+  wide. That is wider than its group, and it grows to the left. At 360
+  pixels it begins 5 pixels left of the thread's frame, so the first
+  letter of each of its lines is cut by about 5 pixels. At 375 its left
+  end is 2 pixels into the thread's padding and nothing is cut, and at
+  390 and 430 it is well inside. Both languages alike. In the same chat the
+  name over the other person's bubble runs past the thread's right
+  edge, and the thread can be pushed sideways, at 360, 375 and 390:
+  that is older than this step, the same to the pixel in a build of
+  9298884. Nothing was changed for it.
+- The look, nothing else moves. With the words and without them (the
+  same chats with no seen positions), at 360x560, in six of the threads
+  and both languages: the header, the card, the thread's own box and
+  the message box have the same place and size. The words are inside
+  the thread, which scrolls. And a wallet of this step on a masterpod
+  of before draws a conversation as the commit before did: a build of
+  9298884 beside this one, thirteen threads with no seen positions, at
+  360 and 430 pixels wide, both languages, every part in the same place
+  (11 to 21 parts a thread).
+- The look, right after a send. In a thread that fills its frame, at
+  360x600, with the made-up masterpod answering after 300 milliseconds
+  and at once: the new bubble shows with "Sending", then gets its tick
+  and "Sent" under it, and the thread stays at its end. The time under
+  the new bubble is whole, 12 pixels over the frame's lower edge: the
+  page's own read after a send brings the thread down. "Seen" stays
+  under the message before.
+- The look, two cases where the last line goes under the frame's edge.
+  Both need a thread that fills its frame and a reader at its end. A
+  word that comes, or a line that grows, with no new message does not
+  bring the thread down. One: a second long username joins the "Seen
+  by" line and the line becomes two; the time under the newest message
+  then stands 7.5 pixels under the edge (360, English). Two: the words
+  come for the first time while the chat is open, which is a masterpod
+  updated at that moment: 11.5 pixels under the edge. A scroll or the
+  next message brings it back. Nothing was changed for it.
+- The look, a short screen. In a marketplace chat the card leaves the
+  thread little room, as before this step. At 360 pixels wide, in
+  English, for a buyer who has not sent an account yet (the card is 246
+  pixels), the thread has 135 pixels at 360x600 and 95 at 360x560; for
+  a buyer who has (the card is 285), 96 and 56. The words stand in that
+  room. A
+  buyer's first message, its "Sent" and its time are whole at 360x600,
+  360x640 and 375x553, and at 360x560 the bubble loses 1 pixel at its
+  top. After "Send my account" the grey line is the newest thing: at
+  360x600 the bubble over it shows 8 of its 36 pixels, with its "Sent"
+  and its time whole, and at 360x560 the bubble and its word are above
+  the frame until the thread is scrolled. With a word the thread's
+  content is 24 pixels taller than before.
+- Tried in the scratch page besides the look, since the look does not
+  show the telling. A stand-in wrote down every call of
+  `markMessagesSeen` and answered as set by hand. One call when a
+  conversation opens, with the newest position shown; none in the 7
+  seconds after it; one more when a message from the other person
+  arrived, with that message's position; one after this pod's own send.
+  With the answer 404: one call, then none when a message arrived, none
+  after a click from that chat straight to another (the same page), and
+  one again from a page opened anew. With a call that fails (status 0):
+  the same call again at each 3-second tick, three in 7 seconds, and no
+  more after the first that succeeded. With the page hidden
+  (`document.visibilityState` set to hidden by hand, since the pane
+  says visible also while it is off screen): no call at the opening and
+  none when a message arrived, though the page drew it, and one call at
+  the next tick once visible. And the words follow the positions: with
+  the other member's position raised by hand to this pod's newest
+  message, "Sent" turned to "Seen" at the wallet's next read of the
+  room list, 3.4 seconds later, and the "Seen" under the older message
+  went.
+- A place the plan does not name that this step left out of date: the
+  class comment of `src/app/services/masterpod-api.service.ts`, which
+  lists where the service's routes came from. It ended with the DAO
+  routes of 2026-11-08 and did not name this step's route. The build
+  left it as it was and put it to the user. Brought in line on the
+  user's word of 2026-11-19 ("go ahead and fix that comment"), after
+  this step's commit (bd3edc4) and in a commit of its own: a comment
+  only, no line of code. The list now also names the two passkey routes
+  of masterpod 19 (2026-11-18), the report of how far a chat was read,
+  `/mark-messages-seen`, of masterpod 21, and one older route it had
+  never named, the read of one listing, `/get-listing`, of 2026-11-06.
+  With them it covers all 92 routes the service calls: the 33 of the
+  test app's file it names first, and the 59 added since, counted
+  against that file. This bullet said at first that the comment named
+  neither the case chats nor the passkey routes. That was wrong for the
+  case chats: on 2026-11-12 they added no route to the service, only a
+  type, two fields and a parameter of `createChatRoom`. `npx ng build`
+  ran again after the change, clean, with the same two files, since a
+  comment does not reach the build.
+- Checked. `git status` showed a clean tree at 9298884 at the start,
+  and this step's five files and no others before the build and at the
+  end: `src/app/services/masterpod-api.service.ts`,
+  `src/app/pages/chat-room.page.ts`, `src/app/i18n/en.ts`,
+  `src/app/i18n/th.ts` and this file. `npx ng build` from the web_app
+  folder: clean, no warnings (2.27 MB initial total,
+  `main-5ZQUFXMU.js`, and `styles-EMD3RG3N.css`, the style file of
+  before). The plan's section 4 has nine indented blocks; each was
+  looked for in the files with the build's date in the place of
+  BUILD-DATE, line for line and with its indentation, and all nine are
+  there. The four English entries were compared with the plan's lines
+  letter for letter: the same. Both language files have the same 26
+  keys in the same order in `chatRoom`. Not checked: a phone; the live
+  wallet; iPhone Safari (no style rule is new to the wallet: the word
+  is styled as the time is); a real session; a real masterpod, whose
+  route, whose 404 and whose seen positions were stand-ins in the
+  browser; two real wallets side by side; the moderator and attestor
+  editions (one codebase; the scratch page was the wallet edition); the
+  Thai by a Thai reader. The run-through is the user's, on the live
+  wallet, after both deploys (the plan's section 7): with two anoPods,
+  one writes and reads "Sent"; the other opens the chat, and within
+  about ten seconds the first reads "Seen"; with the second wallet in a
+  hidden tab, "Sent" stays. The user deploys the wallet servers by
+  section 10 of `forclaude/wallet-deploy-plan-1.md`, wallet1 and then
+  wallet2, with no setting in `network/wallet.env` and no `npm ci`.
+  Until the masterpod has its step, a wallet of this step shows neither
+  word, and each conversation page makes one call that the masterpod
+  answers with 404.
+
+### The sound (2026-11-19)
+
+Built from `forclaude/wallet-chat-and-passkey-plan-1.md` (FINAL,
+2026-11-19), its step 5 of six, its section 5, one commit, on main at
+3821a49, the working tree clean. Why, in the user's words of 2026-11-19,
+on the chat of the production wallet: "How difficult to give chats/
+marketplace sound notifications?" The planning chat offered the small
+version: a short sound while the wallet is open, and no push
+notifications. And of how it rings, as the planning chat had put it: "I
+like your sugesstions". Wallet only: no route, no line of
+`network/wallet.env`, no npm package and no sound file; the masterpod,
+the validators, the doormen, the keyholders, the signing servers and the
+proxy (`server/`) are not touched. The step needs none of the plan's
+steps before it. The unread dot, its count and the 5-second poll's three
+reads are as they were.
+
+- `src/app/services/sound.service.ts`, new, as the plan's 5.1 gives it:
+  the key `anopod-wallet.sound`, the signal `on`, the engine `context`,
+  the four listeners of the constructor, `setOn()`, `chime()`, `wake()`,
+  and the functions `note()`, `readSwitch()` and `writeSwitch()`. A
+  class comment stands over `@Injectable`.
+- `src/app/app.ts`, as the plan's 5.2 gives it: the type `RoomsAnswer`
+  and `SoundService` imported, `sound` injected, the field `heard`
+  beside `polling`, the new first lines of `poll()`, the line
+  `if (rooms?.ok) this.ring(rooms.body);` after the one that keeps the
+  rooms, and the method `ring()` after `poll()`. The class comment and
+  the comment over the timer name the sound.
+- `src/app/pages/account-home.page.ts`, as the plan's 5.3 gives it:
+  `SoundService` injected as `sound`, the fourth row, a `button` with
+  `mat-list-item`, inside the `mat-nav-list` under the Public ledger id
+  row, the two style rules with the button named in each, and the class
+  comment. And one thing the plan does not have, on the user's word: a
+  third style rule, which takes the browser's own button look off the
+  row (the finding of the look, below).
+- `src/app/i18n/en.ts` and `th.ts`: three entries in `accountHome` after
+  `ledgerIdLine`: `soundOn`, `soundOff` and `soundLine`. The English is
+  the plan's 5.3, letter for letter.
+- The three Thai lines, the build chat's, in full. No Thai reader has
+  read them; "Thai read by a Thai reader" stands on the after-production
+  list.
+  `accountHome.soundOn`: "เสียง: เปิด".
+  `accountHome.soundOff`: "เสียง: ปิด".
+  `accountHome.soundLine`: "เสียงสั้น ๆ เมื่อมีข้อความแชทหรือคำขอแชทเข้ามาขณะที่กระเป๋าเงินเปิดอยู่ แตะเพื่อเปิดหรือปิดเสียงบนโทรศัพท์หรือคอมพิวเตอร์เครื่องนี้".
+  How they were made, from the glossary and style of
+  `forclaude/wallet-languages-plan-1.md` 1.6 and from the Thai the file
+  had: "sound" is "เสียง", a word the file did not have yet. "On" and
+  "off" are "เปิด" and "ปิด", the glossary's words for Open and Close,
+  which is how Thai says a sound is on or off. "A chat request" is
+  "คำขอแชท", as `home.chatRequests` has it, and "a chat message" is
+  "ข้อความแชท", from the glossary's two words. "While the wallet is
+  open" is "ขณะที่กระเป๋าเงินเปิดอยู่", as `common.refreshesWhileOpen`
+  says "while the trade is open". "This phone or computer" is
+  "โทรศัพท์หรือคอมพิวเตอร์เครื่องนี้", as `passkeyCheck.note` has it.
+  "Tap" is "แตะ", as the Passkeys page has it. "Arrives" is "เข้ามา",
+  comes in. "Turn it on or off" names the sound again, "เปิดหรือปิดเสียง",
+  since Thai does not say "it" for a thing. "Short" is "สั้น ๆ", with a
+  space on each side of the repeat mark, as the file writes "เพื่อน ๆ".
+  No line ends in a full stop.
+- README: the line of `app.ts, app.html` ends "the notification poll and
+  its sound", and a line for `sound.service.ts` stands at the end of the
+  services. Spec: 8.1 (the `/account` line of the route list, and three
+  new paragraphs in front of the next-step rule: the sound, when it
+  cannot ring, and the switch), 8.2 (the paragraph "Account": four rows;
+  the paragraphs "Chat" and "Notifications": the poll also rings), 8.3
+  (a new line for `sound.service`, with the localStorage key), 8.8, 10
+  (push delivery stays out) and this note.
+- What a browser lets a page do, as the plan has it from the makers' own
+  pages, read by the planning chats on 2026-11-19; this build read none
+  of them again. Which events let a page start sound: the HTML standard
+  (html.spec.whatwg.org, "activation triggering input event") lists
+  `keydown`, `mousedown`, `pointerdown` only when it comes from a mouse,
+  `pointerup` when it does not, and `touchend`. WebKit's page for the
+  iPhone (webkit.org/blog/6784/new-video-policies-for-ios, 2016) asks
+  for "a handler for a touchend, click, doubleclick, or keydown event".
+  Chrome's page (developer.chrome.com/blog/autoplay) says an engine made
+  before the person touched the page starts suspended and has to be
+  resumed afterwards, and advises to "stick to "click" for the time
+  being". So the service listens for `click`, `touchend` and `keydown`,
+  and not for `pointerdown`: under a finger that event comes before the
+  touch counts. When a page stops running: a frozen page's "JavaScript
+  timers and fetch callbacks don't run"
+  (developer.chrome.com/docs/web-platform/page-lifecycle-api), and a
+  hidden tab's timers are checked once a second, and once a minute after
+  five minutes hidden
+  (developer.chrome.com/blog/timer-throttling-in-chrome-88). Push
+  notifications on an iPhone are for "Home Screen web apps", since iOS
+  16.4 (webkit.org/blog/13878). That Safari pauses a page's sound engine
+  when it leaves the screen was found in WebKit's bug tracker, in its
+  engineers' words, not on a policy page.
+- What follows from the plan's code, written here so that it is not
+  taken for a fault. Log in is silent whatever waits: the first answer
+  of a session only tells the shell what is there. A room that is new to
+  the list is silent too: its invite rang when it came. This pod's own
+  message is silent, also one written on another device. The chat on the
+  screen is silent only while its page is visible; the same chat in a
+  hidden tab rings. One answer rings once, however much is new in it,
+  so the sound comes at most once in 5 seconds. A read of the room list
+  that fails changes nothing: what is new rings with the next read that
+  works. But something new that comes while the sound cannot play is not
+  rung for later: the shell counts it as rung. That holds while the
+  switch is off, before the first tap of the tab, and while the phone's
+  browser has stopped the engine. The messages the pinned card posts
+  into a marketplace chat (8.2, Chat) are messages, so a buyer's "Send
+  my account" and a started or released trade ring on the other side. A
+  chat about an attestor case rings like any other, and all three
+  editions have the sound. The switch is the device's: two anoPods on
+  one phone share it, and one anoPod on two phones has two.
+- Readings where the plan left a detail open. BUILD-DATE is 2026-11-19.
+  The class comment of the service stands over `@Injectable`, where
+  every service of the wallet has it, and not over the imports. So the
+  plan's block for the whole file is in the file in two runs: its first
+  five lines, then the comment, then its other 77 lines. With the
+  comment taken out the file is the plan's block, line for line. In
+  `app.ts` the import of the sound service stands after the session
+  service's, by the order of the paths, `sound` is injected after
+  `navigation`, and `heard` stands right under `polling` with no empty
+  line between them. In the page, `sound` is injected after `t`. In 8.1
+  the three paragraphs stand after the one on the Moderation and
+  Attesting numbers. In 8.3 the new line stands in front of
+  `log.service`, and in the README after `escrow-actions.service.ts`.
+  In 10 the sentence is added to the bullet that names push delivery.
+  8.1 also says what follows from the code and what the plan's section 8
+  lists as known limits.
+- The look, where. A development build of a scratch copy of the working
+  tree, and beside it a build of the commit before (3821a49), served by
+  a plain file server on 127.0.0.1 (a temporary entry in
+  `/Users/codex/.claude/launch.json`, taken out again; the file is byte
+  for byte what it was), in the Claude app's browser pane. The sizes:
+  360, 375, 390 and 430 pixels wide at 600 high, the short screen
+  360x560, and 1024x600 once, in English and in Thai, with the sound on
+  and off. A made-up session was set through the `ng` debug tools (an
+  anoPod id, a username, a status with setup complete), and the
+  masterpod's answers were given in the browser by functions set on the
+  API service. The row was pressed by a click event from a script. Then
+  iPhone Safari in the simulator on this Mac (iPhone 17e, 390 by 699
+  points, iOS 27), from a probe page, in English and in Thai. None of
+  our servers was asked, no passkey and no phone was part of it. The
+  pane says it is Chrome on an Android phone at the phone widths and
+  draws Thai with this Mac's Thai font. The pane was not on screen while
+  the look ran; the pictures and the measures do not need it.
+- The look, no sound was heard. The pane lets a page make sound with no
+  touch at all: its own engine answered "running" on a page nobody had
+  touched. So a silent stand-in was put in the place of `AudioContext`
+  before any click: the browser's own engine that draws into memory and
+  not to the speakers (`OfflineAudioContext`). The service ran on it
+  unchanged. The first real hearing is the user's, on the live wallet.
+- THE FINDING of the look: built as the plan's 5.3 has it, the fourth
+  row was drawn as the browser's own button, not as a row of the list.
+  Its words stood in the middle of the row, title and line alike, and an
+  outline ran around it, rounded like a pill: 2 pixels wide and dark in
+  the pane's Chrome, 1 pixel and faint in iPhone Safari. Its icon and
+  its words stood 2 pixels in from where the other rows have theirs (1
+  pixel in Safari), so the title's box began at 58 pixels and was 218
+  wide at 360, where a link row's begins at 56 and is 222 wide. At every
+  size, in both languages, on and off. The cause: Angular Material takes
+  the browser's button look away only inside a `mat-action-list` (its
+  style rule is `mat-action-list button`). A `button` with
+  `mat-list-item` inside a `mat-nav-list`, which is what the plan's 5.3
+  writes, keeps the border and the centred text a browser gives every
+  button. The plan's code had been built and never seen in a browser
+  before this look. The row worked: a press turned the sound off and on.
+- The finding, the rule. One style rule of the page for the button row,
+  Material's own reset for a button in an action list, word for word:
+  `button[mat-list-item] { background: none; color: inherit; border:
+  none; font: inherit; outline: inherit; -webkit-tap-highlight-color:
+  transparent; text-align: start; }`. It was first tried, not built: put
+  into the scratch page as a style sheet, written the way Angular scopes
+  a rule of the page, with the page measured as built and with the rule,
+  at the six sizes in both languages, on and off, and in iPhone Safari
+  in both languages. With the rule the row is a link row in every part:
+  the same words drawn as a copy of a link row have the same icon place
+  (16 and 16 pixels), the same title box (at 56, 222 wide at 360), the
+  same line box, the same lines of text and the same height, and the
+  same border, colours, fonts and alignment. The three rows above it and
+  the card's place and width did not move. (At 1024 wide in Thai the
+  first measure ran while the side menu was still settling after the
+  change of language; made again a few seconds later it showed the same
+  as the others.) The build's first report put it to the user with a
+  picture, as built beside with the rule, and left the wallet as the
+  plan has it: nothing is changed for a finding of the look without the
+  user's word. The user, the same day: "yes, add the style line." So the
+  rule is in the page's styles, as its third rule, with a comment line
+  over it that says why, before this step was committed and in its
+  commit. No other line of code changed with it.
+- The finding, the look again, on the real build with the rule in it: a
+  fresh development build of the working tree, on another port, so that
+  nothing came from the pane's cache, and the rule was read back from
+  the row itself (no border, its words at the start, the list's font
+  and colour). At 360, 375, 390 and 430 pixels wide at 600 high and at
+  360x560, in both languages, on and off, the row equals the same words
+  as a link row in every part, nothing is cut and no page scrolls
+  sideways. In iPhone Safari in the simulator, in both languages, the
+  same: the row is 123.5 points high, as the link row with those words,
+  and the card 413. At 1024x600 the row equals a link row too. There the
+  pane, which was not on screen, did not move the page aside for the
+  side menu, so the list was 958 pixels wide and every row took one
+  line; in the first look's Thai run the page had moved, the list was
+  718 wide and the line took two lines. So a computer's true layout was
+  not seen.
+- The look, the row as it is committed. Nothing is cut and no page
+  scrolls sideways at any size. The line takes five lines in English at
+  360 wide and four at 375, 390 and 430; in Thai four lines at 360, 375
+  and 390 and three at 430. The row is 143.5 pixels high with five
+  lines, 123.5 with four and 103.5 with three, where a row with one
+  line is 64. The whole card shows without scrolling at 360x560: its
+  lower edge is at 505 pixels. Between on and off only the icon and the
+  title differ: "Sound: on" is 76 pixels wide and "Sound: off" 78,
+  "เสียง: เปิด" 70 and "เสียง: ปิด" 64. The Thai line breaks inside a
+  word at some widths: in the pane's Chrome "คำ" stands at the end of
+  one line and "ขอแชท" on the next, and in iPhone Safari "แช" and "ท".
+  That is each browser's own Thai line breaking, which the wallet does
+  not steer.
+- The look, the three rows above. Against the build of the commit
+  before, at 360 and 430 pixels wide in both languages: the card's place
+  and width and every part of the three rows are the same, as first
+  built and again with the rule in. The card is taller by the fourth
+  row.
+- The look, the switch. One press: the title reads "Sound: off", the
+  icon is `volume_off`, and localStorage holds `off` under
+  `anopod-wallet.sound`. The page loaded again: the row reads "Sound:
+  off" from the start, and no engine is made. The next press: "Sound:
+  on", `volume_up`, the key gone, and two notes made on the stand-in,
+  880 and 1174.66 Hz. That press was the first touch of that page, so
+  turning the sound on plays it also as the first thing a person does
+  after a load. Seen as first built, and again on the real build with
+  the rule in.
+- Tried in the scratch page besides the look, since the look does not
+  show the ring. The made-up masterpod's room list was changed by hand
+  and the shell's own `poll()` was run once per change, 25 times, with
+  the calls of `chime()` and the notes made on the stand-in counted. All
+  25 were as the plan says. Nothing rang: for the first answer of a
+  session, with a message from someone else, an own message and an
+  invite in it; for the same answer again; for an own message; for a
+  message in the chat that was on the screen; for an invite that went
+  away together with a room new to the list; while the read failed; with
+  no session; for the first answer of the next session, though a message
+  had come meanwhile; and for another anoPod set in the same tab with no
+  check in between. One chime, two notes, each time: for a message from
+  someone else on the Home page; for one in another chat while the first
+  was on the screen; for one in the open chat with the page hidden
+  (`document.visibilityState` set by hand, since the pane says visible
+  also while it is off screen); for a new invite; for a new join
+  request; for the next message in the room that had been new; for two
+  messages and an invite in one answer; and for the read that worked
+  after the one that failed. `chime()` was called and no note was made:
+  before the first click of the page, with the switch off, and with the
+  engine's state set to "suspended" by hand. Each time the same answer
+  read again rang nothing, so what came then is not rung for later. A
+  click while the engine was stopped asked it once to start again.
+- Tried, the sound drawn and measured, not heard. The service's own
+  `chime()` ran on a fresh stand-in, and the engine drew one second into
+  memory. Two stretches of sound and silence between them: 880 Hz from
+  the start, at its top of 0.19 after 0.01 seconds, below a hundredth of
+  the top by 0.08 seconds; then 1174.66 Hz from 0.14 seconds, at its top
+  of 0.20 at 0.15 seconds, below a hundredth by 0.28 seconds. Full
+  loudness would be 1. So the sound is about a third of a second long
+  and soft, and the browser's engine takes every call of `note()` as
+  written. That is Chrome's engine in the pane; Safari's was not asked.
+- Places this step leaves out of date that the plan does not name: none
+  found. One is older than this step, so not counted: `README.md` says
+  "nothing touches browser storage", while the seen chat positions
+  (2026-11-05), the marketplace filters (2026-11-06) and the seen work
+  ids (2026-11-12) are in localStorage already, and the sound's switch
+  joins them. It holds no secret.
+- Checked. `git status` showed a clean tree at 3821a49 at the start, and
+  this step's seven files and no others before the build and at the
+  end: six changed (`README.md`, this file, `src/app/app.ts`,
+  `src/app/i18n/en.ts`, `src/app/i18n/th.ts`,
+  `src/app/pages/account-home.page.ts`) and
+  `src/app/services/sound.service.ts` new. `npx ng build` from the
+  web_app folder: clean, no warnings (2.27 MB initial total,
+  `main-RB7WUUQN.js` with the third style rule in, `main-37DKR5YC.js`
+  before it, and `styles-EMD3RG3N.css`, the style file of before; run
+  four times in all, and one run stopped on the fetch of Google's font
+  style sheet over the internet, as a run of the passkey step did). The
+  plan's section 5 has six indented blocks; each was looked
+  for in the files with the build's date in the place of BUILD-DATE,
+  line for line and with its indentation. Five are there as written, and
+  the sixth, the whole sound service, is there when the class comment is
+  taken out (the readings above). The three English entries were
+  compared with the plan's lines letter for letter: the same. Both
+  language files have the same eight keys in the same order in
+  `accountHome`. The blocks and the entries were compared again after
+  the third style rule went in, with the same result. Not checked: a
+  phone; the live wallet; a computer's layout with the side menu beside
+  the page; the sound heard by anyone; Safari's sound engine, and
+  whether Safari starts the engine again when the wallet comes back to
+  the screen; whether the iPhone's silent switch mutes the sound; a real
+  session and a real masterpod,
+  whose room lists were made up in the browser; a hidden tab's late
+  sound on a computer; the moderator and attestor editions (one
+  codebase; the scratch page was the wallet edition); the Thai by a Thai
+  reader. The run-through is the user's, on the live wallet (the plan's
+  section 7): with the wallet open on any page, a message from another
+  anoPod plays the two notes; with that chat open on the screen it stays
+  silent; on an iPhone, leave Safari, come back, tap once, and a new
+  message plays again; the row on the Your account page turns the sound
+  off and on, and plays it once when turned on. The user deploys the
+  wallet servers by section 10 of `forclaude/wallet-deploy-plan-1.md`,
+  wallet1 and then wallet2, with no setting in `network/wallet.env` and
+  no `npm ci`. A wallet page loaded before the deploy has no sound until
+  it is loaded again.
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`
@@ -11912,7 +13865,15 @@ button and every 15 s
   2, images and texts, every key the keyholders answered.
 - Sign off: the account picker, Approve or Reject, a note, Sign. The sign-
   off message of masterpod 12.6 signed by pair one,
-  `/sign-off-recovery-case`. The page shows who has signed what.
+  `/sign-off-recovery-case`. The page shows who has signed what. Since
+  2026-11-19 (section 11; decision 10 of
+  forclaude/wallet-chat-and-passkey-plan-1.md) the passkey line stands
+  under the heading and the line of who has signed, over the form: "To
+  confirm, this phone or computer will ask for your passkey, the one you
+  log in with." Sign first asks the device for the passkey that opened
+  the session (the passkey check, 8.9), before pair one is opened; a
+  check that does not pass shows its sentence in red under the button,
+  and nothing is signed.
 - Dismiss: the preset reason, a note, Dismiss (`/dismiss-recovery-case`),
   behind a confirmation.
 - Banker packet, shown when the status is approved or delivering: the
@@ -12392,7 +14353,14 @@ refreshed by a button and every 15 s. Top to bottom:
   account page does (`buildFollowUp` with the staked account's pair one,
   `attestorId` the account, `accountId` the sender, `transactionId` the
   trade's; the wallet pair from `/api/sign/<n>`), then
-  `/sign-off-trade-case`. The page shows who has signed.
+  `/sign-off-trade-case`. The page shows who has signed. Since 2026-11-19
+  (section 11) the passkey line stands under the sentence on what the
+  attestation is, over the button: "To confirm, this phone or computer
+  will ask for your passkey, the one you log in with." "Sign the
+  attestation" first asks the device for the passkey that opened the
+  session (the passkey check, 8.9), once, before pair one is opened; a
+  check that does not pass shows its sentence in red under the button,
+  and nothing is signed.
 - When the answer says decided and no `sent` event exists: Send to the
   validators, which posts both stored attestations (from the
   `attestationSigned` events) to the `/attestation` of the session's
@@ -12439,6 +14407,13 @@ refreshed by a button and every 15 s. Top to bottom:
 - Verdict: Success or Cancel, a note, Sign. The `escrowVerdict` follow-up
   built as the account page does (`arbitratorId` the staked account),
   then `/sign-off-dispute-case`. The page shows each attestor's verdict.
+  Since 2026-11-19 (section 11) the passkey line stands under the
+  sentence on what a verdict does, over the form: "To confirm, this
+  phone or computer will ask for your passkey, the one you log in with."
+  "Sign the verdict" first asks the device for the passkey that opened
+  the session (the passkey check, 8.9), once, before pair one is opened;
+  a check that does not pass shows its sentence in red under the button,
+  and nothing is signed.
 - When decided: Send to the validators posts the two agreeing verdicts
   (from the `verdictSigned` events whose verdict is the decided one) to
   `/escrow-signature`, then `/mark-attestor-case-sent`; Retry on a
@@ -12478,7 +14453,14 @@ every 15 s, the trade case's frame. Top to bottom:
   `attestation` follow-up per move (`attestorId` the staked account,
   `accountId` the move's old account, `transactionId` the move's; the
   wallet pair from `/api/sign/<n>`) and runs `/sign-off-break-glass-case` with
-  every move once.
+  every move once. Since 2026-11-19 (section 11) the passkey line stands
+  under the sentence on what the attestations are, over the button: "To
+  confirm, this phone or computer will ask for your passkey, the one you
+  log in with." "Sign all attestations" first asks the device for the
+  passkey that opened the session (the passkey check, 8.9), once, in
+  front of the loop that signs for each move: one click asks once,
+  however many moves the case has. A check that does not pass shows its
+  sentence in red under the button, and nothing is signed.
 - When the answer says decided: Send to the validators posts the stored
   attestations the session's validator (8.3; the default validator until
   2026-11-10) does not hold yet (two per move once

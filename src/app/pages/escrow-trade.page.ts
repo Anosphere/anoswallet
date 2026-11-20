@@ -47,7 +47,8 @@ interface Outcome {
  * red is the dispute's alone. Nothing is asked in place: each button
  * opens the confirmation box (wallet spec 8.9) with one of the five boxes
  * of escrow-boxes.ts, and Release, Dispute and Cancel each ask for the
- * username there before their button works. The cancel asks a question
+ * passkey there when their button is pressed (2026-11-19; until then the
+ * username was typed there). The cancel asks a question
  * first, "Have you sent any money to the seller?": after "Yes, I have
  * paid" a box says not to cancel and offers the dispute, and nothing is
  * cancelled on that path; after "No, I have not paid" comes the cancel
@@ -255,21 +256,21 @@ export class EscrowTradePage {
     }
   }
 
-  /** The seller's "Release the anos" (2026-11-17): the Release box, with the buyer's account id and the username to type; on its Yes the release is sent. Nothing happens while a box is open or a send is on its way. A "Sent. ..." or a refusal from before goes from the page when the box opens. */
+  /** The seller's "Release the anos" (2026-11-17): the Release box, with the buyer's account id; its Yes asks for the passkey (2026-11-19), and when that passes the release is sent. Nothing happens while a box is open or a send is on its way. A "Sent. ..." or a refusal from before goes from the page when the box opens. */
   protected async release(t: EscrowItem): Promise<void> {
     if (this.boxOpen || this.busy()) return;
     this.outcome.set(null);
-    if (await this.box(releaseBox(this.t(), millionthsToAnos(t.amount), t.accountIdTo, this.session.username()))) await this.act('release', t);
+    if (await this.box(releaseBox(this.t(), millionthsToAnos(t.amount), t.accountIdTo))) await this.act('release', t);
   }
 
-  /** "Something is wrong: dispute", either side's (2026-11-17): the Dispute box, with the username to type; on its Yes the dispute is sent. Nothing happens while a box is open or a send is on its way. A "Sent. ..." or a refusal from before goes from the page when the box opens. */
+  /** "Something is wrong: dispute", either side's (2026-11-17): the Dispute box; its Yes asks for the passkey (2026-11-19), and when that passes the dispute is sent. Nothing happens while a box is open or a send is on its way. A "Sent. ..." or a refusal from before goes from the page when the box opens. */
   protected async dispute(t: EscrowItem): Promise<void> {
     if (this.boxOpen || this.busy()) return;
     this.outcome.set(null);
-    if (await this.box(disputeBox(this.t(), this.session.username()))) await this.act('dispute', t);
+    if (await this.box(disputeBox(this.t()))) await this.act('dispute', t);
   }
 
-  /** The buyer's "I have not paid: cancel the trade" (2026-11-17). First the question "Have you sent any money to the seller?", opened with choice(), since its first button is an answer too. After "Yes, I have paid": the box "Do not cancel this trade", whose red button opens the Dispute box, and on that box's Yes the dispute is sent; nothing is cancelled on this path. After "No, I have not paid": the cancel box, with the username to type, and on its Yes the cancel is sent. When the question closes without a button, by a step back or forward in the browser's history, that is no answer: no further box opens and nothing is sent. Nothing happens while a box is open or a send is on its way. A "Sent. ..." or a refusal from before goes from the page when the question opens. */
+  /** The buyer's "I have not paid: cancel the trade" (2026-11-17). First the question "Have you sent any money to the seller?", opened with choice(), since its first button is an answer too. After "Yes, I have paid": the box "Do not cancel this trade", whose red button opens the Dispute box, and on that box's Yes, which asks for the passkey (2026-11-19), the dispute is sent; nothing is cancelled on this path. After "No, I have not paid": the cancel box, whose Yes asks for the passkey (2026-11-19), and when that passes the cancel is sent. When the question closes without a button, by a step back or forward in the browser's history, that is no answer: no further box opens and nothing is sent. Nothing happens while a box is open or a send is on its way. A "Sent. ..." or a refusal from before goes from the page when the question opens. */
   protected async cancel(t: EscrowItem): Promise<void> {
     if (this.boxOpen || this.busy()) return;
     this.outcome.set(null);
@@ -277,10 +278,10 @@ export class EscrowTradePage {
     if (paid === null) return;
     if (paid) {
       if (!(await this.box(doNotCancelBox(this.t())))) return;
-      if (await this.box(disputeBox(this.t(), this.session.username()))) await this.act('dispute', t);
+      if (await this.box(disputeBox(this.t()))) await this.act('dispute', t);
       return;
     }
-    if (await this.box(cancelBox(this.t(), millionthsToAnos(t.amount), this.session.username()))) await this.act('cancel', t);
+    if (await this.box(cancelBox(this.t(), millionthsToAnos(t.amount)))) await this.act('cancel', t);
   }
 
   protected closedText(c: Closed): string {
