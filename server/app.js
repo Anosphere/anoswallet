@@ -194,12 +194,12 @@ export function createApp(config) {
   app.disable('x-powered-by');
 
   // The page's safety headers on every answer (PAGE_HEADERS), and with
-  // them the page's content security policy (PAGE_POLICY) in its
-  // report-only form: the browser blocks nothing and writes into its
-  // console what the policy would have blocked.
+  // them the page's content security policy (PAGE_POLICY), in force: the
+  // browser blocks what the policy does not allow. Under /api the lines
+  // below write API_HEADERS's own policy over it.
   app.use((req, res, next) => {
     res.set(PAGE_HEADERS);
-    res.set('Content-Security-Policy-Report-Only', PAGE_POLICY);
+    res.set('Content-Security-Policy', PAGE_POLICY);
     next();
   });
 

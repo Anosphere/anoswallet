@@ -168,30 +168,32 @@ Behaviour
   copied: it is no safety header, and the monitor is a private page
   where the wallet is a public one.
   The page's content security policy (2026-11-19, section 11) is one
-  header more of the proxy's, on every answer as the three are. It
-  tells the browser where a wallet page may take each kind of thing
-  from: its scripts, its style rules, its fonts, its pictures, and
-  the addresses its code may call. It is the monitor's policy with
+  header more of the proxy's, on every answer outside /api. It tells
+  the browser where a wallet page may take each kind of thing from:
+  its scripts, its style rules, its fonts, its pictures, and the
+  addresses its code may call. It is the monitor's policy with
   "blob:" added for pictures: nine parts joined by "; ", listed
-  below. It is sent report-only until step 4 of
-  forclaude/wallet-headers-plan-1.md: the header's name is
-  "Content-Security-Policy-Report-Only", and under that name the
-  browser blocks nothing and writes into its console what the policy
+  below. It is in force since the build of 2026-11-19 that switched
+  it on, step 4 of forclaude/wallet-headers-plan-1.md: the header's
+  name is "Content-Security-Policy", and the browser blocks what the
+  policy does not allow and says so in its console. For the one build
+  before that it was sent report-only, as
+  "Content-Security-Policy-Report-Only", under which the browser
+  blocked nothing and only wrote into its console what the policy
   would have blocked. The policy names no address for reports, so
   such a line shows only in the console of the browser that drew the
-  page. Under /api the header stands beside the policy of the point
-  above ("default-src 'none'; frame-ancestors 'none'; sandbox"),
-  which stays the one in force there; once the page's policy is
-  switched on, the policy of the point above stands under /api in its
-  place and not beside it. The closed page and the folder /launch/
-  get no policy (above). "script-src 'self'" needs a build that
-  writes no script into the page itself, so the production build has
-  "inlineCritical": false under optimization.styles in angular.json,
-  the monitor's setting: the built index.html links the build's style
-  sheet plainly and holds one script tag, which names the build's
-  file. Without the setting Angular writes a short script into the
-  page that switches the main style sheet on; the policy would block
-  it, and the style sheet would stay off. The development
+  page. Under /api the policy of the point above ("default-src
+  'none'; frame-ancestors 'none'; sandbox") stands in its place: the
+  proxy writes it over the page's policy on every answer under /api,
+  so an answer there carries the one policy. The closed page and the
+  folder /launch/ get no policy (above). "script-src 'self'" needs a
+  build that writes no script into the page itself, so the production
+  build has "inlineCritical": false under optimization.styles in
+  angular.json, the monitor's setting: the built index.html links the
+  build's style sheet plainly and holds one script tag, which names
+  the build's file. Without the setting Angular writes a short script
+  into the page that switches the main style sheet on; the policy
+  would block it, and the style sheet would stay off. The development
   configuration of the build, which ng serve uses, is as it was. The
   nine parts, and what each is for:
   - "default-src 'self'": whatever no other part names comes from the
@@ -14111,6 +14113,129 @@ no validator has to pull.
   the new setting of `angular.json` takes effect there. Step 3 may go
   out in one deploy with steps 1 and 2. A wallet page that was open
   before the deploy keeps working.
+
+### The page's content security policy is in force (2026-11-19)
+
+Built from `forclaude/wallet-headers-plan-1.md` (FINAL, 2026-11-19), its
+step 4 of four, its section 4, one commit, on main at f258686, which is
+step 3 (the note above). Steps 1 to 3 were live when this was built: on
+the evening of 2026-11-19 `https://wallet.anocloud.com/` sent the policy
+in its report-only form. The user then made the look of the plan's
+section 5 on the live wallet, the pages with the browser's console open,
+and wrote "website checks passed". So the policy is switched on: one
+word of code. There is no route, no line of `network/wallet.env`, no npm
+package, no change under `src/` and none to the build. The validators,
+the doormen, the masterpod, the keyholders and the signing servers are
+not touched, and no validator has to pull.
+
+- `server/app.js`, as the plan's 4.1 gives it. In the line of step 3,
+  `'Content-Security-Policy-Report-Only'` became
+  `'Content-Security-Policy'`. The comment over the middleware now says
+  that the policy is in force, and that the `/api` lines below it write
+  their own policy over it. The sentence in the comment at the top of
+  the file, which step 3 added on the user's word, holds as it is.
+- What changes for a browser. It now holds a wallet page to the policy:
+  what the policy does not allow is blocked, and the console says so.
+  Until now it blocked nothing and only wrote the line.
+- Under `/api` (the plan's decision 17). An answer under `/api` carries
+  one policy again, step 1's own, `default-src 'none'; frame-ancestors
+  'none'; sandbox`. The page's middleware writes the page's policy under
+  the name `Content-Security-Policy`, and step 1's `/api` lines, which
+  come after it, write their own value over it. The report-only header
+  is on no answer any more.
+- What follows from the plan's code, written here so that it is not
+  taken for a fault. Each was seen in the run below. The page's policy
+  is on every answer outside `/api`, not only on the page: on a file's
+  304 and 206, on the answer to a HEAD, on the JSON 404 for a call
+  outside `/api` that is no GET, and on the plain text 404 of a folder
+  with no build. On an answer that Express writes itself (seen by
+  making `index.html` a folder, so that sending it fails) Express puts
+  its own policy, `default-src 'none'`, over the page's. A path in
+  capitals (`/API/anos/1/...`) gets the proxy's own 404 under step 1's
+  policy, since Express takes `/api` in any case. An answer outside
+  `/api` is 12 bytes shorter than with step 3, the header's shorter
+  name, and an answer under `/api` 291 bytes shorter, the whole line.
+- The after-production list (the plan's decision 18 and its 4.3). The
+  box of "content security policy on the wallet" is ticked in
+  `Z-TestNet/after_production_todos/things-to-do-after-production.md`.
+  Its details file has a new section "Done" at its end, and a dated
+  clause beside the sentence that says the wallet is served by nginx:
+  the wallet's page is served by its own server program too. The
+  sentence of `Z-TestNet/test_net_phase_3_production/deploy-notes.md`,
+  section 11, that names the policy as on the list for after production
+  has a dated clause beside it. Each of the two folders is a git
+  repository of its own, with a commit of its own.
+- Readings where the plan left a detail open. The wording of the
+  comment, of section 2, of the README and of the three papers of the
+  after-production list is this build's. In section 2 "on every answer
+  as the three are" became "on every answer outside /api", and the
+  sentence on `/api` now says what is. The report-only form keeps one
+  sentence there, in the past tense. In the README the clause on the
+  report-only form went, and the sentence now begins "The page and the
+  build's files also carry", since under `/api` the page's policy does
+  not go with the three safety headers. The date in "in force since" is
+  this build's; on the wallet servers the policy is in force from the
+  deploy of this build on.
+- Places this step leaves out of date that the plan does not name. In
+  this repository: none found. Step 3's note above speaks of the
+  report-only form; it is the record of that build. Outside it, two in
+  `Z-TestNet/after_production_todos/details/`, left as they are and put
+  to the user in the build's report. In
+  `content-security-policy-on-the-wallet.md` the bullet on
+  `deploy/nginx/wallet.conf` still says "the only headers this file
+  adds are `Cache-Control` headers" and names their lines, which step 2
+  left out of date (its note above). In `records-brought-up-to-date.md`
+  one bullet still calls "content security policy on the wallet" a list
+  item that is left to do.
+- Checked. `git status --short` showed a clean tree at f258686 at the
+  start, and this step's three files and no others at the end:
+  `server/app.js`, this file and `README.md`. `node --check
+  server/app.js` passes. The built file's code lines equal those of the
+  planning chat's own trial file of this step. The words `Report-Only`
+  stand nowhere in `server/app.js` any more. Then one throwaway run on
+  loopback, on the user's Mac, Node v24.22.0, with the same libraries
+  as in step 3: the real `createApp` of the working tree in front of
+  step 1's five made-up backends, step 2's made-up build, and the build
+  of step 3 that was on this Mac, read only (this step changes nothing
+  the build reads). The script is step 3's turned round, in the build
+  chat's scratchpad, and nothing of it is in the repo. No dev server
+  and no `ng serve` ran, and no real server was called. 480 checks, all
+  as expected. What they show:
+  1. The page carries `Content-Security-Policy` with the line of the
+     plan's decision 15, character for character, beside step 2's
+     three, and no `Content-Security-Policy-Report-Only`: `/`, three
+     deep links, `index.html`, the made-up build's files, a path that
+     is no file, two HEADs, a 304, a 206, the JSON 404 for a POST and
+     a PUT, and every file of the real build.
+  2. Under `/api` step 1's own policy stands alone and once, with no
+     report-only header: on twelve forwarded answers and on the
+     proxy's own eight. A made-up page that sent policies under both
+     names and three report headers of its own came back under the
+     proxy's one policy.
+  3. The results of steps 1 and 2 hold. Their 252 checks are as
+     expected, with the 26 that asked for no policy on the page now
+     asking for the page's policy there, and with the policy's name in
+     the 9 lists of a page answer's header names. The 21 lists of an
+     answer under `/api` are step 2's own again.
+  The seventh part is this step's, 228 checks. The file of f258686
+  went through the same script: 317 of the 480 checks were as
+  expected, and the 163 others are what this step changes. Step 3's
+  own script, not changed, gives 297 of 461 on the new file; the 164
+  others are the ones this step turns round on purpose. Not run:
+  nginx, TLS, a real backend, a wallet server, and a browser. The look
+  in a browser was the user's, on the live wallet, with the policy in
+  its report-only form, which reports everything the policy in force
+  blocks. The run-through after the deploy is the user's (the plan's
+  section 5): the same pages once more, and nothing looks different.
+  This line, in Terminal on the user's Mac, then shows
+  `content-security-policy` with the page's policy and no
+  `content-security-policy-report-only`:
+  `curl -s -D - -o /dev/null https://wallet.anocloud.com/`
+  Only the wallet has something to deploy, wallet1 and then wallet2,
+  with no setting in `network/wallet.env` and no `npm ci`. This step
+  goes out alone. A wallet page that was open before the deploy keeps
+  working, under the form it was loaded with, until it is loaded
+  again.
 
 ## 12. Recovery and the moderator edition
 

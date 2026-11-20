@@ -52,13 +52,11 @@ three safety headers: `X-Content-Type-Options: nosniff` (the browser
 does not guess a file's type), `X-Frame-Options: DENY` (no other site
 can show the wallet inside its own page) and
 `Referrer-Policy: no-referrer` (no other site is told which wallet page
-a person came from). With them goes the page's content security policy
-(the spec's section 2), which lets scripts run from the proxy's own
-files only, so the production build writes no script into the page
-(`"inlineCritical": false` in `angular.json`); it is sent report-only
-for now, as `Content-Security-Policy-Report-Only`, under which the
-browser blocks nothing and writes into its console what the policy
-would have blocked. Variables, each with a local default
+a person came from). The page and the build's files also carry the
+page's content security policy (the spec's section 2), which lets
+scripts run from the proxy's own files only, so the production build
+writes no script into the page (`"inlineCritical": false` in
+`angular.json`). Variables, each with a local default
 (`server/config.js`): `PORT` 4300, `MASTERPOD_URL`,
 `VALIDATOR_URLS`, `KEYHOLDER_URLS`, `SIGNING_SERVER_URLS`, `SHARE_THRESHOLD`
 3, `DEPOSIT_FLOOR_PERCENT` 80, `DEFAULT_VALIDATOR` 1 (it no longer picks
