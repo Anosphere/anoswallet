@@ -46,8 +46,14 @@ most 32 unused ones per validator (`validatorIdleMs` and
 `validatorIdleConnections` in `server/config.js`), while the masterpod,
 the keyholders and the signing servers get a new connection for every
 call. Everything else is the Angular build (`dist/wallet/browser`),
-with `index.html` for the router's deep links. Variables, each with a
-local default (`server/config.js`): `PORT` 4300, `MASTERPOD_URL`,
+with `index.html` for the router's deep links. Every answer of the
+proxy, the build's files and the answers under `/api` alike, carries
+three safety headers: `X-Content-Type-Options: nosniff` (the browser
+does not guess a file's type), `X-Frame-Options: DENY` (no other site
+can show the wallet inside its own page) and
+`Referrer-Policy: no-referrer` (no other site is told which wallet page
+a person came from). Variables, each with a local default
+(`server/config.js`): `PORT` 4300, `MASTERPOD_URL`,
 `VALIDATOR_URLS`, `KEYHOLDER_URLS`, `SIGNING_SERVER_URLS`, `SHARE_THRESHOLD`
 3, `DEPOSIT_FLOOR_PERCENT` 80, `DEFAULT_VALIDATOR` 1 (it no longer picks
 the validator: the browser picks one per session, at random, and moves to
@@ -140,7 +146,11 @@ servers from a chat. On each server:
   `deploy/nginx/wallet.conf`, each name to its edition's port on
   loopback. The certificate is the operator's, at
   `/etc/wallet/tls/fullchain.pem` and `/etc/wallet/tls/key.pem`, with a
-  renewal hook that ends in `systemctl reload nginx`.
+  renewal hook that ends in `systemctl reload nginx`. The site adds
+  `Strict-Transport-Security: max-age=31536000` to every answer under
+  the three names: a browser that has seen it uses https only for that
+  name for a year, and shows an error with no way past it if the
+  certificate ever runs out.
 - The site sends the build's script and style files gzip-compressed to a
   browser that asks for it, so the 2.1 MB script travels as about 0.5 MB.
   HTML is compressed already, by nginx's own default. The answers under

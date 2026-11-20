@@ -143,6 +143,30 @@ Behaviour
   nothing in it and give it none of the wallet's rights. A backend that
   does not answer: 502 { error: "<masterpod | validator n | keyholder n
   | signing server n> unavailable" }. Proxy timeout 120 seconds.
+- The safety headers (2026-11-19, section 11). Every answer of the
+  proxy carries three headers, the files of the build and the answers
+  under /api alike, with the values of the validator monitor
+  (monitorsoftware/server/app.js): "X-Content-Type-Options: nosniff"
+  (the browser does not guess a file's type), "X-Frame-Options: DENY"
+  (no other site can show the wallet inside its own page) and
+  "Referrer-Policy: no-referrer" (the browser does not tell another
+  site which wallet page the person came from). Under /api they stand
+  beside the three headers of the point above; nosniff is in both
+  lists and is sent once. A fourth header is not the proxy's: nginx on
+  the wallet servers adds "Strict-Transport-Security: max-age=31536000"
+  to every answer under the three wallet names, where TLS is
+  (deploy/nginx/wallet.conf), as on the monitor. A browser that has
+  seen it uses https only for that name for a year. Accepted with it:
+  if the certificate of a wallet name ever runs out, such a browser
+  shows an error with no way to go on, where a browser that has not
+  seen the header shows a warning a person can click through. The
+  closed page and the folder /launch/, which nginx serves itself, get
+  that one header and none of the proxy's three. The closed page takes
+  nothing from a person and shows nothing from a backend, and it
+  carries its own script inside the page, so a policy for it would be
+  a piece of work of its own. The monitor's X-Robots-Tag is not
+  copied: it is no safety header, and the monitor is a private page
+  where the wallet is a public one.
 - The connections to the validators stay open (2026-11-11, section 11).
   A call to a validator goes to its doorman on a connection that is
   open and waiting when there is one, so it does not open a connection
@@ -13630,6 +13654,193 @@ policy are the plan's steps 2 to 4 and are not in this build.
   Only the wallet has something to deploy, wallet1 and then wallet2,
   with no setting in `network/wallet.env` and no `npm ci`. A wallet
   page that was open before the deploy keeps working.
+
+### The page's plain safety headers (2026-11-19)
+
+Built from `forclaude/wallet-headers-plan-1.md` (FINAL, 2026-11-19), its
+step 2 of four, its section 2, one commit, on main at a2a6a89, on top of
+step 1 (dffb5a2, the note above), which was not pushed or deployed when
+this was built. The look of 2026-11-19 had found the wallet's page sent
+with no safety header at all: no `X-Content-Type-Options`, no
+`X-Frame-Options`, no `Referrer-Policy` and no
+`Strict-Transport-Security` on any of the three wallet names, where the
+validator monitor sends them all. This step adds those four. Three are
+set by the proxy, on every answer it gives, and the fourth by the nginx
+site of the wallet servers. There is no route, no line of
+`network/wallet.env`, no npm package and no change under `src/`. The
+validators, the doormen, the masterpod, the keyholders and the signing
+servers are not touched, and no validator has to pull. The page's
+content security policy is the plan's steps 3 and 4 and is not in this
+build.
+
+- `server/app.js`, as the plan's 2.1 gives it. The constant
+  `PAGE_HEADERS` with its comment, in front of `API_HEADERS`. In
+  `createApp` one piece of middleware with no path, right after
+  `app.disable('x-powered-by')` and in front of step 1's `/api` lines,
+  which sets the three headers on every answer. The comment at the top
+  of the file gains one sentence.
+- `deploy/nginx/wallet.conf`, as the plan's 2.2 gives it. The line
+  `add_header Strict-Transport-Security "max-age=31536000" always;`
+  nine times, three for each of the three wallet names: in the name's
+  `server` block after its `access_log` line, and inside its
+  `location = /closed.html` and inside its `location /launch/`, in
+  both after the `add_header Cache-Control` line. It is the monitor's
+  line, character for character
+  (`monitorsoftware/deploy/nginx/monitor.conf`). The two locations
+  need their own copy, because an `add_header` inside a `location`
+  switches off the `add_header` lines of the `server` block for that
+  location, and each of the two has one already. The block that
+  answers 444 and the port 80 block get nothing. The comment at the
+  top of the file gains a paragraph on it.
+- The proxy's three headers (the plan's decision 10), with the
+  monitor's values. `X-Content-Type-Options: nosniff`: the browser
+  does not guess a file's type. `X-Frame-Options: DENY`: no other site
+  can show the wallet inside its own page.
+  `Referrer-Policy: no-referrer`: the browser does not tell another
+  site which wallet page the person came from. Under `/api` they stand
+  beside step 1's three; `nosniff` is in both lists and is sent once.
+- The https-only header (decisions 11 and 12). nginx adds
+  `Strict-Transport-Security: max-age=31536000` to every answer under
+  the three names, the proxy's answers and its own. A browser that has
+  seen it uses https only for that name for a year. Accepted by the
+  plan with it: if the certificate of a wallet name ever runs out,
+  such a browser shows an error with no way to go on, where a browser
+  that has not seen the header shows a warning a person can click
+  through. The monitor already works that way. The proxy does not set
+  this header, so nothing on a development machine is told to use
+  https only.
+- Not copied, and left out on purpose (decisions 13 and 19). The
+  monitor's `X-Robots-Tag` is not copied: it is no safety header, and
+  the monitor is a private page where the wallet is a public one. The
+  closed page and the folder `/launch/`, which nginx serves itself,
+  get the https-only header and none of the proxy's three. The closed
+  page takes nothing from a person and shows nothing from a backend,
+  and it carries its own script inside the page, so a policy for it
+  would be a piece of work of its own.
+- What follows from the plan's code, written here so that it is not
+  taken for a fault. Each was seen in the run below. The three headers
+  are on every answer the program writes, not only on the page: on a
+  file's 304 and 206, on the answer to a HEAD, on the JSON 404 for a
+  call outside `/api` that is no GET, on the plain text 404 of a
+  folder with no build, and on an answer that Express writes itself
+  (seen by making `index.html` a folder, so that sending it fails: an
+  HTML 404 under Express's own policy `default-src 'none'`). The page
+  gets no content security policy and no `no-store`: those two stay
+  with `/api`. The page's `Cache-Control: public, max-age=0`, its ETag
+  and its Last-Modified are as before. A path that is no file of the
+  build still gets `index.html`, as `text/html`. Under `nosniff` a
+  browser takes a script only under a script type and a style sheet
+  only as `text/css`; the proxy sends the build's script as
+  `text/javascript; charset=utf-8` and its style sheet as
+  `text/css; charset=utf-8`. A backend cannot write the three either:
+  a made-up page that sent `X-Content-Type-Options: made-up`,
+  `X-Frame-Options: ALLOWALL` and `Referrer-Policy: unsafe-url` came
+  back under the proxy's values, since step 1 drops a backend's
+  headers.
+- Read from the rules, not seen, since no browser and no nginx ran.
+  `no-referrer` holds for the wallet's own calls too: the browser
+  sends no Referer to the wallet servers either, so nginx's
+  `wallet-access.log` shows `-` in that place for a call that comes
+  from a wallet page, where it showed the page's address. Under
+  `ng serve` on port 4200 the page comes from Angular's own server,
+  without the three headers; the calls it hands on to port 4300 carry
+  them.
+- Readings where the plan left a detail open. The wording of the
+  sentence in the top comment of `server/app.js`, of the paragraph in
+  the nginx file, of the new point of section 2 and of the README's
+  two sentences is this build's. The sentence in the top comment is a
+  paragraph of its own, after the one on the `/api` headers. The
+  nginx paragraph stands at the end of the top comment; it leaves out
+  the monitor's clause "so the page runs under the same headers on a
+  development machine", which would not hold under `ng serve`. The
+  empty lines around the two new pieces of `server/app.js` are those
+  of the planning chat's own trial file, which the built file equals
+  but for comment lines: the three places step 1 changed and the one
+  new sentence. The built nginx file equals the planning chat's trial
+  file but for the comment paragraph. In section 2 the new point
+  stands after the two points step 1 rewrote, in front of the point
+  on the connections. In the README the sentence on the https-only
+  header says decision 12 too, and stands at the end of the point on
+  nginx.
+- Places this step leaves out of date that the plan does not name.
+  In this repository: none found. Outside it, one, left as it is and
+  put to the user in the build's report:
+  `after_production_todos/details/content-security-policy-on-the-wallet.md`
+  says of `deploy/nginx/wallet.conf` "the only headers this file adds
+  are `Cache-Control` headers, at lines 77, 81, 124, 128, 171 and
+  175". The file now adds the https-only header too, and those six
+  lines stand at 86, 91, 136, 141, 186 and 191. The plan's step 4
+  changes that file for other sentences (its 4.3).
+- Checked. `git status --short` at the start showed this file alone,
+  with the three dated clauses of the note above not yet committed;
+  the other three files were built first, and this file was changed
+  after the user had committed the clauses (a2a6a89). At the end it
+  shows this step's four files and no others: `server/app.js`,
+  `deploy/nginx/wallet.conf`, this file and `README.md`.
+  `node --check server/app.js` passes. The two code blocks of the
+  plan's 2.1 were looked for in `server/app.js` by a script: each is
+  there once, line for line. The nine nginx lines were compared with
+  line 51 of the monitor's file by a script, byte for byte without
+  the indentation, and read by eye in the diff: four spaces in front
+  in the `server` blocks, as the monitor's, eight inside the
+  locations; the 444 block and the port 80 block hold no `add_header`
+  line. Then one throwaway run on loopback, on the user's Mac, Node
+  v24.22.0, with express 5.3.0, http-proxy-middleware 3.0.10,
+  http-proxy 1.18.1, send 1.2.1 and serve-static 2.2.1 from
+  `node_modules`: the real `createApp` of the working tree in front
+  of step 1's five made-up backends and a made-up build (a page, a
+  script, a style sheet, an icon, a picture, a JSON file). The script
+  is step 1's with a sixth part, in the build chat's scratchpad, and
+  nothing of it is in the repo. No dev server and no `ng serve` ran,
+  and no real server was called. Each call came in the way nginx
+  sends it: HTTP/1.1, the Host of the wallet's name,
+  `Connection: close`, a new connection for every call. 252 checks,
+  all as expected. What they show:
+  1. The page carries the three headers: `/`, three deep links,
+     `index.html`, the made-up build's script, style sheet, icon and
+     picture, a HEAD, a 304, a 206, and the JSON 404 for a POST and a
+     PUT. None of them carries a content security policy or
+     `no-store`.
+  2. Under `/api` the three stand beside step 1's three, each once:
+     on twelve forwarded answers (a validator, the masterpod, a
+     keyholder, a signing server; a 200, a 204, a 302, a 400, a 404,
+     the made-up web page, an answer of 4 MB) and on the proxy's own
+     eight (`/api/config`, `/api/health`, its 404s, the 502).
+  3. Step 1's results hold. Its 92 checks are the script's first five
+     parts, and all 92 are as expected, with two header names more in
+     the one that lists the names of the made-up page's answer, and
+     with the four on the page now asking only that no policy and no
+     `no-store` is on it. Step 1's own script, not changed, gives 87
+     of 92 on the new file; the five others are those five, which
+     this step changes on purpose.
+  Besides the three: of 22 paths written in odd ways every answer
+  carried the three headers; the build that was on this Mac
+  (`dist/wallet/browser`, read only: `index.html`, `main-RB7WUUQN.js`,
+  `styles-EMD3RG3N.css`, `favicon.ico`, `logo.png`) came back with
+  the types above and the three headers on each file. The file of
+  dffb5a2 went through the same script: 146 of the 252 checks were as
+  expected, and the 106 others are what this step changes. There the
+  page carried none of the three, and an answer under `/api` only
+  `nosniff`. Not run: nginx (it is not on this Mac; the install
+  script's own `nginx -t` on wallet1 is its check, at the deploy),
+  TLS, a real backend, a wallet server, and a browser. The planning
+  chat had opened the four pages that need no login in Chrome, in a
+  scratch copy with the whole plan's code in force. The run-through
+  is the user's, after the deploy (the plan's section 5): this line,
+  in Terminal on the user's Mac, shows
+  `strict-transport-security: max-age=31536000`,
+  `x-content-type-options: nosniff`, `x-frame-options: DENY` and
+  `referrer-policy: no-referrer`:
+  `curl -s -D - -o /dev/null https://wallet.anocloud.com/`
+  Only the wallet has something to deploy, wallet1 and then wallet2,
+  with no setting in `network/wallet.env` and no `npm ci`. Steps 1
+  and 2 may go out in one deploy. This step changes
+  `deploy/nginx/wallet.conf`: the install script puts the file in
+  place, runs `nginx -t` and reloads nginx. If `nginx -t` refuses the
+  file, the script stops there: nginx keeps running with the file it
+  had, and the three units are not restarted, so the program of
+  before keeps running too. A wallet page that was open before the
+  deploy keeps working.
 
 ## 12. Recovery and the moderator edition
 

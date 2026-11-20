@@ -25,6 +25,10 @@ import { createProxyMiddleware } from 'http-proxy-middleware';
  * library's own on every call: "close", or "keep-alive" on a call to a
  * validator (below).
  *
+ * Every answer of this program carries the page's three safety headers,
+ * the Angular build's files and the answers under /api alike
+ * (PAGE_HEADERS; 2026-11-19, wallet spec 2).
+ *
  * Every proxy is mounted at the root with a pathFilter, so it sees the full
  * path (an app.use('/prefix') mount would strip the prefix before the
  * rewrite ran).
@@ -42,6 +46,20 @@ import { createProxyMiddleware } from 'http-proxy-middleware';
  * masterpod, the keyholders and the signing servers get a new connection
  * for every call.
  */
+
+/**
+ * The page's safety headers, on every answer of this program (wallet spec
+ * 2). The values are the monitor's (monitorsoftware/server/app.js): the
+ * browser does not guess a file's type, no other site's page may show the
+ * wallet inside itself, and the browser tells no other site which wallet
+ * page a person came from. Strict-Transport-Security is not here: nginx
+ * adds it, where TLS is (deploy/nginx/wallet.conf).
+ */
+const PAGE_HEADERS = Object.freeze({
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'no-referrer',
+});
 
 /**
  * The headers of every answer under /api, this program's own and a
@@ -147,6 +165,12 @@ function unknownNumber(kind, who, count) {
 export function createApp(config) {
   const app = express();
   app.disable('x-powered-by');
+
+  // The page's safety headers on every answer (PAGE_HEADERS).
+  app.use((req, res, next) => {
+    res.set(PAGE_HEADERS);
+    next();
+  });
 
   // The headers of every answer under /api (API_HEADERS).
   app.use('/api', (req, res, next) => {
