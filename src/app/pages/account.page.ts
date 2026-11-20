@@ -362,7 +362,8 @@ type SendOrder =
     .form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
     .send { align-items: flex-start; }
     .send > button { margin-top: 8px; }
-    .wide { min-width: 360px; flex: 1; }
+    /* 360 px at the least, or the Send form's whole width where the form is narrower: the card leaves the form 294 px on a phone 360 px wide, and a box of 360 ran 66 px past the card, so the page slid sideways. */
+    .wide { min-width: min(360px, 100%); flex: 1; }
     .muted { color: var(--mat-sys-on-surface-variant); }
     .error { color: var(--mat-sys-error); }
     .ok { color: var(--mat-sys-primary); }

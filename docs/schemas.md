@@ -12479,7 +12479,9 @@ passkey is in 8.9.
   same style on the box "Meeting link (https)" and on the Note boxes,
   and scroll sideways at 360, 375 and 390. The account page has had the
   rule since the testnet copy. It is the kind of fault the birth record
-  form had until 2026-11-18. On no list; nothing was changed.
+  form had until 2026-11-18. On no list; nothing was changed in this
+  step. The account page's box is mended in the next note, in a commit
+  of its own; the staff pages are as they were.
 - Brought in line on the user's word of 2026-11-19 ("go ahead and fix
   the older comments"), before this step was committed and in its
   commit: two comments that the step left out of date and the plan does
@@ -12552,6 +12554,92 @@ passkey is in 8.9.
   setting in `network/wallet.env` and no `npm ci`. A box opened on a
   wallet page loaded before the deploy still asks for the username,
   until the page is loaded again.
+
+### The Recipient box of the Send form fits its card (2026-11-19)
+
+One small fix, built on the user's word in the talking chat of the note
+above ("Allright, let's do both."; the second of its two questions
+asked whether to fix this as a small commit of its own or to put a line
+on the after-production list), with no plan file, one commit, on top of
+the commit of the note above. Why: on a phone 360 pixels wide the box
+"Recipient account id" in the Send form of an account's page was 66
+pixels wider than the room its card has. It ran past the card's right
+edge and 33 pixels past the screen, the paste button at its right end
+was out of sight, and the page slid sideways by 37 pixels. The look of
+the note above saw it; the rule is as old as the testnet copy. Wallet
+only: one style line, and no word of the dictionaries changes.
+
+- `src/app/pages/account.page.ts`: `.wide` has
+  `min-width: min(360px, 100%)` where it had `min-width: 360px`, with a
+  one-line comment that says why. The page has one box of that class,
+  the Recipient box. It is 360 pixels wide at the least, as before, or
+  as wide as the Send form where the form is narrower. On a phone the
+  form has the screen's width less 66 pixels. So the box is 294 pixels
+  wide on a 360 pixel screen, where it was 360 and 66 past the card;
+  309 at 375, where it was 51 past; 324 at 390, where it was 36 past;
+  and 346 at 412, where it was 14 past. From 426 pixels up nothing
+  changes: at 430 the box is 364 wide as before, and at 1024 it is 518.
+- Unchanged: the place and the size of every other part of the Send
+  form (Kind, Stake for, Amount, the Send button) and of the page, at
+  every width, but for one thing that follows from the narrower box.
+  The hint under the box after a paste that found no id, "Nothing on
+  the clipboard looks like an account id.", is two lines in English at
+  360 and 390, where it was one, and the Amount box and the Send button
+  stand 16 pixels lower while it shows. In Thai it stays one line. The
+  room to type in is 234 pixels at 360; it was 300, with its right end
+  and the paste button out of sight. An account id is longer than the
+  box either way and scrolls inside it, as before.
+- Left as they are: the five other pages whose class `.wide` has
+  `min-width: 360px`. They are the attestors' page, with its account
+  box, and the attestors' three case pages and the moderator's case
+  page, with "Meeting link (https)" and the Note boxes. The four case
+  pages scroll sideways at 360, 375 and 390 pixels, as the note above
+  says; the attestors' page was not looked at. Not asked for here, and
+  on no list.
+- Spec: this note, and one sentence of the note above ("Seen in
+  passing").
+- Checked. `git status` showed the twenty files of the note above and
+  no others: `src/app/pages/account.page.ts` and this file are among
+  them, so the two commits share those two files, and the commit line
+  handed to the user puts the first commit's part of both in first.
+  That line was tried on a scratch clone first: nothing was left over,
+  the first commit's two shared files were the copies kept for it, the
+  clone's files were this folder's, and the first commit built alone,
+  clean.
+  `npx ng build` from the web_app folder: clean, no warnings
+  (`main-BEMKDMNL.js`, 2.26 MB, and `styles-EMD3RG3N.css`, the style
+  file of before). Then the look, the way of the note above: a
+  development build of a scratch copy of the working tree, served by a
+  plain file server on 127.0.0.1, in the Claude app's browser pane; the
+  temporary entry in `/Users/codex/.claude/launch.json` is out again,
+  and the file is byte for byte what it was. The rule was first tried
+  in the scratch page, set by hand on the box, before the file was
+  edited; then it was built in and looked at again, and the old rule
+  was put back by hand for the comparison in the same page. The sizes:
+  360, 375, 390, 412, 430 and 1024 pixels wide, in English and in Thai,
+  with and without the hint, on a spending account, and at 360 on a
+  guarded and an assisted account too. At every size the box is inside
+  its card, its label is whole ("Recipient account id" is 154 pixels,
+  the Thai label 92), the paste button is inside the box, and the page
+  does not scroll sideways. Old against new, part by part: only the box
+  and what is inside it differ at 360 to 412, and with the hint the 16
+  pixels said above; nothing differs at 430 and 1024. Set by hand, the
+  rule was tried at 320 pixels too: the box is 254 wide there, inside
+  its card. The pane is Chrome, so the page was also opened in real
+  iPhone Safari, in the iOS simulator on this Mac (iPhone 17e, iOS 27,
+  390 by 699 points), started with no window, with a made-up session
+  set by a probe script: the box is 324 pixels wide in a card with room
+  for 324, and the page does not scroll sideways; with the old rule put
+  back by hand it is 360 wide, 36 past the card and 3 past the screen,
+  and the page scrolls sideways by 7. Those are Chrome's numbers. One
+  thing the look met: right after the rebuild the pane showed the old
+  build once, from its cache. The built file was fetched again, and the
+  new rule was seen in force on the box, before any number was taken.
+  Not checked: a phone; the live wallet; a screen less than 390 points
+  wide in Safari, since this Mac has no such simulator. The pane was
+  not on screen while the look ran. The same style rule,
+  `min-width: min(…, 100%)` on a box that may grow, is in the birth
+  record form since 2026-11-18.
 
 ## 12. Recovery and the moderator edition
 
