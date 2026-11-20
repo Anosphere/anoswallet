@@ -395,6 +395,7 @@ src/anos-accounts/ (router, handlers, service, queries).
     anopod_id     BYTEA NOT NULL (32)               the pod; index on it
     account_type  TEXT NOT NULL                     spending | guarded | vault | assisted (CHECK)
     key_blob      BYTEA NOT NULL (<= 1024)          pair one and pair two's private halves under the encryption key, 156 bytes (section 7)
+                                                    since 2026-11-08 under the pod's key blob key, and no longer under the encryption key (section 7)
                                                     since 2026-11-20 a second column stands beside it, first_key_blob, pair one alone: 4.11
     creation      JSONB NOT NULL                    the signed creation transaction, all eight signatures, as posted to the validator
     submitted_at  TIMESTAMPTZ                       null until a validator answered the creation
@@ -437,6 +438,9 @@ signatures; the validators do.
 
 Level setup implies vouched and setup complete, which is "they are
 vouched" of the flow, and the encryption key the keyBlob is under exists.
+(Since 2026-11-08 the keyBlob is under the pod's key blob key, which
+comes from the passkey's PRF output, and no longer under the encryption
+key: section 7.)
 
 Since 2026-11-10 the masterpod lets a pod make at most 20 new anos
 accounts in the last 30 days: /create-anos-account counts the pod's rows
@@ -14826,7 +14830,9 @@ was sent. Try again in a moment."
   three of them are not in their file's order by path:
   `../passkey-check` after `./log.service` in `signing.service.ts`, in
   front of `./crypto.service` in `escrow-actions.service.ts`, and in
-  front of `../escrow-stage` in `pinned-listing.component.ts`. The
+  front of `../escrow-stage` in `pinned-listing.component.ts`. (After
+  the commit, the same day, the three were moved into their file's
+  order: the last bullet of this note.) The
   comments of 2.13 were brought in line with dated sentences ("Since
   2026-11-20"); a sentence that said the opposite, the passkey first
   and the build after it, was reworded, with its date of 2026-11-19
@@ -14970,6 +14976,8 @@ was sent. Try again in a moment."
   the key
   blobs have been under the key blob key since 2026-11-08, older than
   this step; and the three import lines named under the readings.
+  (Both were brought in line after the commit, the same day: the last
+  bullet of this note.)
 - The deploy, as the plan's section 5 has it. The masterpod's step
   first. Then this one, by the wallet's usual two lines, on wallet1 and
   then on wallet2, one right after the other, with no setting in
@@ -14982,6 +14990,27 @@ was sent. Try again in a moment."
   servers do not read. The way back, should it be needed, has an order
   (the plan's section 5): never the wallet alone, since the wallet of
   before cannot open a first key blob.
+- After the commit, the same day (2026-11-20; the step is 25a42e0). The
+  user: "let's fix the import lines and the older sentence too." Two
+  things, in a commit of their own. The three import lines of
+  `../passkey-check` were moved into their file's order, which is
+  packages, then `../` paths, then `./` paths, each by the alphabet:
+  after `../constants` in `signing.service.ts`, in front of
+  `./anos-api.service` in `escrow-actions.service.ts`, and after
+  `../escrow-stage` in `pinned-listing.component.ts`. Each of the three
+  files differs from the commit by that one line, taken out in one
+  place and put in at another, and every import of the step's 23 files
+  stands in that order now, looked at by a script. So the code no
+  longer equals the planning chat's tried copy line for line: it
+  differs from it by the place of those three lines and by the Thai
+  line. And 4.4's two older places, the `key_blob` row and the sentence
+  under its routes, keep their words and gained a dated clause each,
+  "since 2026-11-08", in the words the masterpod's spec has for the
+  same sentence (its section 5). `npx ng build` again, clean, with no
+  warnings and with the same main file as the commit's, so the built
+  wallet is the same. The two throwaway runs in Node again, 25 and 15
+  results, none off. Not looked at in a browser again: the place of an
+  import line changes nothing a page shows.
 
 ## 12. Recovery and the moderator edition
 

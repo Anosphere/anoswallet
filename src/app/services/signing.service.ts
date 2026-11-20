@@ -1,11 +1,11 @@
 import { Injectable, inject } from '@angular/core';
 import { SIGNING_TIMEOUT_MS } from '../constants';
+import type { SigningPasskey } from '../passkey-check';
 import { noAnswer } from './anos-api.service';
 import { ConfigService } from './config.service';
 import { SignedObject, WalletPublicKeys } from './crypto.service';
 import { LanguageService } from './language.service';
 import { ApiResponse, LogService, reasonOf } from './log.service';
-import type { SigningPasskey } from '../passkey-check';
 import { SessionService } from './session.service';
 
 /**

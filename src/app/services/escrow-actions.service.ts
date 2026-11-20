@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
+import { SigningPasskey, askSigningPasskey } from '../passkey-check';
 import { Accepted, AnosApiService } from './anos-api.service';
 import { ConfigService } from './config.service';
-import { SigningPasskey, askSigningPasskey } from '../passkey-check';
 import { CryptoService, EscrowSignaturePayload, EscrowSignatureType, FollowUp } from './crypto.service';
 import { LanguageService } from './language.service';
 import { ApiResponse, reasonOf } from './log.service';
