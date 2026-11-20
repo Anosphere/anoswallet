@@ -7,7 +7,7 @@ import { RouterLink } from '@angular/router';
 import { millionthsToAnos } from '../amounts';
 import { assistedStageWords } from '../assisted-stage';
 import { ACCOUNT_POLL_MS } from '../constants';
-import { checkSessionPasskey } from '../passkey-check';
+import { askSigningPasskey } from '../passkey-check';
 import { AnosApiService, HeldAssistedTransfer } from '../services/anos-api.service';
 import { ConfigService } from '../services/config.service';
 import { CryptoService, KeyBlobLostError, PairOne } from '../services/crypto.service';
@@ -40,10 +40,14 @@ interface Outcome {
  * /get-my-case, asked once per case). Two buttons: Go to the case when
  * there is one, and Cancel transfer while the stage is attesting or
  * writing, which asks once, with the line that the passkey will be asked
- * for under the question; "Yes, cancel the transfer" asks the device for
- * the passkey that opened the session first (2026-11-19,
- * passkey-check.ts), before the assistedTransferCancel follow-up is
- * built with pair one, signed by /api/sign/<n> and posted to
+ * for under the question; "Yes, cancel the transfer" builds the
+ * assistedTransferCancel follow-up with pair one and then asks the device
+ * for the passkey that opened the session, for exactly that follow-up
+ * (passkey-check.ts; the passkey since 2026-11-19, the build in front of
+ * it since 2026-11-20,
+ * forclaude/second-key-and-signing-passkey-plan-1.md); then the
+ * follow-up is signed by /api/sign/<n>, with the passkey's answer sent
+ * along, and posted to
  * /assisted-transfer-cancel, the path the old paste form took. The page
  * refreshes every 5 seconds while the transfer is held. A transfer seen
  * held and then gone is closed: its id on the first page of
@@ -297,16 +301,16 @@ export class AssistedTransferPage {
     this.dismissReason.set(typeof reason === 'string' ? (this.t().dismissReasons[reason] ?? reason) : null);
   }
 
-  /** "Yes, cancel the transfer". First the passkey check (2026-11-19, passkey-check.ts): the device is asked for the passkey that opened the session, straight from this click; a check that does not pass shows its sentence in the outcome line in red, the question stays, and nothing is built or signed. Then it builds, signs and posts the assistedTransferCancel follow-up, then refreshes. */
+  /** "Yes, cancel the transfer". Since 2026-11-20 it first builds the assistedTransferCancel follow-up with pair one. Then the passkey check (2026-11-19, passkey-check.ts; askSigningPasskey since 2026-11-20): the device is asked for the passkey that opened the session, for exactly that follow-up; a check that does not pass shows its sentence in the outcome line in red, the question stays, and nothing is sent. Then /api/sign/<n> adds the wallet pair, with the passkey's answer sent along, the follow-up is posted, and the page refreshes. */
   protected async confirm(): Promise<void> {
     const transfer = this.transfer();
     if (!this.asking() || !transfer) return;
     this.busy.set(true);
     this.outcome.set(null);
     try {
-      await checkSessionPasskey({ crypto: this.crypto, passkey: this.passkey, session: this.session }, this.t());
-      const pairOne = await this.pairOne();
-      const signed = await this.signing.sign(this.crypto.buildFollowUp(pairOne, { type: 'assistedTransferCancel', transactionId: transfer.transactionId, accountId: this.accountId() }), this.accountId());
+      const followUp = this.crypto.buildFollowUp(await this.pairOne(), { type: 'assistedTransferCancel', transactionId: transfer.transactionId, accountId: this.accountId() });
+      const passkey = await askSigningPasskey({ crypto: this.crypto, passkey: this.passkey, session: this.session }, this.t(), [followUp.payload]);
+      const signed = await this.signing.sign(followUp, this.accountId(), passkey);
       const res = await this.anos.assistedTransferCancel(signed);
       if (!res.ok) throw new Error(this.plainReason(res));
       this.outcome.set({ ok: true, text: this.t().assisted.sentCancel });

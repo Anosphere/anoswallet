@@ -7,7 +7,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { Router, RouterLink } from '@angular/router';
 import { anosToMillionths, millionthsToAnos } from '../amounts';
-import { checkSessionPasskey } from '../passkey-check';
+import { askSigningPasskey } from '../passkey-check';
 import { AnosApiService, FundSettings } from '../services/anos-api.service';
 import { CryptoService, Payout, STAKE_PURPOSES, StakePurpose } from '../services/crypto.service';
 import { GuardianAccount, GuardianAccountsService } from '../services/guardian-accounts.service';
@@ -48,11 +48,14 @@ const emptyRow = (): PayoutRow => ({ accountIdTo: '', amount: '', reason: '', st
  * tells whether a proposal is open; Post proposal, disabled while busy,
  * without a guardian account, or while a proposal is open (the reason
  * shown). Over the button stands the line that the passkey will be asked
- * for (2026-11-19). Post checks each row, then asks the device for the
- * passkey that opened the session (passkey-check.ts), opens pair one of
+ * for (2026-11-19). Post checks each row, opens pair one of
  * the chosen account,
- * builds the fundProposal (crypto.buildFundProposal), has /api/sign/<n> add
- * the wallet pair and posts /fund-proposal; a 202 opens the proposal's page.
+ * builds the fundProposal (crypto.buildFundProposal), then asks the
+ * device for the passkey that opened the session, for exactly that
+ * proposal (passkey-check.ts; since 2026-11-20 the build comes first,
+ * forclaude/second-key-and-signing-passkey-plan-1.md), has /api/sign/<n> add
+ * the wallet pair, with the passkey's answer sent along, and posts
+ * /fund-proposal; a 202 opens the proposal's page.
  * The refusals in words: a proposal already open, no guardian vote (the
  * proposer's weight check too); the rest "/fund-proposal: <reason>".
  */
@@ -213,7 +216,7 @@ export class GuardianNewPage {
     this.payouts.update((rows) => rows.map((row, i) => (i === index ? { ...row, accountIdTo: found[0].toLowerCase(), note: null } : row)));
   }
 
-  /** Post: the rows checked, so that a row that is wrong is said before any passkey is asked; then the passkey check (2026-11-19, passkey-check.ts), the device asked for the passkey that opened the session, and a check that does not pass shows its sentence in the error line with nothing built or signed; then pair one of the chosen account opened for the signature and dropped, /api/sign/<n>, /fund-proposal; a 202 opens the proposal's page, a refusal shows in words. */
+  /** Post: the rows checked, so that a row that is wrong is said before any passkey is asked; then pair one of the chosen account opened for the signature and dropped, and the fundProposal built (since 2026-11-20 in front of the passkey); then the passkey check (2026-11-19, passkey-check.ts; askSigningPasskey since 2026-11-20), the device asked for the passkey that opened the session, for exactly that proposal, and a check that does not pass shows its sentence in the error line with nothing sent; then /api/sign/<n>, with the passkey's answer sent along, /fund-proposal; a 202 opens the proposal's page, a refusal shows in words. */
   protected async post(): Promise<void> {
     const proposer = this.proposer();
     if (this.busy() || !proposer || this.openAlready()) return;
@@ -221,9 +224,9 @@ export class GuardianNewPage {
     this.error.set(null);
     try {
       const payouts = this.checkedPayouts();
-      await checkSessionPasskey({ crypto: this.crypto, passkey: this.passkey, session: this.session }, this.t());
-      const pairOne = await this.guardians.pairOne(proposer);
-      const tx = await this.signing.sign(this.crypto.buildFundProposal(pairOne, proposer, payouts), proposer);
+      const proposal = this.crypto.buildFundProposal(await this.guardians.pairOne(proposer), proposer, payouts);
+      const passkey = await askSigningPasskey({ crypto: this.crypto, passkey: this.passkey, session: this.session }, this.t(), [proposal.payload]);
+      const tx = await this.signing.sign(proposal, proposer, passkey);
       const res = await this.api.fundProposal(tx);
       if (!res.ok) throw new Error(this.refusal(res));
       await this.router.navigate(['/dao/guardians', res.body.transactionId]);

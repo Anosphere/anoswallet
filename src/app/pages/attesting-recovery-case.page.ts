@@ -13,7 +13,7 @@ import { millionthsToAnos } from '../amounts';
 import { CaseChatStartComponent } from '../components/case-chat-start.component';
 import { CASES_POLL_MS } from '../constants';
 import { imageObjectUrl } from '../images';
-import { checkSessionPasskey } from '../passkey-check';
+import { askSigningPasskey } from '../passkey-check';
 import { AnosApiService, AssistedTransferItem } from '../services/anos-api.service';
 import { AttestingService, attestingError } from '../services/attesting.service';
 import { BalancesService } from '../services/balances.service';
@@ -138,10 +138,12 @@ function storedAttestations(events: CaseEvent[]): StoredAttestation[] {
  * timeline; Schedule; the recovery case's lookup id; the two buckets (the
  * trade page's pull, pointed at /list-break-glass-case-security-records);
  * Sign all attestations (the line that the passkey will be asked for, and
- * on the button first the passkey check, once for all the moves, since
- * 2026-11-19, passkey-check.ts; then one attestation follow-up per move,
+ * on the button one attestation follow-up per move,
  * built as the
- * account page builds one and signed by the wallet pair, then
+ * account page builds one; then the passkey check, once, for exactly
+ * those follow-ups, passkey-check.ts, the check since 2026-11-19 and the
+ * build in front of it since 2026-11-20; then each follow-up signed by
+ * the wallet pair, with that one answer sent along, then
  * /sign-off-break-glass-case with every move once); Send to the validators
  * once the case is decided (the stored attestations the validator does not
  * hold yet posted to /attestation, then /mark-break-glass-case-sent; run at
@@ -711,11 +713,16 @@ export class AttestingRecoveryCasePage {
    * transactionId the move's, the wallet pair from /api/sign/<n>; then
    * /sign-off-break-glass-case with every move once. When the answer says
    * decided this sign-off decided the case and the sending runs at once.
-   * Since 2026-11-19 the passkey check comes first (passkey-check.ts): the
-   * device is asked for the passkey that opened the session, straight from
-   * the click, once, in front of the loop that signs for each move. A
+   * Since 2026-11-19 the passkey is asked for (passkey-check.ts), and
+   * since 2026-11-20 for what was built
+   * (forclaude/second-key-and-signing-passkey-plan-1.md): pair one is
+   * opened and every move's follow-up built first, then the device is
+   * asked for the passkey that opened the session, once, for exactly
+   * those follow-ups (askSigningPasskey), in front of the loop that has
+   * each one signed at /api/sign/<n>, where the one answer goes along
+   * every time. A
    * check that does not pass shows its sentence in red under the button,
-   * and nothing is signed.
+   * and nothing is sent.
    */
   protected async attest(): Promise<void> {
     let decided = false;
@@ -723,12 +730,15 @@ export class AttestingRecoveryCasePage {
       const d = this.data();
       if (!d) throw new Error(this.t().common.caseNotLoaded);
       if (d.moves.length === 0) throw new Error(this.t().recoveryCase.noMoves);
-      await checkSessionPasskey({ crypto: this.crypto, passkey: this.passkey, session: this.session }, this.t());
       const { account, pairOne } = await this.attesting.pairOne();
+      const built = d.moves.map((move) => ({
+        transactionId: move.transactionId,
+        followUp: this.crypto.buildFollowUp(pairOne, { type: 'attestation', transactionId: move.transactionId, accountId: move.accountId, attestorId: account.accountId }),
+      }));
+      const passkey = await askSigningPasskey({ crypto: this.crypto, passkey: this.passkey, session: this.session }, this.t(), built.map((one) => one.followUp.payload));
       const attestations: BreakGlassAttestation[] = [];
-      for (const move of d.moves) {
-        const followUp = this.crypto.buildFollowUp(pairOne, { type: 'attestation', transactionId: move.transactionId, accountId: move.accountId, attestorId: account.accountId });
-        attestations.push({ transactionId: move.transactionId, attestation: await this.signing.sign(followUp, account.accountId) });
+      for (const { transactionId, followUp } of built) {
+        attestations.push({ transactionId, attestation: await this.signing.sign(followUp, account.accountId, passkey) });
       }
       const res = await this.masterpod.signOffBreakGlassCase(this.caseId(), attestations);
       if (!res.ok) throw new Error(this.refusal(res, '/sign-off-break-glass-case'));

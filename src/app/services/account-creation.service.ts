@@ -43,8 +43,10 @@ export const LANDING_WAIT_MS = 90_000;
  * the six steps the Wallet page ran until then, in one place, so the
  * recovery's finish opens the new accounts the same way (wallet spec 12.3,
  * Move your money). 1. pair one, pair two, the break-glass seed and its
- * keys, the creation signed by the six keys here, the key blob under the
- * session's key blob key; 2. the seed deposited with the keyholders as
+ * keys, the creation signed by the six keys here, and, under the
+ * session's key blob key, the key blob with both pairs and, since
+ * 2026-11-20, the first key blob with pair one alone (step 4 sends
+ * both); 2. the seed deposited with the keyholders as
  * breakglasskey, then wiped; 3. /api/sign/<n> adds the wallet pair; 4.
  * /create-anos-account; 5. /create-account (a 400 saying the creation is
  * already there counts as submitted); 6. /mark-anos-account-submitted;
@@ -84,6 +86,7 @@ export class AccountCreationService {
       const walletKeys = await this.signing.publicKeys();
       const unsigned = this.crypto.buildCreateAccountTransaction(keys, walletKeys, accountType);
       const keyBlob = this.crypto.toHex(await this.crypto.wrapKeyBlob(secrets, keyBlobKey));
+      const firstKeyBlob = this.crypto.toHex(await this.crypto.wrapFirstKeyBlob(secrets, keyBlobKey));
       onStep(0, 'done');
 
       // 2. The break-glass seed to the keyholders, then wiped.
@@ -102,7 +105,7 @@ export class AccountCreationService {
       // 4. The masterpod row. Its limit on new accounts (403 account limit reached, wallet spec 4.4) is said in the one sentence wallet.accountLimit.
       step = 3;
       onStep(3, 'doing');
-      const registered = await this.masterpod.createAnosAccount({ accountId: creation.payload.accountId, accountType, keyBlob, creation });
+      const registered = await this.masterpod.createAnosAccount({ accountId: creation.payload.accountId, accountType, keyBlob, firstKeyBlob, creation });
       if (!registered.ok) {
         const atLimit = registered.status === 403 && /account limit reached/.test(reasonOf(registered));
         throw new Error(atLimit ? this.lang.words().wallet.accountLimit : `/create-anos-account: ${reasonOf(registered)}`);

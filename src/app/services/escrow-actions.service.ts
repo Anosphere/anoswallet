@@ -1,10 +1,12 @@
 import { Injectable, inject } from '@angular/core';
+import { SigningPasskey, askSigningPasskey } from '../passkey-check';
 import { Accepted, AnosApiService } from './anos-api.service';
 import { ConfigService } from './config.service';
-import { CryptoService, EscrowSignatureType } from './crypto.service';
+import { CryptoService, EscrowSignaturePayload, EscrowSignatureType, FollowUp } from './crypto.service';
 import { LanguageService } from './language.service';
 import { ApiResponse, reasonOf } from './log.service';
 import { MasterpodApiService } from './masterpod-api.service';
+import { PasskeyService } from './passkey.service';
 import { SessionService } from './session.service';
 import { SigningService } from './signing.service';
 
@@ -13,6 +15,13 @@ export type EscrowAction = 'release' | 'cancel' | 'dispute';
 
 const FOLLOW_UPS: Record<EscrowAction, EscrowSignatureType> = { release: 'escrowSuccess', cancel: 'escrowCancel', dispute: 'escrowDispute' };
 
+/** A release, a cancel or a dispute that the person has approved with the passkey and that waits to be sent (2026-11-20): the account it is sent as, the follow-up signed by pair one, and the passkey's answer for it. approve() makes it and send() sends it. */
+export interface ApprovedEscrowAction {
+  accountId: string;
+  followUp: FollowUp<EscrowSignaturePayload>;
+  passkey: SigningPasskey;
+}
+
 /**
  * A release, a cancel or a dispute of an escrow trade (wallet spec 8.2,
  * Escrow trade, and 8.3; 2026-11-17,
@@ -20,8 +29,14 @@ const FOLLOW_UPS: Record<EscrowAction, EscrowSignatureType> = { release: 'escrow
  * and posted by one piece of code, whichever page sends it. It came out of
  * the escrow trade page, which sends through it; the Release of the pinned
  * card of a marketplace chat (pinned-listing.component.ts) sends through
- * it too. The service asks nothing
- * and shows nothing: the page asks in the confirmation box first and shows
+ * it too. Since 2026-11-20
+ * (forclaude/second-key-and-signing-passkey-plan-1.md) it works in two
+ * steps. approve(), which the Yes of the page's confirmation box runs,
+ * builds the follow-up and asks the device for the passkey, for exactly
+ * that follow-up (askSigningPasskey in passkey-check.ts). send(), which
+ * the page runs after the box, has it signed and posts it. The service
+ * opens no box
+ * and shows nothing: the page asks in the confirmation box and shows
  * what came back.
  */
 @Injectable({ providedIn: 'root' })
@@ -31,24 +46,30 @@ export class EscrowActionsService {
   private readonly anos = inject(AnosApiService);
   private readonly crypto = inject(CryptoService);
   private readonly signing = inject(SigningService);
+  private readonly passkey = inject(PasskeyService);
   private readonly config = inject(ConfigService);
   private readonly lang = inject(LanguageService);
   private readonly t = this.lang.words;
 
   /**
-   * Sends the follow-up of `action` for the trade `transactionId`, as the
-   * account `accountId`, one of this pod's. Pair one is opened from the
+   * Builds the follow-up of `action` for the trade `transactionId`, as the
+   * account `accountId`, one of this pod's, and asks the passkey for it
+   * (2026-11-20; until then one method, send, did this without the passkey
+   * and also had the follow-up signed and posted). Pair one is opened from the
    * account's keyBlob for this one signature, as the escrow trade page's
    * pairOne() opens it: the session's accounts, /list-anos-accounts when
    * the account is not among them, the key blob key. Then the
    * escrowSuccess, escrowCancel or escrowDispute follow-up is built with
-   * pair one, /api/sign/<n> adds the wallet pair and /escrow-signature takes
-   * it. Resolves to the answer of /escrow-signature and decides nothing
-   * about it; throws when the account is not this pod's, when the key blob
-   * key is not in RAM, when the keyBlob does not open and when the signing
-   * servers do not sign.
+   * pair one, and the device is asked for the passkey that opened the
+   * session, for exactly that follow-up (askSigningPasskey in
+   * passkey-check.ts). Resolves with what send() takes: the account, the
+   * follow-up and the passkey's answer for it. Throws when the account is
+   * not this pod's, when the key blob
+   * key is not in RAM, when the keyBlob does not open and when the passkey
+   * step does not pass. The Yes of a confirmation box runs it (`approve`,
+   * wallet spec 8.9), so what it throws shows in that box, in red.
    */
-  async send(action: EscrowAction, accountId: string, transactionId: string): Promise<ApiResponse<Accepted>> {
+  async approve(action: EscrowAction, accountId: string, transactionId: string): Promise<ApprovedEscrowAction> {
     let item = this.session.accounts().find((a) => a.accountId === accountId);
     if (!item) {
       const res = await this.masterpod.listAnosAccounts(true);
@@ -59,7 +80,14 @@ export class EscrowActionsService {
     if (!item) throw new Error(this.t().common.notMyAccount);
     if (!keyBlobKey) throw new Error(this.t().common.noKeyBlobKey);
     const pairOne = await this.crypto.pairOneFromKeyBlob(this.crypto.fromHex(item.keyBlob), keyBlobKey);
-    const signed = await this.signing.sign(this.crypto.buildFollowUp(pairOne, { type: FOLLOW_UPS[action], transactionId, accountId }), accountId);
+    const followUp = this.crypto.buildFollowUp<EscrowSignaturePayload>(pairOne, { type: FOLLOW_UPS[action], transactionId, accountId });
+    const passkey = await askSigningPasskey({ crypto: this.crypto, passkey: this.passkey, session: this.session }, this.t(), [followUp.payload]);
+    return { accountId, followUp, passkey };
+  }
+
+  /** Sends what approve() made (2026-11-20): /api/sign/<n> adds the wallet pair, with the passkey's answer sent along, and /escrow-signature takes the follow-up. Resolves to the answer of /escrow-signature and decides nothing about it; throws when the signing servers do not sign. */
+  async send(approved: ApprovedEscrowAction): Promise<ApiResponse<Accepted>> {
+    const signed = await this.signing.sign(approved.followUp, approved.accountId, approved.passkey);
     return this.anos.escrowSignature(signed);
   }
 

@@ -9,7 +9,12 @@ import type { Words } from './i18n/en';
  * dictionary, `words` (wallet spec 8.8), in one place so that every page
  * that opens one opens the same box. Release, Dispute and Cancel each ask
  * for the passkey that opened the session when their button is pressed
- * (`passkey`; since 2026-11-19, in place of the username to type). The
+ * (`passkey`; since 2026-11-19, in place of the username to type). Since
+ * 2026-11-20 (forclaude/second-key-and-signing-passkey-plan-1.md) the
+ * page that opens one of these three, or the Start box, adds the step
+ * that button runs (`approve`, wallet spec 8.9): what is to be signed is
+ * built there, and the passkey is asked for exactly that. The boxes made
+ * here did not change for it. The
  * first button
  * reads Back in four of them. Red (`danger`) is on the two buttons that
  * dispute and on no other: "Yes, cancel the trade" keeps the theme's

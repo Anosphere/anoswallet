@@ -350,11 +350,13 @@ export interface ListingItem {
   createdAt: string;
 }
 
-/** The body of /create-anos-account (wallet spec 4.4). */
+/** The body of /create-anos-account (wallet spec 4.4, and 4.11 since 2026-11-20): a new account brings both blobs, keyBlob, the one with both pairs, which the masterpod keeps, and firstKeyBlob, pair one alone, which it hands back to the wallet. */
 export interface CreateAnosAccountBody {
   accountId: string;
   accountType: string;
   keyBlob: string;
+  /** The account's first key blob, pair one alone (2026-11-20, masterpod spec 22). */
+  firstKeyBlob: string;
   creation: { payload: object; signatures: Record<string, string | undefined> };
 }
 
@@ -771,7 +773,9 @@ export interface ExistingEvidence {
  * routes of masterpod 14.4 and the DAO routes of masterpod 15 (2026-11-08),
  * and after them the two passkey routes of masterpod 19 (2026-11-18) and
  * the report of how far a chat was read, /mark-messages-seen, of masterpod
- * 21 (2026-11-19); the read of one listing, /get-listing, is of 2026-11-06),
+ * 21 (2026-11-19), and the store of an account's first key blob,
+ * /store-first-key-blob, of masterpod 22 (2026-11-20); the read of one
+ * listing, /get-listing, is of 2026-11-06),
  * so no page builds URLs or envelopes. The session service holds the session and signs.
  */
 @Injectable({ providedIn: 'root' })
@@ -983,8 +987,14 @@ export class MasterpodApiService {
     return this.signed('/mark-anos-account-submitted', { accountId });
   }
 
+  /** firstKeyBlobs: true tells the masterpod that this page can open a first key blob (2026-11-20, masterpod spec 22: the old page guard); an older masterpod ignores it. */
   listAnosAccounts(quiet = false): Promise<ApiResponse<{ accounts: AnosAccountListItem[] }>> {
-    return this.signed('/list-anos-accounts', {}, quiet);
+    return this.signed('/list-anos-accounts', { firstKeyBlobs: true }, quiet);
+  }
+
+  /** The first key blob of an account that has none yet (2026-11-20, masterpod spec 22): sent by the login (unlock.ts), quietly. 409 when the account has one already. */
+  storeFirstKeyBlob(accountId: string, firstKeyBlob: string): Promise<ApiResponse<{ accountId: string }>> {
+    return this.signed('/store-first-key-blob', { accountId, firstKeyBlob }, true);
   }
 
   // --- level setup: the wallet's memory (wallet spec 4.6) ---------------------

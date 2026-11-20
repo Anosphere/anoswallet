@@ -1,6 +1,7 @@
 import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef, MatDialogState } from '@angular/material/dialog';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { firstValueFrom } from 'rxjs';
 import { CONFIRM_ARM_MS } from '../constants';
 import { checkSessionPasskey } from '../passkey-check';
@@ -16,7 +17,7 @@ export interface ConfirmLine {
   code?: boolean;
 }
 
-/** What opens the box: its title, the rows, the notes under them, the words on the button that says yes and, when given, the words on the first button, the passkey step of the button that says yes (since 2026-11-19, in place of a text the person had to type) and the red of that button. */
+/** What opens the box: its title, the rows, the notes under them, the words on the button that says yes and, when given, the words on the first button, the passkey step of the button that says yes (since 2026-11-19, in place of a text the person had to type), since 2026-11-20 the caller's own step for it (`approve`) and what that button waits for (`ready`), and the red of that button. */
 export interface ConfirmData {
   title: string;
   lines: ConfirmLine[];
@@ -24,8 +25,12 @@ export interface ConfirmData {
   confirmLabel: string;
   /** The words on the first button, which closes the box with false (2026-11-11). Left out, it reads Cancel (common.cancel); the cancel of a locked transfer gives Back, since Cancel there would read as the cancel itself. So do four of the escrow trade's five boxes (escrow-boxes.ts, 2026-11-17); the fifth, the question before a cancel, gives "No, I have not paid". */
   cancelLabel?: string;
-  /** True makes the second button ask for the passkey that opened the session before the box closes with true (2026-11-19; passkey-check.ts). While the device asks, both buttons are off. When the check passes, the box closes with true. When it does not, the box stays open, the reason shows under the notes in red, and the button works again. Left out, the second button closes the box with true at once. The Send form and the cancel of a locked transfer on the account page give true, and so do the box before a new anos account on the Wallet page, the Release, Dispute and Cancel boxes of an escrow trade and the Start box of the marketplace chat's pinned card (escrow-boxes.ts). */
+  /** True makes the second button ask for the passkey that opened the session before the box closes with true (2026-11-19; passkey-check.ts). While the device asks, both buttons are off. When the check passes, the box closes with true. When it does not, the box stays open, the reason shows under the notes in red, and the button works again. Left out, the second button closes the box with true at once. The Send form and the cancel of a locked transfer on the account page give true, and so do the box before a new anos account on the Wallet page, the Release, Dispute and Cancel boxes of an escrow trade and the Start box of the marketplace chat's pinned card (escrow-boxes.ts). Since 2026-11-20 all of them but the box before a new anos account also give `approve` below, and the passkey is then asked inside that step, for exactly what the step built; the box before a new anos account keeps the wallet's own check (checkSessionPasskey). */
   passkey?: boolean;
+  /** With `passkey` (2026-11-20): the caller's own step, which the second button runs straight from its click in place of the wallet's own passkey check. The caller builds what is to be signed and asks the passkey for it there (askSigningPasskey in passkey-check.ts), and keeps both for after the box. While it runs, both buttons are off. When it resolves, the box closes with true. When it throws, the box stays open, the error's message shows under the notes in red, and the button works again. Every box that gives `passkey` gives it, but the box before a new anos account, which keeps the wallet's own check. */
+  approve?: () => Promise<void>;
+  /** What the second button waits for (2026-11-20): until it resolves the button is off and a moving bar shows under the notes. When it rejects, the error's message shows in red and the button stays off, so the first button is the way out. The Send box of the account page and the Start box of the marketplace chat's card give it: the read of the account's latest transaction id, started when the box opens. Left out, the button waits for CONFIRM_ARM_MS alone. */
+  ready?: Promise<void>;
   /** True puts the class `danger` on the second button (2026-11-12), which the global rule in src/styles.css makes red. Left out, the button keeps the theme's colour; the cancel of a locked transfer gives true, and so do the two boxes of an escrow trade whose second button disputes, the Dispute box and "Do not cancel this trade" (escrow-boxes.ts, 2026-11-17). */
   danger?: boolean;
 }
@@ -68,18 +73,32 @@ export interface ConfirmData {
  * text to type, the username; it is gone since 2026-11-19
  * (forclaude/wallet-chat-and-passkey-plan-1.md), and no box has a text
  * box any more. In its place stands the passkey step (passkey): the
- * second button asks the device for the passkey that opened the session
- * (checkSessionPasskey in passkey-check.ts), straight from its click.
+ * second button asks the device for the passkey that opened the session,
+ * straight from its click. Since 2026-11-20
+ * (forclaude/second-key-and-signing-passkey-plan-1.md) the button runs
+ * the caller's own step for that (approve): the caller builds what is to
+ * be signed and asks the passkey for exactly that (askSigningPasskey in
+ * passkey-check.ts), so the answer can go to a signing server. A box
+ * that gives no such step, which is the box before a new anos account
+ * alone, keeps the wallet's own check (checkSessionPasskey in
+ * passkey-check.ts).
  * While the device asks, both buttons are off. When the check passes, the
  * box closes with true. When it does not, the box stays open, the reason
  * shows under the notes in red, and the button works again.
+ * A caller can also give the box something to wait for (ready, since
+ * 2026-11-20): until it is there, the second button is off and a thin
+ * moving bar shows under the notes; when it fails, its reason shows
+ * under the notes in red and the button stays off, so the first button
+ * is the way out. The Send box of the account page and the Start box of
+ * the marketplace chat's card give it: the read of the account's latest
+ * transaction id, started when the box opens.
  * And a red second button (danger): it carries the class `danger`, the
  * global rule in src/styles.css. A caller that gives neither keeps the box
  * as it was.
  */
 @Component({
   selector: 'app-confirm-dialog',
-  imports: [MatButtonModule, MatDialogModule],
+  imports: [MatButtonModule, MatDialogModule, MatProgressBarModule],
   template: `
     <h2 mat-dialog-title>{{ data.title }}</h2>
     <mat-dialog-content>
@@ -103,10 +122,13 @@ export interface ConfirmData {
       @if (passkeyError(); as text) {
         <p class="error">{{ text }}</p>
       }
+      @if (waiting()) {
+        <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+      }
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button mat-button type="button" [mat-dialog-close]="false" [disabled]="asking()">{{ data.cancelLabel ?? t().common.cancel }}</button>
-      <button mat-flat-button type="button" [class.danger]="data.danger" (click)="yes()" [disabled]="!armed() || asking()">{{ data.confirmLabel }}</button>
+      <button mat-flat-button type="button" [class.danger]="data.danger" (click)="yes()" [disabled]="!armed() || asking() || waiting() || blocked()">{{ data.confirmLabel }}</button>
     </mat-dialog-actions>
   `,
   styles: `
@@ -116,6 +138,7 @@ export interface ConfirmData {
     .value { color: var(--mat-sys-on-surface); overflow-wrap: anywhere; }
     p { margin: 12px 0 0; }
     .error { color: var(--mat-sys-error); }
+    mat-progress-bar { margin-top: 12px; }
   `,
 })
 export class ConfirmDialogComponent {
@@ -132,15 +155,27 @@ export class ConfirmDialogComponent {
 
   /** True while the device is asked for the passkey: both buttons are off. */
   protected readonly asking = signal(false);
-  /** Why the passkey check did not pass, shown under the notes in red; null before a check and while one runs. */
+  /** Why the passkey check did not pass, shown under the notes in red; null before a check and while one runs. Since 2026-11-20 it also holds the reason of a `ready` that was rejected, the read that failed, which shows in the same place. */
   protected readonly passkeyError = signal<string | null>(null);
+  /** True while the caller's `ready` has not settled: the second button is off and the moving bar shows. False from the start in a box without `ready`. */
+  protected readonly waiting = signal(this.data.ready !== undefined);
+  /** True once the caller's `ready` rejected: its reason shows in red and the second button stays off. */
+  protected readonly blocked = signal(false);
 
   constructor() {
     const timer = setTimeout(() => this.armed.set(true), CONFIRM_ARM_MS);
     inject(DestroyRef).onDestroy(() => clearTimeout(timer));
+    this.data.ready?.then(
+      () => this.waiting.set(false),
+      (err: unknown) => {
+        this.waiting.set(false);
+        this.blocked.set(true);
+        this.passkeyError.set(err instanceof Error ? err.message : String(err));
+      },
+    );
   }
 
-  /** The second button. In a box without `passkey` it closes the box with true. In a box with it, the passkey check runs first, straight from this click. A box that was closed meanwhile, by a step back in the browser's history, stays closed with no answer. */
+  /** The second button. In a box without `passkey` it closes the box with true. In a box with it, the passkey step runs first, straight from this click: the caller's `approve` when the box was given one (2026-11-20), which builds what is to be signed and asks the passkey for it, and else the wallet's own check (checkSessionPasskey). A box that was closed meanwhile, by a step back in the browser's history, stays closed with no answer. */
   protected async yes(): Promise<void> {
     if (!this.data.passkey) {
       this.ref.close(true);
@@ -149,7 +184,8 @@ export class ConfirmDialogComponent {
     this.asking.set(true);
     this.passkeyError.set(null);
     try {
-      await checkSessionPasskey({ crypto: this.crypto, passkey: this.passkey, session: this.session }, this.t());
+      if (this.data.approve) await this.data.approve();
+      else await checkSessionPasskey({ crypto: this.crypto, passkey: this.passkey, session: this.session }, this.t());
     } catch (err) {
       this.passkeyError.set(err instanceof Error ? err.message : String(err));
       this.asking.set(false);

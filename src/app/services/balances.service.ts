@@ -221,7 +221,7 @@ export class BalancesService {
     for (const item of accounts) {
       if (this.byAccount()[item.accountId]) continue;
       try {
-        await this.crypto.unwrapKeyBlob(this.crypto.fromHex(item.keyBlob), keyBlobKey);
+        await this.crypto.pairOneFromKeyBlob(this.crypto.fromHex(item.keyBlob), keyBlobKey);
       } catch (err) {
         if (err instanceof KeyBlobLostError) this.byAccount.update((all) => ({ ...all, [item.accountId]: lost() }));
       }

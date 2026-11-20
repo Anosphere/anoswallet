@@ -24,11 +24,13 @@ export interface Identity {
   lookupId: string;
 }
 
-/** An anos account as the masterpod lists it: the keyBlob ciphertext (under the key blob key since 2026-11-08) and the creation, never open keys. */
+/** An anos account as the masterpod lists it: the keyBlob ciphertext (under the key blob key since 2026-11-08) and the creation, never open keys. Since 2026-11-20 the keyBlob is the account's first key blob, pair one alone, once the account has one, and the blob with both pairs only until then; firstKeyOnly says which (masterpod spec 22, wallet spec 4.11). */
 export interface AnosAccountItem {
   accountId: string;
   accountType: string;
   keyBlob: string;
+  /** True when keyBlob is the account's first key blob, pair one alone; false when the account has none yet and keyBlob is the blob with both pairs (2026-11-20, masterpod spec 22). An older masterpod sends no field. */
+  firstKeyOnly?: boolean;
   creation: { payload: Record<string, unknown>; signatures: Record<string, string> };
   submittedAt: string | null;
   createdAt: string;
@@ -86,7 +88,7 @@ export class SessionService {
   readonly hasEncryptionKey = signal(false);
   readonly hasChatKeys = signal(false);
   readonly hasIdentity = signal(false);
-  /** The credential id, hex, of the passkey that opened this session; the Passkeys page marks it, and, since 2026-11-19, the passkey check asks the device for this one passkey before the wallet signs with an account's key (passkey-check.ts, wallet spec 8.9). */
+  /** The credential id, hex, of the passkey that opened this session; the Passkeys page marks it, and, since 2026-11-19, the passkey check asks the device for this one passkey at every button that ends in something signed with an account's key (passkey-check.ts, wallet spec 8.9); since 2026-11-20 its answer, given for exactly what was built, goes to the signing server with the request (askSigningPasskey). */
   readonly passkeyCredentialId = signal<string | null>(null);
   /** The pod's anos accounts from /list-anos-accounts. */
   readonly accounts = signal<AnosAccountItem[]>([]);
