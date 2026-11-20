@@ -91,11 +91,16 @@ type SendOrder =
  * Send first asks in the confirmation box (2026-11-10, wallet spec 8.9,
  * section 11): the amount in the title, the kind, this account, the
  * recipient's full id or the stake's purpose, and for a stake the line
- * about the fund. A stake for daoVote or guardian has a box of its own
+ * about the fund. Since 2026-11-19 the box of every send and every stake
+ * ends with the line that the passkey will be asked for, and its button
+ * asks the device for the passkey that opened the session before
+ * anything is sent (passkey-check.ts, wallet spec 8.9). A stake for
+ * daoVote or guardian has a box of its own
  * (2026-11-12, section 11): a title that names the stake, a line on what
  * the stake gives and how long it is locked, the line about the fund, the
- * username to type, and Stake on the button, which stays off until the
- * username is in. Cancel sends nothing and leaves the form as it was typed.
+ * passkey line, and Stake on the button; until 2026-11-19 the username
+ * was typed in that box, and no box asks for it any more. Cancel sends
+ * nothing and leaves the form as it was typed.
  * Send in the box, or Stake in the stake box, empties the form at once,
  * and the form stays empty
  * whatever the answer is, so the same send cannot go out twice; what is
@@ -125,7 +130,9 @@ type SendOrder =
  * out the lock. The sender can cancel it from that row (2026-11-11,
  * section 11): a Cancel transfer button under the row while the stage is
  * locked or due asks in the confirmation box, whose first button reads
- * Back there; on yes the lockedTransferCancel follow-up is built with
+ * Back there and whose second, "Yes, cancel the transfer", asks for the
+ * passkey (2026-11-19); on yes the lockedTransferCancel follow-up is
+ * built with
  * pair one, signed by /api/sign/<n> and posted to /locked-transfer-cancel,
  * and the sent line or the refusal in plain words shows under the row. A
  * cancel pressed in the transfer's first minutes is refused by the
@@ -570,7 +577,7 @@ export class AccountPage {
     this.pasteNote.set(null);
   }
 
-  /** The form's Send button (wallet spec 8.2, Account, and 8.9; 2026-11-10): the order is taken from the form and shown in the confirmation box, and nothing is sent until Send is pressed there. Cancel leaves the form as it was typed. Send in the box empties the form first and then sends the order, so what goes out is what the box showed. Nothing happens while a box is already open. A stake for daoVote or guardian has a box of its own (2026-11-12): the title names the stake ("Stake 100 anos for DAO votes?", "Stake 1000 anos as a guardian?"); the lines are the same; the notes are three, what the stake gives and how long it is locked, then the line about the fund, then that the username is to be typed; under them a text box for the username (typed); and the button reads Stake and stays off until the username is in the box. For the other four purposes (moderator, attestor, validator, masterPod) and for every transfer the box is as it was. */
+  /** The form's Send button (wallet spec 8.2, Account, and 8.9; 2026-11-10): the order is taken from the form and shown in the confirmation box, and nothing is sent until Send is pressed there and the passkey check has passed (2026-11-19, passkey-check.ts): the box's button asks the device for the passkey that opened the session, and the last note of every box says so. Cancel leaves the form as it was typed. Send in the box empties the form first and then sends the order, so what goes out is what the box showed. Nothing happens while a box is already open. A stake for daoVote or guardian has a box of its own (2026-11-12): the title names the stake ("Stake 100 anos for DAO votes?", "Stake 1000 anos as a guardian?"); the lines are the same; the notes are three, what the stake gives and how long it is locked, then the line about the fund, then the passkey line (until 2026-11-19 the third note said to type the username, and a text box for it stood under the notes); and the button reads Stake. For the other four purposes (moderator, attestor, validator, masterPod) the notes are the line about the fund and the passkey line, and for every transfer the passkey line alone. */
   protected async askSend(): Promise<void> {
     const amount = anosToMillionths(this.amount());
     if (!this.item() || amount === null || this.dialog.openDialogs.length > 0) return;
@@ -600,9 +607,13 @@ export class AccountPage {
           ? { label: words.account.stakeFor, value: words.account.stakePurposes[order.stakePurpose] }
           : { label: words.common.to, value: order.accountIdTo, code: true },
       ],
-      notes: stakeBox ? [stakeBox.note, words.account.confirmStakeNote, words.account.stakeTypeNote] : order.stakePurpose !== null ? [words.account.confirmStakeNote] : [],
+      notes: stakeBox
+        ? [stakeBox.note, words.account.confirmStakeNote, words.passkeyCheck.note]
+        : order.stakePurpose !== null
+          ? [words.account.confirmStakeNote, words.passkeyCheck.note]
+          : [words.passkeyCheck.note],
       confirmLabel: stakeBox ? words.account.stake : words.common.send,
-      typed: stakeBox ? { label: words.common.yourUsername, expected: this.session.username() } : undefined,
+      passkey: true,
     });
     if (!confirmed) return;
     this.resetForm();
@@ -651,7 +662,7 @@ export class AccountPage {
     return reason;
   }
 
-  /** The Cancel transfer button under the Locked transfer row (wallet spec 8.2, Account, and 8.9; 2026-11-11): the sender's cancel of the guarded or vault transfer waiting out its lock. It asks in the confirmation box, whose first button reads Back here, and nothing is sent until "Yes, cancel the transfer" is pressed there. Then the lockedTransferCancel follow-up for the transfer the box showed is built with pair one, /api/sign/<n> adds the wallet pair and /locked-transfer-cancel takes it, with a progress bar under the row meanwhile (cancelBusy); the line under the row is the sent line or the refusal in the words of cancelRefusal, and the page refreshes. Nothing happens with no locked transfer or while a box is already open. */
+  /** The Cancel transfer button under the Locked transfer row (wallet spec 8.2, Account, and 8.9; 2026-11-11): the sender's cancel of the guarded or vault transfer waiting out its lock. It asks in the confirmation box, whose first button reads Back here, and nothing is sent until "Yes, cancel the transfer" is pressed there and the passkey check has passed (2026-11-19, passkey-check.ts): that button asks the device for the passkey that opened the session, and the box's second note says so. Then the lockedTransferCancel follow-up for the transfer the box showed is built with pair one, /api/sign/<n> adds the wallet pair and /locked-transfer-cancel takes it, with a progress bar under the row meanwhile (cancelBusy); the line under the row is the sent line or the refusal in the words of cancelRefusal, and the page refreshes. Nothing happens with no locked transfer or while a box is already open. */
   protected async askCancelLocked(): Promise<void> {
     const waiting = this.locked();
     if (!waiting || this.dialog.openDialogs.length > 0) return;
@@ -663,10 +674,11 @@ export class AccountPage {
         { label: words.common.amount, value: words.common.anos(anos) },
         { label: words.common.to, value: waiting.accountIdTo, code: true },
       ],
-      notes: [words.account.confirmCancelNote(anos)],
+      notes: [words.account.confirmCancelNote(anos), words.passkeyCheck.note],
       confirmLabel: words.assisted.yesCancel,
       cancelLabel: words.common.back,
       danger: true,
+      passkey: true,
     });
     if (!confirmed) return;
     this.cancelBusy.set(true);

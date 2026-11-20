@@ -57,7 +57,10 @@ export interface Assertion {
  * holds one of them refuses instead of replacing it (the passkey of a
  * recovery case is registered with that list too, since 2026-11-18,
  * masterpod spec 20); and the assertion can be asked of one passkey alone,
- * the new one, for its PRF output.
+ * the new one, for its PRF output. Since 2026-11-19 the passkey check
+ * (passkey-check.ts, wallet spec 8.9) asks the assertion of one passkey
+ * alone too: the one that opened the session, by its credential id, with
+ * an empty transports list.
  */
 @Injectable({ providedIn: 'root' })
 export class PasskeyService {
@@ -105,8 +108,13 @@ export class PasskeyService {
   }
 
   /**
-   * Authenticates with any passkey of this site and evaluates the PRF.
-   * The assertion JSON goes to /unlock without its prf results.
+   * Authenticates with a passkey of this site and evaluates the PRF: any
+   * passkey the device offers, or, with `only`, that one passkey alone
+   * (the third tap of an add and, since 2026-11-19, the passkey check,
+   * passkey-check.ts). The assertion JSON is handed back without its prf
+   * results, so a caller can send it to the masterpod, as the unlock flow
+   * sends it to /unlock. A caller that needs only the PRF output or the
+   * credential id sends it nowhere; the passkey check is one of those.
    */
   async assert(challengeHex: string, only?: { id: Uint8Array; transports: string[] }): Promise<Assertion> {
     const { rpId } = await this.config.load();

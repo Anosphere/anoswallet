@@ -63,13 +63,14 @@ src/app/
   constants.ts             the PRF salt label, the polling intervals
   amounts.ts               anos <-> millionths
   countries.ts             the ISO 3166-1 alpha-2 codes for the identity form
-  escrow-boxes.ts          the five boxes of an escrow trade for the confirmation box: Release, Dispute, the question before a cancel, "Do not cancel this trade" and Cancel (spec 8.7, 8.9)
+  escrow-boxes.ts          the five boxes of an escrow trade for the confirmation box: Release, Dispute, the question before a cancel, "Do not cancel this trade" and Cancel; and the Start box, the question before the seller puts the anos in escrow from the marketplace chat's pinned card (spec 8.7, 8.9)
   trade-messages.ts        the three messages the pinned card posts into a marketplace chat, known by their words in every language, so the chat can draw them as grey lines (spec 8.2, 8.7)
   i18n/en.ts, th.ts        the words of each language, one section per page (spec 8.8)
   unlock.ts                the unlock flow, shared by the landing page, setup, the finish of a recovery and the walk-through of the locked-out page
+  passkey-check.ts         the passkey check before the wallet signs with an account's key: the device is asked for the passkey that opened the session (spec 8.9)
   components/camera.component.ts   the camera: live preview, Take photo, a file input as the fallback
   components/note-form.component.ts   the note form under a history row: the kind, the money and the currency, the memo (spec 8.2)
-  components/confirm-dialog.component.ts   the confirmation box before a send, before a new anos account, before the cancel of a locked transfer, before a release, a dispute and a cancel on the escrow trade page and before a release in the marketplace chat's pinned card (the Release box), with the username to type before a DAO or guardian stake and in the escrow trade's Release, Dispute and Cancel boxes, and a red button for the cancel of a locked transfer and for a dispute, and askConfirm and askChoice (spec 8.9)
+  components/confirm-dialog.component.ts   the confirmation box before a send, before a new anos account, before the cancel of a locked transfer, before a release, a dispute and a cancel on the escrow trade page and before the start and the release of a trade in the marketplace chat's pinned card (the Start box and the Release box), with the passkey asked before every send and stake, before a new anos account, before the cancel of a locked transfer, in the escrow trade's Release, Dispute and Cancel boxes and in the card's Start box, and a red button for the cancel of a locked transfer and for a dispute, and askConfirm and askChoice (spec 8.9)
   components/escrow-strip.component.ts   the status box of an escrow trade: whether the anos are in escrow, the step of the four, and what to do and not to do, in green, amber or grey (spec 8.7)
   components/case-chat-start.component.ts   the attestor's Start chat button for the person on a case page: Start chat, Open chat, Invite again (spec 8.7, 13.3)
   components/case-chat-list.component.ts   the person's chats with the attestors of a case, on My case and My recovery case: Accept, Decline, Open chat (spec 8.7, 13.3)
@@ -85,7 +86,7 @@ src/app/
     masterpod-api.service.ts, keyholder-api.service.ts, anos-api.service.ts, signing.service.ts
                            one method per route of each backend, through the proxy
     crypto.service.ts      every derivation, blob, builder and signature; public-ledger-id.ts beside it
-    passkey.service.ts     the two WebAuthn ceremonies with the PRF extension; the exclude list of an add and of a recovery case's opening; the one-passkey assert of an add
+    passkey.service.ts     the two WebAuthn ceremonies with the PRF extension; the exclude list of an add and of a recovery case's opening; the one-passkey assert of an add and of the passkey check
     shares.service.ts      the deposit rule of spec section 6: deposit(secret, shareType)
     log.service.ts         the activity log, and the HTTP plumbing every call goes through
     notes.service.ts      the noted transactions: the last list read, the blobs opened on the phone, add, update, remove (spec 8.2)

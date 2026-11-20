@@ -8,37 +8,55 @@ import type { Words } from './i18n/en';
  * question before a cancel, built from the
  * dictionary, `words` (wallet spec 8.8), in one place so that every page
  * that opens one opens the same box. Release, Dispute and Cancel each ask
- * for the username before their button works (`typed`). The first button
+ * for the passkey that opened the session when their button is pressed
+ * (`passkey`; since 2026-11-19, in place of the username to type). The
+ * first button
  * reads Back in four of them. Red (`danger`) is on the two buttons that
  * dispute and on no other: "Yes, cancel the trade" keeps the theme's
- * colour.
+ * colour. A sixth box stands with them since 2026-11-19
+ * (forclaude/wallet-chat-and-passkey-plan-1.md, decision 12): Start, the
+ * question before the seller puts the anos in escrow from the pinned card
+ * of a marketplace chat (wallet spec 8.2, Chat). The escrow trade page
+ * does not open it.
  */
 
-/** Release, the seller's: the amount and the buyer's account id, when to do it, that it cannot be undone, and the username to type. */
-export function releaseBox(words: Words, anos: string, buyerAccountId: string, username: string): ConfirmData {
+/** Start, the seller's, opened by Start in the form of the pinned card of a marketplace chat (2026-11-19; until then the question stood in the card itself, under the form). The title is the words of the button that opened the form, "Put the anos in escrow". The first note is the card's question, with the amount and the other trader's username; the second says that the passkey will be asked for. No lines. The first button reads Back, and the second reads Yes and asks for the passkey. */
+export function startBox(words: Words, anos: string, name: string): ConfirmData {
+  return {
+    title: words.pinned.startTrade,
+    lines: [],
+    notes: [words.pinned.askStart(anos, name), words.passkeyCheck.note],
+    confirmLabel: words.common.yes,
+    cancelLabel: words.common.back,
+    passkey: true,
+  };
+}
+
+/** Release, the seller's: the amount and the buyer's account id, when to do it, that it cannot be undone, and that the passkey will be asked for. Its button asks for the passkey. */
+export function releaseBox(words: Words, anos: string, buyerAccountId: string): ConfirmData {
   return {
     title: words.escrowBoxes.releaseTitle(anos),
     lines: [
       { label: words.common.amount, value: words.common.anos(anos) },
       { label: words.common.buyer, value: buyerAccountId, code: true },
     ],
-    notes: [words.escrowBoxes.releaseNote, words.escrowBoxes.cannotBeUndone, words.escrowBoxes.typeNote],
+    notes: [words.escrowBoxes.releaseNote, words.escrowBoxes.cannotBeUndone, words.passkeyCheck.note],
     confirmLabel: words.escrow.yes.release,
     cancelLabel: words.common.back,
-    typed: { label: words.common.yourUsername, expected: username },
+    passkey: true,
   };
 }
 
-/** Dispute, either side's: when to use it, what follows, and the username to type. Its button is red. */
-export function disputeBox(words: Words, username: string): ConfirmData {
+/** Dispute, either side's: when to use it, what follows, and that the passkey will be asked for. Its button is red and asks for the passkey. */
+export function disputeBox(words: Words): ConfirmData {
   return {
     title: words.escrowBoxes.disputeTitle,
     lines: [],
-    notes: [words.escrowBoxes.disputeWhen, words.escrowBoxes.disputeWhat, words.escrowBoxes.typeNote],
+    notes: [words.escrowBoxes.disputeWhen, words.escrowBoxes.disputeWhat, words.passkeyCheck.note],
     confirmLabel: words.escrow.yes.dispute,
     cancelLabel: words.common.back,
     danger: true,
-    typed: { label: words.common.yourUsername, expected: username },
+    passkey: true,
   };
 }
 
@@ -65,14 +83,14 @@ export function doNotCancelBox(words: Words): ConfirmData {
   };
 }
 
-/** After "No, I have not paid": the cancel, the buyer's. The amount, where the anos go, when to cancel and when not, that it cannot be undone, and the username to type. Its button is not red. */
-export function cancelBox(words: Words, anos: string, username: string): ConfirmData {
+/** After "No, I have not paid": the cancel, the buyer's. The amount, where the anos go, when to cancel and when not, that it cannot be undone, and that the passkey will be asked for. Its button is not red and asks for the passkey. */
+export function cancelBox(words: Words, anos: string): ConfirmData {
   return {
     title: words.escrowBoxes.cancelTitle,
     lines: [{ label: words.common.amount, value: words.common.anos(anos) }],
-    notes: [words.escrowBoxes.cancelNote(anos), words.escrowBoxes.cancelOnlyIf, words.escrowBoxes.cannotBeUndone, words.escrowBoxes.typeNote],
+    notes: [words.escrowBoxes.cancelNote(anos), words.escrowBoxes.cancelOnlyIf, words.escrowBoxes.cannotBeUndone, words.passkeyCheck.note],
     confirmLabel: words.escrow.yes.cancel,
     cancelLabel: words.common.back,
-    typed: { label: words.common.yourUsername, expected: username },
+    passkey: true,
   };
 }

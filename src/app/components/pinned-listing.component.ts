@@ -9,7 +9,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { RouterLink } from '@angular/router';
 import { anosToMillionths, millionthsToAnos } from '../amounts';
 import { ACCOUNT_POLL_MS, CARD_MESSAGES_PAGE, CARD_TRANSACTIONS_PAGE } from '../constants';
-import { releaseBox } from '../escrow-boxes';
+import { releaseBox, startBox } from '../escrow-boxes';
 import { EscrowGuide, escrowGuide, stateOfStage } from '../escrow-stage';
 import { formatPrice, totalOf } from '../prices';
 import { AnosApiService, EscrowItem, TransactionItem } from '../services/anos-api.service';
@@ -66,14 +66,23 @@ type Found = 'open' | 'released' | 'none' | 'unread';
  * ids into the chat; once one is there it reads "Send another account",
  * until a trade starts. Step 2: the seller's "Put the anos in escrow",
  * shown once the other trader has posted an account id, opens a small
- * form (From, To, Amount, the total at the listing's price), asks once,
- * and builds the escrowTransfer as the account page's Send does. Step 3,
+ * form (From, To, Amount, the total at the listing's price). The form's
+ * Start opens the Start box (escrow-boxes.ts, wallet spec 8.9), the
+ * wallet's pop-up box with the card's question and the line that the
+ * passkey will be asked for; its Yes asks for the passkey (2026-11-19,
+ * passkey-check.ts), and then the card builds the escrowTransfer as the
+ * account page's Send does. Until 2026-11-19 the question stood in the
+ * card, under the form, with Yes and Back; with the passkey line added
+ * there, a short phone screen no longer showed those two buttons, so the
+ * question went into the box
+ * (forclaude/wallet-chat-and-passkey-plan-1.md, decision 12). Step 3,
  * while the anos are held: what they come to at the listing's price, a
  * line for the buyer when fewer anos are held than the listing says, the
  * link "Something wrong?" to the escrow trade page, where Dispute and
  * Cancel are, and for the seller the button of step 4, "I have been paid:
  * release the anos". It opens the Release box (escrow-boxes.ts, wallet
- * spec 8.9), which asks for the username, and its Yes sends the release
+ * spec 8.9), whose Yes asks for the passkey (2026-11-19; until then the
+ * box asked for the username), and then sends the release
  * through escrow-actions.service.ts. In any other open stage the link
  * reads "See the trade". "How a trade works" opens and closes a panel
  * with the four steps, the step the trade is at in bold, and four lines
@@ -218,18 +227,10 @@ type Found = 'open' | 'released' | 'none' | 'unread';
                 @if (formTotal(); as total) {
                   <p class="field">{{ t().pinned.atListingPrice(total) }}</p>
                 }
-                @if (confirmStart()) {
-                  <p class="question">{{ t().pinned.askStart(amount().trim(), otherName()) }}</p>
-                  <div class="buttons">
-                    <button mat-flat-button type="button" (click)="start()" [disabled]="busy()">{{ t().common.yes }}</button>
-                    <button mat-button type="button" (click)="confirmStart.set(false)" [disabled]="busy()">{{ t().common.back }}</button>
-                  </div>
-                } @else {
-                  <div class="buttons">
-                    <button mat-flat-button type="button" (click)="confirmStart.set(true)" [disabled]="busy() || !canStart()">{{ t().common.start }}</button>
-                    <button mat-button type="button" (click)="starting.set(false)" [disabled]="busy()">{{ t().common.cancel }}</button>
-                  </div>
-                }
+                <div class="buttons">
+                  <button mat-flat-button type="button" (click)="start()" [disabled]="busy() || !canStart()">{{ t().common.start }}</button>
+                  <button mat-button type="button" (click)="starting.set(false)" [disabled]="busy()">{{ t().common.cancel }}</button>
+                </div>
               </div>
             } @else {
               <div class="buttons">
@@ -369,7 +370,6 @@ export class PinnedListingComponent {
   /** Null until the first check ends, true when the last check read everything, false when a read in it failed. */
   protected readonly read = signal<boolean | null>(null);
   protected readonly starting = signal(false);
-  protected readonly confirmStart = signal(false);
   protected readonly confirmClose = signal(false);
   protected readonly from = signal('');
   protected readonly to = signal('');
@@ -433,7 +433,7 @@ export class PinnedListingComponent {
     return this.t().pinned.lessLine(millionthsToAnos(listing.quantity), millionthsToAnos(open.amount));
   });
 
-  /** True while the Release box is open: "I have been paid: release the anos" does nothing meanwhile. */
+  /** True while the Start box or the Release box is open: Start in the form and "I have been paid: release the anos" do nothing meanwhile. */
   private boxOpen = false;
   /** The last check that read everything showed an open trade. */
   private seen = false;
@@ -475,7 +475,6 @@ export class PinnedListingComponent {
     this.cancelled.set(false);
     this.read.set(null);
     this.starting.set(false);
-    this.confirmStart.set(false);
     this.confirmClose.set(false);
     this.error.set(null);
     this.showSteps.set(false);
@@ -500,14 +499,31 @@ export class PinnedListingComponent {
     this.from.set(this.spendingAccounts()[0]?.accountId ?? '');
     this.to.set(this.theirAccountIds()[0] ?? '');
     this.amount.set(millionthsToAnos(listing.quantity));
-    this.confirmStart.set(false);
     this.error.set(null);
     this.starting.set(true);
   }
 
   /**
-   * The last guard against sending twice (2026-11-10): one fresh check
-   * first. A check that cannot be read sends nothing; a trade open or
+   * The form's Start (2026-11-19,
+   * forclaude/wallet-chat-and-passkey-plan-1.md, decision 12; until then
+   * Start opened a question in the card, and its Yes ran what follows).
+   * The accounts and the amount are taken from the form as it stands, and
+   * the Start box opens (escrow-boxes.ts, wallet spec 8.9) with the
+   * card's question for that amount and the other trader's username. So
+   * what is sent is what the box asked about: the form cannot be typed in
+   * while the box is open. Nothing happens while a box is open or
+   * something is on its way. Back sends nothing and leaves the form as it
+   * was, and so does a box closed by a step back in the browser's
+   * history, which askConfirm answers as Back. The box's Yes asks the
+   * device for the passkey that opened the session (passkey-check.ts),
+   * straight from its click, because Safari opens the passkey sheet only
+   * for a tap. A check that does not pass shows its sentence in the box,
+   * which stays open, and nothing is read, built or signed. Once the
+   * check has passed and the box has closed, the passkey still stands in
+   * front of the check for an earlier trade, as it did in the card. Then
+   * the last guard against sending twice (2026-11-10): one fresh check
+   * before anything is built. A check that cannot be read sends nothing;
+   * a trade open or
    * released in this chat sends nothing either, and the card shows it. Then
    * the escrowTransfer the way the account page's Send builds it: pair one
    * from the account's keyBlob and the encryption key, /get-account for the
@@ -519,17 +535,29 @@ export class PinnedListingComponent {
    * an answer that failed with no trade found open says so, and the form
    * stays for another try.
    */
-  protected start(): Promise<void> {
-    return this.run(async () => {
-      const from = this.from();
-      const to = this.to();
-      const amount = anosToMillionths(this.amount());
-      if (!from || !to || amount === null) throw new Error(this.t().pinned.pickAccounts);
+  protected async start(): Promise<void> {
+    if (this.boxOpen || this.busy()) return;
+    const from = this.from();
+    const to = this.to();
+    const anos = this.amount().trim();
+    const amount = anosToMillionths(anos);
+    if (!from || !to || amount === null) {
+      this.error.set(this.t().pinned.pickAccounts);
+      return;
+    }
+    this.boxOpen = true;
+    let confirmed: boolean;
+    try {
+      confirmed = await askConfirm(this.dialog, startBox(this.t(), anos, this.otherName()));
+    } finally {
+      this.boxOpen = false;
+    }
+    if (!confirmed) return;
+    await this.run(async () => {
       const found = await this.poll();
       if (found === 'unread') throw new Error(this.t().pinned.notSentUnread);
       if (found !== 'none') {
         this.starting.set(false);
-        this.confirmStart.set(false);
         throw new Error(this.t().pinned.notSentAlready);
       }
       const pairOne = await this.pairOne(from);
@@ -541,7 +569,6 @@ export class PinnedListingComponent {
       const after = await this.poll();
       if (!res.ok && after !== 'open') throw new Error(this.t().pinned.noAnswer);
       this.starting.set(false);
-      this.confirmStart.set(false);
     });
   }
 
@@ -556,10 +583,12 @@ export class PinnedListingComponent {
    * The seller's "I have been paid: release the anos" (2026-11-17,
    * forclaude/wallet-trade-guide-plan-1.md): the Release box of the escrow
    * trade page (escrow-boxes.ts, wallet spec 8.9), with the buyer's account
-   * id and the username to type. Nothing happens while the box is open or
+   * id; its Yes asks for the passkey (2026-11-19; until then the username
+   * was typed in the box). Nothing happens while the box is open or
    * something is on its way. Back sends nothing, and so does a box closed
    * by a step back in the browser's history, which askConfirm answers as
-   * Back. On Yes the release is sent through escrow-actions.service.ts as
+   * Back. On Yes, once the passkey check has passed in the box, the
+   * release is sent through escrow-actions.service.ts as
    * this pod's account in the trade, and one check follows. An answer that
    * failed shows in the error line, in the validator's plain words, only
    * when after that check the card still shows this trade as held: an
@@ -572,7 +601,7 @@ export class PinnedListingComponent {
     this.boxOpen = true;
     let confirmed: boolean;
     try {
-      confirmed = await askConfirm(this.dialog, releaseBox(this.t(), millionthsToAnos(open.amount), open.accountIdTo, this.session.username()));
+      confirmed = await askConfirm(this.dialog, releaseBox(this.t(), millionthsToAnos(open.amount), open.accountIdTo));
     } finally {
       this.boxOpen = false;
     }
@@ -650,8 +679,11 @@ export class PinnedListingComponent {
    * trade seen open and then gone with nothing released is cancelled. A
    * trade this pod sent, found open or released, gets its message posted
    * when the chat has none for it (tell). A trade found also closes the
-   * Start form, so its question does not come back by itself once that
-   * trade is cancelled. An open trade in dispute has its dispute case
+   * Start form, so the form does not come back by itself once that
+   * trade is cancelled (until 2026-11-19 the form held the question of
+   * Start too; a Start box that is open stays open, and its Yes then
+   * meets the fresh check of start(), which sends nothing). An open
+   * trade in dispute has its dispute case
    * looked for, for the page's "Invite an attestor" (findDisputeCase,
    * 2026-11-12); a check that finds no open trade tells the page that
    * there is no such case. A read that fails, or anything thrown (no key
@@ -715,7 +747,6 @@ export class PinnedListingComponent {
         this.cancelled.set(false);
         this.seen = true;
         this.starting.set(false);
-        this.confirmStart.set(false);
         if (trade.accountId === myAccount) {
           await this.tell(room, named, trade.transactionId, this.t().pinned.startedMessage(millionthsToAnos(trade.amount), trade.accountId, trade.accountIdTo, trade.transactionId));
         }
@@ -732,7 +763,6 @@ export class PinnedListingComponent {
         this.cancelled.set(false);
         this.seen = false;
         this.starting.set(false);
-        this.confirmStart.set(false);
         if (done.mine) {
           await this.tell(room, named, done.transactionId, this.t().pinned.releasedMessage(millionthsToAnos(done.amount), done.from, done.to, done.transactionId));
         }

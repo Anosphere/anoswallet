@@ -198,6 +198,13 @@ export const en = {
     noPrfOutput: 'The authenticator returned no PRF output; this passkey or platform does not support PRF',
     noCredential: 'The browser returned no public-key credential',
   },
+  passkeyCheck: {
+    note: 'To confirm, this phone or computer will ask for your passkey, the one you log in with.',
+    notFinished: 'The passkey step was not finished, so nothing was done. Press the button to try again.',
+    otherPasskey: 'That was not the passkey you logged in with, so nothing was done.',
+    failed: (reason: string) => `The passkey could not be used, so nothing was done: ${reason}`,
+    noSession: 'This tab no longer has what the passkey step needs, so nothing was done. Log in again.',
+  },
   shares: {
     noIdentity: 'no public ledger id in RAM: unlock again',
     floorNotReached: (stored: number, keyholders: number, needed: number, keyholder: number, reason: string) =>
@@ -413,7 +420,6 @@ export const en = {
     stakeDaoNote: 'A DAO stake gives you one vote for each anos. It is locked for one month since your last vote.',
     stakeGuardianNote: 'A guardian stake gives you one vote on fund proposals for each 1,000 anos. It is locked for one year since your last vote.',
     confirmStakeNote: 'A stake stays with the fund. It comes back only through a fund proposal that the guardians vote for.',
-    stakeTypeNote: 'To confirm, type your username below.',
     stake: 'Stake',
     sending: 'Sending…',
     escrowOpen: 'An escrow trade is open. This account can send again when it closes.',
@@ -599,7 +605,6 @@ export const en = {
     openText: 'This trade is open. This wallet does not know this stage, so it offers nothing to do with it.',
   },
   escrowBoxes: {
-    typeNote: 'To confirm, type your username below.',
     cannotBeUndone: 'It cannot be undone.',
     releaseTitle: (anos: string) => `Release ${anos} anos to the buyer?`,
     releaseNote: 'Do this only when the money is in your own bank account. A picture of a payment slip is not proof.',
@@ -1484,7 +1489,6 @@ export const en = {
     clear: 'Clear',
     copy: 'Copy',
     username: 'Username',
-    yourUsername: 'Your username',
     selfie: 'selfie',
     noneYet: 'None yet.',
     reading: 'Reading…',

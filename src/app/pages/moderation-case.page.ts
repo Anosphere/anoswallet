@@ -10,6 +10,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { RouterLink } from '@angular/router';
 import { imageObjectUrl } from '../images';
+import { checkSessionPasskey } from '../passkey-check';
 import { BalancesService } from '../services/balances.service';
 import { ConfigService } from '../services/config.service';
 import { CryptoService, PairOne } from '../services/crypto.service';
@@ -25,6 +26,7 @@ import {
   SecurityRecords,
   SignOffVerdict,
 } from '../services/masterpod-api.service';
+import { PasskeyService } from '../services/passkey.service';
 import { RECOVERY_POLL_MS } from '../services/recovery.service';
 import { AnosAccountItem, SessionService } from '../services/session.service';
 import { STATUS_ICONS, moderationError } from './moderation.page';
@@ -79,7 +81,9 @@ interface Outcome {
  * a one-time hybrid pair, the account envelope signed by pair one of the
  * picked account to every keyholder in parallel, the shares opened and
  * combined, the rows from /list-case-security-records decrypted), Sign off
- * (the 12.6 message signed by pair one), Dismiss behind a confirmation, and
+ * (the line that the passkey will be asked for, and on Sign first the
+ * passkey check, since 2026-11-19, passkey-check.ts; then
+ * the 12.6 message signed by pair one), Dismiss behind a confirmation, and
  * the banker packet with Copy once the case is approved.
  */
 @Component({
@@ -225,6 +229,7 @@ interface Outcome {
           @if (signOffs().length > 0) {
             <p class="muted">{{ t().moderationCase.signedSoFar(signOffs().join(', ')) }}</p>
           }
+          <p class="muted">{{ t().passkeyCheck.note }}</p>
           <div class="form">
             <mat-form-field appearance="outline">
               <mat-label>{{ t().common.verdict }}</mat-label>
@@ -328,6 +333,7 @@ export class ModerationCasePage {
   private readonly keyholders = inject(KeyholderApiService);
   private readonly config = inject(ConfigService);
   private readonly crypto = inject(CryptoService);
+  private readonly passkey = inject(PasskeyService);
   protected readonly lang = inject(LanguageService);
   protected readonly t = this.lang.words;
 
@@ -582,9 +588,10 @@ export class ModerationCasePage {
 
   // --- sign off and dismiss ------------------------------------------------------
 
-  /** The 12.6 message signed by pair one of the picked account, then /sign-off-recovery-case. */
+  /** Sign. First the passkey check (2026-11-19, passkey-check.ts): the device is asked for the passkey that opened the session, straight from the click, before pair one is opened; a check that does not pass shows its sentence in red under the button, and nothing is signed. Then the 12.6 message signed by pair one of the picked account, then /sign-off-recovery-case. */
   protected signOff(): Promise<void> {
     return this.act(this.signOutcome, async () => {
+      await checkSessionPasskey({ crypto: this.crypto, passkey: this.passkey, session: this.session }, this.t());
       const { account, pairOne } = await this.pairOne();
       const message = { caseId: this.caseId(), accountId: account.accountId, verdict: this.verdict(), note: this.signNote().trim(), signedAt: new Date().toISOString() };
       const res = await this.masterpod.signOffRecoveryCase({ ...message, signatures: this.crypto.signSignOff(pairOne, message) });

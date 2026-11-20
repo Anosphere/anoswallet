@@ -43,7 +43,9 @@ interface Step {
  * account-creation.service (since 2026-11-08 the steps run there, so the
  * recovery's finish opens accounts the same way; this page keeps the
  * stepper through the service's step callback). Create anos account, and
- * Retry, first ask in the confirmation box (2026-11-10, wallet spec 8.9);
+ * Retry, first ask in the confirmation box (2026-11-10, wallet spec 8.9),
+ * and since 2026-11-19 the box's button asks for the passkey that opened
+ * the session before any step runs (passkey-check.ts);
  * Resubmit does not, since it makes no new account. The balances are read
  * when the page opens and by Refresh, every account; every 5 seconds
  * while an account is not on the ledger yet or any anos are held or
@@ -249,7 +251,7 @@ export class WalletPage {
     if (state === 'failed' && step < 3) this.failedBeforeRegister.set(true);
   };
 
-  /** The button under "Open a new account", as Create anos account and as Retry (wallet spec 8.2, Wallet, and 8.9; 2026-11-10). The key blob goes under the key blob key, so both keys of the session are asked for first, and a missing one shows its sentence with no box. Then the confirmation box names the type from the select; Cancel makes nothing, and its Create anos account button starts the six steps with that type. Nothing happens while a box is already open. Resubmit does not come here: it makes no new account. */
+  /** The button under "Open a new account", as Create anos account and as Retry (wallet spec 8.2, Wallet, and 8.9; 2026-11-10). The key blob goes under the key blob key, so both keys of the session are asked for first, and a missing one shows its sentence with no box. Then the confirmation box names the type from the select; Cancel makes nothing, and its Create anos account button asks the device for the passkey that opened the session (2026-11-19, passkey-check.ts; the box's second note says so) and, when that passes, starts the six steps with that type. A passkey check that does not pass leaves the box open and makes nothing. Nothing happens while a box is already open. Resubmit does not come here: it makes no new account, signs nothing new and asks for no passkey. */
   protected async askCreate(): Promise<void> {
     if (this.dialog.openDialogs.length > 0) return;
     if (!this.session.getEncryptionKey()) {
@@ -264,8 +266,9 @@ export class WalletPage {
     const confirmed = await askConfirm(this.dialog, {
       title: this.t().wallet.confirmCreateTitle(type),
       lines: [],
-      notes: [this.t().wallet.confirmCreateNote],
+      notes: [this.t().wallet.confirmCreateNote, this.t().passkeyCheck.note],
       confirmLabel: this.t().wallet.createAccount,
+      passkey: true,
     });
     if (!confirmed) return;
     await this.create(type);

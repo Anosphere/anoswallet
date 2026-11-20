@@ -7,11 +7,14 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { Router, RouterLink } from '@angular/router';
 import { anosToMillionths, millionthsToAnos } from '../amounts';
+import { checkSessionPasskey } from '../passkey-check';
 import { AnosApiService, FundSettings } from '../services/anos-api.service';
 import { CryptoService, Payout, STAKE_PURPOSES, StakePurpose } from '../services/crypto.service';
 import { GuardianAccount, GuardianAccountsService } from '../services/guardian-accounts.service';
 import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
+import { PasskeyService } from '../services/passkey.service';
+import { SessionService } from '../services/session.service';
 import { SigningService } from '../services/signing.service';
 import { shortId } from '../short-id';
 
@@ -44,7 +47,10 @@ const emptyRow = (): PayoutRow => ({ accountIdTo: '', amount: '', reason: '', st
  * /list-fund-proposals { status: 'open' } when the page opens, which also
  * tells whether a proposal is open; Post proposal, disabled while busy,
  * without a guardian account, or while a proposal is open (the reason
- * shown). Post checks each row, opens pair one of the chosen account,
+ * shown). Over the button stands the line that the passkey will be asked
+ * for (2026-11-19). Post checks each row, then asks the device for the
+ * passkey that opened the session (passkey-check.ts), opens pair one of
+ * the chosen account,
  * builds the fundProposal (crypto.buildFundProposal), has /api/sign/<n> add
  * the wallet pair and posts /fund-proposal; a 202 opens the proposal's page.
  * The refusals in words: a proposal already open, no guardian vote (the
@@ -118,6 +124,7 @@ const emptyRow = (): PayoutRow => ({ accountIdTo: '', amount: '', reason: '', st
     @if (openAlready()) {
       <p class="muted">{{ t().guardianNew.alreadyOpen }}</p>
     }
+    <p class="muted">{{ t().passkeyCheck.note }}</p>
     @if (error(); as text) {
       <p class="error">{{ text }}</p>
     }
@@ -142,6 +149,8 @@ export class GuardianNewPage {
   private readonly guardians = inject(GuardianAccountsService);
   private readonly crypto = inject(CryptoService);
   private readonly signing = inject(SigningService);
+  private readonly passkey = inject(PasskeyService);
+  private readonly session = inject(SessionService);
   private readonly router = inject(Router);
   protected readonly lang = inject(LanguageService);
   protected readonly t = this.lang.words;
@@ -204,7 +213,7 @@ export class GuardianNewPage {
     this.payouts.update((rows) => rows.map((row, i) => (i === index ? { ...row, accountIdTo: found[0].toLowerCase(), note: null } : row)));
   }
 
-  /** Post: the rows checked, pair one of the chosen account opened for the signature and dropped, /api/sign/<n>, /fund-proposal; a 202 opens the proposal's page, a refusal shows in words. */
+  /** Post: the rows checked, so that a row that is wrong is said before any passkey is asked; then the passkey check (2026-11-19, passkey-check.ts), the device asked for the passkey that opened the session, and a check that does not pass shows its sentence in the error line with nothing built or signed; then pair one of the chosen account opened for the signature and dropped, /api/sign/<n>, /fund-proposal; a 202 opens the proposal's page, a refusal shows in words. */
   protected async post(): Promise<void> {
     const proposer = this.proposer();
     if (this.busy() || !proposer || this.openAlready()) return;
@@ -212,6 +221,7 @@ export class GuardianNewPage {
     this.error.set(null);
     try {
       const payouts = this.checkedPayouts();
+      await checkSessionPasskey({ crypto: this.crypto, passkey: this.passkey, session: this.session }, this.t());
       const pairOne = await this.guardians.pairOne(proposer);
       const tx = await this.signing.sign(this.crypto.buildFundProposal(pairOne, proposer, payouts), proposer);
       const res = await this.api.fundProposal(tx);

@@ -7,11 +7,13 @@ import { MatSelectModule } from '@angular/material/select';
 import { RouterLink } from '@angular/router';
 import { millionthsToAnos } from '../amounts';
 import { CopyButtonComponent } from '../components/copy-button.component';
+import { checkSessionPasskey } from '../passkey-check';
 import { AnosApiService, FundProposal, FundSettings } from '../services/anos-api.service';
 import { CryptoService, GuardianVotePayload, Vote } from '../services/crypto.service';
 import { GuardianAccount, GuardianAccountsService } from '../services/guardian-accounts.service';
 import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
+import { PasskeyService } from '../services/passkey.service';
 import { SessionService } from '../services/session.service';
 import { SigningService } from '../services/signing.service';
 import { shortId } from '../short-id';
@@ -46,7 +48,11 @@ const CLOSED = /has closed/;
  * none can; without a guardian account the become-a-guardian sentence and
  * no select. Under it the selected account's state, or, while the vote is
  * open and the account neither proposed nor voted, For and Against, the
- * DAO page's pair, asking in place; Yes opens pair one of the account for
+ * DAO page's pair, asking in place, with the line that the passkey will
+ * be asked for under the question (2026-11-19); Yes first asks the device
+ * for the passkey that opened the session (passkey-check.ts), and a check
+ * that does not pass leaves the question open; then it opens pair one of
+ * the account for
  * the signature and drops it, builds the guardianVote follow-up, has
  * /api/sign/<n> add the wallet pair and posts /guardian-vote; the green line
  * says the vote is sent, the proposal is read again (the vote shows as
@@ -142,6 +148,7 @@ const CLOSED = /has closed/;
             @case ('canVote') {
               @if (asking(); as side) {
                 <p>{{ t().guardians.askVote(side, a.votes, shortId(a.accountId)) }}</p>
+                <p class="muted small">{{ t().passkeyCheck.note }}</p>
                 <div class="buttons">
                   <button mat-flat-button type="button" (click)="confirm()" [disabled]="busy()">{{ t().guardians.yesVote(side) }}</button>
                   <button mat-button type="button" (click)="asking.set(null)" [disabled]="busy()">{{ t().common.back }}</button>
@@ -229,6 +236,7 @@ export class GuardianProposalPage {
   private readonly guardians = inject(GuardianAccountsService);
   private readonly crypto = inject(CryptoService);
   private readonly signing = inject(SigningService);
+  private readonly passkey = inject(PasskeyService);
   private readonly session = inject(SessionService);
   protected readonly lang = inject(LanguageService);
   protected readonly t = this.lang.words;
@@ -314,7 +322,13 @@ export class GuardianProposalPage {
   }
 
   /**
-   * Yes, after the ask: pair one of the picked account for the signature
+   * Yes, after the ask. First the passkey check (2026-11-19,
+   * passkey-check.ts): the device is asked for the passkey that opened the
+   * session, straight from this click. A check that does not pass shows
+   * its sentence in the error line and leaves the question open, so Yes
+   * can be pressed again; it is the one failure that does not close the
+   * question, and nothing is built or signed. Then
+   * pair one of the picked account for the signature
    * and dropped, the guardianVote follow-up (crypto.buildFollowUp),
    * /api/sign/<n>, /guardian-vote. The ask closes; the green line says the
    * vote is sent and the proposal is read again (the vote shows as waiting
@@ -329,6 +343,14 @@ export class GuardianProposalPage {
     this.busy.set(true);
     this.done.set(null);
     this.error.set(null);
+    try {
+      await checkSessionPasskey({ crypto: this.crypto, passkey: this.passkey, session: this.session }, this.t());
+    } catch (err) {
+      // The passkey check did not pass: the question stays, so Yes can be pressed again.
+      this.error.set(err instanceof Error ? err.message : String(err));
+      this.busy.set(false);
+      return;
+    }
     try {
       const payload: GuardianVotePayload = { type: 'guardianVote', transactionId: this.transactionId(), guardianId: account.accountId, vote: side };
       const pairOne = await this.guardians.pairOne(account.accountId);

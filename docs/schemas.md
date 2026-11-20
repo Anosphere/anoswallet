@@ -1452,12 +1452,21 @@ account": a type select (spending,
 guarded, vault, assisted) and Create anos account, which first asks in
 the confirmation box (8.9; 2026-11-10, section 11): the title "Open a new
 spending account?", with the type from the select, the line "The account
-is added to the ledger and stays there for good.", and the buttons Cancel
-and Create anos account. Cancel makes nothing. Retry asks the same way,
-since it is the same button; Resubmit does not ask, since it makes no new
-account. While the encryption key or the key blob key is not in RAM the
+is added to the ledger and stays there for good.", since 2026-11-19
+(section 11) a second line, "To confirm, this phone or computer will ask
+for your passkey, the one you log in with.", and the buttons Cancel
+and Create anos account. Cancel makes nothing. Create anos account in the
+box brings up the device's passkey sheet, for the passkey that opened the
+session (the passkey check, 8.9; 2026-11-19): while the device asks, both
+buttons are off; when the check does not pass, as when the person closes
+the sheet, the box stays, says why in red under the two lines, and
+nothing is made; when the passkey answers, the box closes. Retry asks the
+same way, with the box and the passkey, since it is the same button;
+Resubmit does not ask, and asks for no passkey, since it makes no new
+account and signs nothing new. While the encryption key or the key blob
+key is not in RAM the
 button shows that key's sentence and no box. Create anos account in the
-box runs
+box, once the passkey check has passed, runs
 account-creation.service's createAccount (8.3; since 2026-11-08 the steps
 live there, so the recovery's finish opens accounts the same way, 12.3)
 with the type the box showed, the select keeping its value,
@@ -1610,10 +1619,16 @@ It does not show while the stage is waiting, when the validators would
 refuse the cancel, nor while it is cancelling. The button asks in the
 confirmation box (8.9): the title "Cancel this transfer?"; Amount, "12
 anos"; To, the receiver's full account id; the note "The 12 anos stay in
-this account. It cannot be undone."; the buttons Back and "Yes, cancel
+this account. It cannot be undone."; since 2026-11-19 (section 11) a
+second note, "To confirm, this phone or computer will ask for your
+passkey, the one you log in with."; the buttons Back and "Yes, cancel
 the transfer", the second one red since 2026-11-12 (the box's `danger`,
 8.9). The first button reads Back in this box, where Cancel
-would read as the cancel itself. Back does nothing. Yes builds the
+would read as the cancel itself. Back does nothing. "Yes, cancel the
+transfer" first asks for the passkey that opened the session (the
+passkey check, 8.9; 2026-11-19): a check that does not pass leaves the
+box open with its reason in red, and nothing is built. When it passes,
+Yes builds the
 follow-up lockedTransferCancel for the transfer the box showed,
 { type: "lockedTransferCancel", transactionId, accountId } with signedAt
 added (crypto buildFollowUp, pair one from the keyBlob); /api/sign/<n> adds
@@ -1706,8 +1721,17 @@ account's name and short id ("Spending account 1 · a1b2c3d4…e5f6", the
 short id kept whole where the line wraps); To,
 the recipient's full account id, or for a stake Stake for, the purpose;
 for a stake one more line, "A stake stays with the fund. It comes back
-only through a fund proposal that the guardians vote for."; the buttons
-Cancel and Send. A stake for daoVote or guardian has a box of its own
+only through a fund proposal that the guardians vote for."; since
+2026-11-19 (section 11), as the last line of every box, "To confirm,
+this phone or computer will ask for your passkey, the one you log in
+with."; the buttons
+Cancel and Send. Send in the box brings up the device's passkey sheet,
+for the passkey that opened the session (the passkey check, 8.9;
+2026-11-19). While the device asks, both buttons are off. A check that
+does not pass, as when the person closes the sheet, leaves the box open
+with its reason in red under the lines, and nothing is sent. When the
+passkey answers, the box closes and the send goes out as described
+below. A stake for daoVote or guardian has a box of its own
 (2026-11-12, section 11), so that it does not read like an ordinary
 send. Its title: "Stake 100 anos for DAO votes?" or "Stake 1000 anos as
 a guardian?". Its lines: the same three, Kind, From and Stake for. Its
@@ -1715,17 +1739,19 @@ notes, three, in this order: "A DAO stake gives you one vote for each
 anos. It is locked for one month since your last vote." or "A guardian
 stake gives you one vote on fund proposals for each 1,000 anos. It is
 locked for one year since your last vote."; then the line about the
-fund, as above; then "To confirm, type your username below." Under the
-notes a text box, "Your username" (the box's `typed`, 8.9). The buttons
-are Cancel and Stake, and Stake stays off until the anoPod's username
-is in the text box, compared without regard to capital letters and to
-spaces around it. Stake does what Send does in the other boxes. The
+fund, as above; then the passkey line, "To confirm, this phone or
+computer will ask for your passkey, the one you log in with." (since
+2026-11-19, section 11; until then the third note asked for the
+username, which was typed into a text box under the notes). The buttons
+are Cancel and Stake, and Stake asks for the passkey as Send does (the
+box's `passkey`, 8.9). Stake does what Send does in the other boxes. The
 month and the year are the user's words (the plan's decision 11): no
 code holds a stake for that time, and a stake comes back by a fund
 proposal, as the second note says. A stake for moderator, attestor,
 validator or masterPod and every transfer keep the box described
 first. Cancel sends nothing and leaves the form as it was
-typed. Send in the box empties the form at once, before the answer
+typed. Send in the box, once the passkey check has passed, empties the
+form at once, before the answer
 comes: Kind back to plain, Stake for back to daoVote, the recipient and
 the amount empty, the paste hint gone. The form stays empty whatever the
 answer is, accepted, refused or no answer at all, so the same send cannot
@@ -1904,17 +1930,24 @@ cancel the trade". On this page red is Dispute's alone; until
 an outlined "Dispute" beside it, and each button asked once in place.
 Nothing is asked in place any more: each button opens the confirmation
 box (8.9) with one of the five boxes of src/app/escrow-boxes.ts, and
-Release, Dispute and Cancel each ask for the username there before
-their button works. Release: "Release 5 anos to the buyer?", the lines
+Release, Dispute and Cancel each ask for the passkey there: the box's
+last note is the passkey line, "To confirm, this phone or computer will
+ask for your passkey, the one you log in with.", and its second button
+brings up the device's passkey sheet, for the passkey that opened the
+session (the passkey check, 8.9; 2026-11-19, section 11; until then each
+of the three asked for the username, typed into a text box under the
+notes, before its button worked). A check that does not pass, as when
+the person closes the sheet, leaves the box open with its reason in red,
+and nothing is sent. Release: "Release 5 anos to the buyer?", the lines
 Amount and Buyer (the buyer's account id), the notes "Do this only when
 the money is in your own bank account. A picture of a payment slip is
-not proof.", "It cannot be undone." and "To confirm, type your username
-below.", the text box "Your username", Back and "Yes, release the
-anos". Dispute: "Dispute this trade?", the notes "Use this when the
+not proof.", "It cannot be undone." and the passkey line, Back and "Yes,
+release the anos", which asks for the passkey. Dispute: "Dispute this
+trade?", the notes "Use this when the
 other side does not answer, or something is wrong.", "Attestors will
 decide the trade. After this, neither side can release or cancel it."
-and the note about the username, the text box, Back and "Yes, dispute",
-red. The cancel asks a question first: "Have you sent any money to the
+and the passkey line, Back and "Yes, dispute",
+red, which asks for the passkey. The cancel asks a question first: "Have you sent any money to the
 seller?", the note "If you cancel, the anos go back to the seller.",
 and the buttons "No, I have not paid" and "Yes, I have paid". After
 "Yes, I have paid": "Do not cancel this trade", the notes "If you
@@ -1925,9 +1958,11 @@ red "Something is wrong: dispute", which opens the Dispute box; nothing
 is cancelled on this path. After "No, I have not paid": "Cancel this
 trade?", the line Amount, the notes "The 5 anos go back to the
 seller.", "Only cancel when you have not sent any money. If you have
-paid, do not cancel.", "It cannot be undone." and the note about the
-username, the text box, Back and "Yes, cancel the trade", which is not
-red. Back in any box sends nothing, and a button of the page does
+paid, do not cancel.", "It cannot be undone." and the passkey line, Back
+and "Yes, cancel the trade", which is not
+red and asks for the passkey. The question before a cancel and "Do not
+cancel this trade" ask for no passkey: neither signs anything. Back in
+any box sends nothing, and a button of the page does
 nothing while a box is open or a send is on its way. A box that closes
 without one of its two buttons, which a step back or forward in the
 browser's history does (8.9), answers nothing (2026-11-17, section 11,
@@ -2000,9 +2035,16 @@ once per case), "another reason" when the event has none. The buttons:
 "Go to the case" (to /cases/:caseId) when there is a case, and "Cancel
 transfer" while the stage is attesting or writing, which asks once in
 place ("Cancel this transfer? The 5 anos stay in this account. It cannot
-be undone."), then "Yes, cancel the transfer" or Back. Both cancel
+be undone."), with the passkey line under the question in the page's
+muted grey since 2026-11-19 (section 11), "To confirm, this phone or
+computer will ask for your passkey, the one you log in with.", then
+"Yes, cancel the transfer" or Back. Both cancel
 buttons are red (2026-11-12, section 11; the class `danger`, 8.9):
-"Cancel transfer" and "Yes, cancel the transfer". Yes builds the
+"Cancel transfer" and "Yes, cancel the transfer". Yes first asks the
+device for the passkey that opened the session (the passkey check, 8.9;
+2026-11-19), straight from the click and before anything is built; a
+check that does not pass shows its sentence in red in the outcome line,
+the question stays, and nothing is signed. Then Yes builds the
 assistedTransferCancel follow-up as the removed form did (crypto
 buildFollowUp, pair one from the keyBlob), /api/sign/<n> adds the wallet
 pair, /assisted-transfer-cancel takes it, then "Sent. The transfer is
@@ -2176,10 +2218,30 @@ opens a small form in the card, From
 (this pod's spending accounts; one is fixed, more is a select), To (the
 other person's account ids in the chat, newest first; one is fixed),
 Amount in anos (the listing's quantity at first), the total at the
-listing's price, Start and Cancel; Start asks once in place ("Put 100
-anos into escrow for somchai? You release them once you have been paid.
-Only the buyer can cancel; either side can dispute.", Yes or Back), and
-Yes builds the escrowTransfer as the account page's Send does (pair one
+listing's price, Start and Cancel. Start opens the confirmation box
+(8.9) with the Start box (`startBox` of src/app/escrow-boxes.ts;
+2026-11-19, section 11). The box's title is "Put the anos in escrow",
+the words of the card's button. Its first note is the question, "Put
+100 anos into escrow for somchai? You release them once you have been
+paid. Only the buyer can cancel; either side can dispute.", for the
+amount as the form has it when Start is pressed. Its second note is the
+passkey line, "To confirm, this phone or computer will ask for your
+passkey, the one you log in with." Its buttons are Back and Yes. Back
+sends nothing and leaves the form as it was, and so does a box closed
+by a step back in the browser's history. Yes asks the device for the
+passkey that opened the session (the passkey check, 8.9), straight from
+its click: a check that does not pass shows its sentence in red in the
+box, the box stays open, and nothing is read, built or signed. The
+accounts and the amount are taken when Start is pressed, so what is
+sent is what the box asked about. Start does nothing while a box is
+open or a send is on its way. Until 2026-11-19 Start asked once in
+place: the question stood in the card, under the form, with Yes or
+Back. The build of that day first put the passkey line under it, small
+and grey. With that line a phone screen less than 600 to 620 pixels
+high no longer showed Yes and Back, and the card cannot be scrolled, so
+the question went into the box before that build was committed (section
+11). Once the check has passed and the box has closed, the card
+builds the escrowTransfer as the account page's Send does (pair one
 from the account's keyBlob and the encryption key, /get-account for the
 latest transaction id, buildAnosTransferTransaction with type
 escrowTransfer, /api/sign/<n>, /anos-transfer). What follows the answer
@@ -2200,8 +2262,10 @@ may hide a trade that started: found open, it has started and no error
 shows; otherwise the card says "The validators did not answer. If the
 trade started, it will show here in a moment. If it does not, try again."
 and the form stays for another try. A trade the check finds, open or
-released, closes the form, so its question does not come back by itself
-once that trade is cancelled.
+released, closes the form, so the form does not come back by itself
+once that trade is cancelled. A Start box that is open at that moment
+stays open; its Yes then meets the fresh check of the next paragraph,
+which sends nothing.
 
 The chat's trade (rewritten 2026-11-10, section 11, from
 forclaude/wallet-finished-trade-plan-1.md): the card reads it from the
@@ -2242,8 +2306,10 @@ quantity, "The listing says 100 anos, but only 40 are in escrow. Pay
 only for those." Then the row of buttons. For the seller of a held
 trade, "I have been paid: release the anos" (filled): it opens the
 Release box of the escrow trade page (8.9; `releaseBox` of
-src/app/escrow-boxes.ts) with the buyer's account id and the username to
-type, Back sends nothing, and Yes sends the release through
+src/app/escrow-boxes.ts) with the buyer's account id and the passkey
+line (2026-11-19, section 11; until then the username was typed in the
+box), Back sends nothing, and Yes asks for the passkey in the box and,
+when that passes, sends the release through
 escrow-actions.service (8.3). The card then checks the chat's trade
 once. An answer that failed shows in the card's error line, as the
 refusal in plain words of the Escrow trade paragraph, only when after
@@ -2283,7 +2349,11 @@ with "How a trade works" as the row's only button: to the buyer, amber,
 "The wallet could not reach the validators. It is trying again. Do not
 pay until this box says In escrow.", to the seller, grey, the first two
 of those sentences (until 2026-11-17 the card said "Could not check for
-a trade. Trying again." where its two buttons go). The Yes of Start runs one fresh check before
+a trade. Trying again." where its two buttons go). The Yes of the Start
+box runs one fresh check, after the passkey check has passed in the box
+(2026-11-19, section 11; the passkey is asked first because Safari opens
+the passkey sheet only for a tap, so it cannot wait behind a read) and
+before
 anything is built or signed: when it cannot be read, nothing is sent and
 the card says "Could not check for an earlier trade, so nothing was sent.
 Try again."; when it finds a trade open or released, nothing is sent and
@@ -2709,10 +2779,17 @@ fund proposal can be open at a time."; Post proposal, disabled while
 busy, without a guardian account, or while a proposal is open, "A fund
 proposal is already open. Wait until it is decided." shown as the reason
 (a refused quiet read shows in red instead, and Post stays enabled: the
-validator refuses with words). Post checks each row ("Payout 2: the
+validator refuses with words). Over the button, above the red error
+line, stands the passkey line in the page's muted grey since 2026-11-19
+(section 11): "To confirm, this phone or computer will ask for your
+passkey, the one you log in with." Post checks each row ("Payout 2: the
 recipient must be an account id of 64 hex characters", "Payout 2: the
 amount must be anos with up to six decimals"; the recipient lower-cased,
 the amount as millionths, the reason trimmed, stakeFor only when picked),
+then asks the device for the passkey that opened the session (the
+passkey check, 8.9; 2026-11-19), so a row that is wrong is said before
+any passkey is asked, and a check that does not pass shows its sentence
+in the error line with nothing built or signed; then it
 opens pair one of the chosen account for the signature and drops it,
 builds the fundProposal (crypto.buildFundProposal: the fund as accountId,
 the chosen account as guardianId, no previousTransactionId), has /api/sign/<n>
@@ -2763,9 +2840,16 @@ for" / "You voted against" with the colored thumb, or, while the status
 is open and the account is neither the proposer nor in the votes, two
 big outlined buttons side by side, the green thumb_up "For" and the red
 thumb_down "Against", the DAO page's pair; either asks in place, "Vote
-for with 3 votes from a1b2c3d4…e5f6? It cannot be undone." with "Yes,
+for with 3 votes from a1b2c3d4…e5f6? It cannot be undone.", with the
+passkey line under it, small and grey, since 2026-11-19 (section 11),
+"To confirm, this phone or computer will ask for your passkey, the one
+you log in with.", and with "Yes,
 vote for" and Back (a new pick in the select closes the question, which
-named the account). Yes opens pair one of the selected account from its
+named the account). Yes first asks the device for the passkey that
+opened the session (the passkey check, 8.9; 2026-11-19): a check that
+does not pass shows its sentence in the red error line and leaves the
+question open, so Yes can be pressed again, where every other failure
+closes the question. Then Yes opens pair one of the selected account from its
 keyBlob for the signature and drops it, builds the guardianVote
 follow-up (crypto.buildFollowUp: type guardianVote, the proposal's
 transactionId, the account as guardianId, the vote), has /api/sign/<n> add
@@ -2848,7 +2932,10 @@ excepted, with the keyholder and anos calls included.
                             the credential id, hex, of the passkey that opened the session, set by the unlock flow
                             and by Create, null again at close, which the Passkeys page marks "In use now"; since
                             the same day the key blob key is derived from the PRF output only for the main
-                            passkey, and for an added one it is that passkey's wrapped copy, opened (8.2, Landing)
+                            passkey, and for an added one it is that passkey's wrapped copy, opened (8.2, Landing);
+                            since 2026-11-19 (section 11) the credential id and the PRF output also serve the
+                            passkey check (8.9): the device is asked for that credential, and its answer is
+                            compared with the two the session kept
     masterpod-api.service   the keyholder test app's api.service.ts, base path /api/masterpod, the two changed
                             routes and the four new ones added; the marketplace routes of 2026-11-06: getListing,
                             listingId on createChatRoom, mine and status any on listListings, no hpkeKey on
@@ -3060,7 +3147,10 @@ excepted, with the keyholder and anos calls included.
                             and can be asked of one passkey alone (its id and transports as the allowed list),
                             the third tap of an add (8.2, Passkeys); of the five callers of before, the
                             registration of a recovery case's passkey passes the exclude list since 2026-11-18
-                            (12.3), and the four others pass neither new argument
+                            (12.3), and the four others pass neither new argument; since 2026-11-19 (section 11)
+                            the passkey check (passkey-check.ts, 8.9) is one more caller of the one-passkey
+                            assert: the passkey that opened the session, by its credential id, with an empty
+                            transports list
     shares.service          the deposit rule of section 6, one function: deposit(secret, shareType)
     account-creation.service
                             opening an anos account (2026-11-08): createAccount(type, onStep) runs the six steps
@@ -3225,7 +3315,11 @@ src/app/components/:
   a held trade it opens the Release box (`releaseBox` of
   src/app/escrow-boxes.ts, with `askConfirm`, 8.9) and sends the release
   through `EscrowActionsService` (8.3), and it calls `escrowStageWords`
-  no more.
+  no more. Since 2026-11-19 (section 11) the Start of the seller's form
+  opens the Start box of the same file (`startBox`, with `askConfirm`),
+  and the card holds no question of its own for it: its signal
+  `confirmStart` is gone, and one field, `boxOpen`, keeps Start and the
+  Release button from opening a second box.
 
 Two more small components, for the chat on an attestor case (2026-11-12,
 section 11; the plan is forclaude/wallet-case-chats-plan-1.md), under
@@ -3293,7 +3387,9 @@ marketplace chat gives all five, 8.2, Chat), while escrow-boxes.ts
 holds the five boxes as five functions, `releaseBox`, `disputeBox`,
 `paidQuestionBox`, `doNotCancelBox` and `cancelBox`, each answering the
 `ConfirmData` that `askConfirm` takes (8.9), so every page that opens
-one of them opens the same box.
+one of them opens the same box. A sixth function stands with them since
+2026-11-19 (section 11), `startBox(words, anos, name)`: the Start box of
+the pinned card (8.2, Chat), which the escrow trade page does not open.
 
 ### 8.8 The languages
 
@@ -3483,6 +3579,23 @@ line stands over each: the chat page knows the message by those words
 words kept there. The English is the plan's, letter for letter; the ten
 Thai lines are the build chat's, by the glossary and by the Thai the
 file had for the same things, and no Thai reader has read them.
+The passkey wherever the wallet signs with an account's key
+(2026-11-19, section 11): one new section, and three entries gone. The
+new section, `passkeyCheck`, stands after `passkey` and in front of
+`shares`: five entries, one of them a function (`failed`). `note` is the
+passkey line, "To confirm, this phone or computer will ask for your
+passkey, the one you log in with.", which stands in every box that asks
+for the passkey and near every button that asks without a box (8.9).
+`notFinished`, `otherPasskey`, `failed` and `noSession` are the four
+sentences of a check that did not pass, and each says "so nothing was
+done". Three entries are gone from both files, with the typed username:
+`escrowBoxes.typeNote` and `account.stakeTypeNote`, both "To confirm,
+type your username below.", and `common.yourUsername`, the label of the
+text box. Nothing else used them. `accountLedgerId.typed` is another
+thing and stays. The English is the plan's, letter for letter; the five
+Thai lines are the build chat's, by the glossary and by the Thai the
+file had for the same things, with "Log in" named by the label
+`landing.unlock` gives it, and no Thai reader has read them.
 
 ### 8.9 The confirmation box
 
@@ -3508,7 +3621,9 @@ on-surface-variant colour and the value beside it, in the id font when
 `code` is true; `notes`, each a paragraph under the lines;
 `confirmLabel`, the words on the second button; since 2026-11-11
 (section 11), `cancelLabel`, which a caller may leave out: the words on
-the first button; and, since 2026-11-12, `typed` and `danger`, which
+the first button; and `passkey` (since 2026-11-19, section 11; it took
+the place of `typed`, which stood here from 2026-11-12) and `danger`
+(since 2026-11-12), which
 are described two paragraphs down. A value too long for its
 column wraps at a space, and is cut inside a word only when the word
 alone is too long (`overflow-wrap: anywhere`); a value in the id font is
@@ -3516,9 +3631,21 @@ cut anywhere, by the global rule for `code`, so a 64-character id wraps
 on a phone (2026-11-10, section 11: at first every value was cut
 anywhere). The two buttons, at the right: the first, which closes with
 false and reads Cancel (`common.cancel`), or the caller's `cancelLabel`
-when one is given; and the caller's button, which closes with true.
+when one is given; and the caller's button, which closes with true: at
+once, or, in a box with `passkey`, once the passkey check has passed
+(the next paragraph).
 
-The box closes by those two buttons. A click outside it and the
+The box closes by those two buttons. In a box with `passkey`
+(2026-11-19, section 11) the second button does not close the box at
+once. Its click asks the device for the passkey that opened the session
+(the passkey check, two paragraphs down), straight from the click. While
+the device asks, both buttons are off. When the check passes, the box
+closes with true. When it does not, as when the person closes the
+device's passkey sheet, the box stays open, the reason shows under the
+notes in red, and both buttons work again, so the second can be pressed
+once more and the first still closes the box with false. A box that was
+closed meanwhile, by a step back in the browser's history, stays closed
+with no answer. A click outside it and the
 Escape key do nothing (`disableClose`), so the second click of a double
 click on the page's button cannot close the box or answer it. One more
 thing closes it (put right on 2026-11-17, section 11; until then this
@@ -3537,15 +3664,49 @@ that is narrower.
 
 Two more fields, each of which a caller may leave out (2026-11-12,
 section 11; the plan is forclaude/wallet-case-chats-plan-1.md, its step
-5). `typed`, `{ label, expected }`: the box shows one text box under the
-notes, an outlined field with the caller's label, as wide as the box,
-with the browser's suggestions and its capital first letter turned off
-(`autocomplete="off"`, `autocapitalize="none"`). The second button then
-stays off until what is typed equals `expected`, both trimmed and in
-small letters, and the half second has passed. The text box stands in
-no form, so the Enter key in it answers nothing. The focus still goes
-to the box itself when it opens, so the person taps the text box to
-type. `danger`, true or left out: with true the second button carries
+5). The first of them was `typed`, `{ label, expected }`, until
+2026-11-19: one text box under the notes, for the anoPod's username, and
+the second button stayed off until it was typed. It is gone (section 11;
+the plan is forclaude/wallet-chat-and-passkey-plan-1.md, its step 2):
+no box has a text box any more, no box asks for a typed username, and
+the component no longer draws a form field. In its place stands
+`passkey`, true or left out. With true the second button asks for the
+passkey before the box closes with true, as the paragraph above has it,
+and a check that did not pass shows its sentence as one red line under
+the notes (the class `error`, the theme's error colour), where the text
+box stood. Left out, the second button closes the box with true at
+once. The check is `checkSessionPasskey(services, words)` in
+src/app/passkey-check.ts, one function in a file of its own, as
+unlock.ts is; the component injects `CryptoService`, `PasskeyService`
+and `SessionService` and hands them over. It asks the device for the
+passkey that opened this session, that one alone: `PasskeyService`'s
+`assert` with a fresh random challenge of 32 bytes and `only`, the
+credential id the session kept at Log in (`passkeyCredentialId`, 8.3)
+with an empty transports list, so the browser's `allowCredentials` is
+that one credential with no hint of where it lives. It passes when that
+passkey answered: the credential id of the answer and its PRF output are
+the ones the session kept at Log in. Otherwise it throws one of four
+sentences of the dictionary's group `passkeyCheck` (8.8). "The passkey
+step was not finished, so nothing was done. Press the button to try
+again.": the person closed the device's passkey sheet or it ran out of
+time (the browser's `NotAllowedError`). "The passkey could not be used,
+so nothing was done: <reason>": anything else the device or the browser
+said. "That was not the passkey you logged in with, so nothing was
+done.": another passkey answered. "This tab no longer has what the
+passkey step needs, so nothing was done. Log in again.": the session
+holds no credential id or no PRF output. Nothing goes to a server and
+nothing is kept. The check is the wallet's own, a lock on a button: it
+stops a slip of the finger and a second person holding the unlocked
+phone. It is not a check by the validators or the signing servers. The
+keys that sign also sign every read of a balance, every few seconds, so
+the key that opens them stays in the tab after Log in, and code that got
+into the wallet's page could go around the check. It must be called
+straight from the click that asks for it, before any other wait: Safari
+opens the passkey sheet only for a tap ("Face ID and Touch ID for the
+web require user gestures to function", and the gesture is carried
+through XHR and fetch for 10 seconds;
+webkit.org/blog/11312/meet-face-id-and-touch-id-for-the-web, read
+2026-11-19). `danger`, true or left out: with true the second button carries
 the class `danger`. That class is one rule in src/styles.css, the
 wallet's global style file. It sets five of Material's button variables
 to the theme's error colours: a filled button is red with the on-error
@@ -3570,7 +3731,9 @@ src/app/escrow-boxes.ts (8.7): Release, Dispute, the question before a
 cancel, "Do not cancel this trade" and Cancel; and, since the same day
 (section 11), the pinned card of a marketplace chat (8.2, Chat), whose
 "I have been paid: release the anos" opens the Release box of that
-file. All of them open it with `askConfirm`, but for one box: the
+file, and whose Start, in the seller's form, opens the Start box of
+that file since 2026-11-19 (section 11). All of them open it with
+`askConfirm`, but for one box: the
 escrow trade page opens its question before a cancel with `askChoice`,
 since that box's first button, "No, I have not paid", is an answer of
 its own, and a box closed without a button must not be read as it. The
@@ -3578,15 +3741,57 @@ third, the fourth and the fifth
 place give `cancelLabel`, the first two keep Cancel: the cancel of a
 locked transfer gives Back (`common.back`), since Cancel there would
 read as the cancel itself, and so do four of the escrow trade's boxes,
-the card's Release among them,
-while its question before a cancel gives "No, I have not paid". The
+the card's Release among them, and the card's Start box,
+while the question before a cancel gives "No, I have not paid". The
 third and the fourth place give `danger`: the cancel of a locked transfer, and of
 the escrow trade's boxes the two whose second button disputes, Dispute
 ("Yes, dispute") and "Do not cancel this trade" ("Something is wrong:
-dispute"). `typed` comes from the Send form, only for a stake for
-daoVote or guardian, and from the Release, Dispute and Cancel boxes of
-the escrow trade page and the card's Release: the label "Your username" and the anoPod's
-username. Each does nothing while a box is already open.
+dispute"). Every box gives `passkey` (2026-11-19, section 11) but two of
+the escrow trade's five, the question before a cancel and "Do not cancel
+this trade", which sign nothing: the Send box, for every kind of send
+and every stake; the box before a new anos account, for Create anos
+account and for Retry; the cancel of a locked transfer; the Release,
+Dispute and Cancel boxes of an escrow trade, the card's Release among
+them; and the card's Start box. Each of these boxes ends its notes with
+the passkey line, "To
+confirm, this phone or computer will ask for your passkey, the one you
+log in with." (`passkeyCheck.note`). Each does nothing while a box is
+already open.
+
+Seven more buttons sign with an account's key and open no box
+(2026-11-19, section 11). They ask in the page or asked nothing until
+then, and no new pop-up box was made for them: the passkey check is the
+first thing their click does, before anything is read from a server,
+built or signed, and the passkey line stands near the button. (An
+eighth was among them as that day's build first stood: Yes, under "Put
+the anos in escrow" in the pinned card of a marketplace chat. It asked
+in the card, and its question went into the Start box before the build
+was committed; 8.2, Chat.) "Yes, cancel the transfer" on the assisted
+transfer page. "Post
+proposal" on the New fund proposal page, after the rows are checked.
+"Yes, vote for" and "Yes, vote against" on the Fund proposal page. "Sign
+the attestation", "Sign the verdict" and "Sign all attestations" on the
+attestor's three case pages (13.3), the last one once for all its moves.
+And Sign on the moderator's recovery case page (12.3). A check that does
+not pass throws its sentence, and the page shows it where it shows every
+other failure of that button; nothing is signed. With the seven boxes
+that ask (the Send box, the box before a new anos account, the cancel
+of a locked transfer, Release, Dispute, Cancel and Start) that
+makes fourteen buttons, which is every place the wallet signs with an
+account's key: twelve calls in ten files hand what they built to
+`SigningService.sign` (8.3), and the moderator's sign-off signs with
+pair one itself (`CryptoService.signSignOff`). What asks for no passkey:
+every request to the masterpod, which is signed with the keys of the
+log-in (a chat message, "Send my account" in the card, a listing and its
+close, a DAO proposal, a support and a vote on one, and an attestor's or
+a moderator's Schedule, "Share the case key" and Dismiss); a read, which
+an account's keys sign too (a balance, a history, a trade, and an
+attestor's or a moderator's Pull key); a button that signs nothing new
+(Resubmit on the Wallet page, and "Send to the validators" and Retry on
+the attestors' case pages, which post what was signed before); and the
+run at the end of a recovery (12.3), which opens its new accounts
+through account-creation.service and moves the anos with the break-glass
+keys.
 
 ## 9. Configuration, and running it on this machine
 
@@ -11825,6 +12030,529 @@ had: they guard against a second send.
   `forclaude/wallet-deploy-plan-1.md`, wallet1 and then wallet2, with
   no setting in `network/wallet.env` and no `npm ci`.
 
+### The passkey wherever the wallet signs with an account's key (2026-11-19)
+
+Built from `forclaude/wallet-chat-and-passkey-plan-1.md` (FINAL,
+2026-11-19), its step 2 of six, its section 2, one commit, on main at
+11196f5, which is step 1 of the same plan, the working tree clean. Why,
+in the user's words of 2026-11-19: "Before releasing coins out of escrow
+the user is prompted to type in their username. We might want to change
+this instead to using their passkey to confirm? The username thing is
+confusing people. And having a biometric lock is helpful anyway on that
+step." Then: "Yes, passkey on all." Then: "And while we're at it, I
+think each transaction send should require a passkey use. I think that
+makes it more safe." And, asked which buttons: "Yeah, let's do the
+passkey on each of those as well. Basically, we'll be replacing type
+user name with the passkey prompt." And of a new anos account: "I want
+them to both click ok, and also put in the passkey next. That way we
+prevent accidental sign ups." Wallet only: no route, no line of
+`network/wallet.env` and no npm package; the masterpod, the validators,
+the doormen, the keyholders, the signing servers and the proxy
+(`server/`) are not touched.
+
+What it is. Wherever the wallet signs with an account's key, the button
+first asks the device for the passkey that opened the session, and goes
+on only when that passkey answers. It is a lock on the button, checked
+by the wallet itself. It stops a slip of the finger and a second person
+holding the unlocked phone. It is not a check by the validators or the
+signing servers: the keys that sign also sign every read of a balance,
+every few seconds, so the key that opens them stays in the tab after
+Log in, and this step cannot take it away. Code that got into the
+wallet's page could go around the check. Safari's rule, read on WebKit's
+own page on 2026-11-19
+(webkit.org/blog/11312/meet-face-id-and-touch-id-for-the-web): "Face ID
+and Touch ID for the web require user gestures to function", and the
+gesture is carried through XHR and fetch for 10 seconds. So the passkey
+is asked straight from the click of the button that signs, before any
+other wait.
+
+The fourteen buttons, the table of the plan's section 2, with its
+seventh row as the build ended: the plan has that button, the Yes of
+the chat card's Start, asking in the card, and it got a box of its own
+before the commit, on the user's word (the plan's decision 12, added
+that day; the bullet "The card's Start in the pop-up box", below). So
+the first seven ask in the confirmation box. Six of them did so before,
+and their box gained the passkey. The other seven asked in the page or
+asked nothing, and there the passkey is the first thing the click does.
+
+| The button that brings up the passkey sheet | Where it is | What is signed |
+| --- | --- | --- |
+| Send, or Stake, in the box | the Send form of an account's page | every transfer and every stake |
+| "Yes, cancel the transfer", in the box | "Cancel transfer" under the Locked transfer row of an account's page | the cancel of a guarded or vault transfer |
+| "Create anos account", in the box | "Create anos account", and Retry, on the Wallet page | a new anos account |
+| "Yes, release the anos", in the box | the escrow trade page, and "I have been paid: release the anos" in the chat's card | the release |
+| "Yes, dispute", in the box | the escrow trade page | the dispute |
+| "Yes, cancel the trade", in the box | the escrow trade page | the buyer's cancel |
+| Yes, in the box | Start, in the form of "Put the anos in escrow" in the chat's card | the escrow transfer |
+| "Yes, cancel the transfer" | the assisted transfer page | the cancel of an assisted transfer |
+| "Post proposal" | the New fund proposal page | a guardian's fund proposal |
+| "Yes, vote for", "Yes, vote against" | the Fund proposal page | a guardian's vote |
+| "Sign the attestation" | the attestor's trade case page | one attestation |
+| "Sign the verdict" | the attestor's dispute case page | one verdict |
+| "Sign all attestations" | the attestor's recovery case page | one attestation for each move |
+| Sign | the moderator's recovery case page | the sign-off |
+
+One click asks once, however many signatures it makes. What asks for no
+passkey is in 8.9.
+
+- `src/app/i18n/en.ts` and `th.ts`. A new section `passkeyCheck` after
+  `passkey`, five entries: `note`, `notFinished`, `otherPasskey`,
+  `failed`, a function, and `noSession`. Three entries are gone from
+  both files: `escrowBoxes.typeNote`, `account.stakeTypeNote` and
+  `common.yourUsername`. The English is the plan's 2.1, letter for
+  letter.
+- The five Thai lines, the build chat's, in full. No Thai reader has
+  read them; "Thai read by a Thai reader" stands on the after-production
+  list.
+  `passkeyCheck.note`: "เพื่อยืนยัน โทรศัพท์หรือคอมพิวเตอร์เครื่องนี้จะขอพาสคีย์ของคุณ ซึ่งเป็นพาสคีย์ที่คุณใช้เข้าสู่ระบบ".
+  `passkeyCheck.notFinished`: "ขั้นตอนพาสคีย์ไม่เสร็จสิ้น จึงไม่ได้ทำสิ่งใด กดปุ่มเพื่อลองอีกครั้ง".
+  `passkeyCheck.otherPasskey`: "นั่นไม่ใช่พาสคีย์ที่คุณใช้เข้าสู่ระบบ จึงไม่ได้ทำสิ่งใด".
+  `passkeyCheck.failed`: "ไม่สามารถใช้พาสคีย์ได้ จึงไม่ได้ทำสิ่งใด: ${reason}".
+  `passkeyCheck.noSession`: "แท็บนี้ไม่มีสิ่งที่ขั้นตอนพาสคีย์ต้องใช้อีกต่อไป จึงไม่ได้ทำสิ่งใด เข้าสู่ระบบอีกครั้ง".
+  How they were made, from the glossary and style of
+  `forclaude/wallet-languages-plan-1.md` 1.6 and from the Thai the file
+  had. "To confirm" is "เพื่อยืนยัน", as the two entries that went had
+  it. "Log in" is "เข้าสู่ระบบ", the label `landing.unlock` gives it, used
+  as a verb in all three places. "This phone or computer" is
+  "โทรศัพท์หรือคอมพิวเตอร์เครื่องนี้", after `findPasskey.s2Question`,
+  which has "โทรศัพท์หรือคอมพิวเตอร์เครื่องอื่น" for another one. "Will
+  ask for" is "จะขอ", as `setup.unlockHint` has it. "The passkey step"
+  is "ขั้นตอนพาสคีย์", with the glossary's word for a step. "Press" is
+  "กด", as `vouching.what2` has it, where a tap is "แตะ". "That was not"
+  is "นั่นไม่ใช่", as `accountPasskeys.notNew` has it. "Could not be
+  used" follows the glossary's "ไม่สามารถ…ได้". "No longer" is
+  "อีกต่อไป", as `assisted.noLongerHeld` has it. Two readings of the
+  build's own. "So nothing was done" is "จึงไม่ได้ทำสิ่งใด" in all four
+  sentences, with the written "สิ่งใด" the file uses for "nothing",
+  where `pinned.notSentUnread` says "จึงยังไม่ได้ส่งอะไร" for "so nothing
+  was sent". And "was not finished" is "ไม่เสร็จสิ้น", not "ยังไม่เสร็จ",
+  which would read as still going on. No sentence ends in a full stop.
+- `src/app/passkey-check.ts`, new, as the plan's 2.2 gives it, with a
+  file comment over the imports: one function,
+  `checkSessionPasskey(services, words)`, and the interface of the three
+  services it is handed. `passkey.service.ts` got no code; its class
+  comment names the new caller of the one-passkey assert.
+- `src/app/components/confirm-dialog.component.ts`, as the plan's 2.3
+  gives it: `ConfirmData.passkey` in the place of `typed`; the red line
+  in the place of the text box; both buttons off while the device asks;
+  the injected dialog ref and the three services; `asking` and
+  `passkeyError` in the place of `typedText` and `typedOk`; the method
+  `yes()`; the style `.error` in the place of `.typed`; `FormsModule`,
+  `MatFormFieldModule` and `MatInputModule` out of the imports, and
+  `computed` out of the import from `@angular/core`. `askConfirm` and
+  `askChoice` have the bodies and the comments they had.
+- `src/app/escrow-boxes.ts`: `releaseBox`, `disputeBox` and `cancelBox`
+  lost the parameter `username`, end their notes with
+  `passkeyCheck.note` and give `passkey: true`. `paidQuestionBox` and
+  `doNotCancelBox` are as they were. A sixth function, `startBox`, came
+  before the commit (the bullet "The card's Start in the pop-up box").
+- The pages that open a box, as the plan's 2.5 gives them.
+  `src/app/pages/escrow-trade.page.ts`: the four calls without the
+  username. `src/app/components/pinned-listing.component.ts`,
+  `release()`: the call without the username.
+  `src/app/pages/account.page.ts`: in `askSend()` the three lists of
+  notes, each ending with the passkey line, and `passkey: true` in the
+  place of `typed`; in `askCancelLocked()` the second note and
+  `passkey: true`. `src/app/pages/wallet.page.ts`, `askCreate()`: the
+  second note and `passkey: true`. `resubmit()` and
+  `src/app/services/account-creation.service.ts` are not touched.
+- The buttons that sign without a box, as the plan's 2.6 gives them:
+  eight as first built, seven as committed, since the first of 2.6, the
+  card's Start, asks in a box now (the bullet "The card's Start in the
+  pop-up box"). Each of the seven files got the two imports, the
+  injected `PasskeyService`, the check line and the passkey line in the
+  template. The card had them too as first built, with the check line
+  in `start()` after the line that throws `pickAccounts` and before the
+  check for an earlier trade; they left the card again when the box
+  came. The assisted transfer
+  page's `confirm()`: the first line inside the `try`. The New fund
+  proposal page's `post()`: after the rows are checked; that page got
+  `SessionService` too. The Fund proposal page's `confirm()`: a block of
+  its own in front of the method's `try`, which leaves the question
+  open. The three attestor pages: after the line that throws
+  `caseNotLoaded`, on the recovery case page after the line that throws
+  `noMoves`. The moderator's page: the first line of the function handed
+  to `act`. In the card, `share()`, `tell()` and every rule by which the
+  card finds the chat's trade have the code they had; `check()` lost
+  two lines that closed the question in the card, when the question
+  left the card, and nothing else.
+- README: the line of `passkey-check.ts` after `unlock.ts`; the line of
+  `confirm-dialog.component.ts`; "and of the passkey check" in the line
+  of `passkey.service.ts`.
+- Spec: 8.2 (the paragraphs "Wallet. Titled", "The sender can cancel the
+  locked transfer from its row", "Send: recipient account id", "Escrow
+  trade, at", "Assisted transfer, at", "The pinned card", "The chat's
+  trade", "New fund proposal, at" and "Fund proposal, at"), 8.3 (the
+  lines of `session.service` and `passkey.service`), 8.8, 8.9 (the whole
+  section), 12.3 (the bullet "Sign off"), 13.3 (the three bullets of the
+  sign-offs) and this note. Nothing in 8.7 changed: its lines on
+  `releaseBox` and `escrow-boxes.ts` do not speak of the username.
+- What follows from the plan's code, written here so that it is not
+  taken for a fault. In a box, the first button is off too while the
+  device asks, so a person closes the device's passkey sheet first and
+  the box after it. A box that a step back in the browser's history
+  closed while the device asked stays closed, and its answer is dropped:
+  nothing is sent. The passkey line is the last note of a box, so in the
+  stake box it stands where the note about the username stood. At the
+  card's Start the passkey comes before the check for an earlier trade,
+  so a seller can give the passkey and then read "Nothing was sent. This
+  chat already has an escrow trade."; the plan's decision 11 puts the
+  passkey first because Safari opens the sheet only for a tap, and it
+  is so in the Start box as it was in the card. On the New fund
+  proposal page a wrong row is said before any passkey is asked. On the
+  Fund proposal page a check that did not pass leaves the question open,
+  where every other failure closes it. The fourth sentence, `noSession`,
+  is a guard: every session that can sign with an account's key came
+  through Log in, or through setup's own unlock, and holds both things
+  the check needs.
+- Readings where the plan left a detail open. BUILD-DATE is 2026-11-19.
+  The file comment of `passkey-check.ts` is the build's wording and
+  stands over the imports, as in `trade-messages.ts`. The plan's 2.2
+  says the class comment of `passkey.service.ts` "gains the third user
+  of the one-passkey assert". In the code the passkey check is the
+  second caller of `assert` with `only`; the first is the third tap of
+  an add. The comment gained one sentence that begins "Since
+  2026-11-19", and no sentence of before was reworded. In the comments
+  the plan names, the passkey was added in dated sentences. One older
+  sentence was reworded, in the doc comment of the card's `start()`:
+  "one fresh check first" reads "one fresh check before anything is
+  built", since the passkey check is first now. In 8.2 the three
+  sentences on the typed username left the stake box's text, and one
+  clause in brackets says what stood there until 2026-11-19. Each new
+  import stands in its place by its path, and the injected `passkey`
+  after `signing` (after `crypto` on the moderator's page, which has no
+  `signing`).
+- The look, where. A development build in a scratch folder on this Mac,
+  served by a plain file server on 127.0.0.1 (a temporary entry in
+  `/Users/codex/.claude/launch.json`, taken out again; the file is byte
+  for byte what it was), in the Claude app's browser pane, in English
+  and in Thai, at 360, 375, 390 and 430 pixels wide. The screens were
+  360x640, 375x667, 390x844 and 430x932, and two short ones for the
+  boxes and the card, 360x560 and 375x553. A made-up session was set
+  through the `ng` debug tools: an anoPod id, a username, a status and
+  three accounts. Each box was opened by its page's own method, with
+  the form's values set by hand. The four staff pages were reached too:
+  the edition was set by hand as `/api/config` would give it, and the
+  case reads were answered in the browser. None of our servers was
+  asked: the request list shows the file server and Google's font
+  files. Not on a phone and not on the live wallet. The pane was not on
+  screen while the look ran, so no box was watched opening; the measures
+  and the pictures do not need it.
+- The look, no passkey. The passkey itself cannot be tried in that
+  build: a passkey belongs to the wallet's own address. So the device's
+  answer was a stand-in, set on the wallet's passkey service in the
+  scratch page: the person closed the sheet, another passkey answered,
+  the device said something else, or the session's passkey answered. No
+  passkey was asked for and the browser's passkey call was never made.
+  The first real try is the user's, on the live wallet.
+- The look, the seven boxes: the Send box, a DAO stake box (and the
+  guardian stake box, which is its size), the cancel of a locked
+  transfer, "Open a new spending account?", Release, Dispute and Cancel.
+  A box is the screen's width less 32 pixels. At the four sizes every
+  box is whole inside the screen, its content does not scroll, nothing
+  runs past an edge, and the two buttons stand on one row; the widest
+  pair is Back with "Yes, cancel the transfer", 64 and 197 pixels. No
+  box has a text box. The passkey line is two lines in English in every
+  box at every width. In Thai it is three lines at 360 and two from 375.
+  The tallest box is the stake box: 457 pixels in English and 477 in
+  Thai at 360.
+- The look, the red line in a box, with the device's answer standing in.
+  While the device is asked both buttons are off. Then the box stays
+  open, the red line stands under the notes, and both buttons work
+  again; a second press asks again, and the first button closes the box
+  with nothing sent and the form as it was. "The passkey step was not
+  finished, so nothing was done. Press the button to try again." is
+  three lines at 360 and 375 and two at 390 and 430; the Thai is two
+  lines at every width. The longest sentence the code can make from the
+  dictionary is "The passkey could not be used, so nothing was done: The
+  authenticator returned no PRF output; this passkey or platform does
+  not support PRF": four lines at 360 and 375, three at 390 and 430, and
+  three in Thai. With it the stake box is 549 pixels at 360, still whole
+  on a 360x640 screen. On the two short screens every box is whole with
+  the first red sentence. With the longest one the stake box's content
+  scrolls inside the box, by 12 pixels at 360x560 in both languages and
+  by 17 at 375x553 in English, so the end of the red line is under the
+  box's lower edge until the person scrolls it.
+- The look, the eight buttons without a box, as first built (the card's
+  line and its Yes are gone again: the bullet "The card's Start in the
+  pop-up box"). The passkey line is two
+  lines at every width in both languages, in the page's grey, and does
+  not pass its card or page. In the chat's card: 13 pixels, 8 pixels
+  under the question and 8 over Yes and Back. On the assisted transfer
+  page: 14 pixels, 14 under the question and 14 over the buttons. On the
+  New fund proposal page: 14 pixels, over the red error line and the
+  button, 22 pixels over the button with no error. On the Fund proposal
+  page: 13 pixels, 14 under the question and 13 over the buttons, for
+  "vote for" and for "vote against". On the attestor's three case pages:
+  14 pixels, 14 under the sentence above it and 14 over the button or
+  the form. On the moderator's page: 14 pixels, under the heading "Sign
+  off" when nobody has signed and under the line of who signed when
+  somebody has, 14 over the form. Each button was pressed with the
+  device's answer standing in for a closed sheet: the red sentence shows
+  where that page shows its errors, two lines in English at every width,
+  two in Thai at 360 to 390 and one at 430; the question stays open on
+  the card, on the assisted transfer page and on the Fund proposal page;
+  "Sign all attestations" asked once for a case with two moves.
+- The look, cut, as first built: the chat's card on a short screen.
+  This was the one place where the step's new line pushed something out
+  of sight, and it was mended before the commit (the bullet "The card's
+  Start in the pop-up box"). What the look found: the
+  chat's frame is as high as the screen less 88 pixels and cuts what
+  does not fit; the card in it does not scroll. With the seller's form
+  and the question of Start open, the card is 48 pixels taller than at
+  the commit before: the passkey line's two lines and its gap. Measured
+  with the other trader named "somchai" and a price of 2.00 THB, in a
+  build of 11196f5 and in this build. The card: 434 pixels before and
+  482 now at 360, 415 before and 463 now at 375, 390 and 430, in both
+  languages. The least height of the screen at which Yes is whole: 570
+  before and 618 now at 360, 551 before and 599 now at 375, 390 and 430.
+  On the four sizes of the look Yes is whole, before and now. On the two
+  short screens it is not. At 360x560 Yes lost its lower 10 pixels
+  before, with 30 of its 40 showing, and none of it shows now. At
+  375x553 Yes was whole before, with 2 pixels to spare, and none of it
+  shows now. Back stands beside Yes and goes the same way. A seller on
+  such a screen cannot reach Yes in the card; the Send form of the
+  account page, with the kind escrow, still makes the same transfer. The
+  red line of a check that did not pass stands at the card's end, under
+  the buttons, and needs 46 pixels more: a screen 664 high at 360 and
+  645 at 375 to 430 (625 in Thai at 430, where it is one line), so on a
+  360x640 screen its lower 25 pixels are cut. The message box under the
+  thread was partly cut while the
+  question was open before this step too, on a 360x640 screen 37 of its
+  74 pixels showed; now none of it shows there, and 35 show at 375x667.
+  Which phones show less than 600 or 620 pixels of height with their
+  browser's bars was not measured: no phone was part of the look. The
+  known limit of 2026-11-17 says of the card only that the thread has
+  less room on a small phone. Nothing was changed for it at first.
+- The look, two ways to reach what is cut, tried in scratch copies only
+  after the user asked whether a scrolling card would break anything
+  else. Eighteen states of the card were walked: both sides with and
+  without an account in the chat, the seller's form, the question, the
+  question with the red line, a held trade, a released one, a cancelled
+  one, the panel "How a trade works" open, a long and the widest
+  username. Each state was drawn as it is and with each rule, and every
+  part's place was compared, in English and Thai, at 360x640, 375x553,
+  430x932 and 1024x700. Then in iPhone Safari in the simulator, an
+  iPhone 17e, 390 points wide with 699 points of height showing. The
+  first way lets the card itself scroll (`min-height: 0` and
+  `overflow-y: auto` on the card's element). On a tall screen nothing
+  moves. On a short one the message box then always shows and the card
+  gets the room that is left, so the card is squeezed. At 360x640, where
+  Yes shows today, the card shows 397 of its 482 pixels and Yes is under
+  its lower edge until the card is scrolled. At 375x553 the form's Start
+  and Cancel, whole today, lose 28 of their 40 pixels. The second way
+  lets the whole conversation scroll (`overflow-y: auto` on the
+  conversation page's element). With it nothing moves, in any state at
+  any size: every part stands where it stands today, and where something
+  lies below the frame the conversation scrolls by just that much, 86
+  pixels in the question state at 360x640 and 153 at 375x553. So Yes,
+  the red line, the end of the panel and the message box can be pulled
+  up. One thing shows with it: the chat's top bar, with the back arrow
+  and the title, scrolls away with the rest while the conversation is
+  pulled down. Safari behaved as the pane did for both ways. With the
+  second way, at its 699 points, the question state scrolls 5 pixels,
+  the question with the red line 51 and a held trade with the panel
+  open 97; before any scroll every number is the one of the page as it
+  is, and scrolled to the end the message box is whole. No finger was
+  part of it: the page did the scrolling. Neither rule is in the repo.
+  The user took neither: the next bullet.
+- The card's Start in the pop-up box, built before the commit, in the
+  same working tree, on the user's word (the plan's decision 12, added
+  after FINAL on 2026-11-19, and its section 9). The user had not
+  followed "let the whole conversation scroll", and asked: "why we
+  don't just have the passkey stuff be a popup, because it doesn't
+  actually have to be in the same box as everything else." Nothing
+  technical kept the question in the card. It stood there by one
+  sentence of the plan's decision 11 ("A button that asks in the page
+  today keeps asking in the page"), and the same card already opens the
+  confirmation box for its Release. It was put to the user after a
+  trial in scratch copies, with a picture of both ways on a 375x553
+  screen. The user: "Allright, let's do both." The second of the two is
+  the Recipient box of the account page: a commit of its own, after
+  this one.
+  What changed. `src/app/escrow-boxes.ts`: a sixth function,
+  `startBox(words, anos, name)`, with the title `pinned.startTrade`
+  ("Put the anos in escrow"), no lines, the notes
+  `pinned.askStart(anos, name)` and `passkeyCheck.note`, Back and Yes
+  (`common.back`, `common.yes`) and `passkey: true`.
+  `src/app/components/pinned-listing.component.ts`: in the template the
+  question, its passkey line and its Yes and Back are gone, and the
+  form ends with Start and Cancel alone. `start()` is the Start
+  button's own method now: nothing while a box is open or a send is on
+  its way; the accounts and the amount from the form; `askConfirm` with
+  the Start box; and after a yes the run that was there, the fresh
+  check, pair one, the signing, the send and the check after it. The
+  signal `confirmStart` is gone with its six writes, two of them in
+  `check()`. The `checkSessionPasskey` line, its import and the injected
+  `PasskeyService` are gone, since the box asks. No word of either
+  dictionary changed, so no Thai was written. Comments in those two
+  files, in `passkey-check.ts` and in `confirm-dialog.component.ts`;
+  README (the lines of `escrow-boxes.ts` and of the confirmation box);
+  8.2 ("The pinned card", "The chat's trade"), 8.7 (the card, and the
+  functions of `escrow-boxes.ts`) and 8.9 (the places that use the box,
+  and seven buttons without a box where it said eight). The step is
+  still twenty files.
+  What stays as it was: the order of the guards, the passkey, then the
+  fresh check for an earlier trade, then the build; `share()`, `tell()`
+  and the rules by which the card finds the chat's trade; every other
+  state of the card. What is new in what a person meets: the form
+  cannot be typed in while the box is open, so what is sent is what the
+  box asked about (under the question in the card the form stayed
+  open); and a trade found while the box is open closes the form
+  behind it, the box stays, and its Yes then reads "Nothing was sent.
+  This chat already has an escrow trade." in the card. A red line of
+  before stays in the card until Yes, as it did.
+  The look: a development build of a scratch copy of the working tree,
+  beside a build of the step as first built, served as before (a
+  temporary launch entry, taken out again), the pane hidden, the
+  device's answer a stand-in, at 360x560, 375x553, 360x640, 375x667,
+  390x844, 430x932 and 1024x700, in English and Thai. The card never
+  grows past its form: 366 pixels at 360 wide and 347 from 375, where
+  the card with the question was 482 and 463. Start and Cancel are
+  whole from a screen 503 pixels high at 360 wide and 483 from 375,
+  with 58 pixels to spare at 360x560 and 70 at 375x553; Yes in the card
+  needed 618 and 599. The box is 328 by 273 at 360 wide in both
+  languages, 343 by 253 at 375, 358 by 253 at 390, 398 by 253 at 430
+  and 480 by 233 at 1024: whole inside the screen at every size, its
+  content does not scroll, and Back and Yes stand on one row (64 and 71
+  pixels, in Thai 76 and 64). The question is four lines in English at
+  360 and three from 375, and three in Thai; the passkey line is as in
+  the other boxes. With the sheet closed both buttons are off while the
+  device is asked, then the box stays with the red line: 345 pixels
+  high at 360 in English and 325 in Thai, 325 and 305 at 375, and with
+  the longest red sentence 365 and 345 at 360, 345 and 325 at 375,
+  still whole on the two short screens. Back closes the box with
+  nothing checked, nothing asked of the device and the form as it was.
+  With another passkey, and with no passkey id in the session, the box
+  stays with its sentence and nothing is checked. With the session's
+  passkey the box closes, one fresh check runs, and the card goes on to
+  pair one, which a made-up session cannot open. With a trade found the
+  card says so and the form closes; with a check that cannot be read
+  the card says so and the form stays. A second press of Start opens no
+  second box.
+  Every other state of the card stands where it stood. Fourteen states
+  were walked in both builds: both sides with and without an account in
+  the chat, the form, a held trade for each side, a released one, the
+  question before "Close the listing", a cancelled one, and the panel
+  "How a trade works" open in four of them. At 360x560 in English and
+  Thai, 375x553 in English, 430x932 in Thai and 1024x700 in English,
+  every part has the same place in both builds, to a twentieth of a
+  pixel. One walk first showed an empty part of the message box, of no
+  height, 5 pixels lower in thirteen states; walked again in the other
+  build's order it showed none. It is the noise between two page loads
+  that the build's own walk met too.
+  What it does not mend. A send that fails after the box shows as the
+  card's red line under Start and Cancel, as before. Three lines of it,
+  as "The validators did not answer. ..." is in English at 360 and 375,
+  need a screen 568 pixels high at 360 and 549 at 375, so at 360x560
+  the last 8 pixels of the line are cut; under the question it needed
+  664 and 645. With the longest username the rules allow, 32
+  characters, the card's own lines wrap, the form is 446 pixels at 360
+  and Start loses 22 of its 40 pixels at 360x560; that is the form as
+  it was before this step. In the box such a name wraps onto a line of
+  its own. 32 times "m", the widest name there can be, is 128 pixels
+  past the box's inner edge and the box's content scrolls sideways,
+  where the card cuts that name at its edge.
+  Tried and not chosen: the question as the box's title, as the Release
+  box has it. A title does not wrap inside a word, and a 32-character
+  username ran past the box's right edge. Not looked at in iPhone
+  Safari: the box is the one that six buttons already open, and no
+  style rule is new. Which phones are as short as 560 pixels is still
+  not measured: this Mac has no simulator of 375 points or less.
+- Tried in the scratch page besides the look, with the device's answer
+  standing in. The check asked the passkey service for the session's
+  credential id alone, with an empty transports list and a challenge of
+  64 hex characters. Another passkey's answer: "That was not the passkey
+  you logged in with, so nothing was done.", the box stays. The
+  session's passkey's answer: the Send box closed, the form emptied, and
+  the send went on to its next step, which a made-up session cannot
+  take. A session with no passkey id: "This tab no longer has what the
+  passkey step needs, so nothing was done. Log in again.", the box
+  stays. On the New fund proposal page a wrong row showed its own
+  sentence and the device was not asked.
+- Seen in passing, in the scratch page, and older than this step: a box
+  of the style `.wide`, which has `min-width: 360px`, is wider than its
+  card on a narrow phone. On the account page it is the box "Recipient
+  account id", with the paste button at its right end: 66 pixels past
+  the card's inner edge at 360, 51 at 375 and 36 at 390, and the page
+  scrolls sideways; at 430 it fits. The four staff case pages have the
+  same style on the box "Meeting link (https)" and on the Note boxes,
+  and scroll sideways at 360, 375 and 390. The account page has had the
+  rule since the testnet copy. It is the kind of fault the birth record
+  form had until 2026-11-18. On no list; nothing was changed.
+- Brought in line on the user's word of 2026-11-19 ("go ahead and fix
+  the older comments"), before this step was committed and in its
+  commit: two comments that the step left out of date and the plan does
+  not name. The build's first report had listed them as left. In
+  `src/app/services/session.service.ts` the comment of
+  `passkeyCredentialId` said only that the Passkeys page marks it, and
+  now names the passkey check too. In
+  `src/app/services/passkey.service.ts` the doc comment of `assert()`
+  said "any passkey of this site" and that the assertion goes to
+  `/unlock`. It now says that with `only` one passkey alone is asked, by
+  the third tap of an add and by the passkey check, and that a caller
+  which needs only the PRF output or the credential id sends the
+  assertion nowhere. No line of code changed with them. On the same
+  word, outside this repo, the two lines on the username check in
+  `after_production_todos/details/trade-card-limits.md` were brought in
+  line, in a commit of that folder. Left as they are: the build notes of
+  2026-11-12 and 2026-11-17 in this section, which tell of the typed
+  username as records of their day.
+- Checked. `git status` showed a clean tree at the start, and this
+  step's nineteen files and no others before the build and before the
+  first report: eighteen changed, and `src/app/passkey-check.ts` new.
+  With the two comments brought in line it shows twenty:
+  `src/app/services/session.service.ts` joined. The Start box changed
+  files among the twenty and added none. `npx ng
+  build` from the web_app folder: clean, no warnings (`main-V3BAOOPP.js`,
+  2.26 MB, and `styles-EMD3RG3N.css`, the style file of before; run
+  again after the last comment and this note, with the same two files).
+  With the Start box: clean, no warnings, `main-MK7OARLU.js`, 2.26 MB,
+  and the same style file, twice; one run between the two stopped on
+  the same fetch of Google's font style sheet.
+  The very first run stopped before it built anything, on the fetch of
+  Google's font style sheet over the internet; the next run was clean.
+  The plan's section 2 has 11 indented blocks; each was looked
+  for in the files with the build's date in the place of BUILD-DATE,
+  line for line and with its indentation, and all 11 are there, the
+  five English entries among them. With the Start box ten of the 11
+  stand in the files as section 2 has them; the eleventh, the comment
+  of `ConfirmData.passkey`, names the Start box too in its last
+  sentence, as the plan's section 9 has it. Both language files have the same
+  five keys in the same order in the new section. Under `src/` the
+  searches find no `yourUsername`, no `typeNote`, no `stakeTypeNote`, no
+  `typedText`, no `typedOk` and no `data.typed`, and no line with
+  `typed:` in the three files the plan names; `accountLedgerId.typed`
+  stays. `checkSessionPasskey(` was in ten files as first built:
+  `passkey-check.ts`, the confirmation box and the eight of 2.6. It is
+  in nine as committed: the card's own line went when its Start got the
+  box. Twelve calls in ten files hand
+  what they built to `SigningService.sign`, as the plan counted. Not
+  checked: a passkey; a phone; the live wallet; iPhone Safari, where
+  the passkey sheet needs the tap; a passkey kept on another device,
+  asked by its id with no hint of where it lives; a real session with
+  real keys, so nothing was sent or signed; a real trade; a real case in
+  the attestor and the moderator edition; the Thai by a Thai reader.
+- After this step everything the wallet signs with an account's key
+  passes the passkey check, so it is the first thing to try on real
+  devices (the plan's section 7): on an iPhone in Safari, on an Android
+  phone in Chrome, on a computer that holds the passkey, and on a
+  computer whose passkey is on a phone. A small send between two of the
+  person's own accounts; the same again with the sheet closed; a DAO
+  stake box, which has no username field; "Create anos account", tried
+  to the end only when a new account is wanted; an escrow trade's start,
+  release, dispute and cancel; when there is one, the cancel of a locked
+  and of an assisted transfer; when the role and the case are there, a
+  guardian's proposal and vote, an attestor's sign-off and a moderator's
+  Sign. If a device does not bring up its passkey sheet at all, nobody
+  on that kind of device can send, open an anos account, vote as a
+  guardian or sign off a case. The way back is the wallet's commit
+  before this step, 11196f5, by the same deploy lines: section 10 of
+  `forclaude/wallet-deploy-plan-1.md`, wallet1 and then wallet2, with no
+  setting in `network/wallet.env` and no `npm ci`. A box opened on a
+  wallet page loaded before the deploy still asks for the username,
+  until the page is loaded again.
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`
@@ -12295,7 +13023,15 @@ button and every 15 s
   2, images and texts, every key the keyholders answered.
 - Sign off: the account picker, Approve or Reject, a note, Sign. The sign-
   off message of masterpod 12.6 signed by pair one,
-  `/sign-off-recovery-case`. The page shows who has signed what.
+  `/sign-off-recovery-case`. The page shows who has signed what. Since
+  2026-11-19 (section 11; decision 10 of
+  forclaude/wallet-chat-and-passkey-plan-1.md) the passkey line stands
+  under the heading and the line of who has signed, over the form: "To
+  confirm, this phone or computer will ask for your passkey, the one you
+  log in with." Sign first asks the device for the passkey that opened
+  the session (the passkey check, 8.9), before pair one is opened; a
+  check that does not pass shows its sentence in red under the button,
+  and nothing is signed.
 - Dismiss: the preset reason, a note, Dismiss (`/dismiss-recovery-case`),
   behind a confirmation.
 - Banker packet, shown when the status is approved or delivering: the
@@ -12775,7 +13511,14 @@ refreshed by a button and every 15 s. Top to bottom:
   account page does (`buildFollowUp` with the staked account's pair one,
   `attestorId` the account, `accountId` the sender, `transactionId` the
   trade's; the wallet pair from `/api/sign/<n>`), then
-  `/sign-off-trade-case`. The page shows who has signed.
+  `/sign-off-trade-case`. The page shows who has signed. Since 2026-11-19
+  (section 11) the passkey line stands under the sentence on what the
+  attestation is, over the button: "To confirm, this phone or computer
+  will ask for your passkey, the one you log in with." "Sign the
+  attestation" first asks the device for the passkey that opened the
+  session (the passkey check, 8.9), once, before pair one is opened; a
+  check that does not pass shows its sentence in red under the button,
+  and nothing is signed.
 - When the answer says decided and no `sent` event exists: Send to the
   validators, which posts both stored attestations (from the
   `attestationSigned` events) to the `/attestation` of the session's
@@ -12822,6 +13565,13 @@ refreshed by a button and every 15 s. Top to bottom:
 - Verdict: Success or Cancel, a note, Sign. The `escrowVerdict` follow-up
   built as the account page does (`arbitratorId` the staked account),
   then `/sign-off-dispute-case`. The page shows each attestor's verdict.
+  Since 2026-11-19 (section 11) the passkey line stands under the
+  sentence on what a verdict does, over the form: "To confirm, this
+  phone or computer will ask for your passkey, the one you log in with."
+  "Sign the verdict" first asks the device for the passkey that opened
+  the session (the passkey check, 8.9), once, before pair one is opened;
+  a check that does not pass shows its sentence in red under the button,
+  and nothing is signed.
 - When decided: Send to the validators posts the two agreeing verdicts
   (from the `verdictSigned` events whose verdict is the decided one) to
   `/escrow-signature`, then `/mark-attestor-case-sent`; Retry on a
@@ -12861,7 +13611,14 @@ every 15 s, the trade case's frame. Top to bottom:
   `attestation` follow-up per move (`attestorId` the staked account,
   `accountId` the move's old account, `transactionId` the move's; the
   wallet pair from `/api/sign/<n>`) and runs `/sign-off-break-glass-case` with
-  every move once.
+  every move once. Since 2026-11-19 (section 11) the passkey line stands
+  under the sentence on what the attestations are, over the button: "To
+  confirm, this phone or computer will ask for your passkey, the one you
+  log in with." "Sign all attestations" first asks the device for the
+  passkey that opened the session (the passkey check, 8.9), once, in
+  front of the loop that signs for each move: one click asks once,
+  however many moves the case has. A check that does not pass shows its
+  sentence in red under the button, and nothing is signed.
 - When the answer says decided: Send to the validators posts the stored
   attestations the session's validator (8.3; the default validator until
   2026-11-10) does not hold yet (two per move once

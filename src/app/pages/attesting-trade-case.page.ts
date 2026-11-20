@@ -13,6 +13,7 @@ import { millionthsToAnos } from '../amounts';
 import { CaseChatStartComponent } from '../components/case-chat-start.component';
 import { CASES_POLL_MS } from '../constants';
 import { imageObjectUrl } from '../images';
+import { checkSessionPasskey } from '../passkey-check';
 import { AnosApiService } from '../services/anos-api.service';
 import { AttestingService, attestingError } from '../services/attesting.service';
 import { BalancesService } from '../services/balances.service';
@@ -30,6 +31,7 @@ import {
   SentResult,
   TradeCaseAnswer,
 } from '../services/masterpod-api.service';
+import { PasskeyService } from '../services/passkey.service';
 import { SessionService } from '../services/session.service';
 import { SigningService } from '../services/signing.service';
 import { REVIEW_STATUSES, STATUS_ICONS } from './attesting.page';
@@ -107,7 +109,9 @@ function accepted(result: SentResult): boolean {
  * case page's pull, pointed at /list-trade-case-security-records: a
  * one-time hybrid pair, the account envelope signed by pair one of the
  * staked account to every keyholder in parallel, the shares opened and
- * combined, the rows decrypted), Attest (the attestation follow-up built as
+ * combined, the rows decrypted), Attest (the line that the passkey will be
+ * asked for, and on "Sign the attestation" first the passkey check, since
+ * 2026-11-19, passkey-check.ts; then the attestation follow-up built as
  * the account page builds one, then /sign-off-trade-case), Send to the
  * validators once the case is decided (the stored attestations posted to
  * /attestation and /mark-attestor-case-sent; run at once on the page whose
@@ -274,6 +278,7 @@ function accepted(result: SentResult): boolean {
             <p class="muted">{{ t().tradeCase.signedSoFar(signOffs().join(', ')) }}</p>
           }
           <p class="muted">{{ t().tradeCase.attestText }}</p>
+          <p class="muted">{{ t().passkeyCheck.note }}</p>
           <div class="form">
             <button mat-flat-button type="button" (click)="attest()" [disabled]="busy() || final() || !attesting.accountId()">{{ t().tradeCase.signAttestation }}</button>
           </div>
@@ -366,6 +371,7 @@ export class AttestingTradeCasePage {
   private readonly keyholders = inject(KeyholderApiService);
   private readonly anos = inject(AnosApiService);
   private readonly signing = inject(SigningService);
+  private readonly passkey = inject(PasskeyService);
   private readonly config = inject(ConfigService);
   private readonly crypto = inject(CryptoService);
   protected readonly lang = inject(LanguageService);
@@ -636,12 +642,17 @@ export class AttestingTradeCasePage {
    * accountId the sender, transactionId the trade's, the wallet pair from
    * /api/sign/<n>; then /sign-off-trade-case. When the answer says decided
    * this signature decided the case and the sending runs at once.
+   * Since 2026-11-19 the passkey check comes first (passkey-check.ts): the
+   * device is asked for the passkey that opened the session, straight from
+   * the click, before pair one is opened. A check that does not pass shows
+   * its sentence in red under the button, and nothing is signed.
    */
   protected async attest(): Promise<void> {
     let decided = false;
     await this.act(this.attestOutcome, async () => {
       const d = this.data();
       if (!d) throw new Error(this.t().common.caseNotLoaded);
+      await checkSessionPasskey({ crypto: this.crypto, passkey: this.passkey, session: this.session }, this.t());
       const { account, pairOne } = await this.attesting.pairOne();
       const followUp = this.crypto.buildFollowUp(pairOne, { type: 'attestation', transactionId: d.case.transactionId, accountId: d.case.accountId, attestorId: account.accountId });
       const signed = await this.signing.sign(followUp, account.accountId);

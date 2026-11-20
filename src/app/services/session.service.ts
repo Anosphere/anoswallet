@@ -86,7 +86,7 @@ export class SessionService {
   readonly hasEncryptionKey = signal(false);
   readonly hasChatKeys = signal(false);
   readonly hasIdentity = signal(false);
-  /** The credential id, hex, of the passkey that opened this session; the Passkeys page marks it. */
+  /** The credential id, hex, of the passkey that opened this session; the Passkeys page marks it, and, since 2026-11-19, the passkey check asks the device for this one passkey before the wallet signs with an account's key (passkey-check.ts, wallet spec 8.9). */
   readonly passkeyCredentialId = signal<string | null>(null);
   /** The pod's anos accounts from /list-anos-accounts. */
   readonly accounts = signal<AnosAccountItem[]>([]);
