@@ -3823,7 +3823,15 @@ live camera has, before anything else is done with it. Since 2026-11-12
 the same factor, so every chosen file goes out as its pixels and nothing
 else, with the type `image/jpeg`; a file the browser cannot read as a
 picture is refused with a line under the file input, and nothing is
-emitted.
+emitted. Since 2026-11-21 (section 11) a third quality, `publicSelfie`,
+which the Create page uses for the public selfie: the camera is asked
+for 1280 by 720 as for normal, and what goes out is the middle of the
+picture as a square, the largest square that fits, made smaller to 320
+by 320 pixels when it is larger and never made larger, as JPEG at 0.8.
+That holds for the live camera's frame and for a chosen file alike. The
+live camera is shown as that square, 320 pixels wide at most, and the
+photo taken is shown at 160 pixels, the largest any page draws a public
+selfie. The other two qualities are as they were.
 
 ### 8.5 The copy button
 
@@ -15270,6 +15278,140 @@ has always taken offset.
   8.1's list of pages, "/marketplace  browse: the filter chips, the Your
   listings row, the cards". The DAO's row there does not name its Show
   more either.
+
+### The public selfie is the middle of the picture as a square of 320 pixels (2026-11-21)
+
+No plan file: asked for and decided in chat on 2026-11-20 and 21, built
+2026-11-21 on main at 67ac8b3, the working tree clean. Why: a public
+selfie went out as the camera's whole picture, 1280 by 720 at JPEG 0.92,
+170 to 220 KB, and every page that draws a face read that. The user,
+2026-11-20: "I just noticed that the selfie pictures are all in the
+hundreds of kilobytes ... they don't need to be loading in big
+pictures." And on 2026-11-21: "Ok, middle square at 320 pixels sounds
+good." No new npm package, no setting, nothing in server/, and no
+masterpod change: the masterpod takes any true picture of at most 4096
+pixels a side. What this reaches: the selfies of anoPods created after
+the wallet's deploy. The selfies already stored stay as heavy as they
+are. Making those small is a one-time job on the masterpod's database,
+not planned when this was written.
+
+- Why the middle, as a square. Every place that draws a public selfie
+  is a square or a round box with `object-fit: cover`, and such a box
+  shows the middle of the picture: the avatar, the found person on the
+  new-chat page and in a chat room's invite, the attestor's list, the
+  Vouching page, the dispute case and the three case pages. The strips
+  beside the middle were never on a screen. A phone held upright gives a
+  tall picture, and then the top and the bottom are the strips.
+- Why 320, and why one picture. The largest boxes are 160 pixels (the
+  case pages), 96 (the Vouching page) and 72 (Vouch requests). A phone
+  draws about 3 of its own pixels for each pixel of the page, so the two
+  vouching photos, which the user named as the ones that matter, need
+  288 and 216. A second, smaller copy for the lists was talked through
+  and left: it needs the masterpod, and it can be made later from a 320
+  pixel picture.
+- `src/app/images.ts`: two new functions, and `redrawImage` is
+  unchanged. `squareJpeg(source, width, height, side, jpeg)`: the
+  largest square that fits in `source`, taken from its middle, drawn on
+  white to `side` by `side` pixels, or to the square's own size when
+  that is smaller, encoded with `toBlob('image/jpeg', jpeg)`; null when
+  a canvas gives no context or `toBlob` answers null. Every canvas it
+  made is set to 0 by 0 in a `finally`. `redrawSquare(file, side,
+  jpeg)`: a chosen file decoded with `createImageBitmap(file, {
+  imageOrientation: 'from-image' })`, as `redrawImage` decodes it, then
+  `squareJpeg`; null when the browser cannot decode the file.
+- The halvings, found in the build. `squareJpeg` makes the square
+  smaller in halvings, with one last step of less than a halving. A
+  phone's own photo is 3024 by 4032, about ten times as wide as the
+  square. Drawn that much smaller in one step its fine lines break up
+  into speckle: a test sheet of fine rings came out 67 from a clean
+  reduction (on the scale of 0 to 255) in Safari with the smoothing set
+  to low and to high alike, and in Chrome from one canvas to another;
+  in halvings it came out 7 in both, and its JPEG weighed 20 KB in
+  Safari where the one step's weighed 68 KB. The first version of the
+  function drew in one step with `imageSmoothingQuality = 'high'`, which
+  was clean in Chrome and speckled in Safari.
+- `components/camera.component.ts`: `CameraQuality` has a third value,
+  `publicSelfie`, and its entry in `SIZES` is `{ width: 1280, height:
+  720, jpeg: 0.8, square: 320 }`. The camera is asked for 1280 by 720 as
+  before. `takePhoto` hands the video to `squareJpeg` when the quality
+  has a `square`, and `fileChosen` calls `redrawSquare` in place of
+  `redrawImage`. A new signal `square` puts the class `square` on the
+  video and on the photo taken: the video is 320 pixels wide at most and
+  as high as wide, so the camera shows what is kept; the photo taken is
+  160 pixels. For `normal` and `high` no line that runs has changed.
+- `pages/create.page.ts`: the camera's `quality` is `publicSelfie`. The
+  three cameras of the account recovery pages are as they were.
+- Calls made in the build. Told to the user before it, with no word
+  against them: JPEG 0.8; a picture smaller than 320 is not made larger;
+  the photo taken is shown as the square. Made in the build: the photo
+  taken is shown at 160 pixels and not at the camera's 320, because a
+  320 pixel picture drawn 320 wide is stretched three times on a phone
+  and looks soft, which the stored picture does on no page; and the
+  halvings above.
+- Checked. `npx ng build` from the web_app folder, with the output in
+  the build chat's scratch folder: exit 0, no warning; the development
+  build the same. Then the wallet's own `images.ts`, bundled with
+  esbuild into a scratch page, run in the Claude app's browser pane
+  (Chrome 157) and in the Safari of the iPhone 17 simulator (iOS 27), on
+  one test selfie of this Mac's own test database (1280 by 720, 173 KB):
+  - The live cut and a chosen file both come out 320 by 320: 14.8 KB in
+    Chrome, 25.0 KB in Safari. The same selfie as it went out before:
+    173 KB and 222 KB.
+  - The same selfie turned upright (720 by 1280): 320 by 320, the same
+    weights.
+  - A picture of 200 by 150: 150 by 150, not made larger.
+  - A see-through PNG of 800 by 800: white under it, in the corner and
+    under the half-clear middle.
+  - Bytes that are no picture: null, so the camera's red line shows.
+  - A stand-in camera (the stream of a canvas, 1280 by 720, red strips
+    at the sides and a blue mark in the corner of the middle): the cut
+    has no red, and the blue mark is in its corner. In both browsers.
+- Seen here in a development build served from a scratch folder on this
+  Mac, in the Claude app's browser pane, with the same stand-in camera
+  (the pane blocks the real one) and the masterpod's username check
+  answered inside the page. No server of the network was asked.
+  - The camera is a square of 210, 240 and 280 pixels at 360, 390 and
+    430 wide, and of 320 at 1024 wide. Only the middle of the stand-in's
+    picture shows; its red strips do not.
+  - After Take photo: the photo is 160 by 160, a JPEG of 320 by 320,
+    with Retake under it, and Next is on. Retake clears the photo and
+    the camera comes back.
+  - Through the page's own file input: a 3024 by 4032 JPEG went out as
+    320 by 320, a 200 by 150 one as 150 by 150, a PNG as a JPEG of 320
+    by 320. A file that is no picture gave the red line and left the
+    earlier photo, as before.
+  - A short screen too, 360 by 560: with the page at its end, the
+    camera, Take photo or Retake, the file input, Back and Next are all
+    on the screen. Back and Next end 431 pixels from the top and the
+    window shows 504.
+  - Found: nothing. No page that scrolls sideways and nothing cut at any
+    of the sizes. At 360 wide the step is 52 pixels higher than before
+    while the camera is on (a square of 210 in place of 210 by 157),
+    worked out from the style, not measured against the old build.
+
+  The pane was hidden, so no motion was watched. Not seen on a phone,
+  not with a real camera (the simulator has none), not on an Android
+  phone and not on the live wallet. The page was not looked at in
+  Safari: the two new style lines use what `.frame` already uses
+  (`aspect-ratio`, `object-fit`). How a face looks at JPEG 0.8 was not
+  judged by eye here: the user's own run-through.
+- Seen in passing, not changed. `redrawImage`, which the ID and recovery
+  photos and the case pictures go through, also makes a phone's photo
+  smaller in one step, about three times. A sheet of small print, 4032
+  by 3024 made 1280 wide, came out 19.5 from a clean reduction in Safari
+  against 13.4 in halvings, and 15.0 against 14.3 in Chrome. Told to the
+  user.
+- Places this step made out of date. Five comments were left as they
+  were, listed for the user, and brought in line on the user's "Yes,
+  update them" the same day, before the commit: in
+  `components/camera.component.ts` the comment of `CameraQuality` (it
+  named two qualities, and the selfie under `normal`), the class
+  comment, which gained a sentence "Since 2026-11-21", and the comments
+  of `takePhoto` and `fileChosen`; in `src/app/images.ts` the file's
+  opening comment, which gained a sentence too. Still as they are, in
+  the masterpod's folder and outside this step: the comment at line 51
+  of `src/anopods/anopods.service.js` ("The wallet sends one of about
+  1280") and line 1816 of its `docs/schemas.md`.
 
 ## 12. Recovery and the moderator edition
 

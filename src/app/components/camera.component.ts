@@ -1,7 +1,7 @@
-import { Component, ElementRef, OnDestroy, afterNextRender, inject, input, output, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, OnDestroy, afterNextRender, computed, inject, input, output, signal, viewChild } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { redrawImage } from '../images';
+import { redrawImage, redrawSquare, squareJpeg } from '../images';
 import { LanguageService } from '../services/language.service';
 
 /** What the camera hands over: the image's type and bytes, for the caller to encrypt or send. */
@@ -10,15 +10,17 @@ export interface Photo {
   bytes: Uint8Array;
 }
 
-/** normal: 1280 by 720, JPEG 0.92 (a selfie, a bucket two image); high: 1920 by 1080, JPEG 0.95 (bucket one). */
-export type CameraQuality = 'normal' | 'high';
+/** normal: 1280 by 720, JPEG 0.92 (a bucket two image); high: 1920 by 1080, JPEG 0.95 (bucket one); publicSelfie: the middle of the picture as a square of at most 320 by 320, JPEG 0.8 (the selfie of the Create page, 2026-11-21). */
+export type CameraQuality = 'normal' | 'high' | 'publicSelfie';
 
 /** user: the front camera (a selfie); environment: the back camera (an ID laid on a table). */
 export type CameraFacing = 'user' | 'environment';
 
-const SIZES: Record<CameraQuality, { width: number; height: number; jpeg: number }> = {
+const SIZES: Record<CameraQuality, { width: number; height: number; jpeg: number; square?: number }> = {
   normal: { width: 1280, height: 720, jpeg: 0.92 },
   high: { width: 1920, height: 1080, jpeg: 0.95 },
+  // The public selfie of the Create page (2026-11-21): the camera is asked for 1280 by 720 as for normal, and what is emitted is the middle of the picture as a square of at most `square` pixels a side, JPEG 0.8 (squareJpeg in ../images). Every place that shows a public selfie shows that middle square.
+  publicSelfie: { width: 1280, height: 720, jpeg: 0.8, square: 320 },
 };
 
 /**
@@ -34,6 +36,11 @@ const SIZES: Record<CameraQuality, { width: number; height: number; jpeg: number
  * file is redrawn as a fresh JPEG (redrawImage in ../images), whatever its
  * size, so nothing but its pixels is sent; a file the browser cannot read
  * as a picture is refused with a line under the input and emits nothing.
+ * Since 2026-11-21 the quality publicSelfie, for the selfie of the Create
+ * page: the frame, or the chosen file, goes out as the middle of the
+ * picture as a square of at most 320 by 320 (squareJpeg and redrawSquare
+ * in ../images), the camera is shown as that square, and the photo taken
+ * is shown at 160 pixels.
  */
 @Component({
   selector: 'app-camera',
@@ -41,7 +48,7 @@ const SIZES: Record<CameraQuality, { width: number; height: number; jpeg: number
   template: `
     <div class="camera">
       @if (preview(); as url) {
-        <img class="frame" [src]="url" [alt]="t().camera.yourPhoto" />
+        <img class="frame" [class.square]="square()" [src]="url" [alt]="t().camera.yourPhoto" />
         <div class="row">
           <button mat-stroked-button type="button" (click)="retake()">{{ t().camera.retake }}</button>
         </div>
@@ -49,7 +56,7 @@ const SIZES: Record<CameraQuality, { width: number; height: number; jpeg: number
         @if (cameraError(); as text) {
           <p class="muted">{{ text }}</p>
         } @else {
-          <video #video class="frame" autoplay playsinline muted></video>
+          <video #video class="frame" [class.square]="square()" autoplay playsinline muted></video>
           <div class="row">
             <button mat-flat-button type="button" (click)="takePhoto()" [disabled]="!ready()">
               <mat-icon>photo_camera</mat-icon> {{ t().camera.takePhoto }}
@@ -69,6 +76,9 @@ const SIZES: Record<CameraQuality, { width: number; height: number; jpeg: number
   styles: `
     .camera { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
     .frame { max-width: 100%; width: 480px; aspect-ratio: 4 / 3; object-fit: cover; background: #000; border-radius: 8px; }
+    /* The public selfie (2026-11-21): the camera shows the square that is kept, and the photo taken is shown at 160 pixels, the largest any page draws a selfie. */
+    .frame.square { width: 320px; aspect-ratio: 1; }
+    img.frame.square { width: 160px; }
     .row { display: flex; gap: 8px; }
     .file { display: flex; flex-direction: column; gap: 4px; }
     .muted { color: var(--mat-sys-on-surface-variant); font-size: 13px; margin: 0; }
@@ -81,6 +91,8 @@ export class CameraComponent implements OnDestroy {
   readonly photo = output<Photo>();
   readonly cleared = output<void>();
 
+  /** True for the public selfie (2026-11-21): the camera and the photo taken are shown as a square. */
+  protected readonly square = computed(() => SIZES[this.quality()].square !== undefined);
   protected readonly preview = signal<string | null>(null);
   protected readonly ready = signal(false);
   protected readonly cameraError = signal<string | null>(null);
@@ -131,10 +143,19 @@ export class CameraComponent implements OnDestroy {
     this.ready.set(false);
   }
 
-  /** The current frame as a JPEG. */
+  /** The current frame as a JPEG; for the public selfie (2026-11-21) the middle of the frame as a square. */
   protected async takePhoto(): Promise<void> {
     const video = this.video()?.nativeElement ?? this.host.nativeElement.querySelector('video');
     if (!video || video.videoWidth === 0) return;
+    const { jpeg, square } = SIZES[this.quality()];
+    if (square) {
+      // The public selfie (2026-11-21): the middle of the frame as a square, not the whole frame.
+      const cut = await squareJpeg(video, video.videoWidth, video.videoHeight, square, jpeg);
+      if (!cut) return;
+      await this.emit(cut, 'image/jpeg');
+      this.stop();
+      return;
+    }
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -145,14 +166,15 @@ export class CameraComponent implements OnDestroy {
     this.stop();
   }
 
-  /** A file from the input: a phone's camera or a picked image, redrawn as a JPEG (2026-11-12) and scaled to the quality's size when it is larger; a file the browser cannot read as a picture is refused. */
+  /** A file from the input: a phone's camera or a picked image, redrawn as a JPEG (2026-11-12) and scaled to the quality's size when it is larger, or for the public selfie (2026-11-21) cut to the middle square of at most 320 by 320; a file the browser cannot read as a picture is refused. */
   protected async fileChosen(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     input.value = '';
     if (!file) return;
-    const { width, jpeg } = SIZES[this.quality()];
-    const redrawn = await redrawImage(file, width, jpeg);
+    const { width, jpeg, square } = SIZES[this.quality()];
+    // The public selfie (2026-11-21) is the middle of the picked picture as a square.
+    const redrawn = square ? await redrawSquare(file, square, jpeg) : await redrawImage(file, width, jpeg);
     if (!redrawn) {
       this.fileError.set(this.t().camera.unreadable);
       return;

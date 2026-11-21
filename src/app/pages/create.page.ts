@@ -61,7 +61,7 @@ import { SessionService } from '../services/session.service';
           <mat-step [completed]="selfie() !== null" [label]="t().common.selfieStep">
             <p>{{ t().create.selfieHint }}</p>
             @if (stepper.selectedIndex === 2) {
-              <app-camera quality="normal" (photo)="selfie.set($event)" (cleared)="selfie.set(null)" />
+              <app-camera quality="publicSelfie" (photo)="selfie.set($event)" (cleared)="selfie.set(null)" />
             }
             <div>
               <button mat-button type="button" matStepperPrevious>{{ t().common.back }}</button>
