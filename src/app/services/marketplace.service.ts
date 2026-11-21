@@ -37,7 +37,7 @@ export interface Remembered {
 
 const REMEMBERED_KEY = 'anopod-wallet.marketplace-filters';
 
-/** Browse loads this many open listings at most; the ranges are applied on the phone over them. */
+/** Browse loads this many open listings per read: when the page opens, at a chip change and at each Show more (2026-11-20); the ranges are applied on the phone over the listings loaded. */
 export const BROWSE_LIMIT = 200;
 
 const SORTS: Record<SortKey, Pick<ListingFilters, 'sortBy' | 'sortDirection'>> = {
@@ -71,9 +71,9 @@ export class MarketplaceService {
 
   // --- the reads --------------------------------------------------------------
 
-  /** /list-listings: the open listings matching the filters, up to BROWSE_LIMIT. */
-  load(filters: BrowseFilters): Promise<ApiResponse<{ listings: ListingItem[] }>> {
-    const query: ListingFilters = { status: 'open', limit: BROWSE_LIMIT, ...SORTS[filters.sort] };
+  /** /list-listings: the open listings matching the filters, up to BROWSE_LIMIT of them from `offset` on: 0 for a first read, and for Show more the number of rows already handed out (2026-11-20). */
+  load(filters: BrowseFilters, offset = 0): Promise<ApiResponse<{ listings: ListingItem[] }>> {
+    const query: ListingFilters = { status: 'open', limit: BROWSE_LIMIT, offset, ...SORTS[filters.sort] };
     if (filters.side) query.side = filters.side;
     if (filters.country) query.country = filters.country;
     if (filters.currency) query.currency = filters.currency;

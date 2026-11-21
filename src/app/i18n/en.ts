@@ -782,6 +782,7 @@ export const en = {
     filtersCount: (n: number) => `Filters · ${n}`,
     mineLine: (open: number, waiting: number) => `${open} open · ${waiting} waiting`,
     noMatch: 'No listings match.',
+    showMore: 'Show more',
   },
   listing: {
     title: 'Listing',
@@ -805,6 +806,7 @@ export const en = {
     badQuantity: 'The quantity must be anos with up to six decimals',
     badPrice: 'The price must be a number above zero with up to eight decimals',
     pickBoth: 'Pick a currency and a country',
+    limit: 'You have reached the limit of open listings. Close one of your listings to create a new one.',
   },
   myListings: {
     close: 'Close',

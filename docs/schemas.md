@@ -862,6 +862,35 @@ the buttons that sign (8.9), the services of 8.3 (session.service,
 signing.service, passkey.service, escrow-actions.service,
 masterpod-api.service and crypto.service) and the rows of section 7.
 
+### 4.12 The listing limit
+
+Added 2026-11-20 (forclaude/listing-limit-plan-1.md; section 11): a pod
+may have at most 10 listings open at one time, selling and buying
+together. Until then nothing limited how many listings one pod opens.
+The masterpod's side is its own spec's section 23, which holds the rule,
+the check and what is left as it is. The masterpod gained one check
+there, the last one of /create-listing: in one transaction, with the
+pod's own row locked, it counts the pod's open listings and refuses at
+10 or more. A closed listing does not count, so closing one frees a
+place at once. A pod that had more than 10 open listings on the day the
+limit went live keeps every one of them, and cannot create another until
+it has fewer than 10. No new route, no table, no env variable and no npm
+package.
+
+    POST /create-listing (setup), one check more
+    body and answer: as before ({ side, quantity, currency, country, price }; 201 { listingId, chatRoomId: null })
+    checks: those of before, in their order, so a bad price is still told as a bad price; then the new last one:
+           the caller has fewer than 10 open listings, else 403 listing limit reached, and nothing is written
+    a masterpod of before: never refuses for it
+
+/list-listings did not change. Since this build the wallet sends the
+offset the route always took, for Show more on the marketplace's first
+page.
+
+The proxy forwards both routes as any masterpod path (section 2);
+nothing in server/ changed. The wallet's side is the New listing page
+and Browse (8.2, Marketplace) and marketplace.service (8.3).
+
 ## 5. Validator changes (anossoftware)
 
 ### 5.1 A nonces table and two variables
@@ -3010,7 +3039,18 @@ to /marketplace/mine. Then the cards (8.7) in a grid, one column on a
 phone and two or three on a desktop; the quantity and price ranges are
 applied on the phone over the listings loaded, the price range only once
 a currency is picked; "No listings match." when nothing is left; a
-refused read in red. A round + at the bottom right to /marketplace/new on
+refused read in red. Since 2026-11-20 (4.12; section 11) a Show more
+button stands under the cards while the last read came back full, with
+200 listings. A press reads the next 200 for the same chips, by offset,
+and adds them under the listings shown. A listing already shown is left
+out: one posted between two reads moves every row down by one. The two
+ranges still apply on the phone, over the listings loaded, so with a
+range set a press may add nothing that shows, and "No listings match."
+can then stand with Show more under it. A chip change starts over, with
+the first 200 in place of the listings shown, and the answer of a read
+that a later one overtook is dropped. A refused Show more shows its line
+in red beside the button, which stays.
+A round + at the bottom right to /marketplace/new on
 a phone, a New listing button in the chip row on a desktop. The country
 and the currency picked last are remembered on the device (localStorage,
 `anopod-wallet.marketplace-filters`); Browse opens with them and the
@@ -3049,7 +3089,9 @@ the picker sheet (8.7) and show the chosen name, the remembered ones at
 first; a live "Total 3,550 THB" once the three are in; Create listing,
 which calls /create-listing (side, quantity in millionths, currency,
 country, price; no room and no key work) and opens the listing's page; the
-refusal in red.
+refusal in red. At the masterpod's 403 listing limit reached (4.12, since
+2026-11-20) the line is one sentence: "You have reached the limit of open
+listings. Close one of your listings to create a new one."
 
 Your listings, at /marketplace/mine: a back arrow; /list-listings with
 mine and status any when the page opens and after a Close: the open
@@ -3642,7 +3684,8 @@ excepted, with the keyholder and anos calls included.
                             and the close), sideWords, mySide and firstWords, the rooms and invites about a
                             listing out of session.chatRooms (roomsAbout, myRoomAbout, invitesAbout,
                             waitingCount), stateOf, connect and connectAgain, and the country and currency this
-                            device remembers (remembered, remember)
+                            device remembers (remembered, remember); load takes an offset since 2026-11-20: 0 for a
+                            first read, and for Show more the number of rows already handed out
     profile-cache.service   one /get-anopod-profile per pod per tab, quiet, as a signal: undefined while it loads,
                             null when there is no such pod (2026-11-05); at most PROFILE_READS_AT_ONCE (5) reads
                             in flight, the other ids queued, so a page with many faces gets them a few at a time
@@ -15089,6 +15132,144 @@ spec, section 11.
   second account showed the red 409 line. Not run against a real
   masterpod or validator, not with a passkey, and not seen on a phone:
   the user's run-through after the deploy.
+
+### The listing limit in plain words, and Show more on the marketplace's first page (2026-11-20)
+
+Step 2 of forclaude/listing-limit-plan-1.md (FINAL 2026-11-20), built
+2026-11-20 on main at 26c581f, the working tree clean. Why: nothing
+limited how many listings one pod opens, and the marketplace's first
+page stopped at 200 listings with no way to see the rest. The user,
+2026-11-20: "it hasn't happened yet, but I'm sure some one is going to
+spam and make like 30 marketplace listings. We should limit how many
+total can be open at 1 time." And on the page: "Is there like a scroll
+more if 200 is not enough for some one? Or like a fetch more or
+something." The limit itself is the masterpod's, step 1 of the plan (its
+spec's section 23; here 4.12): at most 10 open listings per pod. This
+step is the wallet's two halves: the refusal said in one sentence, and
+Show more. No new npm package, no setting, nothing in server/. Either
+order of the two deploys is safe (the plan's section 4). With the
+masterpod alone deployed, a wallet of before shows the refusal as "HTTP
+403: listing limit reached". This wallet on a masterpod of before never
+meets the refusal, and Show more works there, because /list-listings
+has always taken offset.
+
+- `services/marketplace.service.ts`: `load(filters, offset = 0)` sends
+  the offset with every read of Browse. The comment of `BROWSE_LIMIT`
+  says what the number is now: the listings of one read.
+- `pages/marketplace.page.ts`: under the cards, in front of the round +
+  button, a red line for a refused Show more and the button Show more (a
+  `mat-button` with the class `more` and the DAO page's one style line).
+  Five new fields: `more`, `busy`, `moreError`, `reads` and `fetched`.
+  `load()` became three methods. `filters()` gives the chips as the
+  service's filters. `load()` reads the first 200 in place of the
+  listings shown; Show more is away while it runs, and its answer is
+  dropped when a later first read was started after it. That last part
+  changes a thing of before: two quick chip changes could leave the
+  older answer on the screen. `loadMore()` reads the next 200 from where
+  the reads so far ended and adds the listings not shown yet, by
+  `listingId`. Its answer is dropped when a chip changed meanwhile, and
+  a refusal goes to `moreError`, with the button left in place.
+- `pages/listing-new.page.ts`: in `create()`, right after the call of
+  /create-listing, a 403 whose reason holds "listing limit reached" is
+  thrown as the sentence `listingNew.limit`. The page's own `run()`
+  shows it in red above Create listing, as it shows "Pick a currency and
+  a country". Every other refusal shows as before. There is no counter,
+  no hint ahead of time and no button under the sentence: the person
+  reaches their listings by the back arrow and the Your listings row.
+- The words. `en.ts`, letter for letter as the plan has them:
+  `marketplace.showMore`, "Show more", after `noMatch`, and
+  `listingNew.limit`, "You have reached the limit of open listings.
+  Close one of your listings to create a new one.", after `pickBoth`.
+  `th.ts`, in the same places: `marketplace.showMore`, "แสดงเพิ่มเติม",
+  the words of the three other Show more buttons, and
+  `listingNew.limit`, in full:
+
+      คุณมีประกาศที่เปิดอยู่ครบจำนวนที่อนุญาตแล้ว ปิดประกาศของคุณหนึ่งรายการเพื่อสร้างประกาศใหม่
+
+  The build wrote it by the style and the glossary of
+  forclaude/wallet-languages-plan-1.md 1.6, from words `th.ts` already
+  has. A listing is "ประกาศ". An open one is "เปิดอยู่"
+  (`marketplace.mineLine`). "Reached the limit" is
+  "ครบจำนวนที่อนุญาตแล้ว", the words of `wallet.accountLimit`. Closing
+  one is "ปิดประกาศ" (`listing.closeListing`). And it ends on the words
+  of the button, "สร้างประกาศ" (`listingNew.create`), as the English
+  does. Word for word it says: "You have open listings up to the number
+  allowed. Close one of your listings to create a new listing." No Thai
+  reader has read it. "Thai read by a Thai reader" stands on the
+  after-production list.
+- What the plan left open, and how it was read. 4.12 was the next free
+  number, so the comment in `create()` names 4.12. BUILD-DATE is
+  2026-11-20. The class comment of `MarketplacePage` gained the plan's
+  sentence after "No listings match.", and the lines after it were
+  wrapped again with no word changed. The class comment of
+  `ListingNewPage` now ends "the masterpod's limit on open listings is
+  said in one sentence of its own (2026-11-20)", and the comment of
+  `create()` ends "At the masterpod's limit on open listings the error
+  is the one sentence listingNew.limit (2026-11-20)." In 8.2 the new
+  sentences of Browse stand after "a refused read in red", and "limit
+  200, open listings only" stays as it was written: it is the first
+  read. `README.md`: no line names the first page's 200 or the New
+  listing page's refusals, so nothing changed there.
+- Checked. `npx ng build` from the web_app folder, with the output in
+  the build chat's scratch folder: exit 0, no warning. `th.ts` has to
+  match the shape of `en.ts`, so a missing or misplaced entry would have
+  failed it. The two English entries were compared with the plan's
+  lines, letter for letter. One comparison beyond the plan's 2.6: the
+  five source files against the planning chat's throwaway copy, in which
+  this code was tried on 2026-11-20 (the plan's section 6). Every line
+  of code is the same. The comments differ in the date, which the copy
+  has as the word BUILD-DATE, and in the wrapping of one class comment.
+  The Thai line differs, since the copy had an English stand-in.
+- Seen here in a development build served from a scratch folder on this
+  Mac, in the Claude app's browser pane, at 360 and 430 pixels wide (600
+  high), in English and in Thai, with a made-up session and a stand-in
+  for the masterpod inside the page: 437 made-up open listings handed
+  out by limit and offset, /create-listing answered "403 listing limit
+  reached", and /get-anopod-profile answered first of all (404), so the
+  cards' pictures could not hang the page. No server of the network was
+  asked: the page's requests went to the file server and to Google's
+  font files.
+  - Show more. 200 cards and the button; after a press 400; after a
+    second press 437 and no button. The offsets asked were 0, 200 and
+    400. The button stands at the left under the last card, 40 pixels
+    high, 95.4 wide in English and 101.6 in Thai, its label whole. The
+    round + button is to its right and lower. Between the two are 176.6
+    pixels at 360 wide in English and 170.4 in Thai, and 246.6 and 240.4
+    at 430.
+  - A quantity range that fits nothing, set on the page's own `ranges`
+    and not typed into the Filters sheet: "No listings match." in one
+    line with Show more under it; the same after one press; after the
+    second press, which brought the last 37 listings, the button was
+    gone.
+  - A refused Show more, pressed at the page's end: the red line
+    "/list-listings: HTTP 500: made-up refusal", one line, right above
+    the button. Both were on the screen with nothing scrolled. The
+    button then stands level with the round + button and beside it, not
+    under it. The next press brought the next 200, and the line was
+    gone.
+  - The New listing page, filled in, one press of Create listing: the
+    sentence in red above the button, two lines in both languages at
+    both widths, nothing cut. The button moved down by 60 pixels.
+  - A short screen too, 360 by 560, in both languages: right after the
+    press the sentence ended 464 pixels from the top and Create listing
+    534, both on the screen, and so were the refused Show more's line
+    and its button.
+  - Found: nothing. No line cut, no label cut, no button under the round
+    one and no page that scrolls sideways, at any of the sizes in either
+    language.
+
+  The pane was hidden, so the pictures were taken one by one and no
+  motion was watched. Thai was drawn with this Mac's Thai font, and a
+  phone's may be a few pixels wider or narrower. Not seen on a phone and
+  not on the live wallet, and not run against a real masterpod: over the
+  real route the refusal takes eleven listings from one anoPod, and Show
+  more takes more than 200 open listings that fit the chips (the plan's
+  section 4).
+- Places the plan does not name. None that this step made wrong. One
+  summary row does not name the new button and was left as it is: in
+  8.1's list of pages, "/marketplace  browse: the filter chips, the Your
+  listings row, the cards". The DAO's row there does not name its Show
+  more either.
 
 ## 12. Recovery and the moderator edition
 

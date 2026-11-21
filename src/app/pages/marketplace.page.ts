@@ -14,7 +14,7 @@ import { countryName, countryOptions } from '../countries';
 import { currencyOptions, priceUnits } from '../prices';
 import { LanguageService } from '../services/language.service';
 import { reasonOf } from '../services/log.service';
-import { MarketplaceService, SortKey } from '../services/marketplace.service';
+import { BROWSE_LIMIT, BrowseFilters, MarketplaceService, SortKey } from '../services/marketplace.service';
 import { ListingItem } from '../services/masterpod-api.service';
 
 /**
@@ -27,9 +27,12 @@ import { ListingItem } from '../services/masterpod-api.service';
  * row, "N open · M waiting", while this pod has listings or someone waits.
  * Then the cards (8.7) in a grid, one column on a phone, the two ranges
  * applied here over the listings loaded; "No listings match." when nothing
- * is left. A round + to /marketplace/new at the bottom right on a phone, a
- * New listing button in the chip row on a desktop. The country and the
- * currency this device last picked are the ones Browse opens with.
+ * is left. Under the cards Show more, while the last read came back full
+ * (2026-11-20): it reads the next 200 for the same chips and adds them
+ * under the listings shown. A round + to /marketplace/new at the bottom
+ * right on a phone, a New listing button in the chip row on a desktop. The
+ * country and the currency this device last picked are the ones Browse
+ * opens with.
  */
 @Component({
   selector: 'app-marketplace-page',
@@ -76,6 +79,12 @@ import { ListingItem } from '../services/masterpod-api.service';
         <app-listing-card [listing]="listing" />
       }
     </div>
+    @if (moreError(); as text) {
+      <p class="error">{{ text }}</p>
+    }
+    @if (more()) {
+      <button mat-button type="button" class="more" (click)="loadMore()" [disabled]="busy()">{{ t().marketplace.showMore }}</button>
+    }
 
     <a mat-fab class="fab" routerLink="/marketplace/new" [attr.aria-label]="t().common.newListing"><mat-icon>add</mat-icon></a>
   `,
@@ -92,6 +101,7 @@ import { ListingItem } from '../services/masterpod-api.service';
     .line { font-size: 13px; color: var(--mat-sys-on-surface-variant); }
     .chevron { color: var(--mat-sys-on-surface-variant); }
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+    .more { margin-top: 8px; }
     .fab { display: none; position: fixed; right: 16px; bottom: 16px; z-index: 1; }
     .muted { color: var(--mat-sys-on-surface-variant); }
     .error { color: var(--mat-sys-error); }
@@ -115,6 +125,16 @@ export class MarketplacePage {
   protected readonly listings = signal<ListingItem[]>([]);
   protected readonly loaded = signal(false);
   protected readonly error = signal<string | null>(null);
+  /** The last read came back full, so more listings may fit the chips: Show more stands under the cards (2026-11-20). */
+  protected readonly more = signal(false);
+  /** A Show more read is running. */
+  protected readonly busy = signal(false);
+  /** A refused Show more, said beside its button. */
+  protected readonly moreError = signal<string | null>(null);
+  /** The first reads counted, so an answer that a later first read overtook is dropped. */
+  private reads = 0;
+  /** How many rows the masterpod has handed out for the chips as they are: where Show more goes on. */
+  private fetched = 0;
   /** This pod's listings, counted once when the page opens: all of them, and the open ones. */
   private readonly mineCount = signal<{ total: number; open: number } | null>(null);
 
@@ -140,17 +160,50 @@ export class MarketplacePage {
     });
   }
 
-  /** /list-listings with the chips' side, country, currency and sort. */
-  protected async load(): Promise<void> {
+  /** The chips as the service's filters. */
+  private filters(): BrowseFilters {
     const side = this.side();
-    const res = await this.market.load({ side: side === 'all' ? null : side, country: this.country(), currency: this.currency(), sort: this.sort() });
+    return { side: side === 'all' ? null : side, country: this.country(), currency: this.currency(), sort: this.sort() };
+  }
+
+  /** /list-listings with the chips' side, country, currency and sort: the first BROWSE_LIMIT, in place of the listings shown. Show more is away while it runs, and an answer that a later first read overtook is dropped (2026-11-20). */
+  protected async load(): Promise<void> {
+    const read = ++this.reads;
+    this.more.set(false);
+    this.moreError.set(null);
+    const res = await this.market.load(this.filters());
+    if (read !== this.reads) return;
     if (res.ok) {
       this.listings.set(res.body.listings);
+      this.fetched = res.body.listings.length;
+      this.more.set(res.body.listings.length >= BROWSE_LIMIT);
       this.error.set(null);
     } else {
       this.error.set(`/list-listings: ${reasonOf(res)}`);
     }
     this.loaded.set(true);
+  }
+
+  /** Show more (2026-11-20): the next BROWSE_LIMIT for the same chips, from where the reads so far ended, added under the listings shown. A listing already shown is left out: one posted meanwhile moves every row down by one. The answer is dropped when the chips changed meanwhile; a refusal shows beside the button, which stays. */
+  protected async loadMore(): Promise<void> {
+    if (this.busy()) return;
+    const read = this.reads;
+    this.busy.set(true);
+    this.moreError.set(null);
+    try {
+      const res = await this.market.load(this.filters(), this.fetched);
+      if (read !== this.reads) return;
+      if (res.ok) {
+        const shown = new Set(this.listings().map((listing) => listing.listingId));
+        this.listings.update((list) => [...list, ...res.body.listings.filter((listing) => !shown.has(listing.listingId))]);
+        this.fetched += res.body.listings.length;
+        this.more.set(res.body.listings.length >= BROWSE_LIMIT);
+      } else {
+        this.moreError.set(`/list-listings: ${reasonOf(res)}`);
+      }
+    } finally {
+      this.busy.set(false);
+    }
   }
 
   protected sideChanged(event: MatChipListboxChange): void {

@@ -788,6 +788,7 @@ export const th: Words = {
     filtersCount: (n: number) => `ตัวกรอง · ${n}`,
     mineLine: (open: number, waiting: number) => `เปิดอยู่ ${open} รายการ · ${waiting} คนกำลังรอ`,
     noMatch: 'ไม่มีประกาศที่ตรงกัน',
+    showMore: 'แสดงเพิ่มเติม',
   },
   listing: {
     title: 'ประกาศ',
@@ -811,6 +812,7 @@ export const th: Words = {
     badQuantity: 'จำนวนต้องเป็น anos ทศนิยมไม่เกินหกตำแหน่ง',
     badPrice: 'ราคาต้องเป็นตัวเลขที่มากกว่าศูนย์ ทศนิยมไม่เกินแปดตำแหน่ง',
     pickBoth: 'เลือกสกุลเงินและประเทศ',
+    limit: 'คุณมีประกาศที่เปิดอยู่ครบจำนวนที่อนุญาตแล้ว ปิดประกาศของคุณหนึ่งรายการเพื่อสร้างประกาศใหม่',
   },
   myListings: {
     close: 'ปิด',
