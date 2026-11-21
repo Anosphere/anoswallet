@@ -15413,6 +15413,52 @@ not planned when this was written.
   of `src/anopods/anopods.service.js` ("The wallet sends one of about
   1280") and line 1816 of its `docs/schemas.md`.
 
+### The sentences on what a verdict does, turned the right way round (2026-11-21)
+
+One small fix, built on the user's word in the chat that found it
+("Yes, fix them"), with no plan file, one commit, on top of the commit
+of the note above. Why: the user reported a dispute on the live
+attestor site: "When two attestors signed success the coins should have
+been released back to the seller, instead they went to the buyer." The
+validators did what a success verdict means to them (anossoftware's
+`docs/schemas.md`, 4.2). An escrow is the seller's transfer to the
+buyer. Two approved `success` verdicts have it written, and the anos go
+to the buyer. Two approved `cancel` verdicts close it, and the anos
+stay with the seller. The wallet signs the choice as it was picked, and
+the masterpod counts it as it was signed. Three sentences of the wallet
+said the opposite, and had since the attestor edition was built
+(2026-10-26, 13.7). So an attestor who means the seller to have the
+anos, and goes by the sentence over the Verdict form, picks Success.
+Wallet only: six strings of the two dictionaries, no code, no server
+change.
+
+- `src/app/i18n/en.ts`, `disputeCase.verdictText`, the sentence over
+  the Verdict form of the attestor's dispute case page (13.3): "Success
+  releases the escrow to the buyer, cancel returns it to the seller."
+  It read "to the seller" and then "to the buyer". The rest of the
+  string is as it was.
+- `src/app/i18n/en.ts`, `myCase.decidedSuccess` and
+  `myCase.decidedCancel`, the status in words of a trader's own case
+  page once a dispute is decided (13.3, My case): "Decided: success,
+  the escrow is released to the buyer." and "Decided: cancel, the
+  escrow returns to the seller." The two sides stood the other way
+  round.
+- `src/app/i18n/th.ts`: the same three strings. In each the words for
+  seller and buyer changed places, spelled as the dictionary's own
+  `sides` has them.
+- Unchanged: the two choices of the Verdict form, "Success" and
+  "Cancel", and that the form starts on Success; the escrow trade page
+  (8.2), whose words on a verdict were right already ("1 to release",
+  "The anos are being released to the buyer."); every other word of the
+  dictionaries. No place of this specification quoted the three
+  sentences, so this note is its only change.
+- Checked: `npx ng build` clean, no warning. The built script holds the
+  three new English sentences and none of the old, and each of the
+  three Thai lines names the side its English names. Not seen in a
+  browser: both pages sit behind a passkey login and need a real
+  dispute. The dispute of the report was not looked at.
+- Not undone by this fix: a transfer that was written stays written.
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`
