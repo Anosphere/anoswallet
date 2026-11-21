@@ -45,10 +45,11 @@ export interface Note {
  * What the notes pages share (wallet spec 8.2, Transaction history, and
  * 8.3; 2026-11-07, section 11): the last list read from the masterpod
  * (/list-noted-transactions) with its blobs opened on the phone under the
- * encryption key, by transaction; the three writes, add, update and
- * remove, each wrapping the private part under the encryption key before
- * it leaves the phone; the kind a history row presets, the currency a new
- * note starts with, and the ledger facts of a row for a new note.
+ * encryption key, by transaction and account; the three writes, add,
+ * update and remove, each wrapping the private part under the encryption
+ * key before it leaves the phone; the kind a history row presets, the
+ * currency a new note starts with, and the ledger facts of a row for a new
+ * note.
  */
 @Injectable({ providedIn: 'root' })
 export class NotesService {
@@ -61,8 +62,18 @@ export class NotesService {
   readonly notes = signal<Note[] | null>(null);
   /** True when the last read hit the masterpod's cap and older notes exist. */
   readonly more = signal(false);
-  /** The notes by transaction id. */
-  readonly byTransaction = computed(() => new Map((this.notes() ?? []).map((n) => [n.transactionId, n])));
+  /** The notes by transaction id and account id, the key noteOf reads. */
+  private readonly byTransactionAndAccount = computed(() => new Map((this.notes() ?? []).map((n) => [`${n.transactionId}:${n.accountId}`, n])));
+
+  /**
+   * The note on this transaction in this account's history, or null. One
+   * note per transaction and account (2026-11-20): a transfer between two
+   * of the pod's own accounts stands in both accounts' histories and holds
+   * a note in each, and each history shows its own.
+   */
+  noteOf(transactionId: string, accountId: string): Note | null {
+    return this.byTransactionAndAccount().get(`${transactionId}:${accountId}`) ?? null;
+  }
 
   /**
    * /list-noted-transactions with the range; each blob opened under the

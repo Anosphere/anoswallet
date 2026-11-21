@@ -459,17 +459,21 @@ section 11 and the records change with the code.
 
 Added 2026-11-07 (forclaude/wallet-notes-plan-1.md; section 11): the
 wallet's memory of what a transaction was for, on the masterpod under
-the person's pod. One row per ledger transaction the person noted for
-their tax records: the ledger's facts in the clear (the masterpod already
-links a pod to its accounts and every validator holds the chain, so they
-are no secret from a snooper, and in the clear they let the database
-sort, cut a date range and refuse a double note) and the private part,
-the kind, the money, the currency, the memo and a typed tag, as one blob
-under the pod's encryption key (section 7), which the masterpod cannot
-open. The masterpod learns which transactions were noted and nothing of
-the money. One note per pod and transaction, enforced by the database; a
-note's ledger facts never change once written, only its blob; the row is
-deleted when the person removes the note. A feature folder
+the person's pod. One row per note the person made on a ledger
+transaction for their tax records: the ledger's facts in the clear (the
+masterpod already links a pod to its accounts and every validator holds
+the chain, so they are no secret from a snooper, and in the clear they
+let the database sort, cut a date range and refuse a double note) and
+the private part, the kind, the money, the currency, the memo and a typed
+tag, as one blob under the pod's encryption key (section 7), which the
+masterpod cannot open. The masterpod learns which transactions were noted
+and nothing of the money. One note per pod, transaction and account,
+enforced by the database: a transfer between two of the pod's own
+accounts is one transaction that stands in both accounts' histories, and
+it can hold a note for each (since 2026-11-20, section 11; one note per
+pod and transaction before). A note's ledger facts never change once
+written, only its blob; the row is deleted when the person removes the
+note. A feature folder
 src/wallet-memory/ on the masterpod (router, handlers, service, the two
 tables' queries), in the shape of src/anos-accounts/.
 
@@ -486,7 +490,7 @@ tables' queries), in the shape of src/anos-accounts/.
       note_blob        BYTEA       NOT NULL CHECK (octet_length(note_blob) <= 4096),
       created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
       updated_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
-      UNIQUE (anopod_id, transaction_id)
+      UNIQUE (anopod_id, transaction_id, account_id)
     );
     CREATE INDEX IF NOT EXISTS noted_transactions_anopod_id_transacted_at_idx ON noted_transactions (anopod_id, transacted_at DESC);
 
@@ -512,8 +516,9 @@ set_updated_at trigger.
       accountId); otherAccountId 32 bytes when not null (400 invalid otherAccountId); position an integer of 0 or more
       (400 invalid position); transactedAt parses (400 invalid transactedAt); amount digits only that fit a BIGINT (400
       invalid amount); noteBlob 1 to 4096 bytes (400 invalid noteBlob); an anos_accounts row with this accountId and
-      this pod (403 not your account); no note of this pod for this transaction (409 already noted), the unique rule
-      as the backstop (a unique violation on the insert answers the same 409)
+      this pod (403 not your account); no note of this pod for this transaction and this account (409 already noted;
+      until 2026-11-20 any note of the pod for the transaction refused it), the unique rule as the backstop (a unique
+      violation on the insert answers the same 409)
     writes: INSERT noted_transactions with a fresh note_id
     answer: 201 { noteId }
 
@@ -536,7 +541,8 @@ set_updated_at trigger.
     checks: the shape (400 bad request shape); from parses when given (400 invalid from); to parses when given (400
       invalid to)
     reads: the pod's rows with transacted_at at or after from and before to, newest transacted_at first, then the
-      highest position, 1001 rows at most
+      highest position, then, of the two notes a transfer between two of the pod's own accounts can hold, the sent
+      one (since 2026-11-20), 1001 rows at most
     answer: 200 { notes: [ { noteId, transactionId, accountId, otherAccountId, position, transactedAt, amount, sent,
       noteBlob, createdAt, updatedAt } ], more: boolean }: the first 1000, and more true when a 1001st row exists
 
@@ -2273,7 +2279,13 @@ time ("3:50:12 PM · Sold · 3,550.00 THB") and whole in the details
 ("Note", the memo), with Edit, which opens the form filled, and Remove,
 which asks "Remove this note?" (Yes, Back). The notes are read once when
 the page opens (/list-noted-transactions, quiet); one note per
-transaction (the masterpod refuses a second with 409).
+transaction and account (the masterpod refuses a second with 409). Since
+2026-11-20 (section 11) a row shows this account's note only: a transfer
+between two of the pod's own accounts stands in both accounts' histories,
+and each history has its own "Add a note" and its own note, "Transferred
+to own account" on the sender's and "Transferred from own account" on the
+receiver's. Before, the note was one per transaction, and the second
+account's history showed and edited the first account's note.
 
 Noted transactions (2026-11-07, section 11), at /wallet/notes, opened by
 the "Noted transactions" button on the Wallet page: the pod's notes over
@@ -3570,7 +3582,9 @@ excepted, with the keyholder and anos calls included.
                             holds BALANCE_KINDS, the card's rows in order, and balanceLine(kind, totals, words),
                             a kind's label and amount, which the card's rows and the sheet's title share
     notes.service           the noted transactions (2026-11-07): the last list read with its blobs opened,
-                            byTransaction, add, update and remove, the preset kind and the starting currency
+                            noteOf(transactionId, accountId), an account's note on a transaction (since 2026-11-20,
+                            section 11; byTransaction before), add, update and remove, the preset kind and the
+                            starting currency
     settings.service        the wallet settings (2026-11-07): one encrypted object on the masterpod (4.7), read once
                             per session (Home, quiet) and saved whole (setup's Continue, the protect page's Save);
                             since 2026-11-18 (section 11) the object also holds passkeyNames, the names of the
@@ -6459,8 +6473,10 @@ part encrypted on the phone before it leaves.
   methods in a group after the anos accounts.
 - `services/notes.service.ts`, new: `NOTE_KINDS`, `MONEY_KINDS`,
   `OTHER_KINDS`, `NoteDetails` and `Note`; the `notes` and `more`
-  signals and `byTransaction`; `load`, `add`, `update` and `remove`,
-  each wrapping or opening the private part under the encryption key;
+  signals and `byTransaction` (since 2026-11-20 `noteOf`, by transaction
+  and account, see the note of that day); `load`, `add`, `update` and
+  `remove`, each wrapping or opening the private part under the
+  encryption key;
   `presetKind`, `startingCurrency` and `clearOf`.
 - `prices.ts`: `perAnosOf`, the price per anos behind a total, rounded
   down to eight decimals on the digits.
@@ -15011,6 +15027,68 @@ was sent. Try again in a moment."
   wallet is the same. The two throwaway runs in Node again, 25 and 15
   results, none off. Not looked at in a browser again: the place of an
   import line changes nothing a page shows.
+
+### A note for each account of a transfer between own accounts (2026-11-20)
+
+No plan file: found and decided in chat on 2026-11-20. The user had sent
+anos from one of their accounts to another and noted the transfer twice,
+in the first account's history ("Transferred to own account") and in the
+second's ("Transferred from own account"). The Noted transactions page
+showed one row. Why: such a transfer is one transaction with one id,
+standing in both accounts' histories. The masterpod kept one note per pod
+and transaction (4.6; decision 10 of forclaude/wallet-notes-plan-1.md),
+and the history page looked a note up by the transaction id alone. So the
+second account's row already carried the first account's note, with Edit
+in the place of "Add a note", and saving there replaced the private part
+of that one note, while its account and its sign stayed the first
+account's. The Noted transactions page listed what it was given: one
+note. Decision 3 of the same plan gives the two sides a kind each, which
+needs a note on each. The masterpod's change of the same day is in its
+spec, section 11.
+
+- `services/notes.service.ts`: `byTransaction` is gone. In its place are
+  a private map by transaction id and account id, and
+  `noteOf(transactionId, accountId)`, the account's note on a transaction
+  or null.
+- `pages/transaction-history.page.ts`: `noteOf(row)` asks the service
+  with the page's account. A row shows this account's note only. Without
+  one it has "Add a note", which presets the kind as before: "Transferred
+  to own account" on the sender's history, "Transferred from own account"
+  on the receiver's.
+- Nothing else changed: not the note form, the Noted transactions page,
+  its CSV or the words. That page shows one row per note, as it always
+  did, so such a transfer now shows as two rows, the sent one first (the
+  masterpod's order).
+- A note made before this day stays on the account it was made on, with
+  the words saved last. A person who noted such a transfer from both
+  sides edits it in the first account's history and adds the second in
+  the other's.
+- The order of a deploy: the masterpod first, the wallet after it. This
+  wallet on a masterpod of before shows "Add a note" in the second
+  account's history and reads "/add-noted-transaction: HTTP 409: already
+  noted" in red on Save. The wallet of before on the new masterpod
+  behaves as before.
+- Comments brought in line in the same change, said to the user before
+  the first edit: the class comment of `NotesService` and the comment of
+  the page's `noteOf`. In this spec: 4.6 (the rule, the table, the two
+  routes), 8.2 (the last sentences of the history's note paragraph), 8.3
+  (the `notes.service` line), and a dated clause in the note of step 2 of
+  2026-11-07 above, whose other words stay as the record of their day.
+- Checked: `npx ng build`, clean with no warnings, built into a scratch
+  folder. Seen here in a development build served from a scratch folder,
+  at 390 pixels wide, with a made-up session of three accounts, a made-up
+  ledger (one transfer between two of the accounts, one receipt from
+  outside) and a stand-in masterpod in the page that keeps the new rule.
+  On the sender's row "Add a note" preset "Transferred to own account"
+  and saved. The receiver's history showed the same transfer with no
+  note and "Add a note", preset "Transferred from own account", and
+  saved. The sender's row still showed its own note. The Noted
+  transactions page showed two rows: "Transferred to own account", −5
+  anos, Spending account, and "Transferred from own account", +5 anos,
+  Vault account. With the stand-in set to the old rule, Save on the
+  second account showed the red 409 line. Not run against a real
+  masterpod or validator, not with a passkey, and not seen on a phone:
+  the user's run-through after the deploy.
 
 ## 12. Recovery and the moderator edition
 
