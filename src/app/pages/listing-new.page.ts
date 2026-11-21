@@ -26,7 +26,8 @@ import { MasterpodApiService } from '../services/masterpod-api.service';
  * chosen name, the ones this device remembers at first; a live "Total 3,550
  * THB" once the three are in; Create listing, which calls /create-listing
  * (no key work: a listing has no room of its own) and opens the listing's
- * page. The refusal shows in red.
+ * page. The refusal shows in red; the masterpod's limit on open listings
+ * is said in one sentence of its own (2026-11-20).
  */
 @Component({
   selector: 'app-listing-new-page',
@@ -128,7 +129,7 @@ export class ListingNewPage {
     return firstValueFrom(ref.afterDismissed());
   }
 
-  /** /create-listing; the country and currency are remembered and the listing's page opens. */
+  /** /create-listing; the country and currency are remembered and the listing's page opens. At the masterpod's limit on open listings the error is the one sentence listingNew.limit (2026-11-20). */
   protected create(): Promise<void> {
     return this.run(async () => {
       const quantity = anosToMillionths(this.quantity());
@@ -139,6 +140,8 @@ export class ListingNewPage {
       const country = this.country();
       if (!currency || !country) throw new Error(this.t().listingNew.pickBoth);
       const res = await this.api.createListing({ side: this.side(), quantity: quantity.toString(), currency, country, price });
+      // The masterpod's limit on open listings (403 listing limit reached, wallet spec 4.12) is said in the one sentence listingNew.limit.
+      if (res.status === 403 && /listing limit reached/.test(reasonOf(res))) throw new Error(this.t().listingNew.limit);
       if (res.ok) {
         this.market.remember({ country, currency });
         await this.router.navigate(['/marketplace', res.body.listingId]);
