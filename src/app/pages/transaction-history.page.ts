@@ -238,9 +238,9 @@ export class TransactionHistoryPage {
     return BigInt(t.amount) > 0n ? this.t().common.anos(millionthsToAnos(t.amount)) : '';
   }
 
-  /** The note on the row, or null (notes.service, byTransaction). */
+  /** This account's note on the row, or null (notes.service, noteOf). */
   protected noteOf(t: TransactionItem): Note | null {
-    return this.notes.byTransaction().get(t.transactionId) ?? null;
+    return this.notes.noteOf(t.transactionId, this.accountId());
   }
 
   /** A note in short, for the row's time line: the kind's words (the tag for other) with the money when there is one; "(cannot read)" for a blob that did not open. */
