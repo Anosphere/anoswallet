@@ -15683,6 +15683,24 @@ signing servers are not touched, and no validator has to pull.
   not, which sentence the wallet showed. What it showed is written
   here when it is known. The plan's step 3 is built only after it has
   gone through on the iPhone 11 and on the Android phone.
+- The deploy and the trial (added 2026-11-21, after this note was
+  committed as c3b0177). The step went out the same day, on wallet1
+  and then on wallet2, as GitHub's main 07ad832 (pull request 41),
+  together with the masterpod's step 1 (the plan's 6.2). Looked at
+  from the build's Mac afterwards: each of the three wallet names
+  answered `/manifest.webmanifest` as `application/manifest+json`,
+  byte for byte the file of `public/`, from both wallet servers; the
+  three pictures answered as `image/png`, byte for byte; and the page
+  held the four lines, with its script unchanged. Then the user made
+  the trial of the plan's 6.3 on the iPhone 11 with iOS 18, on the
+  Android phone and on the iPhone 15 with iOS 27, and wrote: "Yes,
+  yes everything worked on all three phones." Read here as a yes to
+  the two questions asked of each phone: the wallet opened from the
+  Home Screen with no address bar, and the login with the passkey
+  went through. So the plan's decision 12 holds on iOS 18 and on
+  Android as well, and its step 3 can be built. How the icon looks on
+  the Android phone, and which version of Android and of Chrome it
+  runs, was not told.
 - The way back (the plan's 2.5): the one word `"standalone"` in the
   manifest becomes `"browser"`, and one deploy. A wallet that is added
   to a Home Screen after that opens in Safari again on iOS 18 to 25.
