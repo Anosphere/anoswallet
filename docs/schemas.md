@@ -2839,11 +2839,17 @@ the person's selfie, Invite), Invite an attestor (2026-11-12, section
 11: both traders of a marketplace chat, only while its trade is in
 dispute and an attestor has a case open on it; the paragraph on the
 attestor in a marketplace chat, below), Members (a panel of the members
-and the invited with avatars) and Leave (a member who is not the
-creator; the room key is dropped and the list opens). The thread opens
+and the invited with avatars; since 2026-11-22, section 11, at most
+half the conversation high with its rows scrolling inside it, 50
+people drawn at a time, and in a room of more than 10 people a search
+box on top that narrows it by username) and Leave (a member who is not
+the creator; the room key is dropped and the list opens). The thread opens
 at the room's
 newest 50 messages (/list-messages with beforePosition, MESSAGES_PAGE)
-and shows "Load older messages" on top while a page came back full; the
+and shows "Load older messages" on top while a page came back full
+(since 2026-11-22, section 11, the same read also starts by itself when
+the reader comes within 300 px of the thread's top, and the older
+messages are drawn once the thread is at rest); the
 3-second poll reads after the newest shown position; the thread scrolls
 to the bottom after opening and after a send, and for a message that
 arrives only while the reader is within 120 px of the bottom. Messages
@@ -5708,7 +5714,10 @@ before the messages.
   the conversation. An effect opens the route's room once the list has
   it, and again when the id changes; opening reads `beforePosition:
   lastPosition + 1`; Load older reads before the oldest shown and keeps
-  the reader's place (scrollTop moved by the added height); the poll
+  the reader's place (scrollTop moved by the added height) (since
+  2026-11-22, the note of that day at the end of this section: by the
+  distance to the thread's end, read before the older messages are
+  drawn and set again after); the poll
   reads after the newest shown, quiet, skipped while busy; new messages
   are deduplicated by id. The invite form and Members are panels under
   the header, opened from the menu.
@@ -16527,6 +16536,175 @@ sentence.
   `deploy/`. Built from the wallet folder with exactly this step's
   files the script is `main-YCWLFMPN.js`. A wallet that is open on a
   phone meanwhile keeps the script it has until it is loaded again.
+
+### Chat: the Members list scrolls and can be searched, and older messages load on scrolling up (2026-11-22)
+
+Four changes to the conversation page, in four files, with no plan
+file, one commit, on top of 83d4c94. Built on the user's word ("Yes,
+build it") after a talk in the same chat. The talk began with the
+user's report: "When viewing the members of a chat group, you can
+scroll to see them all. You can for chat, but not for members." (read
+as: you cannot), "when the chat room loads up, I believe every single
+chat is fetched? That's too much. It should probably be limited to the
+last 50. And then scrolling up fetches more.", and "We probably also
+want to add a search members function." Their answers settled it: the
+list scrolls and gets a search box ("1. yes."), older messages load on
+scrolling up and the button stays ("2. yes."), and the largest room has
+about 100 people ("Right now about 100."), which is more than the 50
+above which the list was to be drawn in pieces. Wallet only: no server
+change, no new package.
+
+What was wrong with the Members list: it was a column as long as the
+room has people, with no scroll of its own, inside a conversation that
+is as high as the screen and cuts what does not fit. In a room of 120
+members and 5 invited, on a screen of 360 by 560, a build of the commit
+before measured: the list 4,261 pixels high in a frame that ends at
+546; 12 of the 125 rows on the screen; 24 pixels left for the thread;
+the message box at 4,415, out of reach; and all 125 faces read at once.
+
+What was already so for the messages: since 2026-11-05 a conversation
+opens with its newest 50 messages, and "Load older messages" reads 50
+more. Not every message was fetched. What was missing is the read on
+scrolling up.
+
+- Changed, `src/app/pages/chat-room.page.ts`, the Members list. Its
+  panel is `.people` (it was `panel members`; the attestors' panel
+  keeps those classes): at most half the conversation high
+  (`max-height: 50%`), not shrinking, and its rows scroll inside it
+  (`.people .members`). When the room has more than 10 people, members
+  and invited together (`SEARCH_ABOVE`, `searchable`), a box "Search
+  members" stands on top of the rows. It narrows the rows to the
+  usernames that hold what was typed, capitals aside, members and
+  invited alike (`memberSearch`, `foundPeople`); "No members found."
+  when none does; a change of the box starts the list at its top. The
+  list draws 50 rows (`MEMBERS_PAGE`), the members before the invited,
+  and 50 more each time the reader comes within 200 pixels of its end
+  (`membersShown`, `membersScrolled`); the search looks through
+  everyone. So the faces (8.6) are read for the rows drawn only: 50,
+  then 100, then 125 in the room above. The menu's Members calls
+  `toggleMembers()`, which empties the box and starts at 50 rows.
+- Changed, the same file, older messages. When the thread comes within
+  300 pixels of its top (`OLDER_PX`), the page does what "Load older
+  messages" does (`threadScrolled`), once per arrival there
+  (`olderArmed`): a read that fails shows the error line, as the
+  button's does, and is not asked for again until the reader has left
+  the top and come back. Not while another action runs. The button
+  stays: for a thread that does not fill its frame, and after a read
+  that failed. The two scroll listeners are the browser's own, added in
+  two effects, not the template's, so a scroll alone draws nothing
+  again.
+- Changed, the same file, how the reader's place is kept when older
+  messages are drawn (`loadOlder`). The distance to the thread's END is
+  read before and set again after; it was: the thread's growth added to
+  its scroll. Why: Chrome, and Safari from iOS 27, keep a reader's
+  place by themselves when something is put in above it, and the old
+  way then added the same distance a second time. In a build of the
+  commit before, with the button pressed while the thread stood 100 to
+  1,200 pixels under its top, the reader's message was moved by 2,718
+  to 1,618 pixels in Chrome 157 and by 2,922 to 1,822 in Safari on iOS
+  27.0, down to the thread's end; at 0, 5 and 30 pixels it stayed. The
+  button is on the screen only within about 50 pixels of the top, so
+  this never showed. A read that starts 300 pixels under the top would
+  have met it every time.
+- Changed, the same file: older messages are drawn only once the thread
+  is at rest (`threadAtRest`): it has not scrolled for 150 milliseconds
+  (`REST_MS`), and has still not scrolled 40 milliseconds after that
+  was found (`REST_CHECK_MS`). Why: in Safari on iOS 27.0, after a
+  flick, the older messages were drawn while the thread still glided,
+  and the glide went on from the place it had before. The reader then
+  stood on the page just drawn, still near the top, the next page was
+  read, and so on: six pages in two seconds, and message 100 where
+  message 352 had been. On iOS 18.6 and 26.5 the same flick ended the
+  glide and the place held. A finger that rests on the thread does not
+  hold the drawing back.
+- Changed, `src/app/constants.ts`: `MEMBERS_PAGE = 50`, after
+  `MESSAGES_PAGE`. Changed, `src/app/i18n/en.ts` and `th.ts`, group
+  `chatRoom`: `searchMembers` ("Search members", "ค้นหาสมาชิก") and
+  `noMembersFound` ("No members found.", "ไม่พบสมาชิก"). The Thai is
+  the build chat's.
+- Checked: `ng build` of a scratch copy of the working files, clean.
+  Built from the wallet folder with exactly this step's files the
+  script is `main-D746HKNK.js`, byte for byte the copy's (2,311,588
+  bytes).
+- Checked by a look, on a development build of that copy behind a
+  trial file server on the build's Mac: a made-up session, and made-up
+  chats answered inside the page with real ciphertexts (a public room
+  of 120 members and 5 invited with 400 messages, a chat of three with
+  60, a chat of two with 12). No passkey, no server of ours. Five
+  browsers: Chrome 157 with no window (500 by 613, and 1280 by 713);
+  Safari on a simulated iPhone 16 with iOS 18.6 (393 by 659), on an
+  iPhone 17 with iOS 26.5 (402 by 714) and on an iPhone SE with iOS
+  27.0 (375 by 549); Chrome 149 on an Android 17 emulator (360 by 536).
+  In all five: the Members list of the large room is half the
+  conversation high (241 of 448 pixels on the smallest screen), shows
+  50 rows, then 100, then 125 at its end, with the message box inside
+  the frame; "pod01" finds 10 people, "Mai" finds mai and maiyada,
+  "zzz" brings "No members found."; opened again, the box is empty. And
+  with the thread's scroll set by a script 250 pixels under its top, at
+  its top and at its top again: one read each time, 50 more messages,
+  and the reader's first message 0 pixels from where it stood.
+- Checked with a real finger (the simulator tool's touch path; on
+  Android `input motionevent` and `input swipe`), on the three iPhones
+  and on Android. A finger held on the thread while a read's answer was
+  held back for a second and a half: the older messages were drawn
+  under the finger, the message under it stayed where it was, and the
+  thread went on following the finger. A flick: one page, drawn after
+  the thread had stopped (on iOS 27.0 with the rest rule above), and
+  the reader's message in its place, within 2 pixels on Android. The
+  last change, the search box above 10 people only, came after these
+  tries and left the scroll's code as it was; with it the Members list
+  and the scripted scroll were walked again in all five browsers, and
+  the flick on iOS 27.0 and on Android.
+- Checked in Chrome 157 also: the button pressed at seven places from
+  0 to 1,200 pixels under the top, 0 pixels moved at each (the same in
+  Safari on iOS 27.0). A read that fails: the error line, one read,
+  none while the reader stays near the top, a second after leaving and
+  coming back; the button then loads and the line goes. The page left,
+  and another chat opened, while a read ran: no error, and the other
+  chat shows its own messages. A chat of 60 messages: 50, then 60 and
+  no button. Two reads of the chat list while the Members list stood
+  scrolled: the list did not move. Another chat opened with the list
+  open and a search in it: the list is closed, and opened there it
+  shows all its rows. Thai: both strings.
+- Checked, small rooms: with 2 and with 3 people, with nothing or with
+  a block of 150 to 340 pixels standing in the pinned listing card's
+  place, at 360 by 560: the same in every number as a build of the
+  commit before (the list's place and height, each row's place, the
+  thread's height, the message box's place).
+- Seen in the look and mended before the commit. With the search box
+  in every room, a room of two on a screen of 360 by 560, with a block
+  of 250 pixels in the card's place, had its Members rows squeezed to
+  no height: the box added 65 pixels, and the panel could shrink. So
+  the box shows above 10 people only, and the panel does not shrink.
+- Seen and left as it is. The search box is one more box in which a
+  phone's keyboard may write a capital and offer other words (the
+  after-production item "username boxes: the phone's keyboard writes a
+  capital and suggests words"); the search itself takes capitals as
+  small letters. While older messages wait for the thread to rest, the
+  page is busy as it is during the read, so Send is off for that
+  moment. And the chat list of 8.2 still carries every member of every
+  room and is read every 5 seconds: the after-production item "chat
+  list: every member of every chat is sent again every 5 seconds", put
+  there on the user's word the same day.
+- Brought in line on the user's word ("Yes, update them"), in this
+  commit, four places that the build had first left as they were: the
+  page's class comment (one passage at its end, "Since 2026-11-22");
+  the two sentences of 8.2 on the Members panel and on "Load older
+  messages" (a dated clause in each); and, in the note of 2026-11-05
+  above, a dated clause beside the words "scrollTop moved by the added
+  height", which is no longer how the place is kept.
+- Not checked: a real phone; an iPad, Safari on a Mac and Firefox; the
+  wallet opened from the Home Screen; a phone held sideways; a room
+  with its pinned listing card for real (a block stood in its place);
+  a read over a real network; a slow phone, on which the page's own
+  work may hold a scroll event back for longer than the 40
+  milliseconds; the on-screen keyboard over the search box; the
+  attestor's and the moderator's editions, which draw the same page.
+- For the deploy: the user's two lines on wallet1 and then on wallet2,
+  with no `npm ci` (no package file changed) and nothing new under
+  `deploy/`. The build's folder has ten files as before, and the script
+  has a new name (above). A wallet that is open on a phone meanwhile
+  keeps the script it has until it is loaded again.
 
 ## 12. Recovery and the moderator edition
 

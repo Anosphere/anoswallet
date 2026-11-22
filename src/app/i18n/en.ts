@@ -801,6 +801,8 @@ export const en = {
     attestorReads: 'An attestor you invite can read this whole chat.',
     attestorsIn: 'The attestors on this case are already in this chat.',
     invited: '(invited)',
+    searchMembers: 'Search members',
+    noMembersFound: 'No members found.',
     loadOlder: 'Load older messages',
     sending: 'Sending',
     sent: 'Sent',

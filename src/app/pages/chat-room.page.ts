@@ -10,7 +10,7 @@ import { Router, RouterLink } from '@angular/router';
 import { AvatarComponent } from '../components/avatar.component';
 import { CopyButtonComponent } from '../components/copy-button.component';
 import { FoundAccountId, PinnedListingComponent } from '../components/pinned-listing.component';
-import { MESSAGES_PAGE, MESSAGES_POLL_MS } from '../constants';
+import { MEMBERS_PAGE, MESSAGES_PAGE, MESSAGES_POLL_MS } from '../constants';
 import { ChatService, Piece, piecesOf } from '../services/chat.service';
 import { CryptoService } from '../services/crypto.service';
 import { LanguageService } from '../services/language.service';
@@ -55,6 +55,19 @@ const FOLLOW_PX = 120;
 /** "Seen by" names the people who have seen a message up to this many of them; above it, it says how many they are. */
 const SEEN_NAMES = 3;
 
+/** Older messages load by themselves when the reader comes this close to the top of the thread (2026-11-22). */
+const OLDER_PX = 300;
+
+/** The Members list draws its next rows when the reader comes this close to its end (2026-11-22). */
+const MORE_MEMBERS_PX = 200;
+
+/** The Members list has its search box when the room has more than this many people, members and invited together (2026-11-22). A smaller room's list is then as high as before: in a chat with the pinned listing card on a short phone the box's 65 pixels would push the list out of sight. */
+const SEARCH_ABOVE = 10;
+
+/** Older messages are drawn only once the thread has not scrolled for this many milliseconds (2026-11-22), and is found still at rest REST_CHECK_MS later. */
+const REST_MS = 150;
+const REST_CHECK_MS = 40;
+
 /**
  * One conversation (wallet spec 8.2, Chat), at /chat/:chatRoomId inside the
  * chat page's pane: a header with the back arrow (on a phone), the avatar
@@ -95,7 +108,17 @@ const SEEN_NAMES = 3;
  * this pod has read (/mark-messages-seen, masterpod spec 21): after
  * opening, after each poll and after a send, and never from a hidden
  * tab. The seen mark of the sentence further up is another thing: this
- * device's own list, for the unread dot.
+ * device's own list, for the unread dot. Since 2026-11-22 the Members
+ * list is at most half the conversation high and its rows scroll inside
+ * it; it draws MEMBERS_PAGE people, the members before the invited, and
+ * as many more each time the reader comes near its end; and in a room of
+ * more than SEARCH_ABOVE people a box on top of it, Search members,
+ * narrows it to the usernames that hold what was typed. Since that day,
+ * too, older messages load by themselves when the reader comes within
+ * OLDER_PX of the thread's top, and Load older messages stays for a
+ * thread that does not fill its frame and after a read that failed; they
+ * are drawn once the thread is at rest, and the reader's place is kept
+ * by the distance to the thread's end.
  */
 @Component({
   selector: 'app-chat-room-page',
@@ -121,7 +144,7 @@ const SEEN_NAMES = 3;
           @if (chat.isTrader(room) && disputeCaseId() !== null) {
             <button mat-menu-item type="button" (click)="toggleAttestors()" [disabled]="busy()"><mat-icon>fact_check</mat-icon><span>{{ t().chatRoom.inviteAttestor }}</span></button>
           }
-          <button mat-menu-item type="button" (click)="showMembers.set(!showMembers())"><mat-icon>group</mat-icon><span>{{ t().chatRoom.members }}</span></button>
+          <button mat-menu-item type="button" (click)="toggleMembers()"><mat-icon>group</mat-icon><span>{{ t().chatRoom.members }}</span></button>
           @if (!isCreator()) {
             <button mat-menu-item type="button" (click)="leave()" [disabled]="busy()"><mat-icon>logout</mat-icon><span>{{ t().chatRoom.leave }}</span></button>
           }
@@ -154,13 +177,21 @@ const SEEN_NAMES = 3;
         </div>
       }
       @if (showMembers()) {
-        <div class="panel members">
-          @for (m of room.members; track m.anopodId) {
-            <span class="member"><app-avatar [anopodId]="m.anopodId" [username]="m.username" [size]="28" /> {{ m.username }}</span>
+        <div class="panel people">
+          @if (searchable()) {
+            <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>{{ t().chatRoom.searchMembers }}</mat-label><input matInput [ngModel]="memberSearch()" (ngModelChange)="searchMembers($event)" /></mat-form-field>
           }
-          @for (m of room.invited; track m.anopodId) {
-            <span class="member"><app-avatar [anopodId]="m.anopodId" [username]="m.username" [size]="28" /> {{ m.username }} <span class="muted">{{ t().chatRoom.invited }}</span></span>
-          }
+          <div class="members" #membersBox>
+            @for (m of shownMembers(); track m.anopodId) {
+              <span class="member"><app-avatar [anopodId]="m.anopodId" [username]="m.username" [size]="28" /> {{ m.username }}</span>
+            }
+            @for (m of shownInvited(); track m.anopodId) {
+              <span class="member"><app-avatar [anopodId]="m.anopodId" [username]="m.username" [size]="28" /> {{ m.username }} <span class="muted">{{ t().chatRoom.invited }}</span></span>
+            }
+            @if (nobodyFound()) {
+              <span class="muted">{{ t().chatRoom.noMembersFound }}</span>
+            }
+          </div>
         </div>
       }
       @if (chat.isTrader(room)) {
@@ -251,6 +282,8 @@ const SEEN_NAMES = 3;
     .form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .members { display: flex; flex-direction: column; gap: 6px; }
     .member { display: inline-flex; align-items: center; gap: 8px; }
+    .people { flex: none; display: flex; flex-direction: column; gap: 8px; max-height: 50%; }
+    .people .members { flex: 1; min-height: 0; overflow-y: auto; }
     .selfie { width: 40px; height: 40px; object-fit: cover; border-radius: 50%; }
     .thread { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 8px; padding: 12px; }
     .older { align-self: center; }
@@ -297,6 +330,7 @@ export class ChatRoomPage {
   protected readonly lang = inject(LanguageService);
   protected readonly t = this.lang.words;
   private readonly threadBox = viewChild<ElementRef<HTMLElement>>('threadBox');
+  private readonly membersBox = viewChild<ElementRef<HTMLElement>>('membersBox');
 
   /** True once the room list has arrived; the room is the one of the route, null when the pod is not in it. */
   protected readonly loaded = computed(() => this.session.chatRooms() !== null);
@@ -317,6 +351,28 @@ export class ChatRoomPage {
   protected readonly messageText = signal('');
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
+
+  /** True when the room has more than SEARCH_ABOVE people, members and invited together: the Members list then has its search box (2026-11-22). */
+  protected readonly searchable = computed(() => {
+    const room = this.room();
+    return room !== null && room.members.length + room.invited.length > SEARCH_ABOVE;
+  });
+  /** What the search box of the Members list holds (2026-11-22). */
+  protected readonly memberSearch = signal('');
+  /** How many rows the Members list draws: MEMBERS_PAGE when it opens and after each change of the search box, and MEMBERS_PAGE more each time the reader comes near its end (2026-11-22). */
+  private readonly membersShown = signal(MEMBERS_PAGE);
+  /** The room's members and its invited whose username holds what the search box holds, capitals aside; all of them while the box is empty, and in a room that has no search box (2026-11-22). */
+  private readonly foundPeople = computed(() => {
+    const room = this.room();
+    const text = this.searchable() ? this.memberSearch().trim().toLowerCase() : '';
+    const holds = (m: RoomMember) => text === '' || m.username.toLowerCase().includes(text);
+    return { members: room ? room.members.filter(holds) : [], invited: room ? room.invited.filter(holds) : [] };
+  });
+  /** The rows the Members list draws (2026-11-22): the first membersShown of the found people, the members before the invited. */
+  protected readonly shownMembers = computed(() => this.foundPeople().members.slice(0, this.membersShown()));
+  protected readonly shownInvited = computed(() => this.foundPeople().invited.slice(0, Math.max(0, this.membersShown() - this.foundPeople().members.length)));
+  /** True when the search box holds something that no member's and no invited person's username holds: the list then says so (2026-11-22). */
+  protected readonly nobodyFound = computed(() => this.foundPeople().members.length + this.foundPeople().invited.length === 0);
 
   /** The open dispute case of the chat's trade, as the pinned card tells it (2026-11-12): null when the chat's trade is not in dispute or no attestor has a case open on it, and emptied when the room changes. "Invite an attestor" shows only with one. */
   protected readonly disputeCaseId = signal<string | null>(null);
@@ -427,6 +483,10 @@ export class ChatRoomPage {
   /** True once the masterpod answered 404 to /mark-messages-seen: a masterpod of before. This page then tells nothing more for as long as it lives. */
   private seenOff = false;
   private pendingCount = 0;
+  /** True while the next arrival near the top of the thread loads older messages (2026-11-22): set when the room opens and each time the reader is further than OLDER_PX from the top, cleared when such a load starts. So a load that fails is not asked for again until the reader has left the top and come back. */
+  private olderArmed = true;
+  /** When the thread last scrolled, by the page's clock (performance.now); 0 before its first scroll (2026-11-22). */
+  private scrolledAt = 0;
 
   constructor() {
     // The route's room, once the list has it: opened when it changes.
@@ -438,6 +498,80 @@ export class ChatRoomPage {
     });
     const timer = setInterval(() => void this.poll(true).then(() => this.tellSeen()), MESSAGES_POLL_MS);
     inject(DestroyRef).onDestroy(() => clearInterval(timer));
+    // The thread and the Members list are listened to as they scroll (2026-11-22), each while it is drawn. The listeners are the browser's own, not the template's, so a scroll alone draws nothing again.
+    effect((onCleanup) => {
+      const el = this.threadBox()?.nativeElement;
+      if (!el) return;
+      const scrolled = () => this.threadScrolled(el);
+      el.addEventListener('scroll', scrolled, { passive: true });
+      onCleanup(() => el.removeEventListener('scroll', scrolled));
+    });
+    effect((onCleanup) => {
+      const el = this.membersBox()?.nativeElement;
+      if (!el) return;
+      const scrolled = () => this.membersScrolled(el);
+      el.addEventListener('scroll', scrolled, { passive: true });
+      onCleanup(() => el.removeEventListener('scroll', scrolled));
+    });
+  }
+
+  /** The menu's Members opens the list, or closes it. It opens with an empty search box and its first MEMBERS_PAGE rows (2026-11-22). */
+  protected toggleMembers(): void {
+    this.memberSearch.set('');
+    this.membersShown.set(MEMBERS_PAGE);
+    this.showMembers.set(!this.showMembers());
+  }
+
+  /** The search box of the Members list changed (2026-11-22): the list starts again at its top with the first MEMBERS_PAGE of the people found. */
+  protected searchMembers(text: string): void {
+    this.memberSearch.set(text);
+    this.membersShown.set(MEMBERS_PAGE);
+    const el = this.membersBox()?.nativeElement;
+    if (el) el.scrollTop = 0;
+  }
+
+  /** The Members list scrolled (2026-11-22): within MORE_MEMBERS_PX of its end it draws MEMBERS_PAGE more rows, while people are left to draw. */
+  private membersScrolled(el: HTMLElement): void {
+    if (el.scrollHeight - el.scrollTop - el.clientHeight > MORE_MEMBERS_PX) return;
+    const found = this.foundPeople();
+    if (this.membersShown() < found.members.length + found.invited.length) this.membersShown.update((shown) => shown + MEMBERS_PAGE);
+  }
+
+  /** The thread scrolled (2026-11-22): when the reader comes within OLDER_PX of its top, the page does what Load older messages does, once per arrival there (olderArmed). Not while another action runs: the next scroll near the top asks again. */
+  private threadScrolled(el: HTMLElement): void {
+    this.scrolledAt = performance.now();
+    if (el.scrollTop > OLDER_PX) {
+      this.olderArmed = true;
+      return;
+    }
+    if (!this.olderArmed || !this.canLoadOlder() || this.busy()) return;
+    this.olderArmed = false;
+    void this.loadOlder();
+  }
+
+  /**
+   * Ends once the thread is at rest (2026-11-22): it has not scrolled for
+   * REST_MS, and has still not scrolled REST_CHECK_MS after that was first
+   * found, so a scroll that the browser had not yet told the page of is
+   * waited for too. Older messages are drawn only then. While a thread
+   * still glides after a flick, Safari on iOS 27 goes on gliding from the
+   * place it had before they were drawn: the reader lands 50 messages
+   * further back, still near the top, and the next page loads at once.
+   */
+  private async threadAtRest(): Promise<void> {
+    let found = false;
+    for (;;) {
+      const still = performance.now() - this.scrolledAt;
+      if (still < REST_MS) {
+        found = false;
+        await new Promise((done) => setTimeout(done, REST_MS - still));
+      } else if (found) {
+        return;
+      } else {
+        found = true;
+        await new Promise((done) => setTimeout(done, REST_CHECK_MS));
+      }
+    }
   }
 
   protected senderName(room: RoomItem, anopodId: string): string {
@@ -470,6 +604,7 @@ export class ChatRoomPage {
     this.oldest = 0;
     this.newest = 0;
     this.toldSeen = 0;
+    this.olderArmed = true;
     this.canLoadOlder.set(false);
     this.showInvite.set(false);
     this.showMembers.set(false);
@@ -503,13 +638,16 @@ export class ChatRoomPage {
       if (!res.ok || this.openedFor !== room.chatRoomId) return res;
       const shown = await this.shown(room, res.body.messages);
       if (shown.length > 0) {
+        await this.threadAtRest();
+        if (this.openedFor !== room.chatRoomId) return res;
         const el = this.threadBox()?.nativeElement;
-        const heightBefore = el?.scrollHeight ?? 0;
+        // How far the reader is from the thread's end; the same distance is set again once the older messages are drawn (2026-11-22). A browser that has kept the place by itself is then moved by nothing.
+        const fromEnd = el ? el.scrollHeight - el.scrollTop : 0;
         this.oldest = shown[0].position;
         this.messages.update((list) => [...shown, ...list.filter((m) => !shown.some((s) => s.messageId === m.messageId))]);
         afterNextRender(
           () => {
-            if (el) el.scrollTop += el.scrollHeight - heightBefore;
+            if (el) el.scrollTop = el.scrollHeight - fromEnd;
           },
           { injector: this.injector },
         );
