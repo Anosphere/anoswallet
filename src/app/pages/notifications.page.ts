@@ -11,7 +11,7 @@ import { SessionService } from '../services/session.service';
 /** The five case kinds of masterpod 13.7: their reference id is a case id, and the label links to the person's case page (wallet spec 13.4). */
 const CASE_KINDS = ['tradeCaseOpened', 'disputeCaseOpened', 'caseScheduled', 'caseDecided', 'caseDismissed'];
 
-/** The notifications page (wallet spec 8.2): the list, newest first, mark read; the five case kinds link to /cases/:caseId (13.4), recoveryCaseScheduled to /cases/recovery/:caseId (13.3, 2026-11-12), the chat kinds to the chat requests or the room (8.2, Chat). The shell's poll keeps it fresh. */
+/** The notifications page (wallet spec 8.2): the list, newest first, mark read; the five case kinds link to /cases/:caseId (13.4), recoveryCaseScheduled to /cases/recovery/:caseId (13.3, 2026-11-12), the chat kinds to the chat requests or the room (8.2, Chat), and of the four kinds of the security alerts (2026-11-21) transferWaiting to the account's page and alertSettingsChanged to the Security alerts page. The shell's poll keeps it fresh. */
 @Component({
   selector: 'app-notifications-page',
   imports: [RouterLink, MatCardModule, MatButtonModule, MatListModule, MatIconModule],
@@ -59,11 +59,13 @@ export class NotificationsPage {
     void this.refresh();
   }
 
-  /** Where the label leads: a case kind to the case; recoveryCaseScheduled to the person's recovery case, the reference being the case's id (2026-11-12); passkeyAdded to the Passkeys page (2026-11-18; the reference is the new passkey's id, which the link does not use); chatInvite and joinRequest to the chat requests; inviteAccepted, inviteDeclined and joinApproved to the room, the reference being its id; null for the rest. */
+  /** Where the label leads: a case kind to the case; recoveryCaseScheduled to the person's recovery case, the reference being the case's id (2026-11-12); passkeyAdded to the Passkeys page (2026-11-18; the reference is the new passkey's id, which the link does not use); transferWaiting to the page of the account the transfer waits in, the reference being that account's id, and alertSettingsChanged to the Security alerts page, whose reference, the anoPod's own id, the link does not use (2026-11-21); chatInvite and joinRequest to the chat requests; inviteAccepted, inviteDeclined and joinApproved to the room, the reference being its id; null for the rest, the two other kinds of the security alerts among them, recoveryMoveWaiting and recoveryCaseOpened. */
   protected linkOf(kind: string, referenceId: string): string[] | null {
     if (CASE_KINDS.includes(kind)) return ['/cases', referenceId];
     if (kind === 'recoveryCaseScheduled') return ['/cases/recovery', referenceId];
     if (kind === 'passkeyAdded') return ['/account/passkeys'];
+    if (kind === 'transferWaiting') return ['/wallet', referenceId];
+    if (kind === 'alertSettingsChanged') return ['/account/alerts'];
     if (kind === 'chatInvite' || kind === 'joinRequest') return ['/chat/requests'];
     if (kind === 'inviteAccepted' || kind === 'inviteDeclined' || kind === 'joinApproved') return ['/chat', referenceId];
     return null;

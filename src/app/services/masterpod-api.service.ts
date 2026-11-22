@@ -191,6 +191,13 @@ export interface AddPasskeyBody {
   wrappedKeyBlobKey: string;
 }
 
+/** One email of a pod's security alerts as /list-alert-settings lists it (masterpod spec 25): emailId hex, the address in plain text, the language its emails are written in, confirmed once the six-digit code was typed back, createdAt ISO 8601, and removesAt, null or the moment the address comes off the list. */
+export interface AlertEmailItem { emailId: string; email: string; language: 'en' | 'th'; confirmed: boolean; createdAt: string; removesAt: string | null }
+/** One phone of a pod's security alerts as /list-alert-settings lists it (masterpod spec 25): phoneId hex; endpointHash, the SHA-256 of the phone's delivery address, hex, since the address itself is never answered; label, the kind of device (iphone, ipad, android, computer, other); createdAt ISO 8601; removesAt as for an email. */
+export interface AlertPhoneItem { phoneId: string; endpointHash: string; label: string; createdAt: string; removesAt: string | null }
+/** What /list-alert-settings answers (masterpod spec 25): the two lists, each oldest first; emailOn, false while the masterpod sends no email; pushPublicKey, the public half of the masterpod's key for the phones' delivery services as base64url, null while it sends no notification; the two limits; and removeMinutes, how long an email or a phone that was taken off still gets every alert. */
+export interface AlertSettings { emails: AlertEmailItem[]; phones: AlertPhoneItem[]; emailOn: boolean; pushPublicKey: string | null; emailLimit: number; phoneLimit: number; removeMinutes: number }
+
 export interface VouchRequestItem {
   vouchIdNumber: string;
   from: Profile;
@@ -774,8 +781,9 @@ export interface ExistingEvidence {
  * and after them the two passkey routes of masterpod 19 (2026-11-18) and
  * the report of how far a chat was read, /mark-messages-seen, of masterpod
  * 21 (2026-11-19), and the store of an account's first key blob,
- * /store-first-key-blob, of masterpod 22 (2026-11-20); the read of one
- * listing, /get-listing, is of 2026-11-06),
+ * /store-first-key-blob, of masterpod 22 (2026-11-20), and the eight
+ * routes of a pod's security alerts of masterpod 25 (2026-11-21); the read
+ * of one listing, /get-listing, is of 2026-11-06),
  * so no page builds URLs or envelopes. The session service holds the session and signs.
  */
 @Injectable({ providedIn: 'root' })
@@ -1035,6 +1043,48 @@ export class MasterpodApiService {
   /** One more passkey on the anoPod; 201 { passkeyId, credentialId, createdAt }. Refusals the Passkeys page reads: 401 unknown or expired challenge (the ten minutes are over, or the challenge was used) and 401 unknown passkey (the fresh tap was not by a passkey of this anoPod). */
   addPasskey(body: AddPasskeyBody): Promise<ApiResponse<AddedPasskeyItem>> {
     return this.signed('/add-passkey', body);
+  }
+
+  // --- level setup: the security alerts (masterpod spec 25) ---------------------
+
+  /** The pod's list of emails and phones, each oldest first, and what the Security alerts page needs to know about the masterpod. */
+  listAlertSettings(quiet = false): Promise<ApiResponse<AlertSettings>> {
+    return this.signed('/list-alert-settings', {}, quiet);
+  }
+
+  /** A new address on the list, not confirmed yet, with a six-digit code sent to it, 201; for an address that is on the list and not confirmed yet a new code, 200. `language` is the language every email to the address is written in. Refusals the page has a sentence for: 400 invalid email, 409 email already listed, 403 email limit reached, 429 too many codes today, 429 wait before a new code, 503 email alerts not set up. */
+  addAlertEmail(email: string, language: 'en' | 'th'): Promise<ApiResponse<{ emailId: string; email: string; confirmed: false }>> {
+    return this.signed('/add-alert-email', { email, language });
+  }
+
+  /** The code typed back: the address counts from now on. Refusals the page has a sentence for: 401 wrong code, 400 invalid code, 410 code expired, 410 code used up, 429 too many changes today. */
+  confirmAlertEmail(emailId: string, code: string): Promise<ApiResponse<{ emailId: string; confirmed: true }>> {
+    return this.signed('/confirm-alert-email', { emailId, code });
+  }
+
+  /** "Take off": a confirmed address is set to come off at removesAt and gets every alert until then (removed false); one that was never confirmed goes at once (removed true, removesAt null). 429 too many changes today. */
+  removeAlertEmail(emailId: string): Promise<ApiResponse<{ emailId: string; removed: boolean; removesAt: string | null }>> {
+    return this.signed('/remove-alert-email', { emailId });
+  }
+
+  /** "Keep": an address that was set to come off stays. */
+  keepAlertEmail(emailId: string): Promise<ApiResponse<{ emailId: string; removesAt: null }>> {
+    return this.signed('/keep-alert-email', { emailId });
+  }
+
+  /** This browser on the list, with what it handed over when the person allowed notifications (alerts.service, turnOn): 201, or 200 with the row as it stands when it is on the list already. Refusals the page has a sentence for: 503 phone alerts not set up, 400 push service not supported, 403 phone limit reached, 429 too many changes today. */
+  addAlertPhone({ endpoint, p256dh, auth, label }: { endpoint: string; p256dh: string; auth: string; label: string }): Promise<ApiResponse<{ phoneId: string; removesAt: string | null }>> {
+    return this.signed('/add-alert-phone', { endpoint, p256dh, auth, label });
+  }
+
+  /** "Take off": the phone is set to come off at removesAt and gets every alert until then. 429 too many changes today. */
+  removeAlertPhone(phoneId: string): Promise<ApiResponse<{ phoneId: string; removesAt: string | null }>> {
+    return this.signed('/remove-alert-phone', { phoneId });
+  }
+
+  /** "Keep": a phone that was set to come off stays. */
+  keepAlertPhone(phoneId: string): Promise<ApiResponse<{ phoneId: string; removesAt: null }>> {
+    return this.signed('/keep-alert-phone', { phoneId });
   }
 
   // --- level setup: after a recovery (masterpod 12.4.5) and the break-glass moves (masterpod 14.4.1) ---

@@ -926,6 +926,35 @@ The proxy forwards both routes as any masterpod path (section 2);
 nothing in server/ changed. The wallet's side is the New listing page
 and Browse (8.2, Marketplace) and marketplace.service (8.3).
 
+### 4.13 Security alerts
+
+Added 2026-11-21 (forclaude/security-alerts-plan-1.md, its step 1;
+section 11): the masterpod tells a pod by email and by a notification on
+the phone when a transfer starts to wait in one of its guarded, vault or
+assisted accounts, when a recovery is started for it and when its own
+alert list changes. It learns of a waiting transfer from the validators,
+whose report is that plan's step 4 and was not built when the wallet's
+step was: until the validators have it, nothing sets an alert about a
+transfer off. The masterpod's side is its own spec's section 25,
+which holds the rules, the four tables, the routes, the sender and the
+words in full; it was deployed before the wallet's step. What the wallet
+uses of it: eight routes at level setup for the pod's own list,
+/list-alert-settings, /add-alert-email, /confirm-alert-email,
+/remove-alert-email, /keep-alert-email, /add-alert-phone,
+/remove-alert-phone and /keep-alert-phone, whose bodies, answers and
+refusals are in 25.3 there; four more kinds under the bell,
+transferWaiting, recoveryMoveWaiting, recoveryCaseOpened and
+alertSettingsChanged (25.5 there); and the facts a phone is sent, which
+the wallet's worker turns into a sentence (25.7 there; 8.3 here). A
+masterpod of before answers the eight routes with 404, as it answers any
+route it does not have: the Security alerts page then shows that refusal
+in red, and the line on an account's page does not show. The proxy
+forwards the routes as any masterpod path (section 2); nothing in
+server/ changed. The wallet's side is the Security alerts page, the
+Account page, the Notifications page and the account page (8.2),
+alerts.service, masterpod-api.service and the worker file (8.3), and the
+words (8.8).
+
 ## 5. Validator changes (anossoftware)
 
 ### 5.1 A nonces table and two variables
@@ -1277,13 +1306,14 @@ as in the test apps; a new tab unlocks again.
     /vouching                find seeds, send requests, wait
     /identity                the public ledger id: why, the form, the review
     /setup                   keys, the backup code, the deposits, complete-setup
-    /account                 your account: a plain list of rows, Account recovery, Passkeys, Public ledger id and Sound
+    /account                 your account: a plain list of rows, Account recovery, Passkeys, Public ledger id, Sound and Security alerts
     /account/recovery        the Account recovery page: Recovery selfie and Recovery details, with what is on file
     /account/recovery/selfie    the account recovery walkthrough, opened at the selfie
     /account/recovery/details   the walkthrough opened at the ID
     /account/protect         the Protect your passkey page: the setup pane again, Save records the answer
     /account/passkeys        the Passkeys page: the anoPod's passkeys, and the three steps that add one
     /account/ledger-id       the Public ledger id page: the birth record typed again, and whether it gives the same id
+    /account/alerts          the Security alerts page: the emails and the phones that are told when a transfer starts to wait, with Take off and Keep
     /security/bucket-one     forwards to /account/recovery/selfie
     /security/bucket-two     forwards to /account/recovery/details
     /home                    home: the greeting, the balance card, things to do, the tiles
@@ -1602,7 +1632,7 @@ complete, after DAO. Since 2026-11-18 (section 11; the plan is
 forclaude/wallet-account-page-plan-1.md) the page is a plain list under
 its title, with no subtitle and no sentence: one row per thing, each
 with an icon, a title and one line, and a new row goes under the last
-one. Four rows. "Account recovery", with the icon lock_reset (the one
+one. Five rows. "Account recovery", with the icon lock_reset (the one
 the Cases page gives a recovery case) and the line "Your recovery
 selfie and details", opens the Account recovery page, /account/recovery
 (below). "Passkeys" (2026-11-18, section 11), with a key icon and the
@@ -1614,15 +1644,18 @@ Public ledger id page, /account/ledger-id (below). "Sound: on"
 (2026-11-19, section 11), with the icon volume_up and the line "A short
 sound when a chat message or a chat request arrives while the wallet is
 open. Tap to turn it on or off on this phone or computer.", is the
-switch of the wallet's sound (8.1). It is a button where the other three
+switch of the wallet's sound (8.1). It is a button where the other four
 are links, and it opens no page. A style rule of the page takes the
 browser's own button look off it, the outline and the centred words, so
-it is drawn as the three link rows are: Material does that only inside
+it is drawn as the link rows are: Material does that only inside
 an action list, and this row stands in the nav list. A tap turns the
 sound off: the title
 then reads "Sound: off" and the icon is volume_off. The next tap turns
 it on again and plays the sound once. The choice is kept on the device
-(sound.service, 8.3). No row has a
+(sound.service, 8.3). "Security alerts" (2026-11-21, section 11), with
+the icon notifications_active and the line "An email and a notification
+on your phone when a transfer starts to wait", opens the Security alerts
+page, /account/alerts (below). No row has a
 condition of its own: Account is in the navigation only once setup is
 complete. A pod that reaches the Passkeys page earlier by its address
 sees the masterpod's refusal there, and one that reaches the Public
@@ -1816,6 +1849,160 @@ under the row (the card's padding and border, the page's padding). The
 page is then at its end, Check stands where it was pressed and the three
 lines stand above it. Nothing moves when all of that is on the screen
 already.
+
+Security alerts (2026-11-21, section 11; the plan is
+forclaude/security-alerts-plan-1.md, its step 3, and the masterpod's
+side is 4.13), at /account/alerts, reached from the Account page's
+Security alerts row, from the notification "Your security alerts were
+changed" and from the line on the page of a guarded, a vault or an
+assisted account (Account, below). A transfer out of such an account
+waits on the validators before it is written, and its owner can cancel
+it while it waits. Until this page the owner saw that it waits only by
+opening the wallet. Now the masterpod tells the pod by email and by a
+notification on the phone when a recovery is started for the pod and
+when the pod's own list changes, and, from the day the validators report
+the transfers that wait (the plan's step 4, which is not built with this
+page), when a transfer starts to wait. This page is the list of where
+those alerts go: up to 3 emails and 5 phones, and each of them gets
+every alert. There are no switches for single kinds. An email or a
+phone that is taken off stays on the list for a month and gets every
+alert until then, so that whoever gets into a wallet cannot switch its
+alerts off; "Keep" undoes the taking off. No change asks for the
+passkey, and none asks first: nothing is lost by a tap.
+
+Titled "Security alerts" (`accountAlerts.title`), Back to Account
+(`nav.account`), then two paragraphs. `intro1`: "We tell you by email
+and on your phone when a transfer starts to wait in a guarded, vault or
+assisted account, and when a recovery is started in your name. So you
+can cancel a transfer that is not yours." `intro2`, a function: "An
+email or a phone you take off still gets every alert for 30 days. So a
+thief who gets into your wallet cannot switch your alerts off. Every
+email and phone on your list is told when the list changes." Its time is
+the list's own `removeMinutes` in words (`minutes`, as the account
+page's lock line has it): 43200 on the network, which reads "30 days".
+The list is /list-alert-settings, read when the page opens and again
+after every change (alerts.service, 8.3). A refusal shows in red where
+the list would be, "/list-alert-settings: <reason>". Until the list is
+read nothing stands under the first paragraph. While a call runs every
+button of the page is off.
+
+Email, under the heading `emailHeading`. One row per email of the list,
+oldest first. A confirmed row: the address and "Take off" (`takeOff`);
+once it is set to come off, the line `comesOff`, "Comes off on Dec 21,
+2026. Until then it still gets every alert.", stands under the address
+and the button reads "Keep" (`keep`). A row that is not confirmed yet:
+the address, "Not confirmed yet." (`notConfirmed`), a box "Code"
+(`codeLabel`; number keys, the phone's own offer of a code that came in
+a message, six characters at most) with "Confirm" (`confirm`), and "Send
+a new code" (`newCode`) with "Take off". With no row: "No email yet."
+(`emailNone`). Under the rows, while the list holds fewer than
+`emailLimit` rows: a box "Email address" (`emailLabel`, of the type
+email) with "Send the code" (`sendCode`), and under them `emailKept`,
+"We keep your email on our server to send you alerts. The company that
+delivers our emails sees it too." While the masterpod sends no email
+(`emailOn` false), "Email alerts are not switched on yet." (`emailOff`)
+stands in the place of the box. At `emailLimit` rows there is no box and
+nothing stands in its place.
+
+"Send the code" sends the box's words and the language on screen to
+/add-alert-email: every email to that address is written in that
+language. A good answer empties the box, reads the list again and shows
+`codeSent` in the theme's primary colour: "We sent a six-digit code to
+nok@gmail.com. It is good for 10 minutes.", with the address as the
+masterpod keeps it. "Send a new code" is the same call with the row's
+address, and leaves the box as it is. "Confirm" is off until the row's
+box holds six digits; it sends them to /confirm-alert-email, and a good
+answer reads the list again and shows "Confirmed. This email now gets
+your alerts." (`confirmed`). "Take off" is /remove-alert-email: an
+address that was never confirmed goes at once, and a confirmed one gets
+its day. "Keep" is /keep-alert-email. Both read the list again and show
+no line of their own.
+
+Phones, under the heading `phonesHeading`. First "This phone"
+(`thisPhone`), which is the browser the page is open in. What stands
+under it is the first of these seven that holds, in this order:
+1. The masterpod sends no notifications (`pushPublicKey` null): "Alerts
+   on the phone are not switched on yet." (`phonesOff`).
+2. The list holds a phone whose `endpointHash` is this browser's
+   (alerts.service, thisEndpointHash): "Alerts are on for this phone."
+   (`phoneOn`) and "Take off", or the line `comesOff` and "Keep".
+3. The wallet is open in a browser tab on a computer: "Alerts on a phone
+   are turned on from the phone itself. Open the wallet there."
+   (`phoneComputer`).
+4. The wallet is open in a browser tab on a phone: `phoneTab`, "To get
+   alerts on this phone, put the wallet on your Home Screen first. Then
+   open it from there and come back to this page.", then
+   `phoneTabIphone`, 'iPhone: open the wallet in Safari, tap Share, then
+   "Add to Home Screen".', and `phoneTabAndroid`, "Android: open the
+   wallet in Chrome, open the menu with the three dots, then add the
+   wallet to the Home screen." An iPhone's Safari tab ends here: it has
+   no notifications at all, so nothing below is asked of it.
+5. The wallet was opened from the Home Screen in a browser that lacks
+   one of the three things a notification needs: "This browser cannot
+   show alerts." (`phoneUnsupported`).
+6. The person has said no to notifications: "Notifications are switched
+   off for the wallet on this phone. Switch them on in the phone's
+   settings, then come back here." (`phoneDenied`).
+7. Otherwise the button "Turn on alerts for this phone" (`turnOn`) and
+   under it `phoneAsk`, "Your phone will ask whether the wallet may send
+   you notifications. Tap Allow."
+
+The tap on that button runs alerts.service's turnOn as its first thing,
+with nothing waited for in front of it: turnOn's first line asks the
+phone for the permission, and an iPhone asks only inside a tap. What
+turnOn hands back goes to /add-alert-phone; a good answer reads the list
+again and shows "Alerts are on. A first notification is on its way to
+this phone." (`phoneTurnedOn`), since the masterpod sends a new phone
+one notification at once. A person who answers no gets `phoneDenied`: as
+the line under "This phone" once the browser remembers the no (state 6),
+and in red while it does not (a question that was closed with no
+answer). Anything else that is thrown shows its own words in red, and a
+browser's own refusal comes in the browser's words. Under "This phone",
+one row per other phone of the list, oldest first: `phoneAdded`,
+"Android phone, added Nov 3, 2026", made of the phone's kind in words
+(`phoneLabels`: iPhone, iPad, Android phone, Computer, and Another
+device for `other` and for a kind the wallet does not know) and the day
+it was added, with "Take off", or the line `comesOff` and "Keep". They
+call /remove-alert-phone and /keep-alert-phone. The wallet does not take
+a browser's subscription back when its phone is taken off (8.3).
+
+Last, under the heading "Text message" (`textHeading`): "Coming soon."
+(`textSoon`). A day on this page is the browser's own medium date form
+in the language on screen, in the phone's own time: "Dec 21, 2026", "21
+ธ.ค. 2026".
+
+A refusal shows in red under the part it belongs to, the Email part or
+the Phones part. A part's good line and its refusal go when the next
+action of that part starts. These reasons of the masterpod have a
+sentence of their own:
+
+    invalid email                 invalidEmail     "That does not look like an email address."
+    email already listed          emailListed      "This email is already on your list."
+    email limit reached           emailLimit(3)    "You can have 3 emails at most."
+    too many codes today          tooManyCodes     "Too many codes for one day. Try again tomorrow."
+    wait before a new code        waitForCode      "Wait a minute before you ask for a new code."
+    wrong code, invalid code      wrongCode        "That is not the code. Look at the email again."
+    code expired, code used up    codeDead         "This code can no longer be used. Ask for a new one."
+    too many changes today        tooManyChanges   "Too many changes for one day. Try again tomorrow."
+    email alerts not set up       emailOff         "Email alerts are not switched on yet."
+    phone alerts not set up       phonesOff        "Alerts on the phone are not switched on yet."
+    push service not supported    phoneService     "This browser cannot get alerts. On an iPhone use Safari, on Android use Chrome."
+    phone limit reached           phoneLimit(5)    "You can have 5 phones at most."
+
+Any other refusal shows as the other pages show one, the path and the
+reason: "/add-alert-email: HTTP 400: invalid language". The two numbers
+are the list's own (`emailLimit`, `phoneLimit`).
+
+The rows are drawn by the page itself and are no Material list rows: a
+row is its words and, at their right, its one button. The words wrap, an
+address inside a word too, so a row grows with its lines and nothing is
+cut on a phone. Under an address that is not confirmed yet the Code box
+stands with Confirm, and Send a new code with Take off: each two are one
+piece, so on a phone they stand as two lines of two and no button stands
+alone on a line, and on a wide screen all four stand on one line with
+Take off at its right end. The Email address box gives way to Send the
+code, so the two share a line on a phone 360 pixels wide too. The one
+button with a line to itself is "Turn on alerts for this phone".
 
 Home (2026-11-06, section 11), at /home, where an unlock lands once
 setup is complete, first in the navigation; no outer card. Top to
@@ -2151,6 +2338,20 @@ longer held: it was written or cancelled."; "not the transfer's sender",
 "This account cannot cancel this transfer." Every other refusal reads
 "/locked-transfer-cancel: HTTP <status>: <reason>": against a doorman
 without the route, "/locked-transfer-cancel: HTTP 404: Not Found".
+
+The pointer to the security alerts (2026-11-21, section 11; the plan is
+forclaude/security-alerts-plan-1.md). On the page of a guarded, a vault
+or an assisted account, while the pod's alert list is read and holds no
+confirmed email and no phone (alerts.service, nothingSet, 8.3), one grey
+line stands as the first thing under the heading of the waiting
+transfer, "Locked transfer" or "Assisted transfer", whether a transfer
+waits or not: "You are not told yet when a transfer starts to wait in
+this account." and the link "Set up security alerts", which opens the
+Security alerts page (/account/alerts, above). The page asks for the
+list once, quietly, when it opens (ensureLoaded: a list that was read in
+this session is not read again). A list that could not be read shows no
+line, and so does a masterpod of before, which does not have the route.
+A spending account has neither heading and no line.
 
 Send: recipient account id (typed, or by the paste button at the right
 end of the box, which reads the clipboard and takes the run of exactly 64
@@ -3502,6 +3703,17 @@ the case id. The kind passkeyAdded (2026-11-18, section 11; masterpod
 to it, reads "A passkey was added to your anoPod" and links to the
 Passkeys page, /account/passkeys; its reference id is the new passkey's
 id, which the link does not use.
+The four kinds of the security alerts (2026-11-21, section 11; masterpod
+25.5), which the masterpod writes to the pod whether or not it has an
+email or a phone on its list. transferWaiting reads "A transfer is
+waiting to leave one of your accounts" and links to that account's page,
+/wallet/:accountId: its reference id is the account's id.
+recoveryMoveWaiting reads "A recovery is moving anos out of one of your
+accounts" and recoveryCaseOpened "A recovery was started for your
+anoPod"; neither links anywhere. alertSettingsChanged, one kind for
+every change of the pod's alert list, reads "Your security alerts were
+changed" and links to the Security alerts page, /account/alerts; its
+reference id is the pod's own id, which the link does not use.
 
 Seed: the Vouch requests page, for a seed or super seed (2026-11-08,
 section 11). One small call, /list-vouch-requests, answers the open
@@ -3568,7 +3780,13 @@ excepted, with the keyholder and anos calls included.
                             markMessagesSeen, always quiet; the first key blob (2026-11-20, section 11; 4.11):
                             listAnosAccounts sends { firstKeyBlobs: true } as its body, firstKeyBlob on
                             CreateAnosAccountBody, and one method, storeFirstKeyBlob(accountId, firstKeyBlob),
-                            always quiet, which the login calls
+                            always quiet, which the login calls;
+                            the security alerts (2026-11-21, section 11; 4.13): the types AlertEmailItem,
+                            AlertPhoneItem and AlertSettings, and eight methods, one per route: listAlertSettings
+                            (with the quiet flag), addAlertEmail(email, language), confirmAlertEmail(emailId, code),
+                            removeAlertEmail(emailId), keepAlertEmail(emailId), addAlertPhone({ endpoint, p256dh,
+                            auth, label }), which sends those four fields and no other, removeAlertPhone(phoneId)
+                            and keepAlertPhone(phoneId)
     keyholder-api.service   the keyholder test app's, base path /api/keyholder/<n>
     anos-api.service        the anos test app's account-api.service.ts, base path /api/anos/<the session's
                             validator> (2026-11-10, below; /api/anos/<defaultValidator> until then),
@@ -3833,6 +4051,58 @@ excepted, with the keyholder and anos calls included.
                             page becomes visible again (visibilitychange); a browser without an AudioContext,
                             or one that refuses, leaves the wallet silent, and nothing is shown; the shell
                             calls chime() from its poll (app.ts, ring; 8.1)
+    alerts.service          the security alerts of the pod (2026-11-21, section 11; 8.2, Security alerts; 4.13):
+                            settings, a signal, the pod's list as /list-alert-settings last answered it, null until
+                            read; an effect sets it back to null whenever the session's anoPod changes, so that one
+                            anoPod never sees another's list in the same tab (a change alone does it: the effect's
+                            first run leaves the list as it is); nothingSet, true when the list is read and holds
+                            no confirmed email and no phone, which the account page asks (8.2, Account);
+                            load(quiet), the read: a
+                            good answer goes into the signal, and the answer is returned; ensureLoaded(), a quiet
+                            load when the signal is null; then the phone's part, which is this browser on this
+                            device: device(), `tab` when the wallet was not opened from the Home Screen (neither the
+                            display mode standalone nor an iPhone's own navigator.standalone says so), else
+                            `unsupported` when the browser lacks a service worker, the push manager or
+                            notifications, else `ready`; label(), the kind of device from the user agent, in this
+                            order: iphone when it holds "iPhone"; ipad when it holds "iPad", or "Macintosh" with
+                            more than one touch point; android when it holds "Android"; computer when it holds
+                            "Windows", "Macintosh", "Linux" or "CrOS"; else other; permission(), the browser's
+                            Notification.permission, or denied where the browser has no notifications;
+                            thisEndpointHash(), the SHA-256 of this browser's delivery address as 64 hex characters,
+                            what the list names a phone by, from the worker's registration for "/" and its
+                            subscription, null when there is neither or when anything throws; turnOn(key), called
+                            straight from the button's tap, in this order: Notification.requestPermission(), first,
+                            since an iPhone asks only inside a tap (anything but granted throws "denied");
+                            navigator.serviceWorker.register('/alerts-worker.js', { scope: '/' }) and the wait until
+                            it is ready; the masterpod's public key for the phones, 65 bytes from base64url; the
+                            registration's subscription, which is taken back and made anew when it was made with
+                            another server key, and made when there is none (userVisibleOnly, with that key); it
+                            answers { endpoint, p256dh, auth, label }, the delivery address, the browser's public
+                            key and its secret as the browser hands them over (base64url), and label(); nothing in
+                            the wallet ever calls unsubscribe() for a phone that is taken off: the masterpod stops
+                            sending when the month is over, and until then the phone gets every alert; the one
+                            unsubscribe() in turnOn is for a subscription that was made with another server key,
+                            which no message of ours can reach; the worker is switched on in a browser only by
+                            turnOn, when a person turns the phone's alerts on, and the delivery address is the
+                            browser's own: it gets it from its maker's delivery service
+    alerts-worker.js        not a service: the file public/alerts-worker.js, the wallet's notification worker
+                            (2026-11-21, section 11), a plain file of public/ and no part of the Angular build, so
+                            it keeps its name through every build, and the browser asks the wallet's servers for it
+                            again by itself; the browser starts it when the masterpod sends this phone a security
+                            alert, also while the wallet is closed; it does two things: it shows the alert as a
+                            notification, titled "Security alert", with the wallet's logo (/icon-192.png), and when
+                            the notification is tapped it brings the open wallet to the front, or opens the wallet
+                            at "/"; it has no fetch handler and keeps no copy of the wallet, so every page load
+                            still comes from the wallet's servers; the masterpod sends facts, not sentences ({ kind,
+                            ... }, masterpod 25.7), and the sentence is made here: the file's sentences are its own,
+                            in two languages, and not the dictionary's (8.8), Thai when the browser's language is
+                            Thai and English otherwise; an amount is written from its millionths with commas
+                            ("5,000", "1.5"), and a day in the phone's own time ("Dec 21, 2026"); a message it
+                            cannot read (a kind it does not know, an empty message, one that is not JSON) still
+                            shows a notification, "Open the wallet to see your security alerts.", because a browser
+                            takes the permission away from a site whose message shows nothing; a new version of the
+                            file takes over at once (skipWaiting, clients.claim), since it holds nothing an open
+                            page depends on
     log.service             the activity log
 
 Keys are regenerated from blobs at each unlock; nothing secret touches
@@ -4296,6 +4566,32 @@ the words of the group's other lines ("ไม่สามารถ…ได้" 
 "จึงไม่ได้ส่งสิ่งใด" after their "จึงไม่ได้ทำสิ่งใด") and with "ลองอีกครั้งในอีกสักครู่",
 which the file has wherever the English says "Try again in a moment.";
 no Thai reader has read it.
+The security alerts (2026-11-21, section 11): one new section, and eight
+entries in three others. The new section, `accountAlerts`, stands after
+`accountLedgerId` and in front of `accountRecoveryHome`: 45 entries. Six
+of them are functions: `intro2`, which takes the time in words;
+`comesOff`, which takes a day; `codeSent`, which takes the address;
+`emailLimit` and `phoneLimit`, which take the number; and `phoneAdded`,
+which takes the phone's kind in words and a day. One is a table,
+`phoneLabels`, the five kinds of device. `accountHome` gains
+`alertsTitle` and `alertsLine` after `soundLine`, the fifth row of the
+Account page. `notifications.labels` gains four entries after
+`passkeyAdded`: `transferWaiting`, `recoveryMoveWaiting`,
+`recoveryCaseOpened` and `alertSettingsChanged`. `account` gains
+`alertsHint` and `alertsLink` after `lockNotLoaded`, the line on an
+account's page. The English is the plan's, letter for letter. The Thai
+is the build chat's, in the words of the file's other lines, and no Thai
+reader has read it. Two of the Thai lines are not free:
+`accountAlerts.title`, "การแจ้งเตือนความปลอดภัย", and
+`accountAlerts.keep`, "เก็บไว้", are quoted by the masterpod's Thai
+emails (masterpod 25.7, `buttons` in its alert-words.js), so a change of
+either is a change there too. The sentences of a notification on the
+phone are not in the dictionary: they stand in public/alerts-worker.js
+(8.3), in both languages, because that file runs where no dictionary is
+loaded. Its Thai names a kind of account by the word that follows
+"บัญชี" in this file's `account.title`, and quotes "กู้คืนบัญชี"
+(`common.recoverAccount`), "เก็บไว้" and "การแจ้งเตือนความปลอดภัย"; its
+device words are the Thai emails'.
 
 ### 8.9 The confirmation box
 
@@ -4683,6 +4979,12 @@ Cloud machines.
   attestors about a move; a migration of old key blobs (the testnet is
   reset with a fresh genesis instead); the break-glass blob's removal
   from the masterpod.
+  Since 2026-11-21 (4.13; the plan is
+  forclaude/security-alerts-plan-1.md) a notification to the person
+  about a move is built: the kind recoveryMoveWaiting, under the bell,
+  by email and on the phone, from the day the validators report the
+  transfers that wait (that plan's step 4). The attestors are told
+  nothing.
 - From the DAO voting plan (forclaude/dao-voting-plan-1.md, 2026-11-08,
   its section 8): a moderator hide for a proposal's text; votes signed by
   pair one of a staked account instead of the pod's session keys;
@@ -4741,7 +5043,9 @@ Cloud machines.
   after-production list); a limit on opening cases, and a case that
   someone else opened under a person's lookup id ("recovery rules left
   loose" on that list); telling an anoPod's owner that a case was
-  opened; the line under a failed Log in, "No passkey for this site on
+  opened (built since 2026-11-21, 4.13: the kind recoveryCaseOpened,
+  under the bell, by email and on the phone, at most once in 24 hours
+  for one anoPod); the line under a failed Log in, "No passkey for this site on
   this device? Create an anoPod instead."; asking a phone to forget a
   passkey the masterpod does not know; a change to the technical paper.
   The known limits, as that section has them: the check is done by the
@@ -4828,6 +5132,12 @@ Cloud machines.
   wallet's page is running, where push delivery would bring a sound or a
   banner while the wallet is not open, and on an iPhone it needs the
   wallet added to the Home Screen.
+  Since 2026-11-21 (section 11, Security alerts; the plan is
+  forclaude/security-alerts-plan-1.md) push delivery is built for one
+  thing: a security alert reaches a phone as a notification while the
+  wallet is not open, and an email goes with it (8.2, Security alerts;
+  4.13). Nothing else is pushed: a chat message, a chat request and
+  every other line of the bell still show only in the open wallet.
 
 ## 11. Build notes
 
@@ -15683,6 +15993,24 @@ signing servers are not touched, and no validator has to pull.
   not, which sentence the wallet showed. What it showed is written
   here when it is known. The plan's step 3 is built only after it has
   gone through on the iPhone 11 and on the Android phone.
+- The deploy and the trial (added 2026-11-21, after this note was
+  committed as c3b0177). The step went out the same day, on wallet1
+  and then on wallet2, as GitHub's main 07ad832 (pull request 41),
+  together with the masterpod's step 1 (the plan's 6.2). Looked at
+  from the build's Mac afterwards: each of the three wallet names
+  answered `/manifest.webmanifest` as `application/manifest+json`,
+  byte for byte the file of `public/`, from both wallet servers; the
+  three pictures answered as `image/png`, byte for byte; and the page
+  held the four lines, with its script unchanged. Then the user made
+  the trial of the plan's 6.3 on the iPhone 11 with iOS 18, on the
+  Android phone and on the iPhone 15 with iOS 27, and wrote: "Yes,
+  yes everything worked on all three phones." Read here as a yes to
+  the two questions asked of each phone: the wallet opened from the
+  Home Screen with no address bar, and the login with the passkey
+  went through. So the plan's decision 12 holds on iOS 18 and on
+  Android as well, and its step 3 can be built. How the icon looks on
+  the Android phone, and which version of Android and of Chrome it
+  runs, was not told.
 - The way back (the plan's 2.5): the one word `"standalone"` in the
   manifest becomes `"browser"`, and one deploy. A wallet that is added
   to a Home Screen after that opens in Safari again on iOS 18 to 25.
@@ -15692,6 +16020,345 @@ signing servers are not touched, and no validator has to pull.
   this repository none found. The sentence of section 10 on push
   delivery still holds after this step, and the plan's step 3 names
   it.
+
+### Security alerts (2026-11-21)
+
+Built from `forclaude/security-alerts-plan-1.md` (FINAL, 2026-11-21),
+its step 3 of five, its section 3, one commit, on main at b9ae5eb, the
+working tree clean. The plan was written against 824a30e; since then
+came c3b0177, the plan's own step 2 (the note above), and b9ae5eb, 18
+lines of this file, so every place the plan names stood as the plan has
+it. That plan brings security alerts: the masterpod tells a pod by email
+and by a notification on the phone when a transfer starts to wait in a
+guarded, a vault or an assisted account, when a recovery is started for
+the pod and when the pod's alert list changes, so that a transfer that
+is not the owner's can be cancelled in time. Step 1 is the masterpod's
+(masterpodsoftware 93e8f43, section 25 of its spec), deployed 2026-11-21
+with the alerts off. Step 2 put the wallet on the Home Screen, and the
+login from there went through on the user's three phones (the note
+above). This step is the wallet's part: the page Security alerts, the
+phone's part and the bell. Step 4, the validators' report of the
+transfers that wait, is not built: until it is, an alert about a
+transfer has nothing to set it off, and the alerts about a recovery case
+and about a change of the list work without it. Three new files
+(`public/alerts-worker.js`, `src/app/services/alerts.service.ts`,
+`src/app/pages/account-alerts.page.ts`) and seven changed
+(`src/app/services/masterpod-api.service.ts`, `src/app/app.routes.ts`,
+`src/app/pages/account-home.page.ts`, `notifications.page.ts` and
+`account.page.ts`, `src/app/i18n/en.ts` and `th.ts`), with this file and
+`README.md`. No npm package, nothing in `server/`, no line of
+`network/wallet.env`, nothing under `deploy/`. The masterpod, the
+validators, the doormen, the keyholders and the signing servers are not
+touched by it.
+
+- The plan's decision 19 (the user, 2026-11-21, round 3: four times
+  "yes"). A row "Security alerts" under Account. Up to 3 emails and 5
+  phones. "Take off" starts the 30 days and the row shows the day;
+  "Keep" undoes it. Every email and phone on the list gets every alert;
+  no switches for single kinds yet. The phone part is offered only where
+  the wallet was opened from the Home Screen; in a browser tab the page
+  shows the steps. "Text message: coming soon." The same alerts show
+  under the bell inside the wallet, for everybody. One line on the page
+  of a guarded, vault or assisted account points to the new page while
+  nothing is set up.
+
+- The plan's decisions 11, 14 and 16, as far as they are the wallet's.
+  No part keeps a copy of the wallet on the phone: the part that waits
+  for a notification has no fetch handler, so every load still comes
+  from our servers. A notification says the amount and never the
+  receiving account, carries no link and no web address, is in the
+  phone's own language, and a tap on it opens the wallet. The page says
+  in one sentence, before an email is typed, that we keep it and that
+  the company which delivers our emails sees it (`emailKept`).
+
+- The plan's decision 23, the lines that are the wallet's. A
+  notification has the title "Security alert" and one sentence; the
+  masterpod sends the facts and the sentence is made on the phone. A
+  phone that was just turned on gets one notification at once, so the
+  page says that a first one is on its way. A change of the list asks
+  for no passkey tap. The list names a phone by its kind, which the
+  wallet reads when the alerts are turned on. No route answers a phone's
+  delivery address, so the page finds "this phone" by a fingerprint of
+  the address. The part that waits for notifications is switched on in a
+  browser only when a person turns the phone's alerts on. Names in code
+  use "alert". The Thai is written by the build and unread by a Thai
+  speaker.
+
+- `public/alerts-worker.js` (the plan's 3.1): the plan's own text, taken
+  out of the plan file by its line numbers; it is the planning chat's
+  tried file byte for byte. Two things differ, as the plan says: the
+  line `WORDS.th = WORDS.en;` and the comment above it are gone, and a
+  Thai block stands in the `WORDS` object after the English one, with
+  the same 17 keys, each of the same kind, and one comment line above
+  it. The Thai is this build's: the kinds of account are the four words
+  that follow "บัญชี" in th.ts; "กู้คืนบัญชี" is the wallet's Recover
+  account; the two names the English leaves bare, Keep and Security
+  alerts, stand in quotation marks, since Thai has no capital letter to
+  mark a button by; "Not you?" reads "หากไม่ใช่คุณ ให้...", as the
+  masterpod's Thai emails begin that sentence; the device words are the
+  Thai emails'.
+
+- `masterpod-api.service.ts` (3.2): the three interfaces stand after
+  `AddPasskeyBody`, each with a line that says what it is. The eight
+  calls are a part of their own, "level setup: the security alerts",
+  after the passkeys' part. `addAlertPhone` sends the four fields it is
+  handed and no other.
+
+- `alerts.service.ts` (3.3), as the plan has it. Readings where it left
+  a detail open. The effect acts on a change of the session's anoPod
+  alone: an effect also runs once when it is made, and that first run
+  leaves the list as it is, so that a list which was read in the same
+  moment is not thrown away. The last line of `turnOn` is the plan's,
+  with TypeScript's mark that the subscription's address and its two
+  keys are there. The two small types `AlertDevice` and `AlertPhone` are
+  the service's own. The server key is read from base64url with `atob`,
+  and compared with a subscription's kept key byte by byte.
+
+- `account-alerts.page.ts` (3.4), in the form of the Passkeys page: one
+  outlined card, the title, the link back to Account, the classes
+  `error` and `ok`, one `busy` signal. Readings where the plan left a
+  detail open. The rows are the page's own and no Material list rows,
+  with no icon: a list row costs 56 pixels of a phone's width for its
+  icon, and its title is cut where it does not fit. A row's one button
+  stands at the right of its words. Under an address that is not
+  confirmed the four things stand as two pairs (8.2). "Take off" and
+  "Keep" are stroked buttons, "Send the code", "Confirm" and "Turn on
+  alerts for this phone" filled ones, "Send a new code" a text button. A
+  row's title is 16 pixels and its lines 14. The page keeps what it saw
+  of this browser (where the wallet runs, the kind of device, the answer
+  about notifications, the fingerprint) and looks again with every read
+  of the list and after a no. A part's good line and its refusal stand
+  at the part's end. "Send a new code" leaves the Email address box as
+  it is. The Email address box has the type email and no other
+  attribute. A thrown `denied` shows `phoneDenied` once: as the part's
+  own line when the browser remembers the no, in red when it does not.
+
+- The four other places (3.5) are as the plan has them: the fifth row of
+  the Account page, the route after `account/ledger-id`, the two lines
+  in the bell's `linkOf`, and on the account page the service, the quiet
+  read in the constructor and the three lines under each of the two
+  headings. The comments of 3.7: the class comment of
+  `account-home.page.ts` says five rows and names the fifth with its
+  day; `notifications.page.ts` names the two new links in its class
+  comment and in `linkOf`'s, and says which two kinds have none; the
+  class comment of `masterpod-api.service.ts` names the eight routes;
+  `app.routes.ts` does not count the Account pages, so its comment is as
+  it was.
+
+- Checked (the plan's 3.9). `git status --short` showed a clean tree at
+  b9ae5eb at the start, and this step's twelve files and no others at
+  the end. No server that the network can reach was started: every
+  listener of these checks stood on 127.0.0.1, and all are stopped. No
+  email and no notification left the build's Mac. Then:
+  1. `npx ng build --output-path` into the build chat's scratch folder,
+     from the wallet folder: exit 0, no warning, 2.32 MB initial (389.04
+     kB estimated transfer; 2.28 MB and 383.79 kB before this step). The
+     built folder holds ten files, the worker among them, byte for byte
+     the file of `public/`. Built again after this note and the README
+     were written: the same bytes.
+  2. `node --check public/alerts-worker.js`: clean. Its handlers under
+     Node, in a script of the moment, with the browser's language as
+     English and as Thai (and four more values of it, for the choice
+     alone): 922 checks, none bad. The facts of every kind a phone is
+     sent were made by the masterpod's own `phoneFactsOf`
+     (masterpodsoftware 93e8f43), written as JSON and read back as a
+     phone reads them: 19 messages, among them a transfer out of each
+     kind of account, an email whose row is gone and each of the five
+     kinds of device. Each gave one notification. The English sentences
+     equal the plan's "The phone", letter for letter. A kind the file
+     does not know, a message with no kind, an empty message, one that
+     is not JSON, one of no bytes, JSON that is a list, a number, null
+     or a text, and nine messages that lack a part or carry a wrong one:
+     one notification each, and nothing thrown. A tap closes the
+     notification and brings an open wallet to the front, or opens the
+     wallet at "/". The Thai block has the English block's keys, each of
+     the same kind.
+  3. The page at phone width: a development build in the scratch folder
+     behind a small file server, in the app's own browser pane (Chrome),
+     with a made-up session and a stand-in for the masterpod inside the
+     page. 27 states, each in English and in Thai, at 360 by 560, 375 by
+     667 and 430 by 932: an empty list; three emails, one confirmed, one
+     that comes off and one not confirmed; two emails with the box; a
+     code typed; two addresses of 89 and 104 letters; email not switched
+     on; a list that could not be read; each good line and a refusal of
+     each kind; and the phone part in each of its seven states, this
+     phone among four others and coming off, and the button's five
+     outcomes (turned on, a no that the browser remembers, a question
+     closed with no answer, a browser that throws, a refusal of the
+     masterpod). Nothing was wider than the card, nothing was cut, and
+     no button stood alone on a line but "Turn on alerts for this
+     phone", which the plan draws on a line of its own. The measure was
+     shown to fail on four faults put in by hand. Then the card's width
+     was moved from 300 to 760 pixels in steps of 2, for six of the
+     states in both languages. That found one fault of this build: at
+     card widths of 414 to 486 pixels in English, and 392 to 416 in
+     Thai, the Take off of an unconfirmed address ran past the card,
+     because the second pair started from a width of nothing and was
+     kept on the first line. With the rule `flex: 1 0 auto` no width was
+     wrong; the four things stand as two lines under a card width of 504
+     pixels in English (434 in Thai) and as one line from there on.
+  4. The Android emulator of the planning notes (`phone-android-17`,
+     Android 17, Chrome 149.0.7827.5, Google Play services 26.45.31),
+     which was running. The scratch build was a development build with a
+     made-up session, since a passkey there needs the user's own taps;
+     its eight alert calls went to a stand-in masterpod on the Mac,
+     which ran the masterpod's own `alerts.service.js` over rows kept in
+     memory. In a Chrome tab the page showed the steps for the Home
+     Screen and no button. Installed from Chrome's menu ("Add to Home
+     screen", then "Install"): Chrome's box read "Install app, anoPod
+     wallet", and the Home screen got the logo, whole, in a white
+     circle, with "anoPod" under it. Opened from that icon the wallet
+     had no address bar, the page saw the display mode standalone, and
+     the button showed. A tap on "Turn on alerts for this phone":
+     Android asked "Allow anoPod to send you notifications?", with
+     "Allow" and "Don't allow". After Allow the stand-in's log read: the
+     delivery address is on the host fcm.googleapis.com. It is the host
+     the masterpod's list names, and the masterpod's code took the phone
+     (201). The page read "Alerts are on for this phone." Take off
+     showed the day and Keep took it back, by taps. A made-up message
+     handed to the worker by Chrome's DevTools showed as an Android
+     notification, "Security alert" with its sentence and the logo,
+     under the name anoPod; a tap on it closed it and the wallet stood
+     in front. Afterwards the trial subscription was given back, the
+     worker switched off, the trial app taken off the emulator and the
+     tab closed.
+
+- Beyond the plan's list, in the same scratch folder:
+  5. The proxy's own `createApp` over the production build, on 127.0.0.1
+     and a port the system picked, once for each edition: 255 checks,
+     all as expected. `GET /alerts-worker.js` answers 200 as
+     `text/javascript; charset=utf-8`, with `Cache-Control: public,
+     max-age=0`, an ETag, the three safety headers and the page's
+     policy, byte for byte the file of `public/`, its Thai letters
+     whole; asked again with its ETag it answers 304. `index.html` does
+     not name the worker, and the built script registers it in one
+     place, for the scope "/". The page answers at `/account/alerts`.
+  6. Google Chrome 157 with no window and a profile of its own, at the
+     PRODUCTION build behind the proxy's own app, against the stand-in
+     masterpod: 50 checks with the browser's language English and 50
+     with Thai, none bad. A real session was made by the wallet's own
+     create page, its passkey by Chrome's stand-in passkey device, so
+     every call was signed and checked as the masterpod checks a
+     session. The Email part end to end: an address that is none, the
+     code as the masterpod made it, a wrong code, a new code too soon,
+     the right code, the same address in other capitals, Take off with
+     the masterpod's day, 30 days ahead, in the browser's own time,
+     Keep. Then the phone part, with the one question about the display
+     mode answered by hand as standalone, since Chrome with no window
+     has no Home Screen: a no that is remembered gave the sentence about
+     the phone's settings; with nothing answered yet the button showed;
+     with the answer yes the worker started under the page's own policy,
+     Chrome handed over a delivery address at fcm.googleapis.com with a
+     key of 65 bytes and a secret of 16, the masterpod's code took it,
+     and the page found "this phone" by the fingerprint, also when it
+     was opened again and from a tab. Nine messages handed to the worker
+     by DevTools gave one notification each, in the browser's language.
+     The bell's rows read "Your security alerts were changed" and led to
+     the page. Chrome raised nothing against the page's policy.
+  7. A simulated iPhone 16 with iOS 18.6, no window. In Safari, a tab:
+     the steps for the Home Screen and no button; that Safari has a
+     service worker and neither notifications nor a push manager, as the
+     plan says. Added to the Home Screen and opened from the icon: the
+     display mode and the iPhone's own flag both say standalone, all
+     three things are there, and the button shows. A tap on it brought
+     the iPhone's own question at once: "“anoPod” Would Like to Send You
+     Notifications", with "Don't Allow" and "Allow". After Allow the
+     worker was switched on, and then the simulator's own push part
+     refused to hand over a delivery address: its log reads "Cannot
+     subscribe because web clip origin does not have correct
+     permissions" (the check of WebKit's bug 277704), and the page
+     showed the browser's words in red, "User denied push permission". A
+     second tap two minutes later gave the same. A second trial page,
+     which asked for the subscription straight from the tap, as Apple's
+     guide words it ("call the push subscription method immediately from
+     the gesture's event handler code"), got the same question and the
+     same refusal. So the refusal is the simulator's and does not come
+     from the order of the wallet's calls; others report the same words
+     from a simulator (Apple's developer forum, thread 725619). Whether
+     an iPhone hands over a delivery address was NOT seen. It is the
+     first thing the user's trial shows.
+  8. The three other places, in the development build at 360 by 560, in
+     both languages. The Account page has five rows; the new one's line
+     wraps onto three lines in English and two in Thai, and nothing is
+     cut. The bell reads the four new kinds in words, links
+     transferWaiting to the account's page and alertSettingsChanged to
+     this page, links the two recovery kinds nowhere, and still shows a
+     kind it does not know as it is. The line on an account's page
+     stands under "Locked transfer" on a guarded and a vault account and
+     under "Assisted transfer" on an assisted one while the list is
+     empty, with or without a waiting transfer; it does not stand on a
+     spending account, with a confirmed email or a phone on the list, or
+     when the list could not be read.
+
+- A second reader, a separate agent that was told only to find faults
+  and changed nothing, read the change against the plan's section 3
+  after the checks. It found the worker and the English words to be the
+  plan's letter for letter, the seven states, the calls of `turnOn` and
+  the order of `label()` to be the plan's, the permission asked inside
+  the tap, the phone's key and secret decoding to 65 and 16 bytes with
+  the masterpod's own helpers, and the wallet's fingerprint of a
+  delivery address equal to the masterpod's. What it found beside, and
+  what was done about each. Two things of this build that the plan does
+  not have were taken out again: a `load` that dropped an answer when
+  the session's anoPod had changed meanwhile, and a sentence of its own
+  that `turnOn` threw when a subscription came back without its parts.
+  The effect's first run could have thrown away a list that was back
+  before it ran: hence the reading above. A Thai sentence, the one under
+  the Email address box, used one word for the address and for our
+  emails: reworded. Two sentences of this file said that the masterpod
+  tells of a waiting transfer "now", which holds only from the
+  validators' step on: brought in line (8.2, 4.13). And the sentence of
+  section 2 about the service worker, which is in the list of places
+  below. After that the two builds, the proxy's check, both walks in
+  Chrome, the looks at the three sizes and the sweep were run again,
+  with the same results.
+
+- Not tried: an email through the email company; a notification through
+  a delivery service; a real phone; an iPhone's delivery address, in any
+  simulator; the simulators with iOS 26.5 and 27.0; a passkey session on
+  the Android emulator; the moderator and the attestor edition on a
+  phone; nginx; the live wallet; the real masterpod.
+
+- Seen and left as it is, and put to the user. Under the bell on a
+  narrow phone a long line is cut with three dots, as that page has
+  always cut one ("A passkey was added to yo…" at 360 pixels): the four
+  new lines are cut there too, "A transfer is waiting to leav…", "A
+  recovery is moving anos …", "A recovery was started for …", "Your
+  security alerts were ch…". The plan names only `linkOf` on that page.
+  With three emails on the list the Email address box is gone and
+  nothing says why; the plan has a sentence for it only as a refusal.
+  And the page's first paragraph says that we tell a person when a
+  transfer starts to wait: that part begins only when the validators
+  have the plan's step 4, so between the two deploys a person is told of
+  a recovery and of a change of the list and not yet of a waiting
+  transfer (the plan's known limit 7).
+
+- Places this step leaves out of date that the plan does not name. They
+  are left as they are and were asked about. In section 2, the paragraph
+  "The Home Screen files": "there is no service worker". In 8.1, at the
+  end of the paragraph on when the sound cannot ring: "push
+  notifications, which are not built (section 10)". The same words in
+  the class comment of `src/app/services/sound.service.ts`. And in
+  `README.md`, "nothing touches browser storage", which the notes of
+  2026-11-12 and 2026-11-19 already name: a browser now also keeps the
+  worker and its own delivery address for the wallet's address.
+
+- The user's trial (the plan's 6.4) had not been made when this note was
+  written. It follows the deploy of this step, which needs the user's
+  own part first (the plan's 6.1: the account at the email company with
+  its paid plan, the sending domain with its four records, the key for
+  the phones, and the four lines in the masterpod's `.env`): until the
+  masterpod's log says `alerts: email on, phones on`, the page reads
+  "Email alerts are not switched on yet." and "Alerts on the phone are
+  not switched on yet." What the trial showed is written here when it is
+  known.
+
+- For the deploy: the user's two lines on wallet1 and then on wallet2,
+  with no `npm ci` (no package file changed) and nothing new under
+  `deploy/`. The build's folder has ten files where it had nine, and the
+  script has a new name; built from the wallet folder with exactly this
+  step's files it is `main-OPBCOZNH.js`. A wallet that is open on a phone
+  meanwhile keeps the script it has until it is loaded again.
 
 ## 12. Recovery and the moderator edition
 
