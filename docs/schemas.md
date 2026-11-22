@@ -12792,8 +12792,13 @@ The forty Thai lines, as `th.ts` has them:
   log. In English only. The wallet's shell is as high as the browser's
   whole window (`height: 100vh` in `src/app/app.css`, there since the
   app's first build), 739 points there, so in Safari the whole page can
-  move 40 points under the phone's top edge. The fault, with the plan's
-  code: when the walk-through was first drawn, its
+  move 40 points under the phone's top edge. (Since 2026-11-22, the
+  note "The shell is as high as the screen shows, and the Username
+  label of the create page is whole" at the end of this section: the
+  shell's height is `100dvh`, the height the browser shows at that
+  moment. In that note's trials the whole page no longer moved, and
+  the end of a long page stood on the screen.) The fault, with the
+  plan's code: when the walk-through was first drawn, its
   `scrollIntoView({ block: 'start' })` moved the page inside the shell
   and that whole page too. The whole page went up by those 40 points
   and stayed there through every screen. The wallet's top bar is 56
@@ -16456,7 +16461,11 @@ sentence.
   touched), the three round + buttons and the side menu: no rule
   changed. The only place of this specification that names the old
   value is the note of 2026-11-18 on the walk-through's look in Safari
-  ("`height: 100vh` in `src/app/app.css`"), the record of its day.
+  ("`height: 100vh` in `src/app/app.css`"), the record of its day. On
+  the user's word of the same day ("Yes, add it") it got one dated
+  clause in brackets, beginning "Since 2026-11-22"; its old words stand
+  as they were. The clause and this sentence are the commit after
+  997274e, which holds the two fixes and the rest of this note.
 - Checked, the code: `npx ng build` clean, no warning. The two files
   are byte for byte the ones of the scratch copy that was walked on the
   phones, and the script built from the wallet folder is byte for byte
