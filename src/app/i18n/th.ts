@@ -807,6 +807,8 @@ export const th: Words = {
     attestorReads: 'ผู้ยืนยันที่คุณเชิญจะอ่านแชทนี้ได้ทั้งหมด',
     attestorsIn: 'ผู้ยืนยันของเคสนี้อยู่ในแชทนี้แล้ว',
     invited: '(ได้รับเชิญ)',
+    searchMembers: 'ค้นหาสมาชิก',
+    noMembersFound: 'ไม่พบสมาชิก',
     loadOlder: 'โหลดข้อความเก่ากว่า',
     sending: 'กำลังส่ง',
     sent: 'ส่งแล้ว',

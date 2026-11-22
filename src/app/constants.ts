@@ -17,6 +17,9 @@ export const PROFILE_READS_AT_ONCE = 5;
 /** A conversation opens with this many of its newest messages and loads older ones by as many (wallet spec 8.2, Chat). */
 export const MESSAGES_PAGE = 50;
 
+/** The Members list of a conversation draws this many people at first, and as many more each time the reader comes near its end (wallet spec 8.2, Chat; 2026-11-22). */
+export const MEMBERS_PAGE = 50;
+
 /** The transaction history opens with this many of the newest rows and Show more loads as many (wallet spec 8.2, Transaction history). */
 export const HISTORY_PAGE = 20;
 
