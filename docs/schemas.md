@@ -109,6 +109,41 @@ Routes
                                       so a tab loaded before the change cannot sign until it is reloaded
     everything else                   the files of DIST_DIR; index.html for a path that is not a file (the router's deep links)
 
+The Home Screen files (2026-11-21, section 11). Four of the files of
+DIST_DIR are there for a phone's Home Screen: manifest.webmanifest, the
+web app manifest (the name "anoPod wallet", the short name "anoPod",
+the start address and the scope "/", the display mode "standalone",
+white for both of its colours, and two pictures); icon-192.png and
+icon-512.png, those two pictures, 192 and 512 pixels a side; and
+apple-touch-icon.png, 180 pixels a side, the picture an iPhone puts on
+its Home Screen. They are plain files of public/, which the build
+copies beside index.html as they are. The proxy has no route and no
+line of code for them: it serves them as it serves every file of the
+build, the manifest as "application/manifest+json; charset=utf-8" and
+a picture as "image/png", with the safety headers and the page's
+content security policy of the points below. Four lines in the head of
+src/index.html name them to a browser: the link to the manifest, the
+link to the iPhone's picture, the name under the iPhone's icon
+(apple-mobile-web-app-title, "anoPod") and the page's theme colour
+(theme-color, white). The policy lets a manifest and a picture of the
+wallet's own address through as it stands: it has no part of its own
+for a manifest, so "default-src 'self'" decides, and a picture falls
+under "img-src 'self' data: blob:". What the manifest changes on a
+phone: on an iPhone with iOS 18 to 25, a wallet that a person adds to
+the Home Screen opens as an app of its own, with no address bar, where
+without a manifest the icon is a bookmark that opens Safari (since iOS
+26 every site that is added opens as an app, webkit.org/blog/17333);
+and to Chrome on Android the wallet is a site that can be installed as
+an app, which by web.dev's install criteria takes a name, pictures of
+192 and 512 pixels, a start address and a display mode. The icon
+carries the name "anoPod" and the logo. The one manifest serves the
+wallet, the moderator edition and the attestor edition, so all three
+show "anoPod". No part keeps a copy of the wallet on the phone: there
+is no service worker, and every load still comes from the proxy. An
+iPhone settles at the moment of adding whether an icon is an app or a
+bookmark (seen on iOS 18.6, section 11), so a change of the display
+mode reaches only a wallet that is added after it.
+
 Behaviour
 - Bodies are streamed, never parsed: no express.json in front of the
   proxy, so a 70 MB bucket request passes through as it is. Of the
@@ -15458,6 +15493,205 @@ change.
   browser: both pages sit behind a passkey login and need a real
   dispute. The dispute of the report was not looked at.
 - Not undone by this fix: a transfer that was written stays written.
+
+### The wallet on the Home Screen (2026-11-21)
+
+Built from `forclaude/security-alerts-plan-1.md` (FINAL, 2026-11-21),
+its step 2 of five, its section 2, one commit, on main at 824a30e, the
+working tree clean. That plan brings security alerts: an email and a
+notification on the phone when a transfer starts to wait in a guarded,
+a vault or an assisted account, when a recovery is started, and when a
+person's alert list changes. Its step 1 is the masterpod's
+(masterpodsoftware 93e8f43, section 25 of its spec); this step needs
+nothing of it. Why this is a step of its own: on an iPhone a website
+can send notifications only when it was added to the Home Screen, and
+before iOS 26 a site opens from there as an app only when it carries a
+manifest. Whether the wallet's passkey login works inside such an app
+on iOS 18 had never been tried. So these files go out alone, and the
+user tries the login on real phones before the page is built (the
+plan's 6.3). Four new files in `public/` and four lines in
+`src/index.html`. No line of TypeScript, no word in the dictionaries,
+no npm package, nothing in `server/`, no line of `network/wallet.env`.
+The masterpod, the validators, the doormen, the keyholders and the
+signing servers are not touched, and no validator has to pull.
+
+- The plan's decision 11 (the user, 2026-11-20: "1. Yes"). The wallet
+  becomes an app on the Home Screen, in its smallest form: a file that
+  says "I am an app", and a part that waits for a notification and
+  shows it. No part keeps a copy of the wallet on the phone, so every
+  load still comes from our servers. This step is the file. The part
+  that waits is the plan's step 3.
+- The plan's decision 12. The login from the Home Screen works on the
+  user's iPhone 15 with iOS 27, tried by the user on 2026-11-20 with
+  nothing built: "It runs as an app, the login went through and I
+  could see my accounts". The iPhone 11 with iOS 18 and an Android
+  phone are tried after this step. If the login fails on either, the
+  build stops and comes back to the user.
+- The plan's decision 20. The name under the icon is "anoPod", and the
+  picture is the wallet's logo, from a larger picture the user brought.
+- The pictures (the plan's 2.1). The user's picture is
+  `forclaude/app-icon.png` beside the repos, the black triangle with
+  the pale line, on white: a PNG of 1024 by 1024 pixels, sha256
+  b03fc7d6ae428aaca96f60d87c7d5ef0e0d4d01ececd06bbc0e22f57274b7a72.
+  `sips -g pixelWidth -g pixelHeight -g hasAlpha` answered 1024, 1024
+  and `hasAlpha: yes`. The plan asks for a filled background, and the
+  picture has one: the file carries a channel for see-through pixels,
+  and every pixel in it is solid, the four corners and the whole edge
+  white. From it, with `sips -z`: `public/icon-192.png` (192 by 192,
+  9,040 bytes), `public/icon-512.png` (512 by 512, 31,936 bytes) and
+  `public/apple-touch-icon.png` (180 by 180, 8,432 bytes). In each of
+  the three every pixel is solid too, and no dark pixel lies outside
+  the rounded square an iPhone cuts an icon to (counted against the
+  curve |x|^5 + |y|^5 = 1 and against a square with a corner of 22.37
+  percent of its side). `sips` carries over from the user's file its
+  colour profile (Display P3), its 132 dots an inch and the title
+  "Untitled Artwork" in two small text blocks; no name, no date and no
+  place is in them. The picture in `forclaude` stays where it is.
+  `public/logo.png` and `public/favicon.ico` are byte for byte as they
+  were.
+- `public/manifest.webmanifest`, new, letter for letter as the plan's
+  2.2 has it (13 lines, 341 bytes; compared with the plan's own lines).
+  Section 2 says what is in it.
+- `src/index.html`: the four lines of the plan's 2.3, after the line
+  of the favicon. The title "Wallet" stays. The build writes them into
+  the built page with `/>` where the source has ` />`.
+- What follows from the files, written here so that it is not taken
+  for a fault. The proxy answers the four files with `Cache-Control:
+  public, max-age=0` and an ETag, as every file of the build, so a
+  browser asks again at each load and a changed manifest reaches it
+  then. An address that is no file is answered with the page, so
+  `/manifest.json` is a 200 with the page in it, not a 404. While the
+  closed page shows (the file `/etc/wallet/closed`, or a proxy that
+  does not answer), nginx answers the four files' addresses with that
+  page and a 503, as it answers the wallet's own pages, so a wallet
+  that is added to a Home Screen in that time gets no manifest and no
+  picture. The two pictures of the manifest have no `purpose`, which
+  makes them of the kind `any`: by the manifest's standard a phone
+  shows such a picture whole and does not cut it to a shape of its
+  own (not seen on an Android phone). As a `maskable` picture this
+  one would lose the tips of the triangle: 8 percent of its dark
+  pixels lie outside the circle that fits inside the picture, which
+  is what a launcher with round icons cuts. An app on an iPhone's Home
+  Screen is a browser of its own, with storage apart from Safari's. So
+  the four small things the wallet keeps on a device, all in
+  localStorage and none of them secret, start empty in the app: the
+  chat positions seen (a chat that was read in Safari shows as unread
+  once), the country and the currency picked last in the marketplace,
+  the seen ids behind the numbers on Attesting and Moderation, and the
+  sound's switch (a sound that was switched off in Safari plays until
+  it is switched off in the app). A passkey is the phone's and not the
+  browser's, so the same passkey logs in from the app. The three
+  editions are three addresses, so each is an icon of its own, with
+  the same name and the same picture.
+- Readings where the plan left a detail open. The wording of section
+  2's paragraph, of the README's lines and of this note is this
+  build's. The paragraph stands after the routes of section 2, under
+  the line that says the proxy serves the files of the build. The
+  README's Layout had no entry for `public/`; it has one now, with the
+  four files and no others.
+- Checked (the plan's 2.5). `git status --short` showed a clean tree
+  at 824a30e at the start, and this step's seven files and no others
+  at the end: the four new files, `src/index.html`, this file and
+  `README.md`. Then:
+  1. `npx ng build --output-path` into the build chat's scratch
+     folder, from the wallet folder: exit 0, no warning, 2.28 MB
+     initial (383.79 kB estimated transfer). The built `index.html`
+     holds the four lines, each once, and the four files stand beside
+     it, byte for byte those of `public/`.
+  2. The manifest parses as JSON, and `sips` gives the three pictures
+     the sizes above.
+  3. The proxy's own `createApp` over that build, in a script of the
+     moment, on 127.0.0.1 alone and on a port the system picked, once
+     for each of the three editions: 180 checks, all as expected. `GET
+     /manifest.webmanifest` answers 200 as `application/manifest+json;
+     charset=utf-8`, with the three safety headers and the page's
+     policy, character for character. Each of the three pictures
+     answers 200 as `image/png` with the same headers. Every body is
+     the file of `public/` byte for byte, and a HEAD answers the same
+     type. The page at `/`, at `/index.html` and at two deep links
+     holds the four lines. No backend was called.
+  Beyond the plan's list, in the same scratch folder:
+  4. Two builds side by side, each made in a scratch copy with
+     `node_modules` linked in: the commit before, and this step. They
+     differ in `index.html`, by the four lines, and in the four new
+     files, and in nothing else. The script and the style sheet are
+     the same bytes under the same names, so this step changes
+     nothing that runs. (The script's name is not made from its bytes
+     alone: built from the wallet folder itself the same bytes are
+     `main-JKB3W2VF.js`, and in a scratch copy with `node_modules`
+     linked in they are `main-SPVHM7TQ.js`.) The live wallet served
+     `main-JKB3W2VF.js` and `styles-EMD3RG3N.css` on 2026-11-21, and
+     both are byte for byte the files of this step's build from the
+     wallet folder. So the deploy of this step changes the page by
+     its four lines and adds the four files, and a wallet that is
+     open on a phone meanwhile keeps the script it has.
+  5. Google Chrome 157 with no window and a profile of its own, over
+     its DevTools port on 127.0.0.1, at the scratch build behind the
+     proxy's own app: Chrome fetched the manifest as a manifest (200),
+     named no fault in it and no reason against installing the site,
+     wrote no line into its console and raised no issue, so the
+     page's policy blocked nothing; the three pictures drew at 192,
+     512 and 180 pixels.
+- Seen on a simulated iPhone (the plan's last check; a look, not the
+  trial). `iPhone 16 iOS 18.6`, a simulator on this Mac with no
+  window, Safari 18.6, the scratch build behind the proxy's own app at
+  `http://localhost:4322`, which listened on 127.0.0.1 alone:
+  1. Safari asked for the manifest as it loaded the page. Share, "Add
+     to Home Screen": the sheet showed the logo, the name "anoPod" and
+     the sentence "An icon will be added to your Home Screen so you
+     can quickly access this website." After Add the Home Screen
+     showed the logo with "anoPod" under it.
+  2. A tap on that icon opened the wallet's first page with no
+     address bar and no bar of Safari's.
+  3. The build of the commit before, added the same way from another
+     port: the sheet showed a grey square with the letter W, the name
+     "Wallet" (the page's title) and the sentence "... so you can
+     quickly access this website from your default browser." Its icon
+     opened Safari, with the address bar.
+  4. Beyond the plan's look, the login. An account was made in that
+     phone's Safari against a stand-in masterpod on this Mac, which
+     keeps its accounts in memory and runs the masterpod's own create
+     and login checks (masterpodsoftware 93e8f43; the walk tools of
+     the phone looks of 2026-11-21, kept outside the repos), with a
+     passkey of the simulator's Face ID. Then, in the app opened from
+     the Home Screen icon: Log in, the phone's sheet "Use Face ID to
+     sign in?" for that account's passkey, Continue, the face. The
+     stand-in answered `/unlock` with 200, every check passed (the
+     shape, the challenge, the PRF rule, the passkey and its handle,
+     both signatures, the assertion), and the app showed Get vouched
+     with the username in the top bar, still with no address bar. The
+     wallet asks the passkey for its secret output at every login and
+     stops when none comes back (`passkey.service.ts`), so the secret
+     came back inside the app.
+  5. The way back. A copy of the build whose manifest says
+     `"browser"`: the sheet said "from your default browser" again,
+     and the icon opened Safari. An icon that was added while the
+     manifest said `"standalone"` kept opening as an app after the
+     same address served `"browser"` (the app was ended and opened
+     again, and it fetched the new manifest).
+  The trial icons were taken off the simulated Home Screen again, the
+  passkey was forgotten and the simulator was shut down. Not seen: a
+  real phone; the simulators with iOS 26.5 and 27.0; an Android phone
+  or emulator, and so how Android draws the icon; the live wallet; the
+  moderator and the attestor edition on a phone.
+- The user's trial (the plan's 6.3) had not been made when this note
+  was written: it follows the deploy of this step. On the iPhone 11
+  with iOS 18, on the Android phone and on the iPhone 15 with iOS 27
+  the wallet is added to the Home Screen, opened from the new icon,
+  and Log in is tapped. Three things are told: whether the wallet
+  opened with no address bar, whether the login went through, and, if
+  not, which sentence the wallet showed. What it showed is written
+  here when it is known. The plan's step 3 is built only after it has
+  gone through on the iPhone 11 and on the Android phone.
+- The way back (the plan's 2.5): the one word `"standalone"` in the
+  manifest becomes `"browser"`, and one deploy. A wallet that is added
+  to a Home Screen after that opens in Safari again on iOS 18 to 25.
+  An icon that was added before it keeps opening as an app until it
+  is taken off the Home Screen and added again (point 5 above).
+- Places this step leaves out of date that the plan does not name: in
+  this repository none found. The sentence of section 10 on push
+  delivery still holds after this step, and the plan's step 3 names
+  it.
 
 ## 12. Recovery and the moderator edition
 

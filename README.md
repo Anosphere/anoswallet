@@ -111,6 +111,10 @@ src/app/
     work-badge.service.ts the numbers on the Attesting and Moderation menu entries: the things on each page that this device has not seen yet, read every 15 seconds in that edition, the seen ids kept on the device (spec 8.1, 8.3)
     escrow-actions.service.ts   a release, a cancel or a dispute of an escrow trade, in two steps: approve, which the box's Yes runs, builds the follow-up with pair one and asks the passkey for it, and send has it signed and posts it to /escrow-signature; and the validator's refusal in plain words (spec 8.3)
     sound.service.ts       the wallet's one sound, two short notes, and its switch, kept on the device (spec 8.1, 8.3)
+public/                    plain files that the build copies beside index.html as they are
+  manifest.webmanifest     says the wallet is an app once it is added to a phone's Home Screen: the name anoPod, no address bar (spec 2)
+  icon-192.png, icon-512.png   the manifest's two pictures of the logo, 192 and 512 pixels a side
+  apple-touch-icon.png     the logo an iPhone puts on its Home Screen, 180 pixels a side
 docs/                      schemas.md (the spec, build notes in section 11), public-ledger-id.md, build-plan.md
 proxy.conf.json            ng serve forwards /api to the proxy
 ```
