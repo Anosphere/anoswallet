@@ -19,6 +19,7 @@ import { ACCOUNT_POLL_MS, GUARDIAN_STAKE_STEP_ANOS, MILLIONTHS_PER_ANOS } from '
 import { escrowStageWords } from '../escrow-stage';
 import { lockedStageWords } from '../locked-stage';
 import { SigningPasskey, askSigningPasskey } from '../passkey-check';
+import { AlertsService } from '../services/alerts.service';
 import { AccountAnswer, Accepted, AnosApiService, EscrowItem, HeldAssistedTransfer, HeldLockedTransfer, PendingItem } from '../services/anos-api.service';
 import { BalancesService } from '../services/balances.service';
 import { ConfigService } from '../services/config.service';
@@ -322,6 +323,9 @@ type MadeSend = BuiltSend & { passkey: SigningPasskey };
 
           @if (item()?.accountType === 'assisted') {
             <h3>{{ t().common.assistedTransfer }}</h3>
+            @if (alerts.nothingSet()) {
+              <p class="muted">{{ t().account.alertsHint }} <a routerLink="/account/alerts">{{ t().account.alertsLink }}</a></p>
+            }
             @if (assistedError(); as text) {
               <p class="error">{{ text }}</p>
             } @else if (assisted(); as held) {
@@ -339,6 +343,9 @@ type MadeSend = BuiltSend & { passkey: SigningPasskey };
 
           @if (item()?.accountType === 'guarded' || item()?.accountType === 'vault') {
             <h3>{{ t().account.lockedTransfer }}</h3>
+            @if (alerts.nothingSet()) {
+              <p class="muted">{{ t().account.alertsHint }} <a routerLink="/account/alerts">{{ t().account.alertsLink }}</a></p>
+            }
             @if (lockedError(); as text) {
               <p class="error">{{ text }}</p>
             } @else if (locked(); as waiting) {
@@ -406,6 +413,8 @@ export class AccountPage {
   private readonly passkey = inject(PasskeyService);
   private readonly config = inject(ConfigService);
   private readonly dialog = inject(MatDialog);
+  /** The pod's security alerts (2026-11-21): while nothing is set up, a line under the heading of the waiting transfer points to the Security alerts page. */
+  protected readonly alerts = inject(AlertsService);
   protected readonly lang = inject(LanguageService);
   protected readonly t = this.lang.words;
 
@@ -492,6 +501,7 @@ export class AccountPage {
   });
 
   constructor() {
+    void this.alerts.ensureLoaded();
     effect(() => {
       this.accountId();
       untracked(() => {

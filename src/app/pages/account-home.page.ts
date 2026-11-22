@@ -8,18 +8,20 @@ import { SoundService } from '../services/sound.service';
 
 /**
  * The Account page (wallet spec 8.2), at /account: a plain list under its
- * title, one row per thing, each with an icon, a title and one line. Four
+ * title, one row per thing, each with an icon, a title and one line. Five
  * rows: Account recovery, which opens the Account recovery page
  * (/account/recovery); since 2026-11-18, Passkeys, which opens the
  * Passkeys page (/account/passkeys); since 2026-11-18, Public ledger id,
- * which opens the Public ledger id page (/account/ledger-id); and, since
+ * which opens the Public ledger id page (/account/ledger-id); since
  * 2026-11-19, Sound, the switch of the wallet's one sound
- * (sound.service.ts; wallet spec 8.1). The fourth row is a button where
- * the others are links, and it opens no page: its title reads "Sound: on"
- * or "Sound: off", and a tap turns the sound off or on, on this phone or
- * computer. Turning it on plays the sound once. A new row goes under the
- * last one. The page reads nothing. Until 2026-11-18 it carried the two
- * recovery rows itself, under a subtitle and a sentence about recovery.
+ * (sound.service.ts; wallet spec 8.1); and, since 2026-11-21, Security
+ * alerts, which opens the Security alerts page (/account/alerts). The
+ * fourth row is a button where the others are links, and it opens no
+ * page: its title reads "Sound: on" or "Sound: off", and a tap turns the
+ * sound off or on, on this phone or computer. Turning it on plays the
+ * sound once. A new row goes under the last one. The page reads nothing.
+ * Until 2026-11-18 it carried the two recovery rows itself, under a
+ * subtitle and a sentence about recovery.
  */
 @Component({
   selector: 'app-account-home-page',
@@ -51,6 +53,11 @@ import { SoundService } from '../services/sound.service';
             <span matListItemTitle>{{ sound.on() ? t().accountHome.soundOn : t().accountHome.soundOff }}</span>
             <span matListItemLine>{{ t().accountHome.soundLine }}</span>
           </button>
+          <a mat-list-item routerLink="/account/alerts">
+            <mat-icon matListItemIcon>notifications_active</mat-icon>
+            <span matListItemTitle>{{ t().accountHome.alertsTitle }}</span>
+            <span matListItemLine>{{ t().accountHome.alertsLine }}</span>
+          </a>
         </mat-nav-list>
       </mat-card-content>
     </mat-card>
