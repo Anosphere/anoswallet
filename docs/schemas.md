@@ -16353,6 +16353,45 @@ touched by it.
   not switched on yet." What the trial showed is written here when it is
   known.
 
+- The user's own part, the deploy and the trial (added 2026-11-22, after
+  this note was committed as 5c1605b). The user's own part (the plan's
+  6.1) was done that day, the build chat walking it: an account at the
+  email company, Resend; the sending domain `wallet.anocloud.com` there,
+  with the region Ireland; its records at deSEC; an API key that may
+  only send, for that one domain; the key for the phones; the four lines
+  at the end of the masterpod's `.env` on prod1, prod3 and prod2 with a
+  restart of each, after which each server's log said `alerts: email on,
+  phones on, 25 validator keys`; and Resend's paid plan. The servers'
+  lines and the paid plan are the user's word. The records are not the
+  four of the plan's 6.1. For a domain made on that day Resend's page
+  listed a TXT record on `resend._domainkey.wallet`, two CNAME records,
+  on `rsend.wallet` and on `send.wallet`, in the place of the plan's MX
+  and TXT record on `send.wallet`, and its advised DMARC record on
+  `_dmarc`, the name for the whole of `anocloud.com`, where the plan has
+  `_dmarc.wallet`. The plan lets Resend's page decide. All four were
+  seen at both of deSEC's name servers, and Resend showed the domain as
+  verified (the user's word). Then this step went out on wallet1 and on
+  wallet2 as GitHub's main 78b9582 (pull request 42), whose tree is the
+  one that was checked. Looked at from the build's Mac afterwards: each
+  of the three wallet names answered `/alerts-worker.js` as
+  `text/javascript`, byte for byte the file of `public/`, and its page
+  named `main-OPBCOZNH.js`, on ten of ten new connections each. Then the
+  user made the trial of the plan's 6.4 on two phones, each opened from
+  its Home Screen, by the steps the build chat handed, which take an
+  iPhone first and the Android phone second: the row under Account; an
+  email and its code; "Turn on alerts for this phone" and the phone's
+  own question; the same on the second phone; Take off and Keep; the
+  Notifications page; and the page in a Safari tab. Asked whether the
+  trial went through on both phones, the user answered: "Yes, all of
+  it". Read here as: each phone asked, the page said that the alerts are
+  on, the notifications came, and the emails came. So an iPhone does
+  hand a delivery address to a wallet that is opened from its Home
+  Screen, which no simulator had shown (check 7 above). Not told: which
+  of the user's two iPhones it was and its iOS, the Android phone's
+  versions, and the words of each email and notification as they
+  arrived. An alert about a waiting transfer still has nothing to set it
+  off until the validators have the plan's step 4.
+
 - For the deploy: the user's two lines on wallet1 and then on wallet2,
   with no `npm ci` (no package file changed) and nothing new under
   `deploy/`. The build's folder has ten files where it had nine, and the
