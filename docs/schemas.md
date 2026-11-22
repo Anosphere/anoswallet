@@ -16353,12 +16353,171 @@ touched by it.
   not switched on yet." What the trial showed is written here when it is
   known.
 
+- The user's own part, the deploy and the trial (added 2026-11-22, after
+  this note was committed as 5c1605b). The user's own part (the plan's
+  6.1) was done that day, the build chat walking it: an account at the
+  email company, Resend; the sending domain `wallet.anocloud.com` there,
+  with the region Ireland; its records at deSEC; an API key that may
+  only send, for that one domain; the key for the phones; the four lines
+  at the end of the masterpod's `.env` on prod1, prod3 and prod2 with a
+  restart of each, after which each server's log said `alerts: email on,
+  phones on, 25 validator keys`; and Resend's paid plan. The servers'
+  lines and the paid plan are the user's word. The records are not the
+  four of the plan's 6.1. For a domain made on that day Resend's page
+  listed a TXT record on `resend._domainkey.wallet`, two CNAME records,
+  on `rsend.wallet` and on `send.wallet`, in the place of the plan's MX
+  and TXT record on `send.wallet`, and its advised DMARC record on
+  `_dmarc`, the name for the whole of `anocloud.com`, where the plan has
+  `_dmarc.wallet`. The plan lets Resend's page decide. All four were
+  seen at both of deSEC's name servers, and Resend showed the domain as
+  verified (the user's word). Then this step went out on wallet1 and on
+  wallet2 as GitHub's main 78b9582 (pull request 42), whose tree is the
+  one that was checked. Looked at from the build's Mac afterwards: each
+  of the three wallet names answered `/alerts-worker.js` as
+  `text/javascript`, byte for byte the file of `public/`, and its page
+  named `main-OPBCOZNH.js`, on ten of ten new connections each. Then the
+  user made the trial of the plan's 6.4 on two phones, each opened from
+  its Home Screen, by the steps the build chat handed, which take an
+  iPhone first and the Android phone second: the row under Account; an
+  email and its code; "Turn on alerts for this phone" and the phone's
+  own question; the same on the second phone; Take off and Keep; the
+  Notifications page; and the page in a Safari tab. Asked whether the
+  trial went through on both phones, the user answered: "Yes, all of
+  it". Read here as: each phone asked, the page said that the alerts are
+  on, the notifications came, and the emails came. So an iPhone does
+  hand a delivery address to a wallet that is opened from its Home
+  Screen, which no simulator had shown (check 7 above). Not told: which
+  of the user's two iPhones it was and its iOS, the Android phone's
+  versions, and the words of each email and notification as they
+  arrived. An alert about a waiting transfer still has nothing to set it
+  off until the validators have the plan's step 4.
+
 - For the deploy: the user's two lines on wallet1 and then on wallet2,
   with no `npm ci` (no package file changed) and nothing new under
   `deploy/`. The build's folder has ten files where it had nine, and the
   script has a new name; built from the wallet folder with exactly this
   step's files it is `main-OPBCOZNH.js`. A wallet that is open on a phone
   meanwhile keeps the script it has until it is loaded again.
+
+### The shell is as high as the screen shows, and the Username label of the create page is whole (2026-11-22)
+
+Two small fixes of the look, three lines in two files, with no plan
+file, one commit, on top of the commit of the note above (31de4b6).
+Built on the user's word ("let's build them") after two reviews in one
+chat. The first read the code and walked the wallet on phones at
+824a30e, on 2026-11-21. The second did the same at 31de4b6, on
+2026-11-22, after the Home Screen step and the Security alerts page had
+gone live, because the user asked for it: "before you make these fixes
+will need to review again, to make sure it won't conflict with the new
+changes and will still work on everything." Wallet only: no server
+change, no new package.
+
+Why the first fix: `100vh` is the height of a browser's view with the
+browser's own bars drawn back. While its bars are out, a phone's
+browser shows less: 77.5 points less in Safari on iOS 18.6 (iPhone SE),
+40 on iOS 26.5 and 27.0, 80 pixels in Chrome on Android, and 110 points
+in Safari on an iPhone 17 held sideways. The wallet's shell was that
+much higher than what the phone showed. So the end of every long page
+lay behind the browser's bar, and the whole page could be pushed up by
+that much: by a finger at the end of a page, by the keyboard, or by a
+scroll call of the page itself. The wallet's top bar then left the
+screen. The note of 2026-11-18 on the recover walk-through met this as
+its one fault and changed one word for it.
+
+Why the second fix: the Username box is the first thing in step 2, and
+the stepper's own frame for a step's content
+(`mat-vertical-stepper-content`) cuts what stands above it. The box's
+label, once it has moved up into the box's top line, stands 6.8 pixels
+above the box (6.7 on Android), so the top of the word "Username" was
+cut off. No other step begins with a box: steps 1, 3 and 4 begin with a
+sentence.
+
+- `src/app/app.css`, line 4, the shell (`:host`, the `app-root`
+  element): `height: 100dvh;` where it read `height: 100vh;` since the
+  app's first build. `100dvh` is the height the browser shows at that
+  moment, so the shell ends at the screen's edge and the whole page has
+  nowhere to go.
+- `src/app/pages/create.page.ts`, line 50: the Username box of step 2
+  carries `class="first"`. Line 97, new, in the page's styles:
+  `mat-form-field.first { margin-top: 8px; }`. The box stands 8 pixels
+  lower and its label is whole.
+- Unchanged, each looked at in both reviews: the places that were laid
+  out for a frame that ends at the screen's edge. The walk-through's
+  two calls `scrollIntoView({ block: 'nearest' })`
+  (`find-passkey.component.ts`, `recover-open.page.ts`): the reason for
+  `'nearest'` is gone, since with the plan's `'start'` forced in a
+  trial nothing moves any more, and the word stays as it is. The Public
+  ledger id page's row (`account-ledger-id.page.ts`, its
+  `scroll-margin-bottom: 33px` and its call): still needed, it keeps
+  the result on the screen. The chat's own frame (`chat.page.ts`,
+  `calc(100dvh - 64px - 32px)`, `56px` under 600): it was `dvh`
+  already, and its numbers are the same to the tenth of a pixel. The
+  pop-up boxes, the sheets (`max-height: 55vh` and `70vh` are not
+  touched), the three round + buttons and the side menu: no rule
+  changed. The only place of this specification that names the old
+  value is the note of 2026-11-18 on the walk-through's look in Safari
+  ("`height: 100vh` in `src/app/app.css`"), the record of its day.
+- Checked, the code: `npx ng build` clean, no warning. The two files
+  are byte for byte the ones of the scratch copy that was walked on the
+  phones, and the script built from the wallet folder is byte for byte
+  that copy's script (2,308,501 bytes). In the pane at 375 by 812: the
+  shell 812 high, the label 0 pixels cut, the box's `margin-top` 8px.
+- Checked on simulated phones, not on a real one: Safari on an iPhone
+  SE with iOS 18.6, an iPhone 17 with iOS 26.5 and an iPhone SE with
+  iOS 27.0, and Chrome 149 on an Android 17 emulator. Two scratch
+  builds side by side, the wallet as it was and the copy with the three
+  lines, each walk from a fresh page load, with a made-up session, no
+  passkey and no server of ours. With the fix, on all four: the end of
+  every page walked is on the screen, nothing moves after Check on the
+  Public ledger id page or when the side menu opens, and the round +
+  button of the marketplace stands clear of the last card. After
+  typing, where it was tried (iOS 18.6, iOS 26.5 and Android), the page
+  is back where it was. The Security alerts page: its last line lay 45,
+  7, 7 and 47 under the screen's edge and is whole; on iOS 18.6 the
+  page stayed 78 points up after typing in its Email box, with the top
+  bar off the screen, and is back at 0. The iPhone 17 held sideways in
+  Safari, which no look had tried before: as it was, Check was out of
+  reach and the whole page then moved 110 points up; with the fix all
+  is whole and the text keeps its size. Chrome on the build's Mac at
+  500 by 613 and at 1280 by 713: the same in every number in both
+  builds.
+- Checked, the wallet opened from the Home Screen (iOS 18.6, 26.5 and
+  27.0): there the two units are the same number (647, 812 and 647), no
+  browser bar is drawn, and the wallet as it was is right already. Both
+  builds gave the same in every number on all 17 walks, typing
+  included.
+- Seen and left as it is, in both builds alike, and put on the
+  after-production list on the user's word the same day
+  (`after_production_todos/things-to-do-after-production.md`, three
+  lines). One: in Chrome's app window on the Android emulator (the
+  wallet opened from its Home screen icon), a reload inside the window
+  leaves the shell 901.3 pixels high on a screen of 845.3, with `100vh`
+  and with `100dvh` alike; one swipe then moves the whole page 56
+  pixels up. Not on a first open, not in a Chrome tab, not on the
+  iPhones; a real Android phone was not looked at. Two: opened from the
+  Home Screen on iOS 27.0, the wallet's top bar is drawn soft, as if
+  out of focus; seen on the simulated iPhone SE, and by the user on a
+  real phone ("we have witnessed and can confirm"). Three: on a phone
+  narrower than 386 pixels the three boxes of the create page lose
+  their right edge, 11 pixels at 375 wide and 16 at 360
+  (`mat-form-field { min-width: 260px; }`, line 96).
+- Tried and not taken: `height: 100%` for the shell. It is right in the
+  Android state above and gave the same as `100dvh` in every number on
+  the upright walks (Safari on iOS 18.6 and 26.5, Chrome on Android,
+  the Home Screen apps on iOS 18.6 and 26.5). But with the iPhone held
+  sideways Safari then enlarges the page's text by itself, about one
+  and a half times, which neither `100vh` nor `100dvh` brings.
+- Not checked: a real phone, but for the user's own look at the top bar
+  on iOS 27; an iPad; the Android 16 and 15 emulators; a wallet truly
+  installed on Android (a WebAPK); Thai; the DAO, Guardians and log
+  pages (read only); the moderator's and attestor's own pages; a real
+  login; the phone held sideways on any other phone or from the Home
+  Screen.
+- For the deploy: the user's two lines on wallet1 and then on wallet2,
+  with no `npm ci` (no package file changed) and nothing new under
+  `deploy/`. Built from the wallet folder with exactly this step's
+  files the script is `main-YCWLFMPN.js`. A wallet that is open on a
+  phone meanwhile keeps the script it has until it is loaded again.
 
 ## 12. Recovery and the moderator edition
 
