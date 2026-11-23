@@ -70,11 +70,11 @@ const PAGE_HEADERS = Object.freeze({
  * blob: added for pictures. Scripts run only from this program's own
  * files. 'unsafe-inline' for styles is what Angular Material needs. The
  * two Google hosts are the fonts. Pictures are the build's own files,
- * data: addresses (a selfie inside an answer) and blob: addresses (a
- * picture opened in the browser: images.ts, the camera, the recovery
- * page). Every call goes to /api on this address. script-src 'self' needs
- * a build that writes no script into the page itself: inlineCritical is
- * false in angular.json.
+ * data: addresses (a selfie inside an answer and, since 2026-11-22, a
+ * public room's picture) and blob: addresses (a picture opened in the
+ * browser: images.ts, the camera, the recovery page). Every call goes to
+ * /api on this address. script-src 'self' needs a build that writes no
+ * script into the page itself: inlineCritical is false in angular.json.
  */
 const PAGE_POLICY = [
   "default-src 'self'",

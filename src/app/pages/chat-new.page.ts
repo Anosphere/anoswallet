@@ -7,6 +7,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatTabsModule } from '@angular/material/tabs';
 import { Router, RouterLink } from '@angular/router';
+import { RoomPictureComponent } from '../components/room-picture.component';
 import { LIKE_NAMED_ROOMS, PUBLIC_ROOMS_PAGE, ROOM_SEARCH_DEBOUNCE_MS } from '../constants';
 import { ChatService } from '../services/chat.service';
 import { CryptoService } from '../services/crypto.service';
@@ -34,7 +35,7 @@ import { SessionService } from '../services/session.service';
  */
 @Component({
   selector: 'app-chat-new-page',
-  imports: [NgTemplateOutlet, FormsModule, RouterLink, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, MatTabsModule],
+  imports: [NgTemplateOutlet, FormsModule, RouterLink, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, MatTabsModule, RoomPictureComponent],
   template: `
     <header class="head">
       <a mat-icon-button class="back" routerLink="/chat" [attr.aria-label]="t().common.backToChats"><mat-icon>arrow_back</mat-icon></a>
@@ -106,7 +107,7 @@ import { SessionService } from '../services/session.service';
     </mat-tab-group>
     <ng-template #roomRow let-room>
       <div class="item">
-        <span class="disc"><mat-icon>public</mat-icon></span>
+        <app-room-picture [chatRoomId]="room.chatRoomId" [pictureAt]="room.pictureAt" />
         <span class="texts">
           <span class="title">{{ room.name }}</span>
           <span class="line">{{ t().chatNew.byAndMembers(room.creator.username, room.memberCount) }}</span>
@@ -132,7 +133,6 @@ import { SessionService } from '../services/session.service';
     .hint { margin: 12px 0 0; }
     .person, .item { display: flex; align-items: center; gap: 12px; padding: 8px 0; flex-wrap: wrap; }
     .selfie { width: 48px; height: 48px; object-fit: cover; border-radius: 50%; }
-    .disc { width: 40px; height: 40px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--mat-sys-surface-container-high); color: var(--mat-sys-on-surface-variant); flex: none; }
     .texts { flex: 1; min-width: 140px; display: flex; flex-direction: column; }
     .title { font-weight: 500; }
     .line { font-size: 13px; color: var(--mat-sys-on-surface-variant); }

@@ -5,6 +5,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter, map } from 'rxjs';
 import { AvatarComponent } from '../components/avatar.component';
+import { RoomPictureComponent } from '../components/room-picture.component';
 import { ChatService } from '../services/chat.service';
 import { LanguageService } from '../services/language.service';
 import { reasonOf } from '../services/log.service';
@@ -26,10 +27,14 @@ import { TradeMessageKind, tradeMessageKind } from '../trade-messages';
  * forclaude/wallet-chat-and-passkey-plan-1.md) a newest message that the
  * pinned card posted (trade-messages.ts) shows in the preview as the
  * conversation's grey line does, in its words and with no account id.
+ * Since 2026-11-22 (forclaude/public-rooms-plan-1.md) the row of a public
+ * room that has a picture shows that picture, round, where the kind's
+ * icon stood (<app-room-picture>, wallet spec 8.6); the icon stands while
+ * the picture loads and for every room without one.
  */
 @Component({
   selector: 'app-chat-page',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, MatButtonModule, MatIconModule, AvatarComponent],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, MatButtonModule, MatIconModule, AvatarComponent, RoomPictureComponent],
   template: `
     <div class="chat" [class.child-open]="childOpen()">
       <section class="list">
@@ -58,7 +63,7 @@ import { TradeMessageKind, tradeMessageKind } from '../trade-messages';
               @if (chat.otherPerson(room); as other) {
                 <app-avatar [anopodId]="other.anopodId" [username]="other.username" [size]="48" />
               } @else {
-                <span class="disc"><mat-icon>{{ chat.icon(room) }}</mat-icon></span>
+                <app-room-picture [chatRoomId]="room.chatRoomId" [pictureAt]="room.pictureAt" [icon]="chat.icon(room)" [size]="48" />
               }
               <span class="texts">
                 <span class="title">{{ chat.title(room) }}</span>

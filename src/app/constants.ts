@@ -29,6 +29,16 @@ export const ROOM_SEARCH_DEBOUNCE_MS = 400;
 /** New public room shows at most this many rooms whose name holds the typed one (wallet spec 8.2, Chat; 2026-11-22). */
 export const LIKE_NAMED_ROOMS = 5;
 
+/** A public room's picture goes out as the middle of the picked picture, a square of at most this many pixels, a JPEG at this factor: the public selfie's numbers (wallet spec 8.2, Chat; 2026-11-22). */
+export const ROOM_PICTURE_SIDE = 320;
+export const ROOM_PICTURE_JPEG = 0.8;
+
+/** The room picture cache keeps at most this many /get-chat-room-picture reads in flight (wallet spec 8.3; 2026-11-22). */
+export const ROOM_PICTURE_READS_AT_ONCE = 5;
+
+/** A room picture read that failed is forgotten this long afterwards, and only then asked again (wallet spec 8.3; 2026-11-22). */
+export const ROOM_PICTURE_RETRY_MS = 30_000;
+
 /** The transaction history opens with this many of the newest rows and Show more loads as many (wallet spec 8.2, Transaction history). */
 export const HISTORY_PAGE = 20;
 

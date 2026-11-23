@@ -10,12 +10,15 @@ import { Router, RouterLink } from '@angular/router';
 import { AvatarComponent } from '../components/avatar.component';
 import { CopyButtonComponent } from '../components/copy-button.component';
 import { FoundAccountId, PinnedListingComponent } from '../components/pinned-listing.component';
-import { MEMBERS_PAGE, MESSAGES_PAGE, MESSAGES_POLL_MS } from '../constants';
+import { RoomPictureComponent } from '../components/room-picture.component';
+import { MEMBERS_PAGE, MESSAGES_PAGE, MESSAGES_POLL_MS, ROOM_PICTURE_JPEG, ROOM_PICTURE_SIDE } from '../constants';
+import { redrawSquare } from '../images';
 import { ChatService, Piece, piecesOf } from '../services/chat.service';
 import { CryptoService } from '../services/crypto.service';
 import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
 import { MasterpodApiService, MessageItem, Profile, RoomItem, RoomMember } from '../services/masterpod-api.service';
+import { RoomPictureCacheService } from '../services/room-picture-cache.service';
 import { SessionService } from '../services/session.service';
 import { TradeMessageKind, tradeMessageKind } from '../trade-messages';
 import { REVIEW_STATUSES } from './attesting.page';
@@ -118,11 +121,21 @@ const REST_CHECK_MS = 40;
  * OLDER_PX of the thread's top, and Load older messages stays for a
  * thread that does not fill its frame and after a read that failed; they
  * are drawn once the thread is at rest, and the reader's place is kept
- * by the distance to the thread's end.
+ * by the distance to the thread's end. Since 2026-11-22, too
+ * (forclaude/public-rooms-plan-1.md), a public room that has a picture
+ * shows it at the conversation's top, round, where the kind's icon stood
+ * (<app-room-picture>, wallet spec 8.6); and for the creator of a public
+ * room the menu has Room picture, under Members. It opens a panel under
+ * the header, or closes it: the picture at 72 pixels, one sentence on
+ * what the picture is and who sees it, and a file box. A picked photo is
+ * sent at once, as the middle of it in a square of at most
+ * ROOM_PICTURE_SIDE pixels (/set-chat-room-picture, masterpod spec 27);
+ * the creator can put another in its place the same way, and cannot take
+ * the picture away.
  */
 @Component({
   selector: 'app-chat-room-page',
-  imports: [FormsModule, RouterLink, TextFieldModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, MatMenuModule, AvatarComponent, CopyButtonComponent, PinnedListingComponent],
+  imports: [FormsModule, RouterLink, TextFieldModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, MatMenuModule, AvatarComponent, CopyButtonComponent, PinnedListingComponent, RoomPictureComponent],
   template: `
     @if (room(); as room) {
       <header class="head">
@@ -130,7 +143,7 @@ const REST_CHECK_MS = 40;
         @if (chat.otherPerson(room); as other) {
           <app-avatar [anopodId]="other.anopodId" [username]="other.username" />
         } @else {
-          <span class="disc"><mat-icon>{{ chat.icon(room) }}</mat-icon></span>
+          <app-room-picture [chatRoomId]="room.chatRoomId" [pictureAt]="room.pictureAt" [icon]="chat.icon(room)" />
         }
         <div class="texts">
           <div class="title">{{ chat.title(room) }}</div>
@@ -145,6 +158,9 @@ const REST_CHECK_MS = 40;
             <button mat-menu-item type="button" (click)="toggleAttestors()" [disabled]="busy()"><mat-icon>fact_check</mat-icon><span>{{ t().chatRoom.inviteAttestor }}</span></button>
           }
           <button mat-menu-item type="button" (click)="toggleMembers()"><mat-icon>group</mat-icon><span>{{ t().chatRoom.members }}</span></button>
+          @if (isCreator() && room.type === 'public') {
+            <button mat-menu-item type="button" (click)="showPicture.set(!showPicture())"><mat-icon>image</mat-icon><span>{{ t().chatRoom.roomPicture }}</span></button>
+          }
           @if (!isCreator()) {
             <button mat-menu-item type="button" (click)="leave()" [disabled]="busy()"><mat-icon>logout</mat-icon><span>{{ t().chatRoom.leave }}</span></button>
           }
@@ -161,6 +177,13 @@ const REST_CHECK_MS = 40;
             <span>{{ found.firstName }} {{ found.lastName }} <code>{{ found.username }}</code></span>
             <button mat-flat-button type="button" (click)="invite()" [disabled]="busy()">{{ t().chatRoom.invite }}</button>
           }
+        </div>
+      }
+      @if (showPicture()) {
+        <div class="panel form">
+          <app-room-picture [chatRoomId]="room.chatRoomId" [pictureAt]="room.pictureAt" [size]="72" />
+          <span class="muted picture-what">{{ t().chatRoom.pictureWhat }}</span>
+          <input type="file" accept="image/*" (change)="pictureChosen($event)" [disabled]="busy()" />
         </div>
       }
       @if (showAttestors()) {
@@ -277,8 +300,8 @@ const REST_CHECK_MS = 40;
     .texts { flex: 1; min-width: 0; }
     .title { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .line { font-size: 13px; color: var(--mat-sys-on-surface-variant); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .disc { width: 40px; height: 40px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--mat-sys-surface-container-high); color: var(--mat-sys-on-surface-variant); flex: none; }
     .panel { padding: 8px 12px; border-bottom: 1px solid var(--mat-sys-outline-variant); }
+    .picture-what { flex: 1; min-width: 200px; }
     .form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .members { display: flex; flex-direction: column; gap: 6px; }
     .member { display: inline-flex; align-items: center; gap: 8px; }
@@ -326,6 +349,7 @@ export class ChatRoomPage {
   private readonly api = inject(MasterpodApiService);
   private readonly crypto = inject(CryptoService);
   private readonly router = inject(Router);
+  private readonly pictures = inject(RoomPictureCacheService);
   private readonly injector = inject(Injector);
   protected readonly lang = inject(LanguageService);
   protected readonly t = this.lang.words;
@@ -346,6 +370,8 @@ export class ChatRoomPage {
   protected readonly canLoadOlder = signal(false);
   protected readonly showInvite = signal(false);
   protected readonly showMembers = signal(false);
+  /** The menu's Room picture opens the panel, or closes it (2026-11-22). */
+  protected readonly showPicture = signal(false);
   protected readonly inviteName = signal('');
   protected readonly inviteTarget = signal<Profile | null>(null);
   protected readonly messageText = signal('');
@@ -608,6 +634,7 @@ export class ChatRoomPage {
     this.canLoadOlder.set(false);
     this.showInvite.set(false);
     this.showMembers.set(false);
+    this.showPicture.set(false);
     this.inviteTarget.set(null);
     this.setDisputeCase(null);
     this.error.set(null);
@@ -833,6 +860,26 @@ export class ChatRoomPage {
       const hpkeKey = await this.chat.wrapFor(room.chatRoomId, attestor.anopodId);
       const res = await this.api.inviteToChatRoom(room.chatRoomId, attestor.anopodId, hpkeKey);
       await this.chat.refreshRooms();
+      return res;
+    });
+  }
+
+  /** A picture picked for this public room (2026-11-22): the middle of it as a square of at most ROOM_PICTURE_SIDE pixels, a fresh JPEG (redrawSquare in ../images), sent with /set-chat-room-picture; then the room list is read again, so every place shows it. A file the browser cannot read as a picture is refused, never sent as it is. */
+  protected pictureChosen(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    const room = this.room();
+    if (!file || !room) return Promise.resolve();
+    return this.run(async () => {
+      const square = await redrawSquare(file, ROOM_PICTURE_SIDE, ROOM_PICTURE_JPEG);
+      if (!square) throw new Error(this.t().camera.unreadable);
+      const picture = { contentType: 'image/jpeg', image: this.crypto.toBase64(new Uint8Array(await square.arrayBuffer())) };
+      const res = await this.api.setChatRoomPicture(room.chatRoomId, picture);
+      if (res.ok) {
+        this.pictures.put(room.chatRoomId, res.body.pictureAt, picture);
+        await this.chat.refreshRooms();
+      }
       return res;
     });
   }

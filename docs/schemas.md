@@ -249,7 +249,8 @@ Behaviour
     Roboto and Material Symbols Outlined come from Google's font
     host.
   - "img-src 'self' data: blob:": a picture is a file of the build, a
-    data: address (a selfie inside an answer) or a blob: address (a
+    data: address (a selfie inside an answer; since 2026-11-22 also a
+    public room's picture, 4.15) or a blob: address (a
     picture opened in the browser: src/app/images.ts, the camera, the
     recovery page, the evidence pictures of the case pages).
   - "connect-src 'self'": the page's code calls only the wallet's own
@@ -981,9 +982,62 @@ package.
             400 invalid search, for a word of more than 100 characters or a value that is not a string
     a masterpod of before: does not read the word, so nothing is narrowed, and answers the newest first
 
+(Since the picture's step of the same day, 4.15, each room of that
+answer also carries `pictureAt`, after `name`.)
+
 The proxy forwards the route as any masterpod path (section 2); nothing
 in server/ changed. The wallet's side is New chat (8.2, Chat) and
 masterpod-api.service (8.3).
+
+### 4.15 A public room's picture
+
+Added 2026-11-22 (forclaude/public-rooms-plan-1.md, its steps 3 and 4;
+section 11): a public room can have a picture. Its creator sets it, and
+everyone who can read the room's name can see it. Until then a room had
+no picture, and the wallet drew a grey disc with a globe for every
+public room. The masterpod's side is its own spec's section 27, which
+holds the rule, the table, the two routes and what is left as it is. The
+masterpod gained three things there. One table, `chat_room_pictures`,
+with at most one row per room and the picture in the clear, like the
+room's name. Two routes at level setup, one that sets a room's picture
+and one that reads it. And one field more per room, `pictureAt`, in the
+answers of /list-chat-rooms and /list-public-chat-rooms: when the room's
+picture was last set. The picture itself never travels inside a list.
+Only the creator of a public room sets its picture, and can put another
+in its place at any time; no route takes a picture away. A picture is
+at most 320 pixels wide and high and at most 100,000 bytes there. No env
+variable and no npm package.
+
+    POST /set-chat-room-picture (setup), new
+    body: { chatRoomId, picture: { contentType, image } }; contentType is image/jpeg, image/png or
+          image/webp, image the bytes as base64
+    answer: 200 { chatRoomId, pictureAt }, pictureAt an ISO 8601 string, the value the two lists then
+            carry for the room; the same picture sent again answers the pictureAt of before
+    checks, in order: 400 bad request shape; 403 only the creator sets the picture (also for a room
+            that does not exist); 400 only a public room has a picture; 400 invalid picture: <why>
+            (not one of the three types, more than 100,000 bytes, bytes that do not begin as a
+            picture of their type, or more than 320 pixels wide or high)
+    a masterpod of before: 404, as for any route it does not have
+
+    POST /get-chat-room-picture (setup), new
+    body: { chatRoomId }
+    answer: 200 { chatRoomId, picture: { contentType, image }, pictureAt }
+    checks, in order: 400 bad request shape; 404 room not found (also for a room that is not
+            public); 404 no picture
+    the caller need not be a member of the room
+    a masterpod of before: 404, as for any route it does not have
+
+    POST /list-chat-rooms and POST /list-public-chat-rooms (setup), one field more
+    answer: as before, and each room carries pictureAt after name: an ISO 8601 string, or null for a
+            room without a picture; in /list-chat-rooms it is null on every room that is not public,
+            and the invites and the join requests carry none
+    a masterpod of before: sends no pictureAt, which the wallet reads as null: no picture, no read
+
+The proxy forwards the routes as any masterpod path (section 2); nothing
+in server/ changed but the words of one comment (section 11). The
+wallet's side is the chat list, the conversation and New chat (8.2,
+Chat), room-picture-cache.service and masterpod-api.service (8.3), and
+the room's round mark (8.6).
 
 ## 5. Validator changes (anossoftware)
 
@@ -2827,7 +2881,11 @@ pod or join requests on its rooms wait, reading "N invites, M join
 requests"; then the rooms, newest activity first (the newest message,
 else the room's creation). A row shows the other person's avatar (8.6)
 for a private room with one other person, member or invited, else the
-kind's icon (group, public, storefront); the title; the newest message
+kind's icon (group, public, storefront) on a round grey disc, and since
+2026-11-22 (section 11; 4.15) the picture of a public room that has
+one, round and 48 px, where that disc stood (the room's round mark, 8.6;
+the disc with the globe stands while the picture loads and for a public
+room without one); the title; the newest message
 decrypted as one line, "You: " before this pod's own, "No messages yet"
 without one, "(cannot read)" when it will not open, and, for the two
 traders of a marketplace chat, the grey line's words in the place of a
@@ -2862,7 +2920,10 @@ answer, a message from someone else or a chat request (8.1); the list's
 own read rings nothing. "No chat keys in this tab: unlock
 again." shows without chat keys.
 
-One conversation, at /chat/:chatRoomId: a header with the avatar or icon,
+One conversation, at /chat/:chatRoomId: a header with the avatar or icon
+(since 2026-11-22, section 11 and 4.15, the picture of a public room
+that has one, round and 40 px, where the icon's disc stood: the room's
+round mark, 8.6),
 the title, the members (the invited marked) and a menu with Invite
 someone (the creator of a private or public room; the username search,
 the person's selfie, Invite), Invite an attestor (2026-11-12, section
@@ -2872,7 +2933,9 @@ attestor in a marketplace chat, below), Members (a panel of the members
 and the invited with avatars; since 2026-11-22, section 11, at most
 half the conversation high with its rows scrolling inside it, 50
 people drawn at a time, and in a room of more than 10 people a search
-box on top that narrows it by username) and Leave (a member who is not
+box on top that narrows it by username), Room picture (2026-11-22,
+section 11; 4.15: the creator of a public room alone; the paragraph
+"Room picture", below) and Leave (a member who is not
 the creator; the room key is dropped and the list opens). The thread opens
 at the room's
 newest 50 messages (/list-messages with beforePosition, MESSAGES_PAGE)
@@ -2941,6 +3004,36 @@ where a click on another chat keeps the same page, until the person
 opens another page of the wallet or loads it again. "You are
 not in this chat." for a room that is not in
 the list.
+
+Room picture (2026-11-22, section 11; 4.15), an entry of the
+conversation's menu, under Members, in a public room and for its creator
+alone: a member who is not the creator has no such entry, and a room
+that is not public has none for anyone. The entry opens a panel under
+the header, where the panel of Invite someone opens, and closes it
+again. The panel shows the room's round mark at 72 px (8.6: the picture,
+or the grey disc with the globe while the room has none), the sentence
+"This picture stands beside the room's name. Everyone who looks for
+public rooms sees it. Pick a photo to set it, or to put another in its
+place.", and a file box that takes pictures. A picked file is sent at
+once; there is no second button. The wallet redraws it first as it
+redraws the public selfie (`redrawSquare` in images.ts): the middle of
+the picture as a square of at most 320 pixels (`ROOM_PICTURE_SIDE`),
+never made bigger, a fresh JPEG at 0.8 (`ROOM_PICTURE_JPEG`), so only
+pixels go out. It is sent with /set-chat-room-picture. When the
+masterpod has taken it, the wallet keeps the picture under the
+`pictureAt` of the answer (room-picture-cache.service, 8.3), so it is
+not read back, and reads the room list again: the picture then stands
+at the conversation's top, in the panel and in the chat list. A file the
+browser cannot read as a picture is refused with the camera's sentence,
+"The browser cannot read this file as a picture. Pick another photo.",
+in the conversation's red line, and nothing is sent. A refusal of the
+masterpod shows in the same red line, and the picture of before stays.
+The file box is switched off while an action of the page runs. The
+panel closes when the page goes on to another conversation. The creator
+puts another picture in its place the same way, at any time, and cannot
+take the picture away. The other members see a new picture within about
+5 seconds, by the shell's read of the room list, and a person on Find
+public rooms at the next read of that list.
 
 The pinned card (2026-11-06, section 11), in a private room about a
 listing, under the header and its panels and above the thread, drawn for
@@ -3286,7 +3379,11 @@ tried again when the tab is opened anew, and after a read that came
 back the tab does not read by itself again. Each room has its name, "by
 <username> · N members" and
 Open (this pod is in it), Requested (asked from this tab) or Request to
-join. Typing into the box reads the list again 400 milliseconds after
+join; in front of the name stands the room's round mark at 40 px (8.6;
+since the picture's step of 2026-11-22, section 11 and 4.15): the
+room's picture when it has one, else the grey disc with the globe, which
+every row had until then. Typing into the box reads the list again 400
+milliseconds after
 the last key (`ROOM_SEARCH_DEBOUNCE_MS`), for the rooms whose name holds
 the word; that read is quiet, as a poll is. Under the list stands "Show
 more" while the last read came back full: it reads the next 50 for the
@@ -3309,7 +3406,9 @@ box the wallet reads, quietly, the five public rooms with the most
 members whose name holds what was typed (`LIKE_NAMED_ROOMS`), and shows
 them under the box, each with Open, Requested or Request to join, under
 the sentence "These public rooms already have a name like this. You can
-ask to join one, or create yours.". The hint never stops a creation:
+ask to join one, or create yours.". The hint's rows are the rows of
+Find public rooms, so each shows the room's picture when it has one
+(4.15). The hint never stops a creation:
 Create stays pressable, and Enter in the name box still creates. A hint
 read that fails shows nothing, and an emptied box takes the hint away at
 once.
@@ -3862,7 +3961,13 @@ excepted, with the keyholder and anos calls included.
                             limit, offset }, all optional), and listPublicChatRooms takes it and the quiet flag:
                             a search word, a limit and an offset, each put into the body only when it is given
                             (an empty word and an offset of 0 are left out); until then it took nothing and sent
-                            an empty body
+                            an empty body;
+                            a public room's picture (2026-11-22, section 11; 4.15): pictureAt on RoomItem and on
+                            PublicRoomItem, after name (optional, a string or null: a masterpod of before sends
+                            none, and a missing one reads as null), and two methods:
+                            setChatRoomPicture(chatRoomId, picture), which sends { chatRoomId, picture }, and
+                            getChatRoomPicture(chatRoomId, quiet), which sends { chatRoomId } and is quiet unless
+                            asked otherwise, since the room pictures are read as the faces are
     keyholder-api.service   the keyholder test app's, base path /api/keyholder/<n>
     anos-api.service        the anos test app's account-api.service.ts, base path /api/anos/<the session's
                             validator> (2026-11-10, below; /api/anos/<defaultValidator> until then),
@@ -4019,6 +4124,24 @@ excepted, with the keyholder and anos calls included.
                             null when there is no such pod (2026-11-05); at most PROFILE_READS_AT_ONCE (5) reads
                             in flight, the other ids queued, so a page with many faces gets them a few at a time
                             (2026-11-08)
+    room-picture-cache.service
+                            the pictures of public rooms (2026-11-22, section 11; 4.15): one
+                            /get-chat-room-picture per room and per pictureAt per tab, quiet, as a signal:
+                            undefined while the read runs, null when the room has no picture the wallet can show
+                            (the masterpod answered 404, the read failed, or the picture's type is not one of the
+                            wallet's three, IMAGE_CONTENT_TYPES in images.ts), else the picture as a data URL for
+                            an <img>; picture(chatRoomId, pictureAt) reads, and put(chatRoomId, pictureAt,
+                            picture) keeps the picture this tab has just set under the pictureAt of the
+                            masterpod's answer, so it is not read back; pictureAt is when the picture was last
+                            set, as the room lists give it, so a new picture has a new one and is read again; at
+                            most ROOM_PICTURE_READS_AT_ONCE (5) reads in flight, the others queued, oldest ask
+                            first; a read that failed for another reason than 404 is forgotten
+                            ROOM_PICTURE_RETRY_MS (30 seconds) later, and not at once: the disc stands meanwhile,
+                            and the picture is asked for again when it is drawn anew after that pause (forgotten
+                            at once, the draw that follows a failure would ask again right away, for as long as
+                            the masterpod fails; profile-cache.service above still does, which is the
+                            after-production item "faces: a failed read is asked again at once, over and over");
+                            nothing is kept past a page load
     signing.service         the signing servers through the proxy (2026-11-13, section 11; until then
                             /api/sign/public-keys and /api/sign on one server): publicKeys(), GET
                             /api/sign/<n>/public-keys, and sign(transaction, signerAccountId), POST /api/sign/<n>, n
@@ -4229,7 +4352,7 @@ details beside the other side's id and the transaction id (2026-11-06).
 The case pages of
 sections 12 and 13 keep their own copy code.
 
-### 8.6 The avatar
+### 8.6 The avatar, and the room's round mark
 
 One small component, src/app/components/avatar.component.ts
 (`<app-avatar>`, inputs `anopodId`, `username` and `size`, 40 by default;
@@ -4246,6 +4369,27 @@ page (72 px) and beside the proposer on the DAO proposal page (40 px);
 since 2026-11-12 (section 11) in the person's chats about an attestor
 case on My case and My recovery case (8.7), and beside each attestor in
 the conversation's "Invite an attestor" panel (8.2, Chat; 40 px).
+
+The room's round mark (2026-11-22, section 11; 4.15), a second small
+component, src/app/components/room-picture.component.ts
+(`<app-room-picture>`): the picture of a public room when it has one,
+round, else a round grey disc with the icon of the room's kind, as the
+chat pages drew it themselves until then. Four inputs: `chatRoomId`, the
+room; `pictureAt`, when the room's picture was last set, as the room
+lists give it, null or absent for a room without one; `icon`, the
+disc's icon (public, group or storefront, chat.service's `icon`),
+`public` by default; and `size`, the width and height in pixels, 40 by
+default. With a `pictureAt` it asks room-picture-cache.service (8.3),
+one /get-chat-room-picture per room and `pictureAt` per tab; without
+one it asks nothing. The disc stands while the picture loads, when the
+read fails and when the picture cannot be shown. The picture has an
+empty `alt`: the room's name stands beside it in every place. It is
+drawn in the chat list (48 px), at the conversation's top (40 px) and in
+its Room picture panel (72 px), and in the rows of Find public rooms and
+of the hint of New public room (40 px; 8.2, Chat). A private chat with
+one other person still shows that person's avatar. The row "Requests" of
+the chat list, the chat requests, the notifications and the pinned
+listing card are as they were.
 
 ### 8.7 The marketplace components, the case chat components and the escrow trade's status box
 
@@ -16990,6 +17134,280 @@ package, nothing in server/.
   wallet1 and on wallet2, with no `npm ci` (no package file changed)
   and nothing new under `deploy/`. A wallet that is open on a phone
   meanwhile keeps the script it has until it is loaded again.
+
+### A public room's picture (2026-11-22)
+
+Step 4 of `~/Desktop/Z-TestNet/forclaude/public-rooms-plan-1.md` (FINAL,
+2026-11-22), its section 4, built on the user's word ("Okay, go ahead
+and start step 4.") on top of 7451285, the working tree clean. Seven
+source files changed, two new ones and this spec; after the build's
+report two more files with comments alone, and the README (the last
+part of this note). One commit. Why: the
+user, 2026-11-22: "2. Upload an image for the public room." A public
+room's name stays free, about twenty rooms are called anoTH, and a
+picture is one of the things that tell rooms of one name apart (the
+note before this one has the user's words in full). The masterpod's
+part of the picture is the plan's step 3 (4.15; the masterpod's spec,
+section 27), committed there the same day as a11fffe. This step is the
+wallet's alone: no change of a server's code and no new package; in
+server/ only the words of one comment, after the build's report.
+
+- New, `src/app/services/room-picture-cache.service.ts`, as 8.3 now
+  says: `picture(chatRoomId, pictureAt)` and `put(chatRoomId, pictureAt,
+  picture)`, one read per room and `pictureAt` for the tab's life, five
+  at a time, a failed read forgotten 30 seconds later.
+- New, `src/app/components/room-picture.component.ts`, as 8.6 now says:
+  `<app-room-picture>`, the picture or the grey disc with the kind's
+  icon.
+- Changed, `src/app/constants.ts`: four constants after
+  `LIKE_NAMED_ROOMS`: `ROOM_PICTURE_SIDE = 320`, `ROOM_PICTURE_JPEG =
+  0.8`, `ROOM_PICTURE_READS_AT_ONCE = 5` and `ROOM_PICTURE_RETRY_MS =
+  30_000`.
+- Changed, `src/app/services/masterpod-api.service.ts`: `pictureAt` on
+  `RoomItem` and on `PublicRoomItem`, after `name`, and the two methods
+  `setChatRoomPicture` and `getChatRoomPicture`, after
+  `listPublicChatRooms`.
+- Changed, `src/app/pages/chat-new.page.ts`: the row template draws
+  `<app-room-picture>` where it drew the disc with the globe, and the
+  style line `.disc` went. Nothing else: `loadPublicRooms` is the
+  committed one, with the mend of the note before this one.
+- Changed, `src/app/pages/chat.page.ts`: the row of a room that is not
+  a chat with one other person draws `<app-room-picture>` at 48 px with
+  the kind's icon. The style line `.disc` stays, for the row
+  "Requests". The class comment gained a sentence at its end.
+- Changed, `src/app/pages/chat-room.page.ts`, as 8.2 (Chat, "Room
+  picture") now says: `<app-room-picture>` at the conversation's top
+  (the style line `.disc` went); the menu entry for the creator of a
+  public room; the panel after the panel of Invite someone, with the
+  style line `.picture-what`; the field `showPicture`, which `open()`
+  sets to false; the method `pictureChosen`; the cache as the field
+  `pictures`. The class comment gained a passage at its end.
+- Changed, `src/app/i18n/en.ts` and `th.ts`, group `chatRoom`, two new
+  last entries. English, letter for letter the plan's: `roomPicture`
+  "Room picture", `pictureWhat` "This picture stands beside the room's
+  name. Everyone who looks for public rooms sees it. Pick a photo to
+  set it, or to put another in its place.". Thai: `roomPicture`
+  "รูปของห้อง"; `pictureWhat` "รูปนี้แสดงอยู่ข้างชื่อห้อง
+  ทุกคนที่ค้นหาห้องสาธารณะจะเห็นรูปนี้ เลือกรูปถ่ายเพื่อตั้งรูปของห้อง
+  หรือเพื่อเปลี่ยนเป็นรูปอื่น" (one entry, on one line in the file, with
+  a space where this note breaks the line). Both are the build chat's,
+  by the style and the glossary of forclaude/wallet-languages-plan-1.md
+  1.6: a public room is the word of `chatNew.tabFind`, a photo and
+  "pick" the words of `camera.orPick`, a picture the word of
+  `camera.unreadable`. No Thai reader has read them. The sentence for a
+  file that cannot be read is `camera.unreadable`, which both files had.
+- Readings where the plan left a detail open. BUILD-DATE is 2026-11-22,
+  the masterpod's section (the plan's M) is 27 and this spec's new
+  section is 4.15. `RoomPictureComponent` stands last in each page's
+  `imports`, as the pages list their own components after Material's.
+  Each new import line stands where the file's order by path puts it.
+  The class comment of `chat-new.page.ts` is as it was: the plan names
+  a new sentence for the two other pages only. In 8.2 the picture got
+  clauses in the sentences on a row of the chat list, on the
+  conversation's header and its menu, on the rows of Find public rooms
+  and on the hint, and a paragraph of its own, "Room picture", after
+  "One conversation". In 8.3 the new service stands after
+  profile-cache.service, and the entry of masterpod-api.service gained
+  a dated clause at its end. At the build's report the heading of 8.6
+  was as it had been, and the README, which names neither the globe nor
+  a room's picture, was not touched; both changed afterwards (the last
+  part of this note).
+- Checked: `npx ng build` from the wallet folder, clean, with no
+  warnings: the script is `main-6S5ZVB4H.js` (2,321,074 bytes; 4,532
+  more than before the step), built three times with the same bytes,
+  and the build's folder has ten files as before. The two English
+  entries were
+  compared with the plan's, letter for letter.
+- One comparison beyond the plan's checks, with nothing kept. The
+  planning chat had tried this step in a throwaway copy, with the code
+  read out of the plan file by a script (the plan's section 9). The
+  build made that copy again from 7451285 with the same script and
+  compared the nine source files with the working files by `diff`.
+  They differ in comment lines (the date and the number where the copy
+  has the words BUILD-DATE and M, and the two class comments), in one
+  Thai line, which was a stand-in there, and in one line of code: the
+  place of `RoomPictureComponent` in the `imports` of
+  `chat-new.page.ts`, second there and last here. `en.ts` is the same
+  byte for byte.
+- Checked by a look, as the plan's 4.7 says: a development build of the
+  working files in the build chat's scratch folder, served as plain
+  files on 127.0.0.1 by a file server that the app's preview tool
+  started from a temporary launch entry (taken out again; the launch
+  file is byte for byte as before). A made-up session, no passkey, and
+  the masterpod's answers given inside the page: seven chats of the pod
+  (two public rooms of its own and two of someone else's, in each pair
+  one with a picture; a chat with one other person; a group of three;
+  an old listing room) and 120 public rooms, the biggest first, every
+  second one with a picture, twenty of them called anoTH. The pictures
+  were real JPEGs of 320 by 320, drawn in the page. None of our servers
+  was asked: the file server's log holds no POST. The Browser pane was
+  hidden, so these are measures and six pictures, not a watched screen.
+  At 360 by 600, 430 by 600, 360 by 560 and 1280 by 700, in English and
+  Thai. Seen in a development build on this Mac, not on a phone and not
+  on the live wallet.
+  - The chat list. A public room with a picture shows it round, 48 px
+    and whole, where the globe stood; one without shows the globe; the
+    group its icon, the old listing room its storefront, the chat with
+    one other person that person's letter. Every row is 68 px high.
+  - The conversation's top. The picture round at 40 px, or the globe
+    as today; the header is 57 px high either way.
+  - The menu. The creator of a public room: Invite someone, Members,
+    Room picture. A member of someone else's public room: Members,
+    Leave. The creator of a chat with one person and of a group: Invite
+    someone, Members. So only the creator of a public room has the
+    entry. In Thai it reads "รูปของห้อง", whole.
+  - The panel. Room picture opens it under the header, and a second
+    press closes it. At 360 wide it is 147 px high in English, the
+    picture at 72 px and the sentence beside it on five lines, and 127
+    in Thai, four lines. At 430 wide: 127 px and four lines in English,
+    119 and three in Thai. The file box stands under them, 253 px wide.
+    At 1280 wide the file box stands to the right of the sentence and
+    the panel is 97 px high. The message box stays inside the chat's
+    frame with the panel open, also with the Members list or Invite
+    someone open beside it, also at 560 px high: there the messages
+    keep 194 px with the panel alone in English (214 in Thai), 81 with
+    the Members list too and 121 with Invite someone too.
+  - A picked photo. A PNG of 1200 by 800, and JPEGs of 600 by 1500, of
+    3000 by 4000 and of 321 by 320, went through the real file box and
+    the wallet's own redraw, and each was sent as a JPEG of 320 by 320;
+    one of 100 by 80 as 80 by 80, never made bigger. The picture stood
+    at the conversation's top and in the panel at once, and in the row
+    of the chat list, with no read of it. The file box is empty again
+    after each pick. While a picture is on its way the file box is
+    switched off. A conversation that is left meanwhile still gets its
+    picture, in the room it was picked in.
+  - A file that is no picture (a text file named .jpg, an empty file
+    named .png, a .txt file): the camera's sentence in red, in the
+    conversation's red line, nothing sent, the picture of before still
+    there.
+  - A refused `setChatRoomPicture`: the refusal in red, "HTTP 400:
+    invalid picture: image must be at most 100000 bytes" with the
+    stand-in's words, and the picture of before still at the top and in
+    the panel. A call that throws shows its words in red. The next pick
+    that works takes the red line away. The red line stands between
+    the thread and the message box, and the message box stays inside
+    the frame.
+  - From the creator's room straight to another chat, which keeps the
+    same page: the panel is closed.
+  - Find public rooms with 50 rows, 25 of them with a picture: 25
+    reads, each room once, at most five at a time, all quiet; every
+    picture in the row of its own room (each row's picture was compared
+    with the one the stand-in holds for that room), 40 px, round and
+    whole, the other 25 rows with the globe. The hint under "anoTH":
+    five rows, three pictures and two globes, each the room's own.
+  - A masterpod of before, played by leaving `pictureAt` out of both
+    lists: the globes as today in every place, and no picture read at
+    all. The creator's menu still has Room picture, since the wallet
+    cannot tell; a picked photo then answers in red, "HTTP 404: Not
+    Found". The stand-in's body for that was the one the masterpod's
+    code of before gives a route it does not have, as the masterpod's
+    step 3 read it from that code.
+  - A new picture set elsewhere: after the next read of the room list
+    the row shows the globe for the moment the new picture loads, then
+    the new picture; one read. A picture taken down by hand: the globe
+    again, with no read; put back under the `pictureAt` of before, it
+    shows from the cache with no read.
+  - A picture whose type is not one of the wallet's three (the
+    stand-in said image/svg+xml): the globe. A picture that is not
+    square (320 by 200): its middle, round, at the mark's size.
+  - A picture read that fails (500, and a read that throws): one ask
+    in three seconds, and the globe. The read is not made again by the
+    next reads of the room list, nor when the conversation is opened
+    inside the half minute. It is made again when a place that shows
+    the picture is drawn anew after the half minute (the plan's
+    decision 25); what that means in the chat list is under "left as
+    it is", below.
+  - The bodies the two real methods build, read with a stand-in for
+    their signing step: `/set-chat-room-picture { chatRoomId, picture:
+    { contentType, image } }`, not quiet; `/get-chat-room-picture {
+    chatRoomId }`, quiet unless asked otherwise.
+  - Compared with a development build of 7451285, served beside this
+    one, while no room has a picture: the place and the size of every
+    mark, its icon, the title, the line, the button or the time, the
+    height of every row and header, the disc's colours and its
+    roundness, the thread's height and the message box's place, in the
+    chat list, at six conversations' tops, in twelve rows of Find
+    public rooms and in the hint's five. 222 parts at each of 360, 430
+    and 1280 wide in each language, and none differs. In this build a
+    row with a picture against the same row without one: the icon is
+    gone and the picture stands in the disc's box, and nothing beside
+    it moved.
+  - Nothing is cut and nothing scrolls sideways, at any of the sizes,
+    in either language. A title that is too long ends in dots, as
+    before.
+- Seen in the look and left as it is:
+  - After a picture read that failed, the row of the chat list keeps
+    the globe for as long as the person stays in Chat. The list is one
+    page for all of Chat (on a phone it stays loaded behind an open
+    conversation), so its rows are not drawn anew by the reads of the
+    room list nor by opening a conversation and coming back. Measured:
+    31 seconds after a failed read the conversation, opened again, read
+    the picture and showed it at its top, while the row of the same
+    room in the list still showed the globe; after a visit to Home the
+    list showed the picture. A new picture of the room, or the wallet
+    loaded again, also brings it. This is the plan's decision 25 as
+    written ("when it is drawn anew"). Put to the user, who took a line
+    on the after-production list ("Yeah, add the globe to the list of
+    after production."): "room pictures: after a failed read the chat
+    list keeps the globe", added the same day.
+  - While a new picture of a room loads, the globe stands for that
+    moment where the picture of before stood (the plan's decision 26).
+  - The file box is the browser's own, as the camera's is: its words
+    ("Choose File", "No file chosen" in this browser) are the
+    browser's, in the browser's language and not the wallet's.
+  - A photo of 1 by 1 pixel is sent as it is; the masterpod takes any
+    picture inside its limits.
+- Not checked: a real phone; iPhone Safari; a photo from a phone's own
+  picture list or its camera, and its weight (the made-up photos went
+  out at 1,900 to 9,200 bytes; a real one is some 15,000 to 30,000 by
+  the selfie's measures of 2026-11-20); the live wallet and a real
+  masterpod; the two routes over HTTP with a signed request; the page
+  under the proxy's content security policy (the scratch build was
+  served as plain files with no such header; the policy's `img-src`
+  allows `data:` addresses, which is how a room's picture reaches its
+  `<img>`, as a selfie does: read in `server/app.js`, not tried); the
+  wallet opened from the Home Screen; a phone held sideways; the
+  attestor's and the moderator's editions, which draw the same pages.
+- For the deploy: the masterpod's step 3 first, with its schema line
+  before its first restart (the masterpod's spec, 27.7), then this one
+  (the plan's section 6). Against a masterpod of before no room has a
+  picture, and Room picture answers "HTTP 404". Then the user's two
+  lines on wallet1 and on wallet2, with no `npm ci` (no package file
+  changed) and nothing new under `deploy/`. A wallet that is open on a
+  phone meanwhile keeps the script it has until it is loaded again.
+- After the build's report, the same day (2026-11-22). The report had
+  listed six places that the step left out of date and the plan does
+  not name, and the README's Layout, which named neither new file. The
+  user: "Go ahead and update those things." All were brought in line
+  before the commit, with no line of code changed:
+  - `src/app/images.ts`: its opening comment and the comments of
+    `squareJpeg` and `redrawSquare` named the public selfie alone as
+    what the square is for. Each now names a public room's picture
+    beside it, with "since 2026-11-22".
+  - `src/app/services/masterpod-api.service.ts`, the comment of the
+    type `Image`: "plaintext for a selfie" became "plaintext for a
+    selfie and, since 2026-11-22, for a public room's picture".
+  - `server/app.js`, the comment over the content security policy: a
+    public room's picture stands beside the selfie as a picture that
+    comes as a `data:` address. The policy itself is as it was.
+  - This spec, section 2, the line on `img-src`: a clause in brackets,
+    "since 2026-11-22 also a public room's picture, 4.15".
+  - This spec, 4.14: the block of /list-public-chat-rooms stays as
+    step 2 wrote it, and a sentence in brackets under it says that each
+    room of the answer also carries `pictureAt` since the picture's
+    step.
+  - This spec, the heading of 8.6: "The avatar, and the room's round
+    mark", where it read "The avatar".
+  - `README.md`, the Layout: one line for
+    `components/room-picture.component.ts` and one for
+    `room-picture-cache.service.ts`.
+  With them the step is thirteen files: ten changed, two new, and the
+  README. Checked again: `node --check server/app.js`, and `npx ng
+  build` from the wallet folder, clean, with the same script as before,
+  `main-6S5ZVB4H.js`, byte for byte, since only comments changed in the
+  source. The look was not made again for it. For the deploy nothing is
+  added: the changed comment in `server/app.js` needs no step of its
+  own.
 
 ## 12. Recovery and the moderator edition
 
