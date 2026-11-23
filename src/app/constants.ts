@@ -11,6 +11,12 @@ export const MESSAGES_POLL_MS = 3_000;
 export const ACCOUNT_POLL_MS = 5_000;
 export const VOUCH_REQUESTS_POLL_MS = 5_000;
 
+/** The update check (wallet spec 8.1; 2026-11-22): how often the wallet asks its own server for the page again, while the page is on the screen, to see whether a newer build is there. It also asks when it starts and each time it comes back to the front. */
+export const UPDATE_CHECK_MS = 300_000;
+
+/** How long the wallet's own server has to answer before the update check or a refresh gives up (wallet spec 8.1; 2026-11-22). The page is loaded again only after the server has answered, so a phone with no connection keeps the page it has. */
+export const REFRESH_WAIT_MS = 5_000;
+
 /** The profile cache keeps at most this many /get-anopod-profile reads in flight, so a page with many faces gets them a few at a time (wallet spec 8.3). */
 export const PROFILE_READS_AT_ONCE = 5;
 

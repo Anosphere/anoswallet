@@ -1,4 +1,4 @@
-<mat-toolbar color="primary" class="toolbar">
+<mat-toolbar color="primary" class="toolbar" [class.updating]="update.available()">
   @if (session.hasSession()) {
     <button mat-icon-button type="button" class="menu" (click)="menuOpen.set(!menuOpen())" [attr.aria-label]="t().shell.menu">
       <mat-icon>menu</mat-icon>
@@ -10,6 +10,9 @@
     <span class="brand">{{ config.attestorEdition() ? t().shell.brandAttestor : config.moderatorEdition() ? t().shell.brandModerator : t().shell.brandWallet }}</span>
   }
   <span class="spacer"></span>
+  @if (update.available()) {
+    <button mat-flat-button type="button" class="update" (click)="updateNow()">{{ t().shell.update }}</button>
+  }
   @if (session.hasSession()) {
     <span class="who">{{ session.username() }}</span>
     <button mat-button type="button" (click)="lock()">{{ t().shell.lock }}</button>
@@ -43,3 +46,7 @@
     </main>
   </mat-sidenav-content>
 </mat-sidenav-container>
+
+@if (update.refreshing()) {
+  <div class="refreshing" role="status">{{ t().shell.refreshing }}</div>
+}

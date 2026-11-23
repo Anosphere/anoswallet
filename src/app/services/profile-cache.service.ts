@@ -11,6 +11,8 @@ import { MasterpodApiService, Profile } from './masterpod-api.service';
  * PROFILE_READS_AT_ONCE reads are in flight at a time (2026-11-08); the
  * other ids wait in a queue, oldest ask first, so a page with many faces
  * gets them a few at a time and one huge picture delays only its own card.
+ * The tab's life ends at a load of the page, and since 2026-11-22 Lock
+ * loads it (app.ts), so the faces are read again after a Lock.
  */
 @Injectable({ providedIn: 'root' })
 export class ProfileCacheService {

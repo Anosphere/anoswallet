@@ -33,6 +33,8 @@ export interface ConfirmData {
   ready?: Promise<void>;
   /** True puts the class `danger` on the second button (2026-11-12), which the global rule in src/styles.css makes red. Left out, the button keeps the theme's colour; the cancel of a locked transfer gives true, and so do the two boxes of an escrow trade whose second button disputes, the Dispute box and "Do not cancel this trade" (escrow-boxes.ts, 2026-11-17). */
   danger?: boolean;
+  /** True leaves the first button out (2026-11-22): the box has one button, the caller's, and tells something that has happened and cannot be refused. The shell's box "You are logged out" gives it (app.ts). Left out, the box has its two buttons. */
+  single?: boolean;
 }
 
 /**
@@ -94,7 +96,9 @@ export interface ConfirmData {
  * transaction id, started when the box opens.
  * And a red second button (danger): it carries the class `danger`, the
  * global rule in src/styles.css. A caller that gives neither keeps the box
- * as it was.
+ * as it was. Since 2026-11-22 a caller can ask for a box with one button
+ * (single), and the shell's box "You are logged out" is the one box that
+ * does.
  */
 @Component({
   selector: 'app-confirm-dialog',
@@ -127,7 +131,9 @@ export interface ConfirmData {
       }
     </mat-dialog-content>
     <mat-dialog-actions align="end">
-      <button mat-button type="button" [mat-dialog-close]="false" [disabled]="asking()">{{ data.cancelLabel ?? t().common.cancel }}</button>
+      @if (!data.single) {
+        <button mat-button type="button" [mat-dialog-close]="false" [disabled]="asking()">{{ data.cancelLabel ?? t().common.cancel }}</button>
+      }
       <button mat-flat-button type="button" [class.danger]="data.danger" (click)="yes()" [disabled]="!armed() || asking() || waiting() || blocked()">{{ data.confirmLabel }}</button>
     </mat-dialog-actions>
   `,

@@ -1524,6 +1524,107 @@ The user may navigate anywhere the navigation shows at any time.
 The toolbar's words and the navigation's labels come from the
 dictionary and follow the language (8.8; 2026-11-06, section 11).
 
+The Update button (2026-11-22, section 11; the plan is
+forclaude/wallet-refresh-plan-1.md). A page of the wallet keeps the code
+it was loaded with for as long as it lives. In a browser tab a person
+reloads it. A wallet opened from a phone's Home Screen (section 2) has
+no address bar and no reload button, and the phone keeps its page for
+days, so such a wallet ran an old build until the app was swiped away.
+The wallet now finds a newer build by itself (update.service, 8.3): it
+asks its own server for the page again, past the browser's own copy
+(`fetch('/')` with `cache: 'no-store'`), and reads the name of the
+script file in the answer. A build has one script file, named by its
+content (`main-`, letters and digits, `.js`), so another name than the
+one this page runs is another build. Nothing changes on the server for
+it, and the page's content rules allow the ask (`connect-src 'self'`,
+section 2). It asks once when the page starts, every 5 minutes while the
+page is on the screen (`UPDATE_CHECK_MS`), and each time the page comes
+back to the front (the browser's `visibilitychange`; a phone freezes a
+page's timers while another app is in front). It never asks while the
+page is hidden, and once a newer build was seen it asks no more. An
+answer that names no script file changes nothing. A development build
+has one script with no content name (`main.js`): the check is off
+there, so `ng serve` asks nothing. While a newer build is there, the
+top bar shows a filled button "Update" (`shell.update`, "อัปเดต"), after
+the spacer and before the username, on every page, the first page too.
+On a screen narrower than 600 px the username is not shown while the
+button is there, and the wallet's name is cut with "…" when the row has
+no room (Thai at 360 and 375 px; English fits from 360 up). Both rules
+hold only while the button shows (the class `updating` on the toolbar).
+The button has 12 px at each side where Material gives 24, so it is 70
+px wide in English and 64 in Thai. A tap refreshes at once, with no
+question in between (the refresh, the paragraph after the next). A
+person who does not tap keeps the old code and the button.
+
+The end of a login (2026-11-22, section 11; the same plan). The
+masterpod keeps one pair of session keys for an anoPod, for some hours,
+and a page whose keys it no longer took went on looking logged in, with
+red lines such as "HTTP 401: session expired" on its pages. The shell
+now tells the person. The end of a login is the masterpod's 401 on the
+status read of the 5-second poll (/check-anopod-status; 8.2,
+Notifications) with one of three reasons: `session expired` (the hours
+are over, or a finished recovery ended the session), `bad signature`
+(the keys the masterpod holds are those of a newer login of the same
+anoPod, on another phone or computer) or `unknown anopod` (the anoPod
+is gone). On that read `bad signature` can only mean the session keys.
+Three things are not an end and are passed over as before: no
+connection, a masterpod that is down, and a phone whose clock is wrong
+(`timestamp outside window`). Before the box shows, the shell asks the
+status once more, and only a second answer with one of the three
+reasons counts: a read that was on its way while the same tab logged in
+anew (Setup, the finish of a recovery) is then not taken for the end.
+The poll also runs at once when the page comes back to the front, so
+the box is there before a tap. The box is the wallet's pop-up box with
+one button (`single`, 8.9). Its title is "You are logged out"
+(`shell.loggedOutTitle`), its one sentence "A login ends by itself after
+some hours. It also ends when your anoPod is logged in on another phone
+or computer. Log in again to go on." (`shell.loggedOutText`), and its
+button "OK" (`shell.ok`). In Thai: "คุณออกจากระบบแล้ว";
+"การเข้าสู่ระบบจะสิ้นสุดเองเมื่อผ่านไปหลายชั่วโมง
+และจะสิ้นสุดเมื่อ anoPod ของคุณเข้าสู่ระบบบนโทรศัพท์หรือคอมพิวเตอร์เครื่องอื่นด้วย
+โปรดเข้าสู่ระบบอีกครั้งเพื่อดำเนินการต่อ"; "ตกลง". The sentence names no number of
+hours: the number is the masterpod's setting, and the wallet does not
+know it. Whatever closes the box, OK or a step back in the browser's
+history, the wallet locks and refreshes (the next paragraph). The poll
+waits while the box is open, so there is one box. The recovery page
+(/recover/case, 12.3) has a session of its own and keeps its own
+sentence; the box does not show there.
+
+The refresh (2026-11-22, section 11; the same plan). Three things end in
+it: a tap on the Update button, the box "You are logged out", and Lock.
+Until 2026-11-22 Lock dropped the session's keys and showed the first
+page inside the app, and no page was loaded; Log in loads none either. A
+refresh is a real load of the page (`location.reload()`), which empties
+the page's whole memory and brings the newest build, and it always ends
+on the first page, with Log in and Create account. Meanwhile the words
+"Refreshing…" (`shell.refreshing`, "กำลังรีเฟรช…") stand in the middle of
+the screen, over the whole page (a `div` with the class `refreshing` in
+the shell, with the role `status`). The page is loaded again only after
+the wallet's server has answered: update.service asks the server for
+the page first and waits 5 seconds at most (`REFRESH_WAIT_MS`). With no
+answer the words go away and the wallet stays as it is, because a
+wallet from the Home Screen has no reload button to get off a browser's
+error page. Every refresh starts from the first page: the shell drops
+the session and shows the first page inside the app (`toFirstPage()` in
+app.ts), and then the page is loaded again; without that, a refresh
+tapped on the Create page came back on the Create page. Lock does this
+at once, as before, and then asks the server, so with no connection
+Lock still locks and the wallet stays on the first page it shows. The
+Update button asks the server first, so with no connection a tap
+changes nothing and a session stays open. A browser's own reload button
+does what it always did. One workaround stands beside the refresh, and
+it is not a design. In Chrome's app window on Android (the wallet opened
+from its Home screen icon) every load of the page inside that window
+leaves the shell 56 px higher than the window (901.3 on a window of 845,
+seen on an emulator), and one swipe then takes the top bar off the
+screen: the after-production list's item "the wallet as an app on
+Android: the top bar leaves after a pulled-down reload". A refresh is
+such a load. So after a start the shell looks three times, after 0.3, 1
+and 3 seconds, whether it is higher than the window, and if so writes
+its height onto itself (`100dvh`, the same height its style sheet
+names), which Chrome then works out anew. Where the shell fits the
+window nothing is written.
+
 ### 8.2 The screens
 
 Landing. One outlined card, at most 560 px wide, centred on the page,
@@ -3860,7 +3961,10 @@ and the chat rooms with them once setup is complete. Since 2026-11-19
 (section 11) the poll also rings the wallet's sound when its read of the
 chat rooms holds a new message from someone else or a new chat request
 (8.1). A notification by itself rings nothing: a chat request rings
-because it is in the answer of /list-chat-rooms. The chat kinds
+because it is in the answer of /list-chat-rooms. Since 2026-11-22
+(section 11) the poll's status read also tells the end of a login (8.1),
+and the poll runs at once when the page comes back to the front. The
+chat kinds
 link: chatInvite and joinRequest to /chat/requests; inviteAccepted,
 inviteDeclined and joinApproved to the room, /chat/:chatRoomId
 (2026-11-05, section 11). The kind recoveryCaseScheduled (2026-11-12,
@@ -3910,7 +4014,9 @@ excepted, with the keyholder and anos calls included.
     language.service        the language on screen (Thai when the browser's first language is Thai, else
                             English; English for the tab after Switch to English), words, tag, dateTime and
                             time; sets the page's lang, the date adapter's locale and Material's Optional
-                            (2026-11-06)
+                            (2026-11-06); since 2026-11-22 (section 11) the English of Switch to English lasts
+                            until the page is loaded again, and a refresh loads it (8.1): Lock, the Update
+                            button and the box "You are logged out"; the wallet then follows the browser again
     session.service         signals: anopodId, username, firstName, lastName, the session keys, the PRF output
                             while needed and the key blob key derived from it (2026-11-08), the encryption key,
                             the chat keys, the PLID and lookup id, the status
@@ -4123,7 +4229,9 @@ excepted, with the keyholder and anos calls included.
     profile-cache.service   one /get-anopod-profile per pod per tab, quiet, as a signal: undefined while it loads,
                             null when there is no such pod (2026-11-05); at most PROFILE_READS_AT_ONCE (5) reads
                             in flight, the other ids queued, so a page with many faces gets them a few at a time
-                            (2026-11-08)
+                            (2026-11-08); "per tab" is until the page is loaded again, and since 2026-11-22
+                            (section 11) a Lock loads it (the refresh, 8.1), so the faces are read again after
+                            a Lock
     room-picture-cache.service
                             the pictures of public rooms (2026-11-22, section 11; 4.15): one
                             /get-chat-room-picture per room and per pictureAt per tab, quiet, as a signal:
@@ -4141,7 +4249,8 @@ excepted, with the keyholder and anos calls included.
                             at once, the draw that follows a failure would ask again right away, for as long as
                             the masterpod fails; profile-cache.service above still does, which is the
                             after-production item "faces: a failed read is asked again at once, over and over");
-                            nothing is kept past a page load
+                            nothing is kept past a page load, and since 2026-11-22 (section 11) a Lock is such a
+                            load (the refresh, 8.1)
     signing.service         the signing servers through the proxy (2026-11-13, section 11; until then
                             /api/sign/public-keys and /api/sign on one server): publicKeys(), GET
                             /api/sign/<n>/public-keys, and sign(transaction, signerAccountId), POST /api/sign/<n>, n
@@ -4302,6 +4411,17 @@ excepted, with the keyholder and anos calls included.
                             takes the permission away from a site whose message shows nothing; a new version of the
                             file takes over at once (skipWaiting, clients.claim), since it holds nothing an open
                             page depends on
+    update.service          the update check and the refresh (2026-11-22, section 11; 8.1): available, a signal,
+                            true once the wallet's server named another script file than the one this page runs,
+                            until the page is loaded again; refreshing, a signal, true from the start of a refresh
+                            until the page is gone, or until the server did not answer; refresh(before?), which
+                            asks the server for the page, waits REFRESH_WAIT_MS (5 seconds) at most, runs `before`
+                            when one is given and then loads the page again (location.reload()), and with no
+                            answer does nothing but turn refreshing false again; the check looks at three moments:
+                            when the wallet starts, every UPDATE_CHECK_MS (5 minutes) while the page is on the
+                            screen, and each time the page comes back to the front; it never looks while the page
+                            is hidden, and no more once a newer build was seen; in a development build, whose
+                            script has no content name, the check is off; both constants are in constants.ts
     log.service             the activity log
 
 Keys are regenerated from blobs at each unlock; nothing secret touches
@@ -4359,7 +4479,8 @@ One small component, src/app/components/avatar.component.ts
 2026-11-05, section 11): a round selfie when the pod's profile has one,
 else a round disc in the primary-container colour with the first letter
 of the username. The profile comes from profile-cache.service (8.3), one
-/get-anopod-profile per pod per tab. In the chat list, the conversation
+/get-anopod-profile per pod per tab (until the page is loaded again,
+which a Lock does too since 2026-11-22; 8.3). In the chat list, the conversation
 header, the members panel and the chat requests; since 2026-11-06 also on
 the listing cards (24 px), the listing page (56 px) and the people who
 connected (8.7; the pinned listing card drew one too until 2026-11-19,
@@ -4380,8 +4501,9 @@ lists give it, null or absent for a room without one; `icon`, the
 disc's icon (public, group or storefront, chat.service's `icon`),
 `public` by default; and `size`, the width and height in pixels, 40 by
 default. With a `pictureAt` it asks room-picture-cache.service (8.3),
-one /get-chat-room-picture per room and `pictureAt` per tab; without
-one it asks nothing. The disc stands while the picture loads, when the
+one /get-chat-room-picture per room and `pictureAt` per tab (until the
+page is loaded again, which a Lock does too since 2026-11-22; 8.3);
+without one it asks nothing. The disc stands while the picture loads, when the
 read fails and when the picture cannot be shown. The picture has an
 empty `alt`: the room's name stands beside it in every place. It is
 drawn in the chat list (48 px), at the conversation's top (40 px) and in
@@ -4558,7 +4680,14 @@ navigator.language) begins with "th", else English; nothing is stored.
 One button, "Switch to English", always in those English words, under
 the landing card while the app is in Thai: after it the app is English
 for as long as the tab lives, like the unlock itself, and a new tab
-follows the browser again. There is no button to Thai and no language
+follows the browser again. Since 2026-11-22 (section 11) the choice no
+longer outlives a Lock: Lock, the Update button and the box "You are
+logged out" load the page again (the refresh, 8.1), and a page that is
+loaded again follows the browser, as it always did after a reload by
+hand. On a phone whose language is Thai the wallet is then Thai again on
+its first page, and the button is tapped once more. That is a line of
+the after-production list, "Switch to English: the choice is gone after
+a refresh". There is no button to Thai and no language
 toggle anywhere else.
 
 The words live in a dictionary, src/app/i18n/en.ts and th.ts, no
@@ -4812,6 +4941,14 @@ loaded. Its Thai names a kind of account by the word that follows
 "บัญชี" in this file's `account.title`, and quotes "กู้คืนบัญชี"
 (`common.recoverAccount`), "เก็บไว้" and "การแจ้งเตือนความปลอดภัย"; its
 device words are the Thai emails'.
+The Update button, the box "You are logged out" and the refresh
+(2026-11-22, section 11): `shell` gains five entries after `lock`,
+`update`, `refreshing`, `loggedOutTitle`, `loggedOutText` and `ok`, the
+words of the top bar's button, of the words over a page that is loaded
+again and of the box (8.1), none of them a function; the English is the
+plan's, letter for letter, and the Thai is the planning chat's (the
+plan's decision 22), in which "เข้าสู่ระบบ" is the wallet's word for Log in
+(`landing.unlock`), and no Thai reader has read it.
 
 ### 8.9 The confirmation box
 
@@ -4842,7 +4979,9 @@ the place of `typed`, which stood here from 2026-11-12) and `danger`
 (since 2026-11-12), which
 are described two paragraphs down; and, since 2026-11-20 (section 11),
 `approve` and `ready`, which a caller may leave out as well and which
-are described there with `passkey`. A value too long for its
+are described there with `passkey`; and, since 2026-11-22 (section 11),
+`single`, which a caller may leave out: true leaves the first button
+out, so the box has one button, the caller's. A value too long for its
 column wraps at a space, and is cut inside a word only when the word
 alone is too long (`overflow-wrap: anywhere`); a value in the id font is
 cut anywhere, by the global rule for `code`, so a 64-character id wraps
@@ -4876,7 +5015,10 @@ or forward in the browser's history, the Back of a phone among them,
 since Angular Material closes every dialog on such a step
 (`closeOnNavigation`, on by default). The box then closes with no
 answer: `askConfirm` answers false, as for the first button, and
-`askChoice` answers null. The second
+`askChoice` answers null. A box with `single` (2026-11-22, section 11)
+closes by its one button or by such a step in the browser's history;
+the shell's box "You are logged out" is the one box that gives it, and
+the shell does the same whichever of the two closed it (8.1). The second
 button cannot be pressed for the first half second after the box opens
 (`CONFIRM_ARM_MS`, 500, in constants.ts), so that second click can never
 land on it. In a box with `ready` (2026-11-20, section 11) the second
@@ -17408,6 +17550,226 @@ server/ only the words of one comment, after the build's report.
   source. The look was not made again for it. For the deploy nothing is
   added: the changed comment in `server/app.js` needs no step of its
   own.
+
+### An Update button, the box "You are logged out", and a fresh load of the page at Lock (2026-11-22)
+
+Step 1 of `~/Desktop/Z-TestNet/forclaude/wallet-refresh-plan-1.md`
+(FINAL, 2026-11-22), built on the user's word ("Allright, the other chat
+has finished, we can now begin this build.") on top of af9d5dc, the
+working tree clean. One new file, seven changed ones and this spec;
+after the build's report three more files with comments alone, and the
+README (the last part of this note). One
+commit. Nothing changed under `server/`, `deploy/` or `network/`, no
+package, no env line, no route. Why: the user, 2026-11-22, about a
+wallet that was added to a phone's Home Screen: "there is no url bar and
+if they haven't swiped away the app, then it does not refresh. Even if
+they click lock and log back in again, they do not refresh and therefore
+are running the old code." About a login that has ended: "I pick my
+phone up and it's been a while ... And I click my wallet. Boom, I get a
+red error, that's it. What should happen instead, is upon getting this
+error, the app should instead maybe have a pop up say, you're logged
+out, let's log back in ... Then I click ok and there is a refresh, and I
+log back in." And the button: "A little needs update button can appear
+when the web app detects that there is new code. The user clicks it, the
+phone, the home app or the computer refresh ... Now the log back in and
+boom, they're updated." Lock was the user's too: "I suppose we could
+also make it so clicking lock also forces a refresh." What a person sees
+is in 8.1.
+
+- The plan was read and tried at f599958 and said that the build reads
+  its places again first. Two commits had come since, another chat's
+  (7451285 and af9d5dc, the search of the public rooms and a room's
+  picture). The read: `app.ts`, `app.html`, `app.css`, the pop-up box,
+  the session service, the three guards, `unlock.ts`, `app.routes.ts`,
+  the page file and the notification worker were as at f599958, byte
+  for byte; `constants.ts` had gained seven constants after
+  `MEMBERS_PAGE`, the two word files entries in `chatNew` and
+  `chatRoom`, none in `shell`, and `server/app.js` the words of one
+  comment (the page's content rules still say `connect-src 'self'`).
+  The masterpod's session check was as at 93e8f43. So nothing the plan
+  changes or leans on had moved, and the build went on. What the new
+  work added that the shell meets: two timers of the New chat page,
+  both cleared when the page goes, and the picture cache's 30-second
+  timer, which forgets one entry and asks nothing; a call with no
+  session answers `api.noSession` and throws nothing.
+- New, `src/app/services/update.service.ts`, as 8.1 and 8.3 now say:
+  `available`, `refreshing`, `refresh(before?)`, the look at the server's
+  page at the start, every `UPDATE_CHECK_MS` and at each return to the
+  front, and off in a development build.
+- Changed, `src/app/constants.ts`: `UPDATE_CHECK_MS = 300_000` and
+  `REFRESH_WAIT_MS = 5_000`, after `VOUCH_REQUESTS_POLL_MS`.
+- Changed, `src/app/components/confirm-dialog.component.ts`: the field
+  `single` on `ConfirmData`, after `danger`; the first button stands
+  inside `@if (!data.single)`; one sentence at the end of the class
+  comment.
+- Changed, `src/app/app.ts`: five imports; the set `LOGIN_ENDED` and the
+  function `loginEnded` before the class; six lines at the end of the
+  class comment; the fields `dialog` and `update`; in the constructor
+  the poll at the return to the front and the three looks of the way
+  around Chrome's fault, both taken off again when the shell goes; in
+  `poll()` the three lines that send an ended login to `loggedOut()`;
+  and where `lock()` stood, four methods: `loggedOut()`, `lock()`,
+  `updateNow()` and `toFirstPage()`.
+- Changed, `src/app/app.html`: the class `updating` on the toolbar while
+  a newer build is there; the button after the spacer; the `div` with
+  "Refreshing…" at the end. `src/app/app.css`: `.update`, `.updating
+  .brand`, `.refreshing`, and at the end the rule that hides `.who`
+  under 600 px while the button shows.
+- Changed, `src/app/i18n/en.ts` and `th.ts`, section `shell`, five
+  entries after `lock` (8.8). The English is the plan's, letter for
+  letter, and so is the Thai, which is the planning chat's (the plan's
+  decision 22). No Thai reader has read it.
+- What stayed: the guards, the pages, the session service, the recovery
+  page with its own sentence, `server/`, the notification worker. No
+  test file was added (the plan's decision 24).
+- Readings where the plan left a detail open. BUILD-DATE is 2026-11-22.
+  The sentence at the end of the pop-up box's class comment is given by
+  the plan in words, and the build wrote it: "Since 2026-11-22 a caller
+  can ask for a box with one button (single), and the shell's box "You
+  are logged out" is the one box that does." The rest of that comment
+  is as it was. In this spec the three paragraphs of 8.1 stand at its
+  end, the line of update.service before log.service, and the sentence
+  of 8.8 at its end.
+- Checked: `npx ng build` from the wallet folder, clean, with no
+  warnings: the script is `main-HNH3CYZO.js` (2,325,666 bytes; 4,592
+  more than before the step), and the build's folder has ten files as
+  before. No other chat's file was in the folder.
+- Checked against the planning chat's tried copy, kept in
+  `/Volumes/owc2tb/emulators/tools/refresh-walk/` (`final.patch`,
+  `update.service.ts`): the patch went onto a throwaway clone of af9d5dc
+  with no complaint, and the eight files were compared with the working
+  files. Seven are the same byte for byte. The pop-up box's file differs
+  by the one sentence of its class comment, which the tried copy does
+  not hold. The build wrote from the plan, not from the patch.
+- Checked by a walk, as the plan's 1.9 says. All of it on this Mac: two
+  production builds of a scratch copy of the working files, which differ
+  by one space in one word, so that their scripts have two names
+  (`main-YHXMV3YE.js` holds the same statements as the wallet folder's
+  script, in another order, since a build orders them by the folder it
+  runs in); the wallet's own proxy over them on 127.0.0.1; and a
+  stand-in for the masterpod that checks a session in the masterpod's
+  order and words, with the masterpod's own code for the two
+  signatures. None of our servers was asked.
+  - Google Chrome 157 with no window, real sessions by its stand-in
+    passkey: 45 checks, all good, in English and again in Thai. A page
+    asks the server for itself once more at its start, and no button
+    shows while the build is the same. A wrong clock, a masterpod that
+    is down, one read alone refused and no connection, 11 seconds each:
+    no box, still logged in. A newer build: nothing by itself in the
+    first seconds, the button at the return to the front, the session
+    still open. Update with the connection cut: nothing changes. Update
+    with a silent server: "Refreshing…" for 5 seconds (5,064 ms), then
+    the wallet as it was, still logged in. Update: the first page on
+    the new build, no session, no button. The button on the first page
+    of a logged-out wallet too. `session expired`: the box 2.8 seconds
+    later, one box, one button; after OK "Refreshing…" over the first
+    page, then the page loaded again. `bad signature`: the box 3
+    seconds later; a step back in the browser in place of OK locks and
+    loads all the same. Lock: the first page under "Refreshing…" at
+    once, then the load. Lock with the connection cut: locked inside
+    the app, no load, and Log in works on that page once the server is
+    back. Chrome raised no exception and blocked nothing.
+  - The top bar with the button and a session at every width from 320
+    to 620 px in steps of 2, 151 widths in each language: everything
+    inside the bar, nothing over another thing, no sideways slide. The
+    wallet's name is cut with "…" from 320 to 350 px in English and
+    from 320 to 384 in Thai, and whole above. The username is not shown
+    up to 598 px and shown from 600.
+  - A simulated iPhone SE with iOS 18.6, the wallet opened from the
+    Home Screen, with an account made in that phone's Safari and its
+    real passkey (Touch ID). A login by passkey inside the app went
+    through. The session ended on the stand-in's side: the box 4
+    seconds later; OK: "Refreshing…" over the whole screen, then the
+    first page, and the server saw the ask, the page, and the page's
+    own look. A login, then Lock: the same. A newer build while the app
+    was logged in: sent to the back and brought to the front again, the
+    app kept its page, asked the server once and showed the button,
+    with the username gone from the bar. Update with a silent server:
+    "Refreshing…", and after 5 seconds the app as it was, still logged
+    in, no error page. Update: the look, the page, the new script, and
+    the first page on the new build with no button.
+  - Safari on that iPhone, upright and held sideways, after a fresh
+    load each time and more than 3 seconds after it: the shell's own
+    `style` is empty, so the way around Chrome's fault wrote nothing
+    there, and the shell is as high as the page (547 of 547, sideways
+    325 of 325). The text has one size in both: the name 22 px and 28
+    high, a button 16 px and 48 high.
+  - The Android 17 emulator with Chrome 149, started so that it keeps
+    nothing, the wallet put on its Home screen from Chrome's menu and
+    opened from the icon (Chrome's app window, 845 px high), with a
+    recorder in the scratch page that notes both heights from the
+    page's first moment. A first open: the shell 845.3, and nothing
+    written onto it. After Update, which is a load inside the window:
+    901.3 after 118 ms, 845.3 after 429 ms with `100dvh` written onto
+    the shell. After a pulled-down reload: 901.3 after 106 ms, 845.3
+    after 411. A swipe up after each did not move the page. The button
+    showed there too when the app came back to the front.
+  - A development build of the same files: one request for the page,
+    no button.
+- Seen in the build and left as it is, not named by the plan: the
+  language choice. On a phone whose language is Thai, "Switch to
+  English" holds in the page's memory, and nothing is stored (8.8). A
+  refresh is a load of the page, so after Lock, after the Update button
+  and after the box the wallet is Thai again, with "Switch to English"
+  on the page it stands on. Until this step Lock kept the choice. Tried
+  in Chrome with a Thai browser: English after the button, Thai again
+  after the tap on Update. The sentences that say the choice holds "for
+  as long as the tab lives" (8.3, the line of language.service; 8.8,
+  its first paragraph; the comments of `language.service.ts`; the
+  README) are left as they stand, as are the two comments and the
+  README line that say a cache keeps its reads "for the tab's life",
+  and the README's Layout, which has no line for the new service. All
+  were listed in the build's report, and what came of it is the last
+  part of this note.
+- Not checked: a real phone. iOS 26.5 and 27.0. The box by `bad
+  signature` inside a Home Screen app (walked in Chrome). A real
+  Android phone, where the wallet is installed as an app of its own.
+  The live wallet and a real masterpod. The attestor's and the
+  moderator's editions, which run the same shell. The pages of Chat
+  with the button in the bar (the bar is the shell's own, and was
+  looked at on the first page, the create page and the vouching page).
+- For the deploy: the wallet alone, the user's two lines on wallet1 and
+  then on wallet2, with no `npm ci` (no package file changed) and
+  nothing new under `deploy/`. wallet2 right after wallet1: while the
+  two servers hold different builds, an open wallet can be offered the
+  other one. A wallet that is open from before this deploy has no
+  button yet and gets the new code the old way one last time. The
+  Update button does not show at this deploy: it shows at the next
+  deploy of anything, on wallets opened after this one.
+- After the build's report, the same day (2026-11-22). The report had
+  put two things to the user: the language choice, and the places that
+  the step left out of date and the plan does not name. The user: "add
+  the language issue to after production line." and "Fix the out of
+  date sentences."
+  - The language choice is a line of the after-production list since
+    that day, "Switch to English: the choice is gone after a refresh",
+    with its details file. Nothing of it is built: after a refresh the
+    wallet of a Thai phone is Thai again.
+  - The sentences were brought in line before the commit, each with a
+    dated clause beside the old words, and no line of code changed:
+    - `src/app/services/language.service.ts`, the class comment and the
+      comment of `useEnglish()`: "for as long as this tab lives" is
+      until the page is loaded again, which every refresh does.
+    - This spec: 8.3, the line of language.service, and 8.8, its first
+      paragraph, which also names the list's line.
+    - `src/app/services/profile-cache.service.ts` and
+      `src/app/services/room-picture-cache.service.ts`, the class
+      comments: the tab's life ends at a load of the page, and a Lock
+      loads it.
+    - This spec, four places that say the same of those two caches and
+      that the report's list had missed: 8.3, the lines of
+      profile-cache.service and room-picture-cache.service, and 8.6,
+      where "per tab" stands twice.
+    - `README.md`: the lines of the shell and of the pop-up box name
+      the new things; a line for `update.service.ts` stands after the
+      line of the room pictures' cache, whose "for the tab's life" has
+      a clause; and the paragraph on the two languages has a sentence
+      on the refresh.
+  With them the step is thirteen files: eleven changed, one new, and
+  the README. Checked again: `npx ng build` from the wallet folder,
+  clean, with the same script as before, `main-HNH3CYZO.js`, byte for
+  byte, since only comments changed in the source. The walks were not
+  made again for it.
 
 ## 12. Recovery and the moderator edition
 

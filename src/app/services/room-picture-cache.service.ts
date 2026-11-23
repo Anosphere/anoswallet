@@ -17,7 +17,9 @@ type Entry = WritableSignal<string | null | undefined>;
  * is asked for again. It is not forgotten at once: the draw that follows a
  * failure would ask again right away, for as long as the masterpod fails.
  * At most ROOM_PICTURE_READS_AT_ONCE reads are in flight at a time; the
- * others wait in a queue, oldest ask first.
+ * others wait in a queue, oldest ask first. The tab's life ends at a load
+ * of the page, and since 2026-11-22 Lock loads it (app.ts), so the
+ * pictures are read again after a Lock.
  */
 @Injectable({ providedIn: 'root' })
 export class RoomPictureCacheService {
