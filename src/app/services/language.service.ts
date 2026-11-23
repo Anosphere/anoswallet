@@ -13,7 +13,10 @@ const TAGS: Record<Language, string> = { en: 'en-US', th: 'th-TH-u-ca-gregory' }
 /**
  * The language on screen (wallet spec 8.8): Thai when the browser's first
  * language is Thai, else English; English after the landing page's Switch to
- * English, for as long as this tab lives. Nothing is stored. The words of that
+ * English, for as long as this tab lives. Nothing is stored. Since 2026-11-22
+ * that is until the page is loaded again, which Lock, the Update button and
+ * the box "You are logged out" do (app.ts): the page that comes back follows
+ * the browser again. The words of that
  * language (every page reads `t = this.lang.words` and writes `t().page.key`),
  * the locale tag for the browser's own formatting, the two date shapes, and
  * the page's `lang` attribute, the date pickers' calendar and Material's
@@ -42,7 +45,7 @@ export class LanguageService {
     });
   }
 
-  /** Switch to English, the landing page's button while the app is in Thai: for this tab. */
+  /** Switch to English, the landing page's button while the app is in Thai: for this tab, which since 2026-11-22 means until the page is loaded again (Lock and every other refresh load it, app.ts). */
   useEnglish(): void {
     this.language.set('en');
   }

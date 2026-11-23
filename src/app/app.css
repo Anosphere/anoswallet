@@ -29,6 +29,30 @@
   opacity: 0.85;
 }
 
+.update {
+  flex: none;
+  margin-right: 8px;
+  padding: 0 12px;
+}
+
+.updating .brand {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.refreshing {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+  font-size: 1.25rem;
+}
+
 .container {
   flex: 1;
 }
@@ -64,5 +88,11 @@ main {
 @media (max-width: 839px) {
   .menu {
     display: inline-flex;
+  }
+}
+
+@media (max-width: 599px) {
+  .updating .who {
+    display: none;
   }
 }

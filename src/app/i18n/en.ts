@@ -12,6 +12,11 @@ export const en = {
     brandModerator: 'Moderator wallet',
     brandAttestor: 'Attestor wallet',
     lock: 'Lock',
+    update: 'Update',
+    refreshing: 'Refreshing…',
+    loggedOutTitle: 'You are logged out',
+    loggedOutText: 'A login ends by itself after some hours. It also ends when your anoPod is logged in on another phone or computer. Log in again to go on.',
+    ok: 'OK',
   },
   nav: {
     vouching: 'Vouching',

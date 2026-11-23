@@ -74,7 +74,7 @@ server/
   app.js                   createApp(config): /api/config, the forwarders, the build
   config.js                the variables with their local defaults
 src/app/
-  app.ts, app.html         the shell: toolbar, side navigation by status, the notification poll and its sound
+  app.ts, app.html         the shell: toolbar, side navigation by status, the notification poll and its sound; since 2026-11-22 the Update button, the box "You are logged out" and the load of the page after them and after Lock (spec 8.1)
   app.routes.ts            the routes of spec 8.1; session.guard.ts sends anyone without a session to /
   constants.ts             the PRF salt label, the polling intervals
   amounts.ts               anos <-> millionths
@@ -86,7 +86,7 @@ src/app/
   passkey-check.ts         the passkey check before the wallet signs with an account's key: the device is asked for the passkey that opened the session. Two functions: askSigningPasskey, for everything a signing server signs but a new account, asks for exactly what was built, and its answer goes to the signing server with the request; checkSessionPasskey, the wallet's own check, is left for the box before a new anos account and a moderator's Sign (spec 8.9)
   components/camera.component.ts   the camera: live preview, Take photo, a file input as the fallback
   components/note-form.component.ts   the note form under a history row: the kind, the money and the currency, the memo (spec 8.2)
-  components/confirm-dialog.component.ts   the confirmation box before a send, before a new anos account, before the cancel of a locked transfer, before a release, a dispute and a cancel on the escrow trade page and before the start and the release of a trade in the marketplace chat's pinned card (the Start box and the Release box), with the passkey asked before every send and stake, before a new anos account, before the cancel of a locked transfer, in the escrow trade's Release, Dispute and Cancel boxes and in the card's Start box, with `approve`, the caller's own step that the second button runs to build what is signed and ask the passkey for it, and `ready`, what that button waits for under a moving bar (the read of the account's latest transaction id, in the Send box and the Start box), and a red button for the cancel of a locked transfer and for a dispute, and askConfirm and askChoice (spec 8.9)
+  components/confirm-dialog.component.ts   the confirmation box before a send, before a new anos account, before the cancel of a locked transfer, before a release, a dispute and a cancel on the escrow trade page and before the start and the release of a trade in the marketplace chat's pinned card (the Start box and the Release box), with the passkey asked before every send and stake, before a new anos account, before the cancel of a locked transfer, in the escrow trade's Release, Dispute and Cancel boxes and in the card's Start box, with `approve`, the caller's own step that the second button runs to build what is signed and ask the passkey for it, and `ready`, what that button waits for under a moving bar (the read of the account's latest transaction id, in the Send box and the Start box), and a red button for the cancel of a locked transfer and for a dispute, and askConfirm and askChoice; since 2026-11-22 also a box with one button (`single`), the shell's "You are logged out" (spec 8.9)
   components/escrow-strip.component.ts   the status box of an escrow trade: whether the anos are in escrow, the step of the four, and what to do and not to do, in green, amber or grey (spec 8.7)
   components/case-chat-start.component.ts   the attestor's Start chat button for the person on a case page: Start chat, Open chat, Invite again (spec 8.7, 13.3)
   components/case-chat-list.component.ts   the person's chats with the attestors of a case, on My case and My recovery case: Accept, Decline, Open chat (spec 8.7, 13.3)
@@ -113,7 +113,8 @@ src/app/
     escrow-actions.service.ts   a release, a cancel or a dispute of an escrow trade, in two steps: approve, which the box's Yes runs, builds the follow-up with pair one and asks the passkey for it, and send has it signed and posts it to /escrow-signature; and the validator's refusal in plain words (spec 8.3)
     sound.service.ts       the wallet's one sound, two short notes, and its switch, kept on the device (spec 8.1, 8.3)
     alerts.service.ts      the security alerts: the pod's list of emails and phones that are told when a transfer starts to wait, and the phone's own part: whether the wallet was opened from the Home Screen, the kind of device, and turnOn, which asks the phone for its permission and switches the worker on (spec 8.2, 8.3)
-    room-picture-cache.service.ts   the pictures of public rooms: one read per room and picture for the tab's life, five at a time; a read that failed is asked again half a minute later at the earliest (spec 8.3)
+    room-picture-cache.service.ts   the pictures of public rooms: one read per room and picture for the tab's life (it ends at a load of the page, which a Lock is since 2026-11-22), five at a time; a read that failed is asked again half a minute later at the earliest (spec 8.3)
+    update.service.ts      the update check and the refresh: whether the wallet's server holds a newer build than this page runs, which shows the Update button, and the load of the page after that button, after Lock and after the box "You are logged out", made only once the server has answered (spec 8.1, 8.3)
 public/                    plain files that the build copies beside index.html as they are
   manifest.webmanifest     says the wallet is an app once it is added to a phone's Home Screen: the name anoPod, no address bar (spec 2)
   icon-192.png, icon-512.png   the manifest's two pictures of the logo, 192 and 512 pixels a side
@@ -126,7 +127,9 @@ proxy.conf.json            ng serve forwards /api to the proxy
 The app speaks English and Thai (spec 8.8). The language follows the
 browser's first language, English unless it is Thai, and the landing
 card offers Switch to English for the tab while the app is in Thai;
-nothing is stored.
+nothing is stored. Since 2026-11-22 a refresh (Lock, the Update button,
+the box "You are logged out") loads the page again, and the wallet then
+follows the browser again.
 
 Everything secret lives in RAM and dies with the tab; nothing touches
 browser storage. A new tab unlocks again.

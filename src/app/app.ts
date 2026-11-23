@@ -1,20 +1,33 @@
 import { BreakpointObserver, Breakpoints } from '@angular/cdk/layout';
-import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { Component, DestroyRef, ElementRef, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
+import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatListModule } from '@angular/material/list';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { map } from 'rxjs';
+import { askConfirm } from './components/confirm-dialog.component';
 import { NOTIFICATIONS_POLL_MS } from './constants';
 import { ConfigService } from './services/config.service';
 import { LanguageService } from './services/language.service';
+import { ApiError, ApiResponse } from './services/log.service';
 import { MasterpodApiService, RoomsAnswer } from './services/masterpod-api.service';
 import { NavigationService } from './services/navigation.service';
 import { SessionService } from './services/session.service';
 import { SoundService } from './services/sound.service';
+import { UpdateService } from './services/update.service';
+
+/** The three answers of the masterpod's session check (masterpod spec 3) that say this page's login has ended: the hours of a login are over, or a recovery ended it; a newer login of the same anoPod took its place; the anoPod is gone. */
+const LOGIN_ENDED = new Set(['session expired', 'bad signature', 'unknown anopod']);
+
+/** True when the masterpod refused a plain read of the shell's poll with one of those three. A wrong clock, a masterpod that is down and a phone with no connection answer otherwise and are passed over, as before. */
+function loginEnded(res: ApiResponse<unknown>): boolean {
+  const reason = (res.body as Partial<ApiError> | null)?.error;
+  return !res.ok && res.status === 401 && typeof reason === 'string' && LOGIN_ENDED.has(reason);
+}
 
 /**
  * The shell (wallet spec 8 and 8.1): a toolbar and a side navigation on a
@@ -34,7 +47,12 @@ import { SoundService } from './services/sound.service';
  * (sound.service.ts; wallet spec 8.1): its 5-second poll plays it once
  * when the room list holds a new message from someone else, unless that
  * conversation is the page on the screen, or a new invite or join
- * request.
+ * request. Since 2026-11-22 (wallet spec 8.1; the plan is
+ * forclaude/wallet-refresh-plan-1.md) the shell also shows the
+ * Update button in the top bar while the wallet's server has a newer
+ * build (update.service.ts), tells a person whose login has ended, with
+ * the box "You are logged out", and loads the page again after that box,
+ * after the Update button and after Lock, under the words "Refreshing…".
  */
 @Component({
   selector: 'app-root',
@@ -51,6 +69,8 @@ export class App {
   private readonly api = inject(MasterpodApiService);
   private readonly navigation = inject(NavigationService);
   private readonly sound = inject(SoundService);
+  private readonly dialog = inject(MatDialog);
+  protected readonly update = inject(UpdateService);
 
   /** True on a narrow screen: the navigation hides behind the menu button. */
   protected readonly handset = toSignal(
@@ -69,7 +89,32 @@ export class App {
     // poll also rings: the answer with the chat rooms goes to ring(), which
     // plays the wallet's sound for what is new in it (8.1).
     const timer = setInterval(() => void this.poll(), NOTIFICATIONS_POLL_MS);
-    inject(DestroyRef).onDestroy(() => clearInterval(timer));
+    // Back at the front, the poll runs at once (2026-11-22): a phone freezes
+    // the timer while another app is in front, and a login that ended
+    // meanwhile shows its box without the wait.
+    const front = () => {
+      if (document.visibilityState === 'visible') void this.poll();
+    };
+    document.addEventListener('visibilitychange', front);
+    // A way around a fault of Chrome's app window on Android (the wallet
+    // opened from its Home screen icon; 2026-11-22, wallet spec 8.1): a page
+    // that is loaded again inside that window is told, for its first
+    // moments, a screen 56 pixels higher than the one it has, and the shell
+    // keeps the height its style sheet gave it then. The same height written
+    // onto the shell itself is worked out anew. Looked at three times after
+    // the start; nothing is written while the shell fits the window.
+    const shell = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
+    const settle = () => {
+      if (shell.offsetHeight <= window.innerHeight) return;
+      shell.style.height = '';
+      shell.style.height = '100dvh';
+    };
+    const settles = [300, 1000, 3000].map((ms) => setTimeout(settle, ms));
+    inject(DestroyRef).onDestroy(() => {
+      clearInterval(timer);
+      settles.forEach(clearTimeout);
+      document.removeEventListener('visibilitychange', front);
+    });
   }
 
   private polling = false;
@@ -90,6 +135,10 @@ export class App {
         this.session.setupComplete() ? this.api.listChatRooms(true) : Promise.resolve(null),
       ]);
       if (!this.session.hasSession()) return;
+      if (loginEnded(status)) {
+        await this.loggedOut();
+        return;
+      }
       if (notifications.ok) this.session.notifications.set(notifications.body.notifications);
       if (status.ok) this.session.status.set(status.body);
       if (rooms?.ok) this.session.chatRooms.set(rooms.body);
@@ -133,8 +182,36 @@ export class App {
     if (this.handset()) this.menuOpen.set(false);
   }
 
-  protected lock(): void {
+  /**
+   * The login has ended (2026-11-22, wallet spec 8.1): the masterpod no
+   * longer takes this page's session keys. The status is asked once more
+   * first, so that a read which was on its way while this tab logged in
+   * anew (Setup, the finish of a recovery) is not taken for the end. Then
+   * the box "You are logged out", with one button; whatever closes it, the
+   * wallet locks and loads its page again. The poll waits meanwhile.
+   */
+  private async loggedOut(): Promise<void> {
+    const again = await this.api.checkAnopodStatus(true);
+    if (!this.session.hasSession() || !loginEnded(again)) return;
+    const words = this.t().shell;
+    await askConfirm(this.dialog, { title: words.loggedOutTitle, lines: [], notes: [words.loggedOutText], confirmLabel: words.ok, single: true });
+    await this.lock();
+  }
+
+  /** Lock: the session's keys are dropped and the first page shows, as before; since 2026-11-22 the page is then loaded again from the server (update.service.ts), which empties the page's whole memory and brings the newest build. Without a connection the wallet stays locked on the first page it shows. */
+  protected async lock(): Promise<void> {
+    await this.toFirstPage();
+    await this.update.refresh();
+  }
+
+  /** The Update button (2026-11-22): the page is loaded again from the server. A session ends with it, but only once the server has answered: with no connection the tap changes nothing. The load always starts from the first page, so the wallet comes back on it whatever page the button was tapped on. */
+  protected updateNow(): void {
+    void this.update.refresh(() => this.toFirstPage());
+  }
+
+  /** Drops the session, if one is open, and shows the first page inside the app. */
+  private toFirstPage(): Promise<boolean> {
     this.session.close();
-    void this.router.navigateByUrl('/');
+    return this.router.navigateByUrl('/');
   }
 }
