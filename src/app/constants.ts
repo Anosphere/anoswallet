@@ -20,6 +20,15 @@ export const MESSAGES_PAGE = 50;
 /** The Members list of a conversation draws this many people at first, and as many more each time the reader comes near its end (wallet spec 8.2, Chat; 2026-11-22). */
 export const MEMBERS_PAGE = 50;
 
+/** Find public rooms reads this many rooms at a time, and Show more as many again (wallet spec 8.2, Chat; 2026-11-22). */
+export const PUBLIC_ROOMS_PAGE = 50;
+
+/** The search box over the public rooms and the name box of New public room read the masterpod this long after the last key (wallet spec 8.2, Chat; 2026-11-22). */
+export const ROOM_SEARCH_DEBOUNCE_MS = 400;
+
+/** New public room shows at most this many rooms whose name holds the typed one (wallet spec 8.2, Chat; 2026-11-22). */
+export const LIKE_NAMED_ROOMS = 5;
+
 /** The transaction history opens with this many of the newest rows and Show more loads as many (wallet spec 8.2, Transaction history). */
 export const HISTORY_PAGE = 20;
 
