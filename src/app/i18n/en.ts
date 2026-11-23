@@ -771,6 +771,10 @@ export const en = {
     requested: 'Requested',
     requestToJoin: 'Request to join',
     noPublicRooms: 'No public rooms yet.',
+    searchRooms: 'Search public rooms',
+    noRoomsMatch: 'No public rooms match.',
+    showMore: 'Show more',
+    likeNamed: 'These public rooms already have a name like this. You can ask to join one, or create yours.',
   },
   chatRequests: {
     noRequests: 'No requests.',

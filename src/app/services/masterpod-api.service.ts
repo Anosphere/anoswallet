@@ -292,6 +292,13 @@ export interface RoomsAnswer {
   joinRequests: JoinRequestItem[];
 }
 
+/** What /list-public-chat-rooms takes (2026-11-22, masterpod spec 26): a search word matched anywhere in the name, how many rooms, and from which row on. */
+export interface PublicRoomsQuery {
+  search?: string;
+  limit?: number;
+  offset?: number;
+}
+
 export interface PublicRoomItem {
   chatRoomId: string;
   name: string;
@@ -944,8 +951,13 @@ export class MasterpodApiService {
     return this.signed('/list-chat-rooms', {}, quiet);
   }
 
-  listPublicChatRooms(): Promise<ApiResponse<{ rooms: PublicRoomItem[] }>> {
-    return this.signed('/list-public-chat-rooms', {});
+  /** The public rooms, the ones with the most members first; `search` narrows them by name (2026-11-22, masterpod spec 26). A masterpod of before takes no search word and answers the newest first. */
+  listPublicChatRooms(query: PublicRoomsQuery = {}, quiet = false): Promise<ApiResponse<{ rooms: PublicRoomItem[] }>> {
+    const body: Record<string, unknown> = {};
+    if (query.search) body['search'] = query.search;
+    if (query.limit !== undefined) body['limit'] = query.limit;
+    if (query.offset) body['offset'] = query.offset;
+    return this.signed('/list-public-chat-rooms', body, quiet);
   }
 
   /** The room's messages after a position (the poll), or with `beforePosition` the newest `limit` below it (opening a room, loading older ones). */

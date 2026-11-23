@@ -955,6 +955,36 @@ Account page, the Notifications page and the account page (8.2),
 alerts.service, masterpod-api.service and the worker file (8.3), and the
 words (8.8).
 
+### 4.14 Public rooms: a search, and the biggest first
+
+Added 2026-11-22 (forclaude/public-rooms-plan-1.md, its steps 1 and 2;
+section 11): the masterpod's list of public rooms takes a search word
+and answers the rooms with the most members first. Until then it
+answered the newest first and took no word, and the wallet showed the 50
+newest rooms and no others. The masterpod's side is its own spec's
+section 26, which holds the rule, the read and what is left as it is.
+The masterpod gained one optional field there, `search`, on
+/list-public-chat-rooms: a room fits when its name holds the word
+anywhere, capital and small letters alike; `%` and `_` mean themselves;
+the spaces around the word are taken off, and an empty word means no
+search. The order is the most members first, then the newest, then the
+room's id, with and without a word. A room's name stays free: two rooms
+may carry one name. No new route, no table, no env variable and no npm
+package.
+
+    POST /list-public-chat-rooms (setup), one field more and a new order
+    body: { limit, offset, search }, all optional; limit 50 by default and at most 200, offset 0;
+          search a word of at most 100 characters, matched anywhere in a room's name
+    answer: as before (200 { rooms: [ { chatRoomId, name, creator: profile, memberCount, createdAt } ] }),
+            the rooms with the most members first, then the newest
+    checks: those of before, in their order (400 invalid limit, 400 invalid offset), then the new last one:
+            400 invalid search, for a word of more than 100 characters or a value that is not a string
+    a masterpod of before: does not read the word, so nothing is narrowed, and answers the newest first
+
+The proxy forwards the route as any masterpod path (section 2); nothing
+in server/ changed. The wallet's side is New chat (8.2, Chat) and
+masterpod-api.service (8.3).
+
 ## 5. Validator changes (anossoftware)
 
 ### 5.1 A nonces table and two variables
@@ -1325,7 +1355,7 @@ as in the test apps; a new tab unlocks again.
     /wallet/notes            the noted transactions: every account's notes, a date range, the kind chips, the totals, Download as CSV
     /chat                    the list of chats; on a desktop the pane beside it shows the child route
     /chat/requests           invites to me and join requests on my rooms
-    /chat/new                start a chat: Message someone, New public room, Find public rooms
+    /chat/new                start a chat: Message someone, Find public rooms, New public room
     /chat/:chatRoomId        one conversation
     /marketplace             browse: the filter chips, the Your listings row, the cards
     /marketplace/new         a new listing
@@ -3237,17 +3267,52 @@ requests on the rooms this pod created (`<username> asks to join
 <title>`), Approve (the room key wrapped to the requester) and Decline;
 each with the person's avatar; "No requests." when both lists are empty.
 
-New chat, at /chat/new, three tabs. Message someone: a username, Find
-(/search-usernames), the person's name, username and selfie, Start chat:
-the private chat with exactly the two of you opens when it exists, else
-a private room is created with a new room key wrapped to this pod's chat
-keys, the person is invited with it wrapped to theirs (their chat public
-keys are read first, so someone without them makes no room) and the room
-opens; finding yourself reads "That is you.". New public room: a name,
-Create, the room opens. Find public rooms: /list-public-chat-rooms when
-the tab first opens and on Refresh, each room with its name, "by
-<username> · N members" and Open (this pod is in it), Requested (asked
-from this tab) or Request to join.
+New chat, at /chat/new, three tabs, since 2026-11-22 (section 11; 4.14)
+in the order Message someone, Find public rooms, New public room; until
+then New public room stood second and Find public rooms third. Message
+someone: a username, Find (/search-usernames), the person's name,
+username and selfie, Start chat: the private chat with exactly the two
+of you opens when it exists, else a private room is created with a new
+room key wrapped to this pod's chat keys, the person is invited with it
+wrapped to theirs (their chat public keys are read first, so someone
+without them makes no room) and the room opens; finding yourself reads
+"That is you.".
+
+Find public rooms, since 2026-11-22: a box "Search public rooms", and
+under it the public rooms with the most members first, 50 at a time
+(`PUBLIC_ROOMS_PAGE`), read with /list-public-chat-rooms when the tab
+opens, until a read has come back: a first read that was refused is
+tried again when the tab is opened anew, and after a read that came
+back the tab does not read by itself again. Each room has its name, "by
+<username> · N members" and
+Open (this pod is in it), Requested (asked from this tab) or Request to
+join. Typing into the box reads the list again 400 milliseconds after
+the last key (`ROOM_SEARCH_DEBOUNCE_MS`), for the rooms whose name holds
+the word; that read is quiet, as a poll is. Under the list stands "Show
+more" while the last read came back full: it reads the next 50 for the
+word the list was read for and adds them under the rooms shown, leaving
+out a room that is already there, since the order goes by the number of
+members and can move between two reads. Refresh reads the list again
+for the word in the box. A read that comes back empty shows "No public
+rooms yet." when the box held no word and "No public rooms match." when
+it held one; neither shows before a read has come back, so not while
+the first read runs and not after a first read that was refused. A
+refused read is said in red in the tab, and what stood there before
+stays: the rooms, or the line for an empty list. An answer that a later
+read overtook is dropped. Until 2026-11-22 the tab read
+/list-public-chat-rooms with an empty body when it first opened and on
+Refresh, and showed the 50 newest rooms and no others.
+
+New public room: a name, Create, the room opens. Since 2026-11-22 the
+tab also shows a hint: 400 milliseconds after the last key in the name
+box the wallet reads, quietly, the five public rooms with the most
+members whose name holds what was typed (`LIKE_NAMED_ROOMS`), and shows
+them under the box, each with Open, Requested or Request to join, under
+the sentence "These public rooms already have a name like this. You can
+ask to join one, or create yours.". The hint never stops a creation:
+Create stays pressable, and Enter in the name box still creates. A hint
+read that fails shows nothing, and an emptied box takes the hint away at
+once.
 
 Unread: the last message position seen in each room is kept on this
 device, in localStorage under `anopod-wallet.chat-seen.<anopodId>`, read
@@ -3792,7 +3857,12 @@ excepted, with the keyholder and anos calls included.
                             (with the quiet flag), addAlertEmail(email, language), confirmAlertEmail(emailId, code),
                             removeAlertEmail(emailId), keepAlertEmail(emailId), addAlertPhone({ endpoint, p256dh,
                             auth, label }), which sends those four fields and no other, removeAlertPhone(phoneId)
-                            and keepAlertPhone(phoneId)
+                            and keepAlertPhone(phoneId);
+                            the public rooms (2026-11-22, section 11; 4.14): the type PublicRoomsQuery ({ search,
+                            limit, offset }, all optional), and listPublicChatRooms takes it and the quiet flag:
+                            a search word, a limit and an offset, each put into the body only when it is given
+                            (an empty word and an offset of 0 are left out); until then it took nothing and sent
+                            an empty body
     keyholder-api.service   the keyholder test app's, base path /api/keyholder/<n>
     anos-api.service        the anos test app's account-api.service.ts, base path /api/anos/<the session's
                             validator> (2026-11-10, below; /api/anos/<defaultValidator> until then),
@@ -16705,6 +16775,221 @@ scrolling up.
   `deploy/`. The build's folder has ten files as before, and the script
   has a new name (above). A wallet that is open on a phone meanwhile
   keeps the script it has until it is loaded again.
+
+### Public rooms: a search, the biggest first, and a hint before a room is made (2026-11-22)
+
+Step 2 of `~/Desktop/Z-TestNet/forclaude/public-rooms-plan-1.md` (FINAL,
+2026-11-22), its section 2, built on the user's word ("Yes, build it")
+on top of f599958, the working tree clean. Five source files and this
+spec, one commit. Why: the user, 2026-11-22: "1. Public rooms are
+searchable. 2. Upload an image for the public room. 3. Should we make
+it so that public rooms have to have unique names. Somehow facebook
+doesn't have a problem with this. I'm on the fence. One issue is that
+like 20 people have already made a room called anoTH. So now people are
+asking for public group names to be unique." The talk's answer, which
+the user took: names stay free; a search, the biggest rooms first and a
+picture tell rooms of one name apart, and a hint shows the rooms that
+exist before another is made. The masterpod's part of the search is the
+plan's step 1 (4.14; the masterpod's spec, section 26), committed there
+the same day as 6ba4826. The picture is the plan's steps 3 and 4 and is
+not built. This step is the wallet's alone: no server change, no new
+package, nothing in server/.
+
+- Changed, `src/app/constants.ts`: three constants after `MEMBERS_PAGE`:
+  `PUBLIC_ROOMS_PAGE = 50`, `ROOM_SEARCH_DEBOUNCE_MS = 400` and
+  `LIKE_NAMED_ROOMS = 5`.
+- Changed, `src/app/services/masterpod-api.service.ts`: the type
+  `PublicRoomsQuery`, in front of `PublicRoomItem`, and
+  `listPublicChatRooms(query = {}, quiet = false)`, which builds the
+  body from the query: `search` when it is not empty, `limit` when it is
+  given, `offset` when it is not 0. It took nothing before and sent an
+  empty body.
+- Changed, `src/app/pages/chat-new.page.ts`, as 8.2 (Chat, New chat) now
+  says. The second and third tabs changed places. Find public rooms
+  gained the search box (`roomSearch`, `searchRooms`), the read of 50
+  rooms for the word in the box (`loadPublicRooms`), Show more
+  (`moreRooms`, `loadMoreRooms`, `roomsFetched`), the line for a list
+  that came back empty, by the word the list was read for (`foundFor`,
+  `publicLoaded`), and its own red line (`findError`). New public room
+  gained the hint (`likeNamed`, `nameTyped`). The row of a room is one
+  template, `#roomRow`, which both tabs draw through `NgTemplateOutlet`;
+  its inside is the row of before, letter for letter. Two style lines,
+  `.search` and `.hint`. The page's first read happens at the second
+  tab now (`tabChanged`). `createPublic` empties the name through
+  `nameTyped('')`, so the hint goes with the name. A constructor clears
+  the two timers when the page is left. The class comment gained a
+  passage at its end, "Since 2026-11-22".
+- A change that comes with the plan's code: the reads of Find public
+  rooms no longer run under the page's `busy`, and a refusal of theirs
+  is no longer the red line on top of the page. They have their own
+  `loadingRooms`, which switches Show more and Refresh off while a read
+  runs, and their own `findError`, in the tab. The other actions of the
+  page (Find, Start chat, Create, Request to join) are as before.
+- Changed, `src/app/i18n/en.ts` and `th.ts`, group `chatNew`, four new
+  last entries. English, letter for letter the plan's: `searchRooms`
+  "Search public rooms", `noRoomsMatch` "No public rooms match.",
+  `showMore` "Show more", `likeNamed` "These public rooms already have a
+  name like this. You can ask to join one, or create yours.". Thai:
+  `searchRooms` "ค้นหาห้องสาธารณะ", the words of `tabFind`; `showMore`
+  "แสดงเพิ่มเติม", the words of the other Show more buttons;
+  `noRoomsMatch` "ไม่พบห้องสาธารณะที่ตรงกัน"; `likeNamed`
+  "ห้องสาธารณะเหล่านี้มีชื่อคล้ายกับชื่อนี้อยู่แล้ว
+  คุณขอเข้าร่วมห้องใดห้องหนึ่งได้ หรือสร้างห้องของคุณเองก็ได้" (one
+  entry, on one line in the file, with a space where this note breaks
+  the line). The last two are the build chat's, by the style and the
+  glossary of forclaude/wallet-languages-plan-1.md 1.6: "not found" is
+  the word of `chatRoom.noMembersFound`, asking to join the word of
+  `chatNew.requestToJoin`. No Thai reader has read them.
+- Readings where the plan left a detail open. BUILD-DATE is 2026-11-22,
+  the masterpod's section is 26 and this spec's new section is 4.14.
+  The import of `NgTemplateOutlet` is the file's first line,
+  `DestroyRef` stands after `Component` in the line under it, and the
+  constants' import stands in front of the import of `ChatService`. The
+  row template stands directly under `</mat-tab-group>`. The new fields
+  stand between `publicRooms` and `busy`, and the constructor after
+  `error`, the last field. The comment of `tabChanged` says that Find
+  public rooms is the second tab since 2026-11-22 and was the third
+  (and, since the mend below, when the tab reads). In 8.3 no line named
+  `listPublicChatRooms`, so the entry of masterpod-api.service gained a
+  dated clause at its end. In 8.2 the paragraph on New chat became
+  three, one per tab, each with what it was until 2026-11-22.
+- Checked: `npx ng build` from the wallet folder, clean, with no
+  warnings: the script is `main-7DQX45BV.js` (2,316,542 bytes), and the
+  build's folder has ten files as before. That is the build with the
+  mend below; before the mend the script was `main-6N7BEYDO.js`. The
+  four English entries were compared with the plan's, letter for
+  letter.
+- One comparison beyond the plan's checks, with nothing kept. The
+  planning chat had tried this step in a throwaway copy of f599958, with
+  the code read out of the plan file by a script (the plan's section
+  9). The build made that copy again with the same script and compared
+  the five source files with the working files by `diff`. Before the
+  mend below they differed in comment lines only (the date and the
+  number where the copy has the words BUILD-DATE and N, the class
+  comment's new passage and the comment of `tabChanged`) and in one
+  Thai line, `likeNamed`, which was a stand-in there. `en.ts` is the
+  same byte for byte. With the mend, `chat-new.page.ts` also differs
+  from the plan's code in the lines of the mend, and in no other line
+  of code.
+- Checked by a look, as the plan's 2.6 says: a development build of the
+  working files in the build chat's scratch folder, served as plain
+  files on 127.0.0.1 by a file server that the app's preview tool
+  started from a temporary launch entry (taken out again; the launch
+  file is byte for byte as before). A made-up session, no passkey, and
+  the masterpod's answers given inside the page: 120 made-up public
+  rooms, twenty of them called anoTH, three that hold "Bangkok meetup",
+  names in Thai, one long name of many words and one of a single long
+  word, one creator with a username of 32 letters, and one room this
+  pod is in. None of our servers was asked. The Browser pane was hidden,
+  so these are measures and four pictures, not a watched screen. At 360
+  by 600, 430 by 600, 360 by 560 and 1280 by 700, in English and Thai.
+  - Find public rooms. While the first read runs the tab shows the box
+    and Refresh, switched off, and no line. Then 50 rows, the biggest
+    first, the room this pod is in with Open. Show more gives 100 rows,
+    then 120 different rows and no button. A typed word reads nothing at
+    once and makes one quiet read 400 milliseconds after the last key;
+    three quick keys make one read. "anoth" leaves 21 rows, "zzzz"
+    leaves "No public rooms match.", and with no room at all the line is
+    "No public rooms yet.". Spaces around a word are not sent, and a
+    word of spaces is no search. Refresh reads for the word in the box.
+    A refused read and a read that throws each show their line in red
+    and leave the rows of before. The late answer of an older word is
+    dropped. Show more pressed right after a new word was typed goes on
+    with the word the list was read for, and its answer is dropped once
+    the new word's read has started.
+  - New public room. A name that three rooms hold: one quiet read of
+    five rooms after the wait, then the sentence and the three rows.
+    "anoTH" shows the five biggest; Request to join in a hint row turns
+    to Requested, and the room this pod is in reads Open. A name no room
+    holds shows no hint. An emptied box takes the hint away at once,
+    with no read. A hint read that is refused or throws shows nothing,
+    also no red line. The late answer of an older name is dropped. The
+    page left inside the wait reads nothing afterwards. Create is
+    pressable from the first letter on, before any read and beside the
+    hint. With real chat keys made in the page and the masterpod's
+    answer given there, Create made the room with the hint on the
+    screen, Enter in the name box made one too, the name went out
+    without the spaces around it, and the wallet opened the new room. A
+    refused creation leaves the name and the hint and says the refusal
+    on top.
+  - The body that `listPublicChatRooms` builds, read with a stand-in
+    for its signing step: `{}` with no query; `{ limit: 50 }` for an
+    empty word; `search`, `limit` and `offset` when each is given.
+  - Nothing scrolls sideways, at any of the sizes, in either language.
+    At 1280 wide nothing is cut. Show more and Refresh stand on one
+    line. The hint's sentence takes two lines at 360 and at 430 in
+    English, three at 360 and two at 430 in Thai, and one at 1280.
+- Seen in the look and left as it is. Each was compared with a
+  development build of f599958 served beside this one, and is the same
+  there unless said otherwise:
+  - The three tab labels do not fit in one row on a phone, in either
+    language: the after-production item "new chat: the three tab labels
+    do not fit on a phone". At 360 wide the strip that shows the labels
+    is 254 pixels: "Message someone" is whole, 86 of the 162 pixels of
+    "Find public rooms" are seen, and "New public room" stands behind
+    the arrow. At 430 wide 156 of the 162 are seen. In the build of
+    before the hidden label was "Find public rooms", at both widths.
+    The label of the tab a person has pressed is brought into view
+    whole.
+  - A row of a room with Request to join is 108 pixels high at 360
+    wide, the button under the name, and 56 at 430, the button beside
+    it.
+  - A room's name of one long word with no space runs past its row's
+    edge and is cut, at 360 and at 430.
+  - At 430 wide in English the line "by <username> · N members" of a
+    creator whose username has 32 letters, the longest allowed, lies
+    over the left edge of Request to join by 23 pixels, in the rows of
+    Find public rooms and of the hint alike. Not at 360, where the
+    button stands under the name, and not in Thai, whose button is
+    narrower. Put to the user, who took a line on the after-production
+    list ("2. Okay, list line."): "new chat: a long username runs over
+    the Request to join button", added the same day.
+  - "Create" stands under the name box at 360 wide in English, and
+    beside it in Thai and at 430.
+  - The search box is one more box in which a phone's keyboard may
+    write a capital and offer other words (the after-production item
+    "username boxes: the phone's keyboard writes a capital and suggests
+    words"). The search takes capitals as small letters.
+- Mended before the commit, on the user's word ("1. Let's mend it."),
+  one thing the look had shown in the plan's own code. When the very
+  first read of Find public rooms was refused, the tab showed the
+  refusal in red and under it "No public rooms yet.", though no read
+  had come back empty. The plan's decision 13 gives that line only to
+  a read that came back empty; the plan's code marked the list as read
+  in its `finally`, after a refusal too. (The page of before showed
+  that line whenever the list was empty, also while the read ran.) Now
+  `loadPublicRooms` sets `publicLoaded` only when a read came back, and
+  its `finally` only ends `loadingRooms`. One thing comes with it,
+  because `tabChanged` goes by the same mark: after a first read that
+  failed, the tab reads again by itself when a person leaves it and
+  comes back. Before the mend it waited for Refresh. The comments of
+  `publicLoaded`, `loadPublicRooms` and `tabChanged` say so.
+- The mend was looked at in a new development build, by the same way:
+  a refused first read and a first read that throws each leave the red
+  line alone, with no line for an empty list. Leaving the tab and
+  coming back makes one read more, still refused, and the rooms come by
+  themselves once the masterpod answers again; after a read that came
+  back, coming back to the tab reads nothing. A first read that came
+  back with no room shows "No public rooms yet.", a refused Refresh
+  after it adds the red line and leaves that line, and a Refresh that
+  works shows the rooms. A refused first read, then a typed word:
+  "zzzz" gives "No public rooms match." and "anoth" its 21 rows. While
+  the first read runs the tab still shows no line. The walk of every
+  state at 360 and at 430 wide, in English and Thai, gave the same
+  lines as before the mend.
+- Not checked: a real phone; iPhone Safari; the live wallet and a real
+  masterpod (the order of the made-up rooms is the stand-in's); the
+  wallet opened from the Home Screen; a phone held sideways; the
+  on-screen keyboard over the two boxes; the attestor's and the
+  moderator's editions, which draw the same page.
+- For the deploy: the masterpod's step first, then this one (the
+  plan's section 6). Against a masterpod of before, which does not read
+  the word, the search box narrows nothing and the list is the newest
+  first; and the hint would show the five newest rooms under any typed
+  name, as if they had a name like it. Then the user's two lines on
+  wallet1 and on wallet2, with no `npm ci` (no package file changed)
+  and nothing new under `deploy/`. A wallet that is open on a phone
+  meanwhile keeps the script it has until it is loaded again.
 
 ## 12. Recovery and the moderator edition
 
