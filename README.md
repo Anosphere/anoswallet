@@ -91,6 +91,7 @@ src/app/
   components/case-chat-start.component.ts   the attestor's Start chat button for the person on a case page: Start chat, Open chat, Invite again (spec 8.7, 13.3)
   components/case-chat-list.component.ts   the person's chats with the attestors of a case, on My case and My recovery case: Accept, Decline, Open chat (spec 8.7, 13.3)
   components/find-passkey.component.ts   the walk-through in front of the locked-out stepper, "Find your passkey first": five screens that name where a passkey may be and ask about each, with the start page's Log in on the first (spec 12.3)
+  components/room-picture.component.ts   a room's round mark on the chat pages: the picture of a public room when it has one, else the grey disc with the icon of the room's kind (spec 8.6)
   pages/                   one file per route: landing, create, recover, vouching, identity, setup,
                            wallet, noted-transactions, account, account-home, account-recovery-home, account-recovery, account-protect, account-passkeys, account-ledger-id, account-alerts, chat, marketplace, notifications, seed, log
   pages/my-recovery-case.page.ts   the person's recovery case, /cases/recovery/:caseId: the status, the video call with its time and its link, the chat with the attestor, the accounts being moved, the timeline (spec 13.3)
@@ -112,6 +113,7 @@ src/app/
     escrow-actions.service.ts   a release, a cancel or a dispute of an escrow trade, in two steps: approve, which the box's Yes runs, builds the follow-up with pair one and asks the passkey for it, and send has it signed and posts it to /escrow-signature; and the validator's refusal in plain words (spec 8.3)
     sound.service.ts       the wallet's one sound, two short notes, and its switch, kept on the device (spec 8.1, 8.3)
     alerts.service.ts      the security alerts: the pod's list of emails and phones that are told when a transfer starts to wait, and the phone's own part: whether the wallet was opened from the Home Screen, the kind of device, and turnOn, which asks the phone for its permission and switches the worker on (spec 8.2, 8.3)
+    room-picture-cache.service.ts   the pictures of public rooms: one read per room and picture for the tab's life, five at a time; a read that failed is asked again half a minute later at the earliest (spec 8.3)
 public/                    plain files that the build copies beside index.html as they are
   manifest.webmanifest     says the wallet is an app once it is added to a phone's Home Screen: the name anoPod, no address bar (spec 2)
   icon-192.png, icon-512.png   the manifest's two pictures of the logo, 192 and 512 pixels a side

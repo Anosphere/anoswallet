@@ -823,6 +823,8 @@ export const en = {
     youSentAccount: 'You sent your account for this trade.',
     theySentAccount: (name: string) => `${name} sent their account for this trade.`,
     tradeUpdate: 'Trade update. Look at the box at the top of this chat.',
+    roomPicture: 'Room picture',
+    pictureWhat: "This picture stands beside the room's name. Everyone who looks for public rooms sees it. Pick a photo to set it, or to put another in its place.",
   },
   rooms: {
     publicRoom: 'Public room',

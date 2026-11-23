@@ -2,7 +2,8 @@
  * Pictures in the wallet (2026-11-12): the wallet's own list of the picture
  * types it shows, and the redraw a picked picture goes through before it is
  * sent. Since 2026-11-21 also the cut of the public selfie: the middle of
- * the picture as a small square.
+ * the picture as a small square. Since 2026-11-22 a public room's picture
+ * is cut the same way (wallet spec 4.15).
  */
 
 /** The three picture types the wallet shows: the three the masterpod takes (masterpod spec 3). The wallet keeps this list itself and does not go by the type a server names. */
@@ -59,12 +60,13 @@ export async function redrawImage(file: Blob, limit: number, jpeg: number): Prom
 
 /**
  * The middle of a picture as a square JPEG (2026-11-21), for the public
- * selfie: the largest square that fits in `source`, taken from its middle,
- * drawn on white to a canvas of `side` by `side` pixels, or of the
- * square's own size when that is smaller (never scaled up), and encoded at
- * the factor `jpeg`. `width` and `height` are the source's own size in
- * pixels. Every place that shows a selfie shows that middle square, so the
- * strips beside it are not sent. Null when the canvas cannot encode it.
+ * selfie and, since 2026-11-22, for a public room's picture: the largest
+ * square that fits in `source`, taken from its middle, drawn on white to a
+ * canvas of `side` by `side` pixels, or of the square's own size when that
+ * is smaller (never scaled up), and encoded at the factor `jpeg`. `width`
+ * and `height` are the source's own size in pixels. Every place that shows
+ * a selfie or a room's picture shows that middle square, so the strips
+ * beside it are not sent. Null when the canvas cannot encode it.
  *
  * The square is made smaller in halvings, with one last step of less than a
  * halving: a phone's own photo is about ten times as wide as the square,
@@ -113,7 +115,9 @@ export async function squareJpeg(source: CanvasImageSource, width: number, heigh
  * A picked file as the square of squareJpeg (2026-11-21): decoded as
  * redrawImage decodes it, with the orientation from the file. Null when
  * the browser cannot decode the file or the canvas cannot encode it: such
- * a file is refused, never sent as it is.
+ * a file is refused, never sent as it is. A picked selfie goes through it
+ * and, since 2026-11-22, the photo a room's creator picks under Room
+ * picture.
  */
 export async function redrawSquare(file: Blob, side: number, jpeg: number): Promise<Blob | null> {
   let bitmap: ImageBitmap;

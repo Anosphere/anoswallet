@@ -21,7 +21,7 @@ export interface Profile {
   selfie?: Image | null;
 }
 
-/** An image on the wire: the content type and the bytes as base64 (plaintext for a selfie, ciphertext in a bucket). */
+/** An image on the wire: the content type and the bytes as base64 (plaintext for a selfie and, since 2026-11-22, for a public room's picture; ciphertext in a bucket). */
 export interface Image {
   contentType: string;
   image: string;
@@ -247,6 +247,8 @@ export interface RoomItem {
   chatRoomId: string;
   type: 'private' | 'public' | 'marketplace';
   name: string | null;
+  /** When the room's picture was last set, null for a room without one (2026-11-22, masterpod spec 27). A masterpod of before sends no such field: a missing one reads as null. */
+  pictureAt?: string | null;
   listingId: string | null;
   /** The listing the room is about (an old marketplace room, or a private room made with a listingId), null for the others. */
   listing: RoomListing | null;
@@ -302,6 +304,8 @@ export interface PublicRoomsQuery {
 export interface PublicRoomItem {
   chatRoomId: string;
   name: string;
+  /** When the room's picture was last set, null for a room without one (2026-11-22, masterpod spec 27). A masterpod of before sends no such field: a missing one reads as null. */
+  pictureAt?: string | null;
   creator: Profile;
   memberCount: number;
   createdAt: string;
@@ -958,6 +962,16 @@ export class MasterpodApiService {
     if (query.limit !== undefined) body['limit'] = query.limit;
     if (query.offset) body['offset'] = query.offset;
     return this.signed('/list-public-chat-rooms', body, quiet);
+  }
+
+  /** Gives a public room its picture, or another in place of the one it has; only the room's creator (2026-11-22, masterpod spec 27). */
+  setChatRoomPicture(chatRoomId: string, picture: Image): Promise<ApiResponse<{ chatRoomId: string; pictureAt: string }>> {
+    return this.signed('/set-chat-room-picture', { chatRoomId, picture });
+  }
+
+  /** A public room's picture (2026-11-22, masterpod spec 27). Quiet unless asked otherwise: the room pictures are read like the faces. */
+  getChatRoomPicture(chatRoomId: string, quiet = true): Promise<ApiResponse<{ chatRoomId: string; picture: Image; pictureAt: string }>> {
+    return this.signed('/get-chat-room-picture', { chatRoomId }, quiet);
   }
 
   /** The room's messages after a position (the poll), or with `beforePosition` the newest `limit` below it (opening a room, loading older ones). */
