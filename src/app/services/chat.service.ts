@@ -3,7 +3,7 @@ import { millionthsToAnos } from '../amounts';
 import { CryptoService } from './crypto.service';
 import { LanguageService } from './language.service';
 import { ApiResponse } from './log.service';
-import { InviteItem, MasterpodApiService, RoomItem, RoomListing, RoomMember, RoomsAnswer } from './masterpod-api.service';
+import { InviteItem, MasterpodApiService, RoomItem, RoomListing, RoomMember, RoomNews, RoomsAnswer, RoomsRead, SeenItem } from './masterpod-api.service';
 import { Bytes } from './passkey.service';
 import { SessionService } from './session.service';
 
@@ -34,6 +34,81 @@ export type RoomKind = 'direct' | 'group' | 'public' | 'marketplace';
 
 const DAY_MS = 86_400_000;
 
+/** True for a room that /list-chat-rooms sent whole; false for the three fields of a room of which only the newest message is new (2026-11-24). */
+function isWhole(entry: RoomItem | RoomNews): entry is RoomItem {
+  return 'type' in entry;
+}
+
+/**
+ * A room that /list-chat-rooms sent whole, as it goes into the list in
+ * memory in the place of the entry the list holds for it (2026-11-24): a
+ * member's seen position does not fall. An answer of /list-chat-rooms can
+ * arrive after a newer answer of the open conversation's own read, and
+ * that read hands out a position only once, when it has changed. The
+ * masterpod itself never lowers one.
+ */
+function keepSeen(room: RoomItem, held: RoomItem | undefined): RoomItem {
+  if (!held) return room;
+  const before = new Map(held.members.map((member) => [member.anopodId, member.seenPosition]));
+  let kept = false;
+  const members = room.members.map((member) => {
+    const was = before.get(member.anopodId);
+    if (was === undefined || member.seenPosition === undefined || was <= member.seenPosition) return member;
+    kept = true;
+    return { ...member, seenPosition: was };
+  });
+  return kept ? { ...room, members } : room;
+}
+
+/** `held` with each of `news` in it: in the place of the entry with the same id, else at the end, where the masterpod's list has the newest. The same list when nothing came. */
+function putEach<T>(held: T[], news: T[], idOf: (item: T) => string): T[] {
+  if (news.length === 0) return held;
+  const list = [...held];
+  for (const item of news) {
+    const index = list.findIndex((entry) => idOf(entry) === idOf(item));
+    if (index === -1) list.push(item);
+    else list[index] = item;
+  }
+  return list;
+}
+
+/**
+ * The list in memory with an answer to a read with `since` put into it
+ * (2026-11-24; wallet spec 4.17). A room that came whole takes the place
+ * of the one the list holds, or is added at the front, where the
+ * masterpod's list has the newest room; several new rooms stay in the
+ * answer's order, the newest first. Three fields change that room's
+ * newest message. An invite or a join request is added at the end.
+ * `unknown` says that three fields came for a room the list does not
+ * hold. The same list, not a copy, when the answer holds nothing.
+ */
+function withNews(list: RoomsAnswer, answer: RoomsRead): { list: RoomsAnswer; unknown: boolean } {
+  if (answer.rooms.length + answer.invites.length + answer.joinRequests.length === 0) return { list, unknown: false };
+  const rooms = [...list.rooms];
+  const places = new Map(rooms.map((room, index) => [room.chatRoomId, index]));
+  const added: RoomItem[] = [];
+  let unknown = false;
+  for (const entry of answer.rooms) {
+    const index = places.get(entry.chatRoomId);
+    if (isWhole(entry)) {
+      if (index === undefined) added.push(entry);
+      else rooms[index] = keepSeen(entry, rooms[index]);
+    } else if (index === undefined) {
+      unknown = true;
+    } else {
+      rooms[index] = { ...rooms[index], lastMessage: entry.lastMessage, lastPosition: entry.lastPosition };
+    }
+  }
+  return {
+    list: {
+      rooms: [...added, ...rooms],
+      invites: putEach(list.invites, answer.invites, (invite) => invite.inviteId),
+      joinRequests: putEach(list.joinRequests, answer.joinRequests, (request) => request.joinRequestId),
+    },
+    unknown,
+  };
+}
+
 /**
  * What the chat pages share (wallet spec 8.2, Chat, and 8.3): the room keys
  * and their wraps for other pods, decrypting a message, a room's title and
@@ -48,7 +123,13 @@ const DAY_MS = 86_400_000;
  * chat with this pod about a case. And since 2026-11-19
  * (forclaude/wallet-chat-and-passkey-plan-1.md) a listing chat's trade in
  * a few words from the reader's own side (tradeWords), which the room's
- * title carries.
+ * title carries. And since 2026-11-24 (forclaude/chat-list-plan-1.md;
+ * wallet spec 4.17) the chat list in memory is kept here: the read of the
+ * whole list (refreshRooms), the read of what is new only, which the shell
+ * makes every 5 seconds (refreshNews), and the members' seen positions
+ * that the open conversation's read brings (putSeen); and the calendar
+ * day as a signal (today), which that 5-second read moves, for the words
+ * of the chat that depend on today's date.
  */
 @Injectable({ providedIn: 'root' })
 export class ChatService {
@@ -64,11 +145,109 @@ export class ChatService {
     this.requestedRooms.update((set) => new Set(set).add(chatRoomId));
   }
 
-  /** /list-chat-rooms, quiet, into session.chatRooms; the answer, so a caller can report a refusal. */
-  async refreshRooms(): Promise<ApiResponse<RoomsAnswer>> {
+  /**
+   * The local calendar day, as a signal (2026-11-24; wallet spec 4.17). The
+   * chat list words a row's time by today's date ("14:32", "Yesterday"),
+   * and a conversation writes "Today" and "Yesterday" over its days. Both
+   * read this signal, so those words are drawn again when the day changes.
+   * Every read of what is new looks at the clock (refreshNews, the shell's
+   * read of every 5 seconds). Until 2026-11-24 the chat list in memory was
+   * set anew every 5 seconds, which drew those words again as a side
+   * effect; the list is now set only when something in it changed.
+   */
+  readonly today = signal(dayOf(new Date()));
+
+  /**
+   * /list-chat-rooms for the whole list, quiet, into session.chatRooms; the
+   * answer, so a caller can report a refusal. The read after a person's own
+   * action, which can take things out of the list, and the first read after
+   * a page load or a login. Since 2026-11-24 the answer's `seq` is kept as
+   * the list's number (putWhole).
+   */
+  async refreshRooms(): Promise<ApiResponse<RoomsRead>> {
     const res = await this.api.listChatRooms(true);
-    if (res.ok && this.session.hasSession()) this.session.chatRooms.set(res.body);
+    if (res.ok && this.session.hasSession()) this.putWhole(res.body);
     return res;
+  }
+
+  /**
+   * /list-chat-rooms for what is new only (2026-11-24; wallet spec 4.17;
+   * the plan is forclaude/chat-list-plan-1.md): the shell's read of every 5
+   * seconds and the Chat page's opening. The request carries the list's
+   * number as `since`, and what comes back is put into the list in memory
+   * (withNews); when nothing came, the list is not set anew. Then the list
+   * is counted. The whole list is read, once (refreshRooms), when a count
+   * differs from the answer's `counts`, since something was taken away that
+   * no answer names; when three fields came for a room the list does not
+   * hold; and when the answer's `seq` is below the `since` that was sent.
+   * Otherwise the answer's `seq` is the list's next number. While the list
+   * has no number, the first read of a login among them, this is the read
+   * of the whole list. An answer without `seq`, from a masterpod of before,
+   * is the whole list and is taken as that. An answer is put in only while
+   * the list's number is still the `since` it was asked with: a read of
+   * the whole list that came in between has more, and the next read brings
+   * whatever this one held. The answer is the last read's, so a caller can
+   * report a refusal. Every call also looks at the clock, for the words
+   * that depend on today's date (today).
+   */
+  async refreshNews(): Promise<ApiResponse<RoomsRead>> {
+    this.today.set(dayOf(new Date()));
+    const since = this.session.chatRoomsSeq;
+    if (since === null) return this.refreshRooms();
+    const res = await this.api.listChatRooms(true, since);
+    if (!res.ok || !this.session.hasSession()) return res;
+    const answer = res.body;
+    if (typeof answer.seq !== 'number' || !answer.counts) {
+      this.putWhole(answer);
+      return res;
+    }
+    const list = this.session.chatRooms();
+    if (list === null || this.session.chatRoomsSeq !== since) return res;
+    if (answer.seq < since) return this.refreshRooms();
+    const news = withNews(list, answer);
+    if (news.list !== list) this.session.chatRooms.set(news.list);
+    const counted = news.list.rooms.length === answer.counts.rooms && news.list.invites.length === answer.counts.invites && news.list.joinRequests.length === answer.counts.joinRequests;
+    if (news.unknown || !counted) return this.refreshRooms();
+    this.session.chatRoomsSeq = answer.seq;
+    return res;
+  }
+
+  /**
+   * The members' seen positions that the open conversation's read brought
+   * (2026-11-24; wallet spec 4.17; /list-messages with `seenSince`),
+   * written into that room's entry of the list in memory, where the
+   * conversation reads them for "Seen" and "Seen by". A position is only
+   * ever raised. An entry for a pod that the list does not hold as a
+   * member of the room is passed over: that room comes whole with the next
+   * read of the list. The list is set anew only when a position rose.
+   */
+  putSeen(chatRoomId: string, seen: SeenItem[]): void {
+    const list = this.session.chatRooms();
+    const index = list ? list.rooms.findIndex((room) => room.chatRoomId === chatRoomId) : -1;
+    if (!list || index === -1 || seen.length === 0) return;
+    const positions = new Map(seen.map((item) => [item.anopodId, item.seenPosition]));
+    let raised = false;
+    const members = list.rooms[index].members.map((member) => {
+      const position = positions.get(member.anopodId);
+      if (position === undefined || position <= (member.seenPosition ?? 0)) return member;
+      raised = true;
+      return { ...member, seenPosition: position };
+    });
+    if (!raised) return;
+    const rooms = [...list.rooms];
+    rooms[index] = { ...rooms[index], members };
+    this.session.chatRooms.set({ ...list, rooms });
+  }
+
+  /** A whole list from /list-chat-rooms becomes the list in memory, and its `seq` the list's number: null when the answer carries none, a masterpod of before, so the next read asks for the whole list again. Where the list already holds a room, a member's seen position does not fall (keepSeen). */
+  private putWhole(answer: RoomsRead): void {
+    const held = new Map((this.session.chatRooms()?.rooms ?? []).map((room) => [room.chatRoomId, room]));
+    this.session.chatRooms.set({
+      rooms: answer.rooms.filter(isWhole).map((room) => keepSeen(room, held.get(room.chatRoomId))),
+      invites: answer.invites,
+      joinRequests: answer.joinRequests,
+    });
+    this.session.chatRoomsSeq = typeof answer.seq === 'number' ? answer.seq : null;
   }
 
   // --- keys -----------------------------------------------------------------
@@ -325,6 +504,11 @@ export class ChatService {
     const me = this.session.anopodId();
     return room.members.filter((m) => m.anopodId !== me);
   }
+}
+
+/** The local calendar day of a time, as a key: the value of ChatService.today. */
+function dayOf(date: Date): string {
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 }
 
 /** Whole days from the start of `date`'s day to the start of today, by the local clock. */

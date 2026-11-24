@@ -11,6 +11,7 @@ import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/rou
 import { map } from 'rxjs';
 import { askConfirm } from './components/confirm-dialog.component';
 import { NOTIFICATIONS_POLL_MS } from './constants';
+import { ChatService } from './services/chat.service';
 import { ConfigService } from './services/config.service';
 import { LanguageService } from './services/language.service';
 import { ApiError, ApiResponse } from './services/log.service';
@@ -71,6 +72,7 @@ export class App {
   protected readonly t = this.lang.words;
   private readonly router = inject(Router);
   private readonly api = inject(MasterpodApiService);
+  private readonly chat = inject(ChatService);
   private readonly navigation = inject(NavigationService);
   private readonly sound = inject(SoundService);
   private readonly dialog = inject(MatDialog);
@@ -89,8 +91,10 @@ export class App {
     void this.config.load().catch(() => undefined);
     // The notification poll (wallet spec 8.2): while a session is open, the
     // notifications and the status (vouched, the counts) every 5 seconds,
-    // and the chat rooms with them once setup is complete (8.2, Chat). The
-    // poll also rings: the answer with the chat rooms goes to ring(), which
+    // and the chat rooms with them once setup is complete (8.2, Chat). Since
+    // 2026-11-24 the read of the chat rooms asks only for what is new and
+    // puts it into the list in memory (chat.service's refreshNews; 4.17).
+    // The poll also rings: after that read the list goes to ring(), which
     // plays the wallet's sound for what is new in it (8.1).
     const timer = setInterval(() => void this.poll(), NOTIFICATIONS_POLL_MS);
     // Back at the front, the poll runs at once (2026-11-22): a phone freezes
@@ -136,7 +140,7 @@ export class App {
       const [notifications, status, rooms] = await Promise.all([
         this.api.listNotifications(false, true),
         this.api.checkAnopodStatus(true),
-        this.session.setupComplete() ? this.api.listChatRooms(true) : Promise.resolve(null),
+        this.session.setupComplete() ? this.chat.refreshNews() : Promise.resolve(null),
       ]);
       if (!this.session.hasSession()) return;
       if (loginEnded(status)) {
@@ -145,22 +149,25 @@ export class App {
       }
       if (notifications.ok) this.session.notifications.set(notifications.body.notifications);
       if (status.ok) this.session.status.set(status.body);
-      if (rooms?.ok) this.session.chatRooms.set(rooms.body);
-      if (rooms?.ok) this.ring(rooms.body);
+      // The read of the chat rooms has put its answer into the list in memory already (refreshNews): the sound is given that list as it stands now.
+      const list = rooms?.ok ? this.session.chatRooms() : null;
+      if (list) this.ring(list);
     } finally {
       this.polling = false;
     }
   }
 
   /**
-   * The sound (2026-11-19, wallet spec 8.1): one chime when this answer of
-   * /list-chat-rooms holds something new since the one before. New is: a
-   * newest message by someone else in a room the shell already knew,
-   * unless that conversation is the page on the screen; or an invite or
-   * a join request it did not know. The first answer of a session rings
-   * for nothing, and so does a room that is new to the list.
+   * The sound (2026-11-19, wallet spec 8.1): one chime when the chat list
+   * holds something new since the shell's read before. New is: a newest
+   * message by someone else in a room the shell already knew, unless that
+   * conversation is the page on the screen; or an invite or a join request
+   * it did not know. The first read of a session rings for nothing, and so
+   * does a room that is new to the list. Until 2026-11-24 the list was the
+   * answer of /list-chat-rooms itself; since then it is the list in
+   * memory, after the read's answer was put into it (4.17).
    */
-  private ring(answer: RoomsAnswer): void {
+  private ring(list: RoomsAnswer): void {
     const me = this.session.anopodId();
     if (me === null) return;
     const before = this.heard !== null && this.heard.anopodId === me ? this.heard : null;
@@ -168,13 +175,13 @@ export class App {
     const positions = new Map<string, number>();
     const requests = new Set<string>();
     let news = false;
-    for (const room of answer.rooms) {
+    for (const room of list.rooms) {
       positions.set(room.chatRoomId, room.lastPosition);
       const known = before?.positions.get(room.chatRoomId);
       if (known === undefined || room.lastMessage === null || room.lastPosition <= known) continue;
       if (room.lastMessage.senderAnopodId !== me && onScreen !== `/chat/${room.chatRoomId}`) news = true;
     }
-    for (const id of [...answer.invites.map((i) => i.inviteId), ...answer.joinRequests.map((r) => r.joinRequestId)]) {
+    for (const id of [...list.invites.map((i) => i.inviteId), ...list.joinRequests.map((r) => r.joinRequestId)]) {
       requests.add(id);
       if (before !== null && !before.requests.has(id)) news = true;
     }

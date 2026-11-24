@@ -1180,6 +1180,146 @@ The wallet's side is the conversation and the chat list (8.2, Chat),
 stickers.service, session.service and masterpod-api.service (8.3), the
 words (8.8), and src/app/stickers.ts.
 
+### 4.17 The chat list: only what is new
+
+Added 2026-11-24 (forclaude/chat-list-plan-1.md, its steps 1 and 2;
+section 11): the wallet's read of the chat list of every 5 seconds gets
+only what is new. Until then every such read got the whole list: every
+chat with this pod's wrapped key and every member, 21.8 KB for a person
+with five chats of two people and 55 KB with nine such chats and a room
+of 100 people, counted from the form of the answer. The user,
+2026-11-23: "Usually the user's phone would check to see if there's new
+data it doesn't have and grab that." The masterpod's side is its own
+spec's section 29, which holds the rule, the counter, the numbers and
+their triggers, the two reads and what is left as it is. The masterpod
+gained four things there. One counter in its database, the sequence
+`chat_change_seq`. Five numbers on four tables that take the counter's
+next value when something of a chat list changes, set by triggers. One
+field more in the body of /list-chat-rooms, `since`, and two in its
+answer, `seq` and `counts`. And one field more in the body of
+/list-messages, `seenSince`, and with it two in its answer, `seen` and
+`seenSeq`. No new route, no table, no env variable and no npm package.
+
+    POST /list-chat-rooms (setup), one field more in the body and two in the answer
+    body: {} or { since }; since is the seq of the answer the wallet last put into its list, a whole number
+          from 0 to 9007199254740991; a body without it, or with null, asks for everything; a since of 0 is
+          a since
+    answer: 200 { seq, counts: { rooms, invites, joinRequests }, rooms, invites, joinRequests }
+            seq: the highest number among the caller's own rooms, invites and join requests, 0 when there
+                 is none; the number to send as the next since; it can be lower than the since that was sent
+            counts: how many rooms, open invites and open join requests the caller has now
+            without since: the three lists whole, as before (8.2, Chat), with seq and counts in front
+            with since: rooms holds only the rooms that changed after it, in the whole list's order. An
+                 entry is a room whole (it has type, hpkeKey, members and the rest) when its people or its
+                 facts changed: a member joined or left, an invite was made or answered, its picture was
+                 set, its listing was closed. It is { chatRoomId, lastMessage, lastPosition } when only a
+                 message came. invites and joinRequests hold the ones written after since, the oldest
+                 first. What was taken away is not named.
+            nothing new: {"seq":9120,"counts":{"rooms":10,"invites":0,"joinRequests":0},"rooms":[],
+                 "invites":[],"joinRequests":[]}, 105 bytes
+    checks: those of before, then 400 invalid since
+    a masterpod of before: does not read since, and answers the whole list with no seq and no counts
+
+    POST /list-messages (setup), one field more in the body and, with it, two in the answer
+    body: { chatRoomId, afterPosition, beforePosition, limit, seenSince }; seenSince is optional: 0 when
+          the conversation is opened, then the seenSeq of the answer before
+    answer with seenSince: 200 { messages, seen: [ { anopodId, seenPosition } ], seenSeq }
+            seen: the members of the room whose seen position changed after seenSince, the caller's own
+                 among them; with 0 every member who has seen anything (a member still at 0 is left out)
+            seenSeq: the number to send as the next seenSince, 0 when no member has seen anything; it can
+                 be lower than the seenSince that was sent
+    answer without seenSince: 200 { messages }, as before
+    checks: those of before, and 400 invalid seenSince, after limit and before the member check
+    a masterpod of before: does not read seenSince, and answers { messages }
+
+What the wallet does with it (chat.service, 8.3). It keeps the chat list
+in memory, session.chatRooms, as before, and a number beside it,
+session.chatRoomsSeq: the `seq` of the answer that was last put into the
+list.
+
+- The read of the whole list. The first read after a page load or a
+  login carries no `since`, and its answer is the list. So is the read
+  after a person's own action: accept, decline, approve, a new chat, an
+  invite, Leave, a room's picture, Connect in the marketplace (the
+  nineteen calls of `refreshRooms()`). Such an action can take things
+  out of the list, and one read of the whole list is the plain way to
+  drop them. It happens once for each tap.
+- The read of what is new (`refreshNews()`). The shell's read of every 5
+  seconds (8.1; 8.2, Notifications) and the Chat page's read at its
+  opening (8.2, Chat) carry `since`. What comes back is put into the
+  list. A room that came whole takes the place of the one the list
+  holds, or goes to the front when the list does not hold it; several
+  new rooms stay in the answer's order, the newest first. Three fields
+  change that room's newest message and position. An invite or a join
+  request goes to the end, or takes the place of the one with its id.
+  When nothing came, the list is not set anew, so nothing that draws
+  from it is worked out again.
+- The count. After that the wallet counts its list. It reads the whole
+  list, once, in three cases: a count differs from `counts`, which
+  means that something was taken away that no answer names (a chat was
+  left, an invite or a request was answered); three fields came for a
+  room the list does not hold; `seq` is below the `since` that was sent
+  (the entry that held the highest number is gone, or the database was
+  put back from a backup). Otherwise `seq` is the list's next number.
+  When that read of the whole list fails, the number stays, and the
+  next read asks with the same `since` again.
+- Answers in another order. An answer to a read with `since` is put in
+  only while the list's number is still that `since`. Otherwise it is
+  dropped: a read of the whole list came in between, and the next read
+  brings whatever the dropped one held.
+- A masterpod of before. An answer with no `seq` is the whole list and
+  is taken as that, and the list then has no number, so the next read
+  asks for the whole list. That is also a masterpod server that still
+  runs the old code during the masterpod's own deploy: the wallet then
+  reads as it read before this step, until an answer carries `seq`
+  again.
+- The seen positions. They leave the 5-second read. The open
+  conversation's own read brings them (8.2, Chat, "One conversation"):
+  its opening read asks with `seenSince` 0, each later read with the
+  `seenSeq` of the answer before, and `seen` is written into the room's
+  entry of the list in memory (`putSeen()`), where the conversation
+  reads the positions for "Seen" and "Seen by" as before. An entry for
+  a pod that the list does not hold as a member of the room is passed
+  over; that room comes whole with the next read of the list. A room
+  that comes whole still carries every member's position of that
+  moment. In the list a member's position is only ever raised: an
+  answer of the chat list can arrive after a newer answer of the
+  conversation's read, and that read hands a position out only once.
+  The masterpod itself never lowers one.
+- The words that depend on today's date. A row of the chat list words
+  its time by today's date ("14:32", "Yesterday", a weekday, a date),
+  and a conversation writes "Today" and "Yesterday" over its days.
+  Until this step those words were drawn again every 5 seconds, as a
+  side effect of the list being set anew. Now that the list is set
+  only when something in it changed, chat.service keeps the local
+  calendar day as a signal, `today`. Every read of what is new looks at
+  the clock, and the chat list's rows and the conversation's thread
+  read the signal, so the words follow a change of the day within 5
+  seconds, as before, with nothing else set anew. The plan does not
+  name this: it is what its rule "when nothing came, the list in memory
+  is not set anew" took away, seen in a trial and put back (section
+  11).
+- A read that is refused or not answered changes nothing, and the next
+  one asks again.
+
+What a person sees: nothing new on the screen. The unread dot, the bold
+row, the number on the Chat entry of the menu, the sound, a row's line
+and the order of the rows, a new chat, an invite or a request that
+shows with no reload, the titles and the names are all drawn from the
+same list by the same code. "Seen" and "Seen by" follow within 3
+seconds, where it was 5. What changes is what travels down to the
+phone: about 100 bytes every 5 seconds while nothing is new, about 540
+once for a new message, and one room whole once when its people or
+facts change. What goes up is as before: three signed requests every 5
+seconds, about 9.6 KB each (section 10).
+
+The proxy forwards both routes as any masterpod path (section 2);
+nothing in server/ changed, and no request was added, so the doormen
+count the same calls as before. The wallet's side is the shell's poll
+(8.1; 8.2, Notifications), the chat list and the conversation (8.2,
+Chat), and chat.service, session.service and masterpod-api.service
+(8.3).
+
 ## 5. Validator changes (anossoftware)
 
 ### 5.1 A nonces table and two variables
@@ -1626,7 +1766,12 @@ new to the list. One answer rings once at most, however much is new in
 it. What the shell has rung for is kept in RAM, for the pod of the
 session, and is forgotten when the session closes. Only this poll rings:
 the chat pages' own reads of the room list do not, and the other
-notifications have no sound.
+notifications have no sound. Since 2026-11-24 (section 11; 4.17) the
+poll's read of the chat rooms asks only for what is new, and what the
+shell looks at for the sound is the chat list in memory, once that
+read's answer was put into it. What rings is the same: something that
+another read put into the list rings at the poll's next read, as it did
+before.
 
 When the sound cannot ring. A browser lets a page make sound only after
 the person has touched the page, so the sound engine is made at the
@@ -3168,7 +3313,13 @@ Recovery case", and with one other person the row still shows that
 person's avatar. The
 rooms are the latest /list-chat-rooms answer kept in the session, which
 the shell's 5-second poll refreshes once setup is complete; the list
-refreshes it once when it opens. Since 2026-11-19 (section 11) the
+refreshes it once when it opens. Since 2026-11-24 (section 11; 4.17)
+what the session keeps is the chat list in memory, and both of those
+reads ask the masterpod only for what is new and put it into that list;
+the whole list is read at the first read after a page load or a login
+and after a person's own action. A row's time, which is worded by
+today's date, follows a change of the day as before (4.17, "The words
+that depend on today's date"). Since 2026-11-19 (section 11) the
 shell's poll also rings the wallet's sound for what is new in that
 answer, a message from someone else or a chat request (8.1); the list's
 own read rings nothing. "No chat keys in this tab: unlock
@@ -3197,7 +3348,10 @@ and shows "Load older messages" on top while a page came back full
 (since 2026-11-22, section 11, the same read also starts by itself when
 the reader comes within 300 px of the thread's top, and the older
 messages are drawn once the thread is at rest); the
-3-second poll reads after the newest shown position; the thread scrolls
+3-second poll reads after the newest shown position (since 2026-11-24,
+section 11 and 4.17, the opening read and every such poll also ask, with
+`seenSince`, for the members' seen positions that changed); the thread
+scrolls
 to the bottom after opening and after a send, and for a message that
 arrives only while the reader is within 120 px of the bottom. Messages
 by one sender within five minutes of each other, on one day, form a
@@ -3227,7 +3381,10 @@ line. Under this pod's own messages stands a word, in small grey letters
 under the bubble (2026-11-19, section 11; the masterpod's side is 4.10).
 "Seen" stands under the newest of this pod's messages that another
 member of the room has seen, by the seen positions that come with
-/list-chat-rooms: a member has seen a message when that member's seen
+/list-chat-rooms (until 2026-11-24; since then, section 11 and 4.17,
+they come with this conversation's own read of /list-messages and are
+written into the room's entry of the chat list in memory): a member has
+seen a message when that member's seen
 position is at or above the message's position. In a room with more than
 one other member it reads "Seen by mai, joy", with the usernames of
 those who have seen it, for up to three names; with more it reads "Seen
@@ -3241,7 +3398,13 @@ carries none: the word then stands under this pod's newest bubble. No
 word shows in a room with nobody else in it and nobody invited, and none
 while no member of the room carries a seen position, which is a
 masterpod of before (4.10). The small tick in each bubble stays. The
-words are as fresh as the shell's 5-second read of the room list. The
+words were as fresh as the shell's 5-second read of the room list.
+Since 2026-11-24 (section 11; 4.17) they are as fresh as the
+conversation's own 3-second read: when the conversation opens, that read
+brings the position of every member who has seen anything, and
+afterwards only the positions that changed, so "Seen" follows within 3
+seconds where it was 5. Against a masterpod of before, which hands the
+positions out with the whole room list alone, it is 5 as it was. The
 room is marked seen (Unread, below) when it opens and when
 new messages show. While the conversation is on the screen the page also
 tells the masterpod how far this pod has read (/mark-messages-seen,
@@ -4201,7 +4364,10 @@ above.
 
 Notifications: the list, newest first, mark read; the 5-second poll
 runs while a session is open and updates the status (vouched, counts),
-and the chat rooms with them once setup is complete. Since 2026-11-19
+and the chat rooms with them once setup is complete. Since 2026-11-24
+(section 11; 4.17) the poll's read of the chat rooms asks only for what
+is new: about 100 bytes come back while nothing is new, where the whole
+list came before. Its two other reads are as they were. Since 2026-11-19
 (section 11) the poll also rings the wallet's sound when its read of the
 chat rooms holds a new message from someone else or a new chat request
 (8.1). A notification by itself rings nothing: a chat request rings
@@ -4280,7 +4446,13 @@ excepted, with the keyholder and anos calls included.
                             the blob with both pairs only until then; since 2026-11-23 (section 11; 4.16)
                             stickerSets, a signal: the stickers' list as /list-stickers answered it for this
                             login, the sets in the order of their row, null until that answer has arrived and
-                            null again at close, so the next login asks anew (stickers.service, below)
+                            null again at close, so the next login asks anew (stickers.service, below); since
+                            2026-11-24 (section 11; 4.17) chatRooms is the chat list in memory (the rooms, the
+                            invites to this pod, the join requests on its rooms), which chat.service changes and
+                            which is set anew only when something in it changed, where until then it was the
+                            latest /list-chat-rooms answer, set anew every 5 seconds; and chatRoomsSeq, a plain
+                            field: that list's number, the `seq` of the answer that was last put into it, null
+                            while there is no list and after an answer that carried none, null again at close
     masterpod-api.service   the keyholder test app's api.service.ts, base path /api/masterpod, the two changed
                             routes and the four new ones added; the marketplace routes of 2026-11-06: getListing,
                             listingId on createChatRoom, mine and status any on listListings, no hpkeKey on
@@ -4324,7 +4496,15 @@ excepted, with the keyholder and anos calls included.
                             the stickers (2026-11-23, section 11; 4.16): one method, listStickers(quiet), which
                             sends {} to /list-stickers and is quiet unless asked otherwise, since it is nothing
                             the person did; its answer is typed unknown, and readStickerSets (src/app/stickers.ts)
-                            reads it and trusts nothing in it
+                            reads it and trusts nothing in it;
+                            the chat list (2026-11-24, section 11; 4.17): listChatRooms(quiet, since), which sends
+                            { since } when a number is given and {} when none is, and answers a RoomsRead ({ seq,
+                            counts, rooms, invites, joinRequests }, seq and counts optional: a masterpod of before
+                            sends neither), an entry of whose rooms is a RoomItem or a RoomNews ({ chatRoomId,
+                            lastMessage, lastPosition }); RoomsAnswer stays the type of the list in memory;
+                            seenSince on MessagesQuery, and listMessages answers a MessagesAnswer ({ messages,
+                            seen, seenSeq }, the last two optional), an entry of seen a SeenItem ({ anopodId,
+                            seenPosition })
     keyholder-api.service   the keyholder test app's, base path /api/keyholder/<n>
     anos-api.service        the anos test app's account-api.service.ts, base path /api/anos/<the session's
                             validator> (2026-11-10, below; /api/anos/<defaultValidator> until then),
@@ -4470,7 +4650,17 @@ excepted, with the keyholder and anos calls included.
                             or whose listing's owner this pod is; otherTrader(room), for such a room the other
                             of the two, found among the members and the invited, else null;
                             caseAttestors(caseId), the creators of this pod's rooms about the case that another
-                            pod created, each once, as the room lists its members (id and username)
+                            pod created, each once, as the room lists its members (id and username); the chat
+                            list in memory (2026-11-24, section 11; 4.17): refreshRooms(), the read of the whole
+                            list, which now also keeps the answer's seq as the list's number; refreshNews(), the
+                            read of what is new, for the shell's poll and the Chat page's opening: the request
+                            with `since`, the answer put into the list, and the read of the whole list when a
+                            count differs, when three fields name a room the list does not hold or when seq is
+                            below the since, by the rules of 4.17; putSeen(chatRoomId, seen), the members' seen
+                            positions that the open conversation's read brought, written into that room's entry;
+                            today, a signal: the local calendar day, which refreshNews() sets at every call and
+                            which the chat list's rows and the conversation's thread read, so the words that
+                            depend on today's date ("Yesterday", "Today") are drawn again when the day changes
     marketplace.service     what the marketplace pages share (2026-11-06): load, get, mine and close (the reads
                             and the close), sideWords, mySide and firstWords, the rooms and invites about a
                             listing out of session.chatRooms (roomsAbout, myRoomAbout, invitesAbout,
@@ -5775,6 +5965,27 @@ Cloud machines.
   check until then (8.9). The first, the second and the fourth are lines
   of the after-production list. That section of the plan has what else
   is out and the known limits.
+- From the chat list plan (forclaude/chat-list-plan-1.md, 2026-11-24,
+  its section 6; 4.17): the requests going up, which are as they were
+  (every signed request carries an ML-DSA-87 signature of 4,627 bytes,
+  sent as hex, so one request is about 9.6 KB, and the wallet sends
+  three every 5 seconds: /list-notifications, /check-anopod-status and
+  /list-chat-rooms); the notifications, whose read still answers the
+  newest 100 whole every 5 seconds; the reads of the whole chat list at
+  a page load, at a login and after a person's own action, once each;
+  keeping the list on the phone between two loads of the page; and the
+  members leaving the chat list altogether, with a read that hands out
+  a chat's members a page at a time, so a room that is sent whole still
+  carries every member. One gap is known and is a line of the
+  after-production list, "chat: of two changes written at the same
+  instant, a phone can miss one": two writes that are committed in the
+  other order than their numbers, with a person's read between the two
+  commits, can make a wallet miss one change of one chat (a dot, a line
+  of the chat list, a name, a reader under "Seen by") until that chat's
+  next change or until the page is loaded again. A new chat, invite or
+  request that is missed this way is found at the next read, by the
+  count. The open conversation's read of new messages had the same trait
+  before this step.
 - Several passkeys, push delivery, a custom theme, rate limits. Push
   delivery stays out since the sound of 2026-11-19 (8.1; section 11)
   too: that sound is made by the open page and plays only while the
@@ -19060,6 +19271,308 @@ script only six words of the two dictionaries and one comment.
   the build notes of 12.7 and of 13.7. README unchanged.
 - For the deploy: the wallet alone, the user's two lines on wallet1 and
   then on wallet2, with no `npm ci` (no package file changed).
+
+### The chat list: only what is new (2026-11-24)
+
+Step 2 of `~/Desktop/Z-TestNet/forclaude/chat-list-plan-1.md` (FINAL,
+2026-11-24), the wallet's part, built on the user's word (their click on
+the card "Chat list, step 2: the wallet's part") on top of 605f0ca, the
+working tree clean. Six files of `src/app` and this file, one commit.
+Why: the user, 2026-11-23: "I believe currently, every 5 seconds, the
+wallet is sending all the person's chats data to the phone. This is
+insane. Usually the user's phone would check to see if there's new data
+it doesn't have and grab that." The masterpod's part is the plan's step
+1 (4.17; the masterpod's spec, section 29), committed there the same day
+as 975c1e7. No template, no style and no word changed. No new package,
+nothing in `server/` and nothing new under `deploy/`.
+
+- Changed, `src/app/services/masterpod-api.service.ts`, as 8.3 now says:
+  the types `RoomNews`, `RoomsRead`, `SeenItem` and `MessagesAnswer`;
+  `seenSince` on `MessagesQuery`; `listChatRooms(quiet, since)`;
+  `listMessages` answers a `MessagesAnswer`. The comments of
+  `RoomsAnswer` and of `RoomMember.seenPosition`.
+- Changed, `src/app/services/session.service.ts`: the field
+  `chatRoomsSeq`, which `close()` sets to null, and the comment of
+  `chatRooms`.
+- Changed, `src/app/services/chat.service.ts`, as 4.17 and 8.3 now say:
+  `refreshRooms()` puts its answer in through `putWhole()`; new are
+  `refreshNews()`, `putSeen()`, `putWhole()` and the signal `today`, and
+  beside the class five functions: `isWhole`, `keepSeen`, `putEach`,
+  `withNews` and `dayOf`. The class comment gained a passage.
+- Changed, `src/app/app.ts`: the shell takes chat.service; `poll()`
+  calls `refreshNews()` where it called `listChatRooms(true)` and set
+  the answer; `ring()` is given the list in memory after that read, and
+  its parameter is named `list`. Three comments.
+- Changed, `src/app/pages/chat.page.ts`: the page's opening read is
+  `refreshNews()`; `rooms` reads `chat.today`. The class comment gained
+  a sentence.
+- Changed, `src/app/pages/chat-room.page.ts`: the field `seenSince`;
+  `open()` sets it to 0 and its read asks with `seenSince: 0`; `poll()`
+  asks with `seenSince` and takes the positions before its return for
+  an answer with no message; the method `takeSeen()`; `thread` reads
+  `chat.today`. The class comment and the comment of `marks` gained a
+  passage each.
+- Not changed: the nineteen calls of `refreshRooms()` (seventeen in
+  pages, components and marketplace.service.ts, two inside
+  chat.service.ts), and the pinned card's own read of a room's messages
+  (pinned-listing.component.ts), which asks with no `seenSince`.
+- Changed, this spec: the new 4.17; in 8.1 the sound's paragraph; in
+  8.2 the chat list, "One conversation" and Notifications; in 8.3 the
+  rows of session.service, masterpod-api.service and chat.service; one
+  item of section 10; this note. `README.md` unchanged.
+- Readings where the plan left a small point open, each the smallest
+  way seen:
+  1. Where the code is. The list and its number stay in
+     session.service. Everything that changes the list is in
+     chat.service, and the rules of an answer with `since` are plain
+     functions beside the class. No new file.
+  2. A conversation's opening read carries `seenSince` 0, so the
+     positions are there with the first messages and not 3 seconds
+     later. Load older messages and the pinned card's read carry none.
+  3. A seen position in the list is only ever raised. The plan's work
+     note named two ways for an answer of the chat list that arrives
+     after a newer answer of the conversation's read: keep the higher
+     position of each member, or ask once more with `seenSince` 0. The
+     first is built, and it holds wherever a room's entry is put in: an
+     answer with `since`, a read of the whole list, and `seen`. One
+     case then differs from the masterpod. A member who left a room and
+     came back between two reads of this wallet keeps the position of
+     before in this wallet's list, until the page is loaded again,
+     where the masterpod has 0 for the new membership. That person did
+     see the message.
+  4. An answer that leads to a read of the whole list is put in first,
+     since what came is true, and the list's number is left as it was.
+     So a read of the whole list that fails is asked for again by the
+     next read.
+  5. An answer with no `seq` leaves the list without a number, so the
+     next read asks for the whole list. An answer with `seq` and no
+     `counts` is taken the same way: the masterpod sends both or
+     neither.
+  6. The answer handed to the caller is the last read's. When a read
+     with `since` led to a read of the whole list that was refused, the
+     Chat page shows that refusal, as it showed a refused read before.
+  7. The words that depend on today's date (4.17). This is not in the
+     plan. The plan's rule "when nothing came, the list in memory is
+     not set anew" took something away that nobody had named: until
+     this step, a row's time and a conversation's day line were drawn
+     again every 5 seconds only because the list was set anew. It was
+     tried before it was mended (below, "Midnight"). The mend is the
+     signal `today` in chat.service, set by `refreshNews()` and read by
+     the chat list's `rooms` and the conversation's `thread`: ten lines
+     of script in three files. The day headings of the transaction
+     history and of Noted transactions and the time on a marketplace
+     card use the same two functions of chat.service. They never
+     followed a change of the day by themselves, and this step leaves
+     them so.
+- Checked: `npx ng build` from the wallet folder into a scratch folder:
+  clean, with no warning. The script is `main-C2VSZNGC.js`, 2,339,229
+  bytes, which is 2,793 more than the script of 605f0ca built the same
+  way (2,336,436); the style sheet is `styles-HGVKDO6M.css`, as before;
+  the build's folder has ten files as before. A scratch copy of 605f0ca
+  with this step's files built the same bytes under another name
+  (`cmp`), and every trial below ran on that copy's builds.
+- Checked, the list's code case by case, in Node 24.22.0:
+  chat.service.ts and session.service.ts of the scratch copy, bundled
+  as they are with the wallet's own esbuild, every `@angular/` import
+  sent to a small stand-in (inject, signal), and the transport written
+  by hand. 36 results, none bad. The first read sends no `since`, and
+  the next sends the answer's `seq`. With nothing new the list is the
+  same object and is not set anew. Three fields change a room's newest
+  message and nothing else of it. A room that came whole takes its
+  place; two new rooms go to the front in the answer's order; an invite
+  and a join request go to the end, and one the list holds takes its
+  own place. A count that differs, a `seq` below the `since` and three
+  fields for a room the list does not hold each lead to one read of the
+  whole list, and the read after it carries `since` again. A read of
+  the whole list that fails leaves the number, and the next read asks
+  with the same `since`. An answer with no `seq`, and one with `seq`
+  and no `counts`, is taken as the whole list. An answer that arrives
+  after a read of the whole list moved the number is dropped, and of
+  two answers to one `since` the older is dropped. A session that
+  closed while a read was on its way gets nothing put in. `putSeen()`
+  passes over a pod the list does not hold, writes the asker's own
+  position, sets nothing anew for the same or a lower position, and a
+  room that comes whole with older positions does not lower one.
+- Checked, the same code against the masterpod's own code: the made-up
+  wallets of the masterpod's note (its spec, 29.8), with the wallet's
+  real list code in the model's place. The masterpod is
+  masterpodsoftware 975c1e7 on a scratch PostgreSQL 17 that was started
+  for this build alone: a data folder of its own, 127.0.0.1 port 61231
+  and nowhere else, no socket file. This Mac's own PostgreSQL on port
+  5432 was not touched. Random changes, one after the other, each by
+  its route's own service function: messages, read positions, new
+  rooms, invites and their answers, join requests and their answers,
+  members leaving, pictures, chats about a listing, listings closed.
+  Three wallets a pod, each with one conversation "open" for its seen
+  positions: one calls `refreshNews()` after every change, one only now
+  and then, and one as the wallet behaves, with `refreshRooms()` after
+  an action of its own pod. Five rounds of 3,000 steps with five seeds,
+  11,063 changes: 170,391 comparisons of what a wallet holds with a
+  read of the whole list, none different; 169,029 comparisons of the
+  open conversation's seen positions, none below and none above;
+  105,585 reads with nothing new, none of which set the list anew. A
+  wallet read the whole list 4,704 times by itself: 105 first reads,
+  4,439 for a count that differed and 160 for a `seq` below its
+  `since`, and never for three fields of a room it did not hold. The
+  invites and the join requests always stood in the whole list's
+  order. Then six copies of chat.service.ts with one rule taken out
+  each (the count, the three fields, a whole room in its place, the
+  invites, `putSeen()`, new rooms at the front), 600 steps each: all
+  six came out bad, so the rounds notice a missing rule.
+- Checked by a walk in Google Chrome 158 with no window: development
+  builds of the scratch copy behind the wallet's own server program
+  (the copy's `server/app.js`), in front of the masterpod's own app
+  (`createApp()` of 975c1e7) on that scratch PostgreSQL. A small front
+  of the trial's between the two wrote down every request and its
+  answer and could hold an answer back or refuse one. Four people, each
+  in a Chrome of their own. The login alone was made up: no passkey;
+  the session keys and the chat keys were the wallet's own fresh ones,
+  and the trial told the scratch masterpod of them as a create, a setup
+  and a login would. Everything else was real: every request signed by
+  the wallet and checked by the masterpod's own code, every chat, key
+  wrap and message made by the wallet's own pages and crypto. Nothing
+  of the wallet was replaced but the sound, which was counted and not
+  played. 77 results, none bad:
+  - The first read after a login carries no `since`. Every later read
+    of the timer carries the number of the answer before; with nothing
+    new the answer is 101 or 102 bytes, and the list in memory was set
+    0 times in 11 seconds.
+  - New chat, Message someone: the read after a person's own action
+    carries no `since`. The invited person's Requests row came with no
+    reload after 3.2 seconds, in an answer with `since` that held the
+    invite alone, and their wallet rang once. After their Accept the
+    first person's row read their name after 0.7 seconds, the room
+    having come whole in an answer with `since`.
+  - A message: the other person, with the conversation open, had it
+    after 2.0 seconds, and "Seen" stood under it 2.0 seconds after the
+    masterpod had taken their wallet's report. The conversation's
+    opening read asked with `seenSince` 0 and each later read with the
+    `seenSeq` of the answer before; the position came in one answer of
+    that read, and no read of the chat list brought a room meanwhile.
+    A message to a person on the chat list: the row bold with a dot
+    after 0.7 seconds, as three fields, 491 bytes; the Chat entry of
+    the menu counts 1 and the wallet rang once.
+  - A third person invited from the conversation's menu: the titles
+    followed on all three wallets, and "Seen by nok, lek" stood under a
+    message once both had read it.
+  - A public room: the creator's Requests row for a request to join,
+    with one ring; after Approve the room stood in the asker's chat
+    list with no reload, having come whole; a picture set for the room
+    reached both wallets' entries within 5 seconds.
+  - Something taken away that no answer names, made by the masterpod's
+    route alone, with no page around it: a room left, and an invite
+    declined. The next read's answer said one fewer in `counts`, the
+    wallet read the whole list once, the row was gone at that read (4.8
+    and 5.0 seconds after the change), and the reads after it carried
+    `since` again.
+  - Leaving Chat and coming back: the Chat page's own read carries
+    `since` and brings 102 bytes. The page loaded again and a new
+    login: the first read carries no `since` and brings the whole list
+    (12,192 bytes for three chats), and every line of the chat list
+    opens with its room's key as before the load.
+  - An answer with `since` that held a message as three fields was
+    handed back 8 seconds late; meanwhile a second message came and the
+    wallet read the whole list. The late answer was dropped: the row
+    kept the second message, and the list was not set again.
+  - A read of the whole list refused once: the room stayed in the
+    list, the page showed no error, and 5 seconds later the wallet
+    asked with the same `since` again, read the whole list, and the
+    room was gone.
+  - A masterpod server that still runs the code of 73f2551 on the same
+    tables, as during the masterpod's own deploy: its answer has no
+    `seq`, the wallet took it as the whole list (12,015 bytes each
+    time), and "Seen" still came. With the two kinds answering in turn,
+    the wallet asked with `since` after an answer with `seq` and for
+    the whole list after one without. With the new code alone again,
+    the reads were back at 102 bytes, after at most one read of the
+    whole list.
+    The chat list read the same through all of it, and no page showed
+    an error.
+  - No line in the masterpod app's own error log. Chrome named one
+    thing beside its advice on speed: the request that the trial
+    itself had refused.
+- Checked, "nothing new on the screen": the wallet as committed and
+  this step's build, one after the other on one address, so that what
+  the browser keeps for the address, each chat's read mark for the
+  dot, is the same for both. The same person, with a chat of two and a
+  public room with an unread message. 10 results, none bad: the chat
+  list reads the same line for line, with the same bold row and dot;
+  the Chat entry counts the same; the conversation reads the same in
+  its title, the names under it, every message and the word under it.
+  A picture of the chat list and a picture of the conversation, taken
+  in each build at 390 by 760: the same file both times, byte for byte.
+  For that person the committed build got 8,589 bytes every 5 seconds
+  and this step's 102 while nothing was new.
+- Checked, a masterpod of before (the code of 73f2551 on that commit's
+  tables, which have no counter): this step's build against it, 12
+  results, none bad. An invite, an accept, a message, "Seen" and the
+  bold row all came as before this step, the last two within 5
+  seconds. Every read of the chat list carried no `since` and brought
+  the whole list; the conversation's reads carried `seenSince` 0 every
+  time and got the messages alone; no request was refused. So the
+  wallet deployed before the masterpod would read as it read before
+  this step, and gain nothing until the masterpod's step is there.
+- Checked, "Midnight": a page's clock was moved on by 24 hours while
+  nothing was new, against a masterpod stand that takes a clock a day
+  off (the trial's setting, not a server's). The committed build: the
+  conversation's day line read "Yesterday" where it had read "Today",
+  and the chat list's row "Yesterday" where it had read "12:02 PM",
+  after 3.4 seconds. This step's build before the mend of reading 7:
+  both stayed as they were through five reads with nothing new, 24
+  seconds. With the mend: both read "Yesterday" after 3.5 seconds, the
+  reads meanwhile were the small ones, and the list in memory was set
+  0 times.
+- Checked, the production build of the scratch copy behind the
+  wallet's own server program: its first page is drawn under its own
+  content security policy, and Chrome names no error and no breach of
+  the policy. That build has no debugging names and was not walked.
+- What travelled in the walk, counted at the trial's front as bytes of
+  an answer's body, with the short ids and low numbers of a fresh
+  database: the chat list with nothing new 101 or 102 bytes (105 with
+  a number of four digits and ten rooms); one new message 491 to 496;
+  one room of two or three people whole 4,038; the whole list of three
+  chats 12,192. A signed request of the chat list going up: 9,628 to
+  9,638 bytes, as before this step. The open conversation's read: 38
+  bytes with no new message and no new position, 133 with one
+  position, 790 at an opening with two messages and two positions.
+- Seen and left as it is:
+  - A public room that this pod came into by an approved request
+    stands first in the list in memory, by the plan's rule "a chat
+    that is added goes to the front", where the masterpod's list has
+    it by the day the room was made. Nothing draws from that order.
+    The chat list's page orders its rows by the newest activity, and
+    the places that take the first fitting room look among private
+    rooms, which come into the list by a read of the whole list. Such
+    a read puts the room at the masterpod's place. In the random
+    rounds the order differed in 3,795 comparisons of the wallet that
+    behaves as the wallet does, every one of them with such a room.
+  - The masterpod's answer of /list-messages also names the asker's
+    own position, about 100 bytes once after each message the person
+    has read. That is as the masterpod's spec has it (29.4).
+  - The first read of a login rings for nothing, as before: an invite
+    that arrives within 5 seconds of a login plays no sound.
+  - What this step leaves as it was, the three signed requests going
+    up every 5 seconds among them, is the item of the chat list plan
+    in section 10.
+- Not checked: a real phone, and the simulated phones (no template, no
+  style and no word changed, and nothing here hangs on a finger); the
+  live wallet, its nginx and the doormen; the masterpod's servers,
+  PostgreSQL 16 and PgBouncer; a slow connection, on which answers
+  overtake each other more often than on one Mac; a room of 100 people
+  in a browser (the masterpod's note counted its bytes); Connect in the
+  marketplace and a closed listing in a browser (they were in the
+  random rounds); the attestor's and the moderator's editions, which
+  run the same code; Thai; Safari and Firefox; `ng serve`. The gap of
+  section 10 was not tried for, by the plan.
+- For the deploy: the masterpod's step 1 first, with its schema line on
+  the leader before its first restart (the masterpod's spec, 29.8).
+  Then the wallet, the user's two lines on wallet1 and then on wallet2,
+  with no `npm ci` (no package file changed). A wallet that is open on
+  a phone meanwhile keeps the script it has until it is loaded again,
+  and goes on reading the whole list until then. The box of "chat list:
+  every member of every chat is sent again every 5 seconds" on the
+  after-production list is ticked with this step (the plan's section 4,
+  point 5).
 
 ## 12. Recovery and the moderator edition
 
