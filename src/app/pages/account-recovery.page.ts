@@ -257,7 +257,7 @@ const ID = 1;
     .thumb img { width: 120px; height: 90px; object-fit: cover; border-radius: 8px; }
     .thumb button { position: absolute; top: -8px; right: -8px; background: var(--mat-sys-surface); }
     .fields { display: flex; flex-wrap: wrap; gap: 8px; max-width: 720px; }
-    mat-form-field { min-width: 260px; }
+    mat-form-field { width: 260px; max-width: 100%; }
     .wide { width: 100%; max-width: 720px; }
     .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
     .muted { color: var(--mat-sys-on-surface-variant); }

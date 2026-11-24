@@ -14274,7 +14274,9 @@ passkey is in 8.9.
   rule since the testnet copy. It is the kind of fault the birth record
   form had until 2026-11-18. On no list; nothing was changed in this
   step. The account page's box is mended in the next note, in a commit
-  of its own; the staff pages are as they were.
+  of its own; the staff pages are as they were. (The staff pages are
+  mended on 2026-11-23: the note "A box with a least width in pixels
+  is no wider than its row" below.)
 - Brought in line on the user's word of 2026-11-19 ("go ahead and fix
   the older comments"), before this step was committed and in its
   commit: two comments that the step left out of date and the plan does
@@ -14388,7 +14390,8 @@ only: one style line, and no word of the dictionaries changes.
   page, with "Meeting link (https)" and the Note boxes. The four case
   pages scroll sideways at 360, 375 and 390 pixels, as the note above
   says; the attestors' page was not looked at. Not asked for here, and
-  on no list.
+  on no list. (Mended on 2026-11-23: the note "A box with a least
+  width in pixels is no wider than its row" below.)
 - Spec: this note, and one sentence of the note above ("Seen in
   passing").
 - Checked. `git status` showed the twenty files of the note above and
@@ -17152,7 +17155,9 @@ sentence.
   real phone ("we have witnessed and can confirm"). Three: on a phone
   narrower than 386 pixels the three boxes of the create page lose
   their right edge, 11 pixels at 375 wide and 16 at 360
-  (`mat-form-field { min-width: 260px; }`, line 96).
+  (`mat-form-field { min-width: 260px; }`, line 96). (Mended on
+  2026-11-23: the note "A box with a least width in pixels is no wider
+  than its row" below.)
 - Tried and not taken: `height: 100%` for the shell. It is right in the
   Android state above and gave the same as `100dvh` in every number on
   the upright walks (Safari on iOS 18.6 and 26.5, Chrome on Android,
@@ -18486,6 +18491,155 @@ the working tree clean. Three files, one commit.
 - For the deploy: the wallet alone, the user's two lines on wallet1 and
   then on wallet2, with no `npm ci` (no package file changed). The
   masterpod is not touched.
+
+### A box with a least width in pixels is no wider than its row (2026-11-23)
+
+No plan file. The second of the five kinds of mistake named to the
+user (the note "A word that is longer than its line may break" above
+has the first), built on the user's word ("Yes, pixel widths") on top
+of 2879195, the working tree clean. One commit: ten page files and
+this file. Twelve style lines; no line of script and no word of the
+dictionaries changes.
+
+- The mistake: a box was told `min-width: 260px`, `280px`, `320px` or
+  `360px`, and a least width in pixels holds whatever the room is. A
+  card leaves its content the screen's width less 66 px, and a step of
+  a vertical stepper in a card the width less 150 px. So on a phone
+  the box was wider than its row: it passed its card, was cut off by
+  the step's frame, or let the page be pushed sideways.
+- Ten lines get `min-width: min(Npx, 100%)` where they had
+  `min-width: Npx`, the form that `.wide` of `account.page.ts` has had
+  since 2026-11-19: N px at the least, or the row's whole width where
+  the row is narrower. They are `.dates` (280) in
+  `src/app/pages/noted-transactions.page.ts` and
+  `transaction-history.page.ts`; `.wide` (360) in `attesting.page.ts`,
+  `attesting-trade-case.page.ts`, `attesting-recovery-case.page.ts`,
+  `attesting-dispute-case.page.ts` and `moderation-case.page.ts`;
+  `.filter` (320) in `attesting.page.ts` and `moderation.page.ts`;
+  `.column` (280) in `attesting-dispute-case.page.ts`. Each of these
+  boxes is a part of a flex row.
+- Two lines get `mat-form-field { width: 260px; max-width: 100%; }`
+  where they had `mat-form-field { min-width: 260px; }`, the form that
+  `recover-open.page.ts` has had since 2026-11-10: `create.page.ts`
+  and `account-recovery.page.ts`. The first form is not enough there.
+  Three of their boxes are no part of a flex row (Username on the
+  create page, Email and Phone number on the recovery page), and such
+  a box keeps the 212 px that Angular Material gives it (180 px to
+  type in and 32 px of padding). In a first trial with the first form
+  it stood 212 px wide in a step of 170 px at 320 px, with 18 px cut
+  off. With a width and `max-width: 100%` a box is 260 px wide where
+  its step has the room and as wide as the step where not, in a flex
+  row and out of one. `.wide` of the recovery page sets its own
+  `width` and `max-width`, as before.
+- Left as they are, three of the fifteen lines that were named to the
+  user: `.dates { min-width: 280px; ... }` in `dao.page.ts` and in
+  `guardians.page.ts`, and `.request { width: 320px; }` in
+  `seed.page.ts`. The DAO page and the Guardians page have no card: at
+  320 px their tab leaves the Dates box 288 px, more than the 280 it
+  asks for, and with a range picked the box is 288 px wide in 288. The
+  seed page's card has a `width` and no least width, and it is a part
+  of a flex row, so it gets narrower by itself: 254 px wide in 254 at
+  320 px, 294 in 294 at 360 px. All three were measured in the look
+  below.
+- Seen here, in a development build of a scratch copy of 2879195 with
+  the twelve lines (its `src` folder the same in every file as the
+  wallet folder's, `diff -r`), served from a scratch folder, in Google
+  Chrome 158 run without a window, with a made-up session and no
+  server (only `/api/config` was asked, and answered 404). The staff
+  pages were opened with a made-up edition and a made-up case each (a
+  trade case, a recovery case, a dispute case with the case key held
+  and a moderator's case, all in review and with no event), answered
+  in the browser. 21 views: the create page's steps 1 and 2; Noted
+  transactions and the transaction history, each empty and with a
+  range picked; the Decided tab of the DAO page and of the Guardians
+  page, the same two ways; the recovery page's Email, Phone, Contact,
+  Bank and last step; Attesting, the three attestor case pages,
+  Moderation and the moderator's case page. At 320, 360, 375, 390,
+  412, 430, 600, 768, 1024 and 1280 px wide, in English and in Thai:
+  420 looks. In each look every box under a changed rule, every piece
+  of text (23,060 in all) and every part of the page (69,700) was
+  measured with the rule's old declarations put back into the page's
+  own style sheet, with the new ones, and with the old ones again.
+- What changes. At 430, 768, 1024 and 1280 px: nothing. At 600 px the
+  side menu stands beside the page and leaves it 360 px, so a page
+  behind the login is there as on a phone of 360 px. In no look does a
+  part outside the changed boxes change its size or its place.
+  - The create page and the recovery page: a step leaves a box 170,
+    210, 225 and 240 px at 320, 360, 375 and 390 px. The boxes were
+    260 px wide and the step's frame cut off their right end, 66, 26
+    and 11 px of it at 320, 360 and 375 px; at 390 px they stood 20 px
+    past their row, uncut. Now each is as wide as its step. From
+    412 px up (262 px of room) they are 260 px wide as before. (The
+    note of 2026-11-22 has 16 px at 360; this look measured 26.)
+  - Noted transactions and the transaction history, at 320 px only,
+    where the card leaves 254 px: the Dates box was 280 px wide, 26 px
+    past its row and 9 px past the card's edge. Now 254.
+  - The `.wide` boxes of the staff pages ("Anos account", "Meeting
+    link (https)", "Note", "Share the case key with"): the card leaves
+    254, 294, 309, 324 and 346 px at 320, 360, 375, 390 and 412 px.
+    The boxes were 360 px wide and ended 73, 33, 18 and 3 px right of
+    the screen's edge at 320, 360, 375 and 390 px, and the page could
+    be pushed sideways by as much; at 412 px they stood 14 px past
+    their row, inside the card. Now each is as wide as its row, and
+    the page cannot be pushed sideways.
+  - `.filter` on Attesting and on Moderation, 320 px wide in 254, 294
+    and 309 px of room: it ended 33 px right of the screen's edge at
+    320 px (the Moderation page could be pushed sideways by 33 px),
+    9 px past the card's edge at 360 px, and 11 px past its row,
+    inside the card, at 375 px. Now as wide as its row.
+  - The two columns of a dispute case's files, at 320 px only: 280 px
+    wide in 254, 9 px past the card's edge. Now 254.
+- What the narrower boxes cost, all of it inside a box:
+  - On the recovery page a label that is longer than its box ends in
+    "…" while the box is empty and not tapped: "Anything else, one per
+    line" at 360 px and narrower (13 px of it at 360, 53 at 320), and
+    at 320 px also "Name on the account" (16 px) and "Their phone
+    number" (6 px). In Thai: the label of the last step at 375 px and
+    narrower (9, 24 and 64 px), and "Their phone number" at 320 px
+    (30 px). Until now the box was cut off instead; at 360 px the
+    label in it was whole.
+  - With a range picked on Noted transactions or on the transaction
+    history at 320 px, each of the two dates is 6 to 7 px longer than
+    its room, and its end is out of sight. In the old box of 280 px
+    both dates were whole.
+  - The Moderation page's Status box shows the picked statuses in one
+    line, "Open, In review, Approved, Delivering". The line ends in
+    "…" at 375 px and narrower (10, 25 and 65 px of it at 375, 360 and
+    320 px). At 375 px the old box stood inside the card, so there the
+    change costs the end of that line and mends nothing a person saw.
+    In Thai the line is longer than the box at every width, as before
+    (52 px at 1280 px).
+  - The account pickers of the staff pages show the account's kind and
+    its id of 64 characters, which a box of 360 px cut short as well;
+    66 px more of it is out of sight at 360 px.
+- Not seen: Safari; a phone; the live wallet; a real case of an
+  attestor or of a moderator; a box with something typed in, the dates
+  apart; a label while its box is tapped; a screen narrower than
+  320 px; `/account/recovery/selfie`, which is the recovery page
+  opened at its first step; `ng serve`.
+- A picture of the create page's first step at 360 px, today beside
+  the change, was shown to the user.
+- `npx ng build` from the wallet folder into a scratch folder: clean,
+  no warning. The script is `main-SROSCGUF.js`, 2,336,349 bytes: byte
+  for byte the script of the scratch copy that was measured (`cmp`),
+  and 122 bytes more than the script built from 2879195 in a second
+  scratch copy. Twelve places differ, the twelve rules. The style
+  sheet `styles-HGVKDO6M.css` and every other file are the same;
+  `index.html` differs in the script's name.
+- Spec: this note, and one sentence added to each of three older
+  notes of this section that the change left out of date: "The
+  passkey wherever the wallet signs with an account's key"
+  (2026-11-19, under "Seen in passing"), "The Recipient box of the
+  Send form fits its card" (2026-11-19, under "Left as they are") and
+  "The shell is as high as the screen shows, and the Username label
+  of the create page is whole" (2026-11-22, after "Three:"). README
+  unchanged.
+- `Z-TestNet/after_production_todos/things-to-do-after-production.md`
+  has the line "create page: the boxes lose their right edge on a
+  narrow phone". This change mends it. The list is another folder and
+  is not touched by this commit.
+- For the deploy: the wallet alone, the user's two lines on wallet1 and
+  then on wallet2, with no `npm ci` (no package file changed).
 
 ## 12. Recovery and the moderator edition
 

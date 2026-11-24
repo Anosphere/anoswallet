@@ -87,7 +87,7 @@ export function moderationError(res: ApiResponse<unknown>, path: string, words: 
   `,
   styles: `
     .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .filter { min-width: 320px; }
+    .filter { min-width: min(320px, 100%); }
     .muted { color: var(--mat-sys-on-surface-variant); }
     .error { color: var(--mat-sys-error); }
     code { font-size: 12px; word-break: break-all; }

@@ -93,7 +93,7 @@ import { SessionService } from '../services/session.service';
   `,
   styles: `
     .fields { display: flex; flex-wrap: wrap; gap: 8px; }
-    mat-form-field { min-width: 260px; }
+    mat-form-field { width: 260px; max-width: 100%; }
     mat-form-field.first { margin-top: 8px; }
     .error { color: var(--mat-sys-error); }
     button + button { margin-left: 8px; }
