@@ -84,7 +84,7 @@ interface TodoLine {
   styles: `
     :host { display: block; }
     .greeting { display: flex; align-items: center; gap: 16px; margin: 8px 0 16px; }
-    .greeting h2 { margin: 0; font-size: 24px; font-weight: 500; }
+    .greeting h2 { margin: 0; font-size: 24px; font-weight: 500; line-height: 1.3; }
     h3 { margin: 24px 0 4px; }
     .error { color: var(--mat-sys-error); }
     .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-top: 24px; }

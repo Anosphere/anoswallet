@@ -211,7 +211,7 @@ const CLOSED = /has closed/;
     h3 { font-size: 1rem; font-weight: 500; margin: 24px 0 4px; }
     .total { font-weight: 500; margin: 8px 0 0; }
     .numbers { display: flex; flex-direction: column; gap: 6px; margin: 16px 0; }
-    .large { font-size: 1.6rem; font-weight: 700; }
+    .large { font-size: 1.6rem; font-weight: 700; line-height: 1.3; }
     .small { font-size: 13px; }
     .wide { width: 100%; margin: 8px 0; }
     .you { display: flex; align-items: center; gap: 6px; }

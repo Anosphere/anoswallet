@@ -18641,6 +18641,108 @@ dictionaries changes.
 - For the deploy: the wallet alone, the user's two lines on wallet1 and
   then on wallet2, with no `npm ci` (no package file changed).
 
+### A line of big letters is as high as its letters (2026-11-23)
+
+No plan file. The third of the five kinds of mistake that gets built
+(the note "A word that is longer than its line may break" above names
+them), on the user's word ("Yes, line heights") on top of e074a03, the
+working tree clean. One commit: five page files and this file. Five
+style lines; no line of script and no word of the dictionaries
+changes.
+
+- The mistake: `src/material-theme.scss` gives `body` the font
+  `var(--mat-sys-body-medium)`, which the built style sheet holds as
+  `400 .875rem / 1.25rem Roboto`. The line height in it is a length,
+  so every element inherits 20 px, whatever the size of its letters. A
+  rule that makes the letters bigger than that and sets no line height
+  of its own gets lines 20 px apart for letters whose own box is
+  higher. On one line nothing shows. On two lines the second line is
+  written into the first.
+- Five rules gain `line-height: 1.3`: `.headline` (2rem, 32 px) in
+  `src/app/pages/vouching.page.ts`; `.large` (1.6rem, 25.6 px) in
+  `dao-proposal.page.ts` and in `guardian-proposal.page.ts`; `.price`
+  (1.6rem) in `listing.page.ts`; `.greeting h2` (24 px) in
+  `home.page.ts`. A number with no unit, so the line follows the size
+  of the letters. 1.3 is what `.title` of `landing.page.ts` has; the
+  two balances (`balance-card.component.ts`, `wallet.page.ts`) have
+  1.2. These five hold words, in Thai too, and Thai writes marks over
+  and under a letter, so they get the bigger of the two. Both values
+  were looked at in pictures of the five texts, in English and in
+  Thai; both keep the lines apart.
+- What it changes on two lines: the lines stand 41.6, 33.3 and 31.2 px
+  apart (1.3 times 32, 25.6 and 24 px) where they stood 20 px apart.
+  The letters' own boxes are 38, 30 and 28 px high, so until now the
+  second line lay 18, 10 and 8 px into the first. Now it does not.
+- What it changes on one line: the text's box is as high as its line
+  (41.6, 33.3 and 31.2 px) where it was 20 px, so what stands under it
+  stands lower. Under the headline of the Get vouched page 21.6 px;
+  under the vote line of a proposal in its vote (the DAO's and the
+  fund's) and under a listing's price 13.3 px. On Home nothing moves:
+  the greeting's row is 56 px high from the picture beside it, and one
+  line stands in its middle as before. With two lines it is 43.2 px
+  under the headline, 26.5 px under a vote line or a price, and on
+  Home the row is 62.4 px high, the picture in it stands 3.2 px lower
+  and everything under the row 6.4 px lower.
+- When each text takes two lines, as measured:
+  - "You've been vouched" and its Thai words: at 320 and 360 px, and
+    at 600 px, where the side menu leaves the page 360 px. One line
+    from 375 px up.
+  - The greeting on Home: with a long first name only. "Hello,
+    Christopher Alexander" at 390 px and narrower; a Thai first name
+    of two long words at 320 px. "Hello, Mai" is one line at every
+    width.
+  - The vote line of a DAO proposal: in English one line at every
+    width, also as "For 1234 · Against 567"; in Thai two lines at 320
+    and 360 px with those numbers.
+  - The vote line of a fund proposal: "For 12500 · Against 4300" at
+    320 px; its Thai at 390 px and narrower.
+  - A listing's price: "1,250,000.00 IDR per anos" at 320 px, in both
+    languages. "35.50 THB per anos" is one line at every width.
+- Seen here, in a development build of a scratch copy of e074a03 with
+  the five lines (its `src` folder the same in every file as the
+  wallet folder's, `diff -r`), served from a scratch folder, in Google
+  Chrome 158 run without a window, with a made-up session and no
+  server (only `/api/config` was asked, and answered 404); a made-up
+  DAO proposal, fund proposal and listing were answered in the
+  browser. Nine views: the Get vouched page once vouched; Home with a
+  short first name and with one of two long words; a DAO proposal in
+  its vote and a fund proposal in its vote, each with small and with
+  big numbers; a listing with a short and with a long price. At 320,
+  360, 375, 390, 412, 430, 600, 768, 1024 and 1280 px wide, in English
+  and in Thai: 180 looks. In each look the changed text (its lines,
+  how far apart they stand, how high the letters' own box is), every
+  piece of text (7,280 in all) and every part of the page (7,340) was
+  measured with the line height taken out of the page's own style
+  sheet, put back, and taken out again. In no look does anything
+  change but straight down: no part changes its width or moves
+  sideways, no other text gets other lines, and no text takes more or
+  fewer lines than before.
+- Seen besides, and left as it is: ten rules give a heading letters of
+  20 px (`1.25rem`) on the same 20 px lines, the `h2` of
+  `dao-proposal.page.ts` with a proposal's title among them. There the
+  letters are as big as the line is high, not bigger. A title of three
+  lines at 360 px was looked at in a picture: in English the lines
+  stand close and no letter meets another; in Thai the marks over the
+  letters of a line touch the line above. Not changed and not asked
+  for; told to the user.
+- Not seen: Safari; a phone, where the Thai letters come from another
+  font than on this Mac; the live wallet; a proposal that is decided
+  or waiting (its vote line has no large type); the attestor's and the
+  moderator's editions, which draw the same pages; a screen narrower
+  than 320 px; `ng serve`.
+- A picture of the Get vouched page at 360 px, today beside the
+  change, was shown to the user.
+- `npx ng build` from the wallet folder into a scratch folder: clean,
+  no warning. The script is `main-KURZCXI3.js`, 2,336,429 bytes: byte
+  for byte the script of the scratch copy that was measured (`cmp`),
+  and 80 bytes more than the script built from e074a03 in a second
+  scratch copy. Five places differ, the five rules. The style sheet
+  `styles-HGVKDO6M.css` and every other file are the same;
+  `index.html` differs in the script's name.
+- Spec: this note only. README unchanged.
+- For the deploy: the wallet alone, the user's two lines on wallet1 and
+  then on wallet2, with no `npm ci` (no package file changed).
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`

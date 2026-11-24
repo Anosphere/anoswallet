@@ -137,7 +137,7 @@ import { SessionService } from '../services/session.service';
     h2 { font-size: 1.25rem; font-weight: 500; margin: 0; }
     h3 { font-size: 1rem; font-weight: 500; margin: 20px 0 4px; }
     .banner { display: inline-block; padding: 4px 12px; border-radius: 10px; background: var(--mat-sys-secondary-container); color: var(--mat-sys-on-secondary-container); font-weight: 500; margin: 0 0 8px; }
-    .price { font-size: 1.6rem; font-weight: 700; margin: 4px 0 8px; }
+    .price { font-size: 1.6rem; font-weight: 700; line-height: 1.3; margin: 4px 0 8px; }
     .line { font-size: 1.05rem; margin: 2px 0; }
     .owner { display: flex; align-items: center; gap: 12px; margin: 16px 0; }
     .texts { display: flex; flex-direction: column; }
