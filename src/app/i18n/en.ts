@@ -830,6 +830,10 @@ export const en = {
     tradeUpdate: 'Trade update. Look at the box at the top of this chat.',
     roomPicture: 'Room picture',
     pictureWhat: "This picture stands beside the room's name. Everyone who looks for public rooms sees it. Pick a photo to set it, or to put another in its place.",
+    stickers: 'Stickers',
+    sticker: 'Sticker',
+    stickersSentLately: 'Stickers you sent lately',
+    stickerSet: 'Sticker set',
   },
   rooms: {
     publicRoom: 'Public room',

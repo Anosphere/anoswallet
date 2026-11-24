@@ -11,6 +11,7 @@ import { LanguageService } from '../services/language.service';
 import { reasonOf } from '../services/log.service';
 import { RoomItem } from '../services/masterpod-api.service';
 import { SessionService } from '../services/session.service';
+import { stickerNamed } from '../stickers';
 import { TradeMessageKind, tradeMessageKind } from '../trade-messages';
 
 /**
@@ -30,7 +31,12 @@ import { TradeMessageKind, tradeMessageKind } from '../trade-messages';
  * Since 2026-11-22 (forclaude/public-rooms-plan-1.md) the row of a public
  * room that has a picture shows that picture, round, where the kind's
  * icon stood (<app-room-picture>, wallet spec 8.6); the icon stands while
- * the picture loads and for every room without one.
+ * the picture loads and for every room without one. Since 2026-11-23
+ * (forclaude/stickers-database-plan-1.md; wallet spec 4.16) a newest
+ * message that is a sticker, its whole text a sticker's code
+ * (../stickers), shows in the preview as the word "Sticker". That is
+ * worked out from the message's text alone: this page does not ask for
+ * the list of the sets.
  */
 @Component({
   selector: 'app-chat-page',
@@ -175,7 +181,7 @@ export class ChatPage {
     });
   }
 
-  /** The one-line preview: "You: " before this pod's own message; the two texts for a room without messages or a message that will not open. For the two traders of a marketplace chat (2026-11-19), a newest message that the pinned card posted shows as the conversation's grey line does, with no account id: "You sent your account for this trade.", "mai sent their account for this trade." or "Trade update. Look at the box at the top of this chat." */
+  /** The one-line preview: "You: " before this pod's own message; the two texts for a room without messages or a message that will not open. For the two traders of a marketplace chat (2026-11-19), a newest message that the pinned card posted shows as the conversation's grey line does, with no account id: "You sent your account for this trade.", "mai sent their account for this trade." or "Trade update. Look at the box at the top of this chat." Since 2026-11-23 a newest message that is a sticker shows as the word "Sticker", after "You: " when it is this pod's own. */
   protected preview(room: RoomItem): string {
     const last = room.lastMessage;
     if (!last) return this.t().chat.noMessages;
@@ -188,7 +194,7 @@ export class ChatPage {
     }
     const text = this.previews().get(last.messageId);
     if (text === undefined) return '';
-    return (mine ? this.t().chat.youPrefix : '') + text;
+    return (mine ? this.t().chat.youPrefix : '') + (stickerNamed(text) ? this.t().chatRoom.sticker : text);
   }
 
   private async decryptPreviews(rooms: RoomItem[]): Promise<void> {

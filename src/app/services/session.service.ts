@@ -1,4 +1,5 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
+import type { StickerSet } from '../stickers';
 import { ChatKeys, CryptoService, Envelope, HybridPublicKey, SessionKeys } from './crypto.service';
 import type { RoomsAnswer } from './masterpod-api.service';
 import { Bytes } from './passkey.service';
@@ -97,6 +98,8 @@ export class SessionService {
   readonly unread = computed(() => this.notifications().filter((n) => !n.read));
   /** The latest /list-chat-rooms answer (the rooms, the invites to this pod, the join requests on its rooms): the shell's poll once setup is complete, and the chat pages. */
   readonly chatRooms = signal<RoomsAnswer | null>(null);
+  /** The stickers of the wallet's chat as /list-stickers answered them for this login (wallet spec 4.16; 2026-11-23): the sets in the order of their row. Null until that answer has arrived; stickers.service asks for it when a conversation is first opened, once after each login. */
+  readonly stickerSets = signal<StickerSet[] | null>(null);
   /** The last message position seen in each room on this device (wallet spec 8.2, Chat), kept in localStorage per pod. */
   readonly seenPositions = signal<Record<string, number>>({});
   /** The rooms whose newest message is by someone else and above the seen position (0 when the room was never opened here). */
@@ -154,6 +157,7 @@ export class SessionService {
     this.accounts.set([]);
     this.notifications.set([]);
     this.chatRooms.set(null);
+    this.stickerSets.set(null);
     this.seenPositions.set({});
   }
 

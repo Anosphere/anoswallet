@@ -988,6 +988,11 @@ export class MasterpodApiService {
     return this.signed('/mark-messages-seen', { chatRoomId, position }, true);
   }
 
+  /** The stickers of the wallet's chat (2026-11-23, masterpod spec 28; wallet spec 4.16): every set in the order of the row of sets, each with its stickers in their order, each sticker with its number and its tags. Text only. Quiet unless asked otherwise: stickers.service reads it once after each login, and it is nothing the person did. What the answer holds is read by readStickerSets (../stickers), which trusts nothing in it. A masterpod of before answers 404. */
+  listStickers(quiet = true): Promise<ApiResponse<unknown>> {
+    return this.signed('/list-stickers', {}, quiet);
+  }
+
   getChatPublicKeys(anopodIds: string[]): Promise<ApiResponse<{ keys: ChatKeyItem[] }>> {
     return this.signed('/get-chat-public-keys', { anopodIds });
   }

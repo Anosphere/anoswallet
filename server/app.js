@@ -49,6 +49,12 @@ import { createProxyMiddleware } from 'http-proxy-middleware';
  * and passed on it would tell the doorman to close after its answer. The
  * masterpod, the keyholders and the signing servers get a new connection
  * for every call.
+ *
+ * One address outside /api is asked of a backend too (2026-11-23, wallet
+ * spec 4.16): GET /stickers/<set>/<number>, the picture of a sticker of
+ * the wallet's chat. It is asked of the masterpod and handed to the
+ * browser as a picture that the browser keeps; the lines are where
+ * createApp mounts it.
  */
 
 /**
@@ -129,6 +135,39 @@ function ownAnswerHeaders(proxyRes) {
     if (!KEPT_ANSWER_HEADERS.has(name)) delete proxyRes.headers[name];
   }
   proxyRes.headers['content-type'] = json ? 'application/json; charset=utf-8' : 'text/plain; charset=utf-8';
+}
+
+/**
+ * The address of a sticker's picture at this program (2026-11-23, wallet
+ * spec 4.16), with nothing before it and nothing after it: the set's
+ * name, small letters, digits and hyphens, and the sticker's number, two
+ * digits, as the masterpod has them (its spec, section 28).
+ */
+const STICKER_PATH = /^\/stickers\/[a-z0-9-]{1,32}\/[0-9]{2}$/;
+
+/**
+ * What a sticker's picture says to the browser about keeping it (wallet
+ * spec 4.16): for a year, with no question in that time whether it has
+ * changed. A picture never changes under its number; a sticker that is
+ * drawn again gets a new number.
+ */
+const STICKER_KEEP = 'public, max-age=31536000, immutable';
+
+/**
+ * Called with the masterpod's answer to a sticker's picture, as
+ * ownAnswerHeaders is under /api. Only one answer is handed on as a
+ * picture: a 200 that the masterpod calls image/webp. It goes on as
+ * image/webp with its length and STICKER_KEEP, and with no other header
+ * of the masterpod's. Every other answer, a sticker that is not there
+ * among them, goes on with its status and its body as JSON or plain
+ * text, marked "no-store": the browser does not keep it and asks again
+ * the next time the picture is to show.
+ */
+function ownPictureHeaders(proxyRes) {
+  const picture = proxyRes.statusCode === 200 && /^image\/webp\s*(;|$)/i.test(proxyRes.headers['content-type'] ?? '');
+  ownAnswerHeaders(proxyRes);
+  if (picture) proxyRes.headers['content-type'] = 'image/webp';
+  proxyRes.headers['cache-control'] = picture ? STICKER_KEEP : 'no-store';
 }
 
 /** 502 { error: "<who> unavailable" } when a backend does not answer. */
@@ -263,6 +302,40 @@ export function createApp(config) {
   app.use(unknownNumber('sign', 'signing server', config.signingServerUrls.length));
 
   app.use('/api', (req, res) => {
+    res.status(404).json({ error: 'Not Found', path: req.originalUrl });
+  });
+
+  // The stickers' pictures (2026-11-23, wallet spec 4.16), in front of the
+  // build's files and outside /api, where every answer is JSON or plain
+  // text that the browser may not keep. GET /stickers/<set>/<number> is
+  // asked of the masterpod as /sticker-picture/<set>/<number>, a read that
+  // needs no login: a sticker is the same for everybody. None of the
+  // browser's headers goes with the ask. So the question whether a picture
+  // has changed (If-None-Match) never reaches the masterpod, which then
+  // always answers with the whole picture, and this program hands out no
+  // ETag to ask with. Whatever is under /stickers and is not answered as a
+  // picture is marked "no-store": an answer of the masterpod's that is no
+  // picture (ownPictureHeaders), a masterpod that does not answer (502),
+  // and an address of another form or a method other than GET (404).
+  app.use('/stickers', (req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    for (const name of Object.keys(req.headers)) {
+      if (name !== 'connection') delete req.headers[name];
+    }
+    next();
+  });
+  app.use(
+    createProxyMiddleware({
+      target: config.masterpodUrl,
+      changeOrigin: true,
+      proxyTimeout: config.proxyTimeoutMs,
+      timeout: config.proxyTimeoutMs,
+      pathFilter: (path, req) => req.method === 'GET' && STICKER_PATH.test(req.url),
+      pathRewrite: (path) => path.replace(/^\/stickers\//, '/sticker-picture/'),
+      on: { error: unavailable('masterpod'), proxyRes: ownPictureHeaders },
+    }),
+  );
+  app.use('/stickers', (req, res) => {
     res.status(404).json({ error: 'Not Found', path: req.originalUrl });
   });
 
