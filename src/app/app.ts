@@ -38,9 +38,13 @@ function loginEnded(res: ApiResponse<unknown>): boolean {
  * setup is complete; home, wallet, chat, marketplace and account once it
  * is, and Cases with them, wallet spec 13.1; seed when the pod is a seed;
  * Moderation in the moderator edition, wallet spec 12.1, which also names
- * the app "Moderator wallet" in the toolbar; Attesting in the attestor
- * edition, wallet spec 13.1, named "Attestor wallet"). The toolbar's name
- * is a link to Home once setup is complete. The toolbar's words come from
+ * the app "Moderator" in the toolbar; Attesting in the attestor edition,
+ * wallet spec 13.1, named "Attestor"). The toolbar's name is a link to
+ * Home once setup is complete. Since 2026-11-24 it is one short word in
+ * bold letters of 18 px ("anoPod" in the wallet edition; the word
+ * "wallet" went out of all three names), and the username beside it ends
+ * in "…" when the top bar has no room for all of it, so the bar is never
+ * wider than a phone's screen. The toolbar's words come from
  * the dictionary (wallet spec 8.8), and the language service is created
  * here, so the page's `lang` attribute follows the language from the
  * start. Since 2026-11-19 the shell also rings the wallet's one sound

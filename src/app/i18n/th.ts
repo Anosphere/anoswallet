@@ -20,9 +20,9 @@ const roleWord = (role: string): string => ROLES[role] ?? role;
 export const th: Words = {
   shell: {
     menu: 'เมนู',
-    brandWallet: 'กระเป๋าเงิน anoPod',
-    brandModerator: 'กระเป๋าเงินผู้ดูแล',
-    brandAttestor: 'กระเป๋าเงินผู้ยืนยัน',
+    brandWallet: 'anoPod',
+    brandModerator: 'ผู้ดูแล',
+    brandAttestor: 'ผู้ยืนยัน',
     lock: 'ล็อก',
     update: 'อัปเดต',
     refreshing: 'กำลังรีเฟรช…',

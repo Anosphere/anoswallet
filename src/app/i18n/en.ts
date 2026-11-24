@@ -8,9 +8,9 @@
 export const en = {
   shell: {
     menu: 'Menu',
-    brandWallet: 'anoPod wallet',
-    brandModerator: 'Moderator wallet',
-    brandAttestor: 'Attestor wallet',
+    brandWallet: 'anoPod',
+    brandModerator: 'Moderator',
+    brandAttestor: 'Attestor',
     lock: 'Lock',
     update: 'Update',
     refreshing: 'Refreshing…',

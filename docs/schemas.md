@@ -1586,8 +1586,13 @@ until setup is complete; home first, then wallet, chat, marketplace, DAO
 isSeed. The Chat entry carries the number of unread rooms (8.2, Chat;
 2026-11-05, section 11) and the Notifications entry the number of unread
 notifications (2026-11-06); the side panel and the Home tiles draw one
-list, navigation.service (8.3). The toolbar's "anoPod wallet" is a link
-to /home once setup is complete.
+list, navigation.service (8.3). The toolbar's brand is a link to /home
+once setup is complete. Since 2026-11-24 (section 11) the brand is one
+short word in bold letters of 18 px: "anoPod", and in the staff's
+editions "Moderator" (12.1) and "Attestor" (13.1). It read "anoPod
+wallet", "Moderator wallet" and "Attestor wallet" before, in letters of
+22 px. The username beside it ends in "…" when the top bar has no room
+for all of it.
 
 Two more entries carry a number since 2026-11-12 (section 11; the plan
 is forclaude/wallet-case-chats-plan-1.md, its decisions 15 and 25): the
@@ -1692,6 +1697,10 @@ On a screen narrower than 600 px the username is not shown while the
 button is there, and the wallet's name is cut with "…" when the row has
 no room (Thai at 360 and 375 px; English fits from 360 up). Both rules
 hold only while the button shows (the class `updating` on the toolbar).
+Since 2026-11-24 (section 11) the wallet's name is the one short word
+"anoPod" in letters of 18 px, which has room beside the button from 320
+px up in both languages and in the staff's editions, so the second rule
+finds nothing to cut on a phone.
 The button has 12 px at each side where Material gives 24, so it is 70
 px wide in English and 64 in Thai. A tap refreshes at once, with no
 question in between (the refresh, the paragraph after the next). A
@@ -18891,6 +18900,167 @@ line and no word of the dictionaries changes.
 - For the deploy: the wallet alone, the user's two lines on wallet1 and
   then on wallet2, with no `npm ci` (no package file changed).
 
+### The top bar says anoPod in smaller letters, and its username gives way (2026-11-24)
+
+No plan file. The end of the work on text that runs out of its borders
+(four notes above this one: "A word that is longer than its line may
+break", "A box with a least width in pixels is no wider than its row",
+"A line of big letters is as high as its letters" and "The line under
+an input box takes the room it needs"). The last kind of mistake named
+in the first of them was a long word in a part of a row. A walk of
+every page, with ordinary names and with the longest ones, showed that
+with ordinary names one thing alone stood out of its borders: the
+wallet's own top bar. The user settled
+how to mend it in talk, the last two turns of it: "what if we just keep
+the word anoPod, take out the wallet part, and make it smaller but
+still keep it bold so that a tap on it goes to the home", then "Yes, 18
+px". Built on top of 5d8495c, the working tree clean. One commit: four
+files of `src/app` and this file. No template changes, and of the
+script only six words of the two dictionaries and one comment.
+
+- What was wrong. `app.html` puts the brand, the username (`.who`) and
+  the Lock button into one row of Angular Material's toolbar, which is
+  `display: flex; white-space: nowrap` (`.mat-toolbar-single-row`), and
+  `app.css` let neither text give way. The brand stood in the toolbar's
+  own letters of 22 px: "anoPod wallet" was 139.4 px wide and
+  "กระเป๋าเงิน anoPod" 177.6 px. The row was wider than a phone's screen
+  as soon as the username had more letters than these. In Thai: none at
+  320 px (three letters were 13 px too many), 7 at 360 px, 9 at 375, 12
+  at 390 and 393, 13 at 402, 15 at 412, 18 at 430. In English: 6, 13,
+  15, 16, 18, 18, 20, 23. With one letter more the Lock button began to
+  run off the screen's right edge, and every page of that person could
+  be pushed sideways; with a long username the button stood off the
+  screen whole, and the round "+" buttons of Marketplace, DAO and
+  Guardians with it. So this was no rare case: a Thai phone 375 px wide
+  and a username of 10 letters.
+- `src/app/i18n/en.ts` and `src/app/i18n/th.ts`: the brand's three names
+  lose the word "wallet". `brandWallet` is "anoPod" in both languages
+  (it was "anoPod wallet" and "กระเป๋าเงิน anoPod"), `brandModerator` is
+  "Moderator" and "ผู้ดูแล" ("Moderator wallet", "กระเป๋าเงินผู้ดูแล"),
+  `brandAttestor` is "Attestor" and "ผู้ยืนยัน" ("Attestor wallet",
+  "กระเป๋าเงินผู้ยืนยัน"). Lines 8 and 10 of `app.html` are their only
+  use and are not changed: the brand is a link to /home once setup is
+  complete, as before, and plain text until then. The name in the web
+  app manifest, "anoPod wallet" (section 2), is another thing and
+  stays.
+- `src/app/app.css`: `.brand` gains `font-size: 18px`; its weight stays
+  500. `.who` gains `min-width: 0; overflow: hidden; text-overflow:
+  ellipsis`: of the row's parts the username is the one that gives way,
+  and it ends in "…". The two rules of the Update button's time
+  (`.updating .brand`, and `.updating .who` under 600 px; 8.1) are not
+  changed.
+- `src/app/app.ts`: the comment over the shell names the brand as it
+  reads now.
+- What a person sees. "anoPod" is 61.7 px wide. A username stands whole
+  up to 16 letters at 320 px, 20 at 360, 23 at 375, 26 at 390 and 393,
+  28 at 402, 30 at 412, and all 32 at 430 (of the lengths tried: every
+  one from 5 to 16 and from 22 to 32, and 18 and 20). A longer one
+  ends in "…": one of 20 letters shows 15 of them at 320 px. In the
+  staff's editions "Moderator" is 83.9 px wide and "Attestor" 65.1
+  ("ผู้ดูแล" 43, "ผู้ยืนยัน" 55); at 320 px a username of 12 letters
+  stands whole beside "Moderator" and one of 16 beside the other three.
+- A correction of what the user was told before the build: 18 letters
+  at 320 px, 24 at 360, 26 at 375, 29 at 390, 32 at 412. Those numbers
+  were measured without the "…" rule, where the row's parts may stand in
+  the bar's own 16 px of padding at the right. With the rule the row
+  keeps that padding, and the username gives way two to four letters
+  sooner: the numbers of the paragraph above.
+- Seen here, in development builds served from a scratch folder, in
+  Google Chrome 158 run without a window, with made-up sessions and
+  made-up rows and no server: the build of 5d8495c beside the build of
+  a scratch copy of it with the change, the same looks in both.
+  (1) The top bar by itself: Home in the three editions, usernames of 3
+  to 32 letters, eight widths (320, 360, 375, 390, 393, 402, 412 and
+  430 px), English and Thai, 608 looks in each build. In the build of
+  5d8495c 349 of them can be pushed sideways and the Lock button is off
+  the screen in 346; in the build with the change none can and it is
+  off in none, and no text or part outside the top bar stands
+  elsewhere than before.
+  (2) Every page: 4 pages before a login; 41 looks of a logged-in
+  person's pages (38 addresses, and Home and Wallet once more with
+  balances and an account right after a send), once with ordinary names
+  and once with the longest; 30 views with made-up rows (chats,
+  requests, listings, proposals, alerts, the staff's cases, three
+  people in each list), once with ordinary usernames and once with
+  usernames of 7, 16 and 32 letters. Ten widths from 320 to 1280 px,
+  English and Thai: 2,920 looks in each build, 139,070 texts and
+  493,684 parts. With ordinary names no text stands out of a frame in
+  either build; 65 looks can be pushed sideways in the build of 5d8495c
+  (every page of a logged-in person in Thai at 320 px, by 9 px) and
+  none in the build with the change. With the longest names 852 looks
+  can be pushed sideways in the build of 5d8495c (every one from 320 to
+  430 px, by 88 to 209 px) and 4 in the build with the change (the
+  listing page at 320 px; "Known and left as it is" below); the texts
+  that stand out of a frame are 1,745 against 40, and the Lock button
+  is off the screen in 852 looks against none. Outside the top bar the
+  two builds differ in 102 looks. 78 are looks of Marketplace, DAO and
+  Guardians: their round "+" button, which the too-wide bar had moved
+  off the screen with the page's width (in English at 360 px with the
+  long username it stood 131 px further right and 233 px lower than its
+  place), stands at its place in the build with the change. 24 are
+  looks of the Log page, whose first line is the time of that run's
+  newest call. No other text or part stands elsewhere.
+  (3) While the Update button shows: the three editions, usernames of 3
+  to 32 letters, seven widths from 320 to 600 px, both languages, 252
+  looks in each build. No look can be pushed sideways in either. The
+  build of 5d8495c cuts the brand with "…" at 320 px in every edition
+  and both languages, at 360 px in three of those six (Thai in the
+  wallet and the attestor edition, English in the moderator edition)
+  and at 375 px in two; the build with the change cuts it in no look.
+- Tried before this, in the same walk, and not taken: two rules for the
+  whole wallet, each switched on in the page on top of 5d8495c.
+  `overflow-wrap: anywhere` in place of `break-word` on `body`: with
+  ordinary names it changes nothing in 1,500 looks; with the longest it
+  mends 40 texts, breaks 38 others in the middle of a word that stood
+  inside their frame before (the name on a marketplace card, the
+  sender's name in a chat, the "Waiting for …" button of a listing),
+  and leaves the top bar as it is, since the toolbar does not wrap.
+  That is what the note "A word that is longer than its line may break"
+  says of `anywhere`, now seen. `* { min-width: 0; }`: worse, it lays
+  the top bar's own texts over each other (154 texts out of a frame
+  with ordinary names, where there were none).
+- Thai is not the long word. The wallet's 1,359 Thai texts (all of
+  `th.ts`, the blanks filled) at 14 px: the widest piece a browser
+  cannot break is 124.8 px, the English word "breakGlassTransfer:" in a
+  Thai sentence; the widest Thai piece is 85 to 97 px. Thai names and
+  sentences typed with no space break into pieces of at most 61 px. The
+  same in Chrome 158 on a Mac, in Safari of a simulated iPhone SE with
+  iOS 18.6 and with iOS 27.0, and in Chrome 149 of an Android 17
+  emulator: all four break Thai between words by a dictionary. What
+  does not break is Latin letters and digits in one piece: a username
+  (a to z, 0 to 9 and _ by the masterpod's rule; 223.6 px for one of 32
+  letters, 110.2 px for one of 16), an email address, a long name
+  written in Latin letters.
+- Known and left as it is: with a username of 32 letters, a name of 24
+  letters in one piece or a title typed in one piece, three pages have
+  a text that stands out of its row at 320 to 430 px: the cards of the
+  DAO list (their title and their line), the owner block of a listing,
+  and a name on Vouch requests. A person with a username of 16 letters
+  stands out of nothing on any page at any width. This is the kind of
+  the first note's list that was not built (a text part of a row keeps
+  `min-width: auto`); the user: "It's unusual for anyone to have such a
+  long username. Even 16 would be highly unusual."
+- Not seen: Safari and a phone for the top bar itself (the breaking of
+  Thai was seen there, the bar was not); the live wallet; a screen
+  narrower than 320 px.
+- Pictures of the top bar in Thai at 375 px with a username of 10
+  letters were shown to the user in the talk before the build: the ways
+  that were talked through, and "anoPod" at 18 and at 16 px.
+- `npx ng build` from the wallet folder into a scratch folder: clean,
+  no warning. The script is `main-HXXDI3RK.js`, 2,336,436 bytes: byte
+  for byte the script of the scratch copy that was measured (`cmp`),
+  and 154 bytes less than the script of 5d8495c. Five places differ:
+  the brand's names in the English dictionary, two stretches of them in
+  the Thai one, and the two rules. The style sheet
+  `styles-HGVKDO6M.css` and every other file are the same; `index.html`
+  differs in the script's name.
+- Spec: this note; in 8.1 the brand's sentence and one sentence after
+  the rules of the Update button's time; in 12.1 and 13.1 what an
+  edition changes; the shell's line in the table of 13.4; one clause in
+  the build notes of 12.7 and of 13.7. README unchanged.
+- For the deploy: the wallet alone, the user's two lines on wallet1 and
+  then on wallet2, with no `npm ci` (no package file changed).
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`
@@ -18915,7 +19085,9 @@ live on 4200 through the same `proxy.conf.json`, one at a time.
 
 What the edition changes: the navigation shows Moderation (12.3) when the
 edition is moderator and a session is open; the landing card's title says
-Moderator wallet; and, since 2026-11-12 (section 11), the wallet reads
+Moderator wallet (as built, 12.7: the toolbar's brand; since 2026-11-24
+it reads "Moderator", section 11); and, since 2026-11-12 (section 11),
+the wallet reads
 the recovery cases that are open or in review every 15 seconds, for the
 number on the Moderation entry (8.1; work-badge.service, 8.3). Nothing
 else. A moderator's pod is an ordinary pod
@@ -19534,7 +19706,8 @@ clean. What this section left open and how it was decided:
   the app reads as the wallet edition.
 - The shell: `Moderation` (icon `gavel`) after the status entries and
   before Notifications, when the edition is moderator and a session is
-  open; the toolbar's brand reads "Moderator wallet" in that edition.
+  open; the toolbar's brand reads "Moderator wallet" in that edition
+  (since 2026-11-24 "Moderator", section 11).
   Approved change 5 placed "the landing card's title" in the shell; the
   landing page's own card title ("Your anoPod") lives in
   `pages/landing.page.ts`, which is not on the approved list, and was
@@ -19736,7 +19909,8 @@ pointing at the same backends; the masterpod lists its origin in
 
 What the edition changes: the navigation shows Attesting (13.3) when the
 edition is attestor and a session is open; the toolbar's brand reads
-"Attestor wallet"; and, since 2026-11-12 (section 11), the wallet reads
+"Attestor" ("Attestor wallet" until 2026-11-24, section 11); and, since
+2026-11-12 (section 11), the wallet reads
 the three lists of the Attesting page every 15 seconds, for the number
 on the Attesting entry (8.1; work-badge.service, 8.3). Nothing else. An
 attestor's pod is an ordinary pod
@@ -20131,7 +20305,8 @@ Notifications).
                             2026-11-12 recoveryCaseScheduled too, linking to /cases/recovery/:caseId
     constants               CASES_POLL_MS (15 s)
     shell                   Attesting in the navigation when the edition is attestor and a session is open;
-                            Cases when setup is complete; the brand "Attestor wallet"
+                            Cases when setup is complete; the brand "Attestor" ("Attestor wallet"
+                            until 2026-11-24, section 11)
 
 ### 13.5 Running it on this machine
 
@@ -20188,7 +20363,8 @@ and how it was decided:
   the status entries and before Notifications; Cases (icon
   `folder_shared`) after Wallet in the setup-complete block; the brand
   reads "Attestor wallet" in the attestor edition, "Moderator wallet" in
-  the moderator one. `attestingGuard` is `moderationGuard` with
+  the moderator one (since 2026-11-24 "Attestor" and "Moderator",
+  section 11). `attestingGuard` is `moderationGuard` with
   `attestor`; a session in another edition lands on the landing page.
 - `MasterpodApiService`: the eighteen methods under three headings (the
   attestor reads, the attestor writes, the person's side) with the shapes
