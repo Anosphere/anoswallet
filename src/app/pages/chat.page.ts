@@ -24,6 +24,9 @@ import { TradeMessageKind, tradeMessageKind } from '../trade-messages';
  * /chat/new. An unread room (session.unreadRooms) has a dot under its
  * time and a bold title. The rooms are session.chatRooms, which the shell's poll
  * refreshes every 5 seconds; the page refreshes them once when it opens.
+ * Since 2026-11-24 (forclaude/chat-list-plan-1.md; wallet spec 4.17) both
+ * reads ask the masterpod only for what is new and put it into that list
+ * (chat.service's refreshNews); until then each read the whole list.
  * For the two traders of a marketplace chat (2026-11-19,
  * forclaude/wallet-chat-and-passkey-plan-1.md) a newest message that the
  * pinned card posted (trade-messages.ts) shows in the preview as the
@@ -155,7 +158,11 @@ export class ChatPage {
   /** True while a child route (a conversation, the requests, a new chat) is open. */
   protected readonly childOpen = computed(() => this.url().startsWith('/chat/'));
 
-  protected readonly rooms = computed(() => this.chat.sorted(this.session.chatRooms()?.rooms ?? []));
+  /** The rows, newest activity first. Since 2026-11-24 it also reads the day (chat.today): a row's time is worded by today's date ("14:32", "Yesterday"), so the rows are drawn again when the day changes; until then the list itself was set anew every 5 seconds. */
+  protected readonly rooms = computed(() => {
+    this.chat.today();
+    return this.chat.sorted(this.session.chatRooms()?.rooms ?? []);
+  });
   protected readonly unreadIds = computed(() => new Set(this.session.unreadRooms().map((r) => r.chatRoomId)));
   protected readonly requestCount = computed(() => {
     const answer = this.session.chatRooms();
@@ -172,7 +179,7 @@ export class ChatPage {
   private readonly notices = signal(new Map<string, TradeMessageKind>());
 
   constructor() {
-    void this.chat.refreshRooms().then((res) => {
+    void this.chat.refreshNews().then((res) => {
       if (!res.ok) this.error.set(`/list-chat-rooms: ${reasonOf(res)}`);
     });
     effect(() => {

@@ -96,8 +96,10 @@ export class SessionService {
   /** The notifications, newest first, refreshed by the shell's 5-second poll. */
   readonly notifications = signal<NotificationItem[]>([]);
   readonly unread = computed(() => this.notifications().filter((n) => !n.read));
-  /** The latest /list-chat-rooms answer (the rooms, the invites to this pod, the join requests on its rooms): the shell's poll once setup is complete, and the chat pages. */
+  /** The chat list in memory (the rooms, the invites to this pod, the join requests on its rooms), null until the first answer of /list-chat-rooms. Until 2026-11-24 it was that route's latest answer, set anew every 5 seconds. Since then (wallet spec 4.17; chat.service.ts) only the first read of a login and the read after a person's own action bring the whole list; the shell's 5-second read and the Chat page's opening bring what is new, which is put into this list, and the open conversation's read writes the members' seen positions into it. It is set anew only when something in it changed. */
   readonly chatRooms = signal<RoomsAnswer | null>(null);
+  /** The number of that list (2026-11-24, masterpod spec 29): the `seq` of the answer of /list-chat-rooms that was last put into it, which the next read of what is new sends as `since`. Null while there is no list, and after an answer that carried no number (a masterpod of before): the next read then asks for the whole list. */
+  chatRoomsSeq: number | null = null;
   /** The stickers of the wallet's chat as /list-stickers answered them for this login (wallet spec 4.16; 2026-11-23): the sets in the order of their row. Null until that answer has arrived; stickers.service asks for it when a conversation is first opened, once after each login. */
   readonly stickerSets = signal<StickerSet[] | null>(null);
   /** The last message position seen in each room on this device (wallet spec 8.2, Chat), kept in localStorage per pod. */
@@ -157,6 +159,7 @@ export class SessionService {
     this.accounts.set([]);
     this.notifications.set([]);
     this.chatRooms.set(null);
+    this.chatRoomsSeq = null;
     this.stickerSets.set(null);
     this.seenPositions.set({});
   }

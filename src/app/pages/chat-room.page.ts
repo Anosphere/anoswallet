@@ -17,7 +17,7 @@ import { ChatService, Piece, piecesOf } from '../services/chat.service';
 import { CryptoService } from '../services/crypto.service';
 import { LanguageService } from '../services/language.service';
 import { ApiResponse, reasonOf } from '../services/log.service';
-import { MasterpodApiService, MessageItem, Profile, RoomItem, RoomMember } from '../services/masterpod-api.service';
+import { MasterpodApiService, MessageItem, MessagesAnswer, Profile, RoomItem, RoomMember } from '../services/masterpod-api.service';
 import { RoomPictureCacheService } from '../services/room-picture-cache.service';
 import { SessionService } from '../services/session.service';
 import { StickersService } from '../services/stickers.service';
@@ -110,7 +110,13 @@ const REST_CHECK_MS = 40;
  * plan): "Seen" under the newest one that another member has seen, "Seen
  * by" with the usernames when the room has more than one other member,
  * and "Sent" under the newest one while nobody has seen it yet. The
- * members' seen positions come with /list-chat-rooms. While the
+ * members' seen positions came with /list-chat-rooms, every 5 seconds;
+ * since 2026-11-24 (forclaude/chat-list-plan-1.md; wallet spec 4.17) this
+ * page's own read of the messages brings them, every 3 seconds: every
+ * member's when the conversation opens, afterwards only the positions
+ * that changed (/list-messages with `seenSince`). They are written into
+ * the room's entry of the chat list in memory, so the words are drawn as
+ * before. While the
  * conversation is on the screen the page tells the masterpod how far
  * this pod has read (/mark-messages-seen, masterpod spec 21): after
  * opening, after each poll and after a send, and never from a hidden
@@ -537,10 +543,11 @@ export class ChatRoomPage {
     return [...found.values()];
   });
 
-  /** The messages as the thread draws them: a day line before each day, the messages of one sender within GROUP_MINUTES in one group, and for the two traders of a marketplace chat (2026-11-19) a grey line in the place of each message the pinned card posted, which ends the group before it. */
+  /** The messages as the thread draws them: a day line before each day, the messages of one sender within GROUP_MINUTES in one group, and for the two traders of a marketplace chat (2026-11-19) a grey line in the place of each message the pinned card posted, which ends the group before it. Since 2026-11-24 it also reads the day (chat.today): a day line is worded by today's date ("Today", "Yesterday"), so the thread is made again when the day changes; until then the room's entry was set anew every 5 seconds. */
   protected readonly thread = computed<ThreadItem[]>(() => {
     const room = this.room();
     if (!room) return [];
+    this.chat.today();
     const direct = this.chat.kind(room) === 'direct';
     const items: ThreadItem[] = [];
     let group: Group | null = null;
@@ -590,7 +597,9 @@ export class ChatRoomPage {
   /**
    * The word under this pod's own messages (2026-11-19), by message id.
    * "Seen" under the newest one that another member has seen, by the seen
-   * positions of /list-chat-rooms; with more than one other member, "Seen
+   * positions in the room's entry of the chat list in memory, which this
+   * page's own read keeps fresh since 2026-11-24 (takeSeen; until then
+   * they came with /list-chat-rooms); with more than one other member, "Seen
    * by" and the usernames of those who have, and above SEEN_NAMES of them
    * how many they are. "Sent" under the newest one when nobody has seen it
    * yet, a person who is only invited so far among them. A message drawn
@@ -625,6 +634,8 @@ export class ChatRoomPage {
   private newest = 0;
   /** The newest position this page told the masterpod it has seen, for the room it shows; 0 when none. */
   private toldSeen = 0;
+  /** The number this page sends as `seenSince` with its reads of the room's messages (2026-11-24; wallet spec 4.17): 0 when the room opens, which asks for every member who has seen anything, then the `seenSeq` of the last answer, which asks only for the positions that changed after it. */
+  private seenSince = 0;
   /** True once the masterpod answered 404 to /mark-messages-seen: a masterpod of before. This page then tells nothing more for as long as it lives. */
   private seenOff = false;
   private pendingCount = 0;
@@ -810,13 +821,14 @@ export class ChatRoomPage {
     void this.send(suggestion.sticker);
   }
 
-  /** The room's newest page; whatever was shown before is dropped. Since 2026-11-23 the list of the sets of stickers is asked for here, which asks the masterpod only when this login has no list yet (stickers.service.ts). */
+  /** The room's newest page; whatever was shown before is dropped. Since 2026-11-23 the list of the sets of stickers is asked for here, which asks the masterpod only when this login has no list yet (stickers.service.ts). Since 2026-11-24 the same read asks with `seenSince` 0 for the seen position of every member who has seen anything (takeSeen). */
   private async open(room: RoomItem): Promise<void> {
     this.ready = false;
     this.messages.set([]);
     this.oldest = 0;
     this.newest = 0;
     this.toldSeen = 0;
+    this.seenSince = 0;
     this.olderArmed = true;
     this.canLoadOlder.set(false);
     this.showInvite.set(false);
@@ -828,12 +840,13 @@ export class ChatRoomPage {
     this.setDisputeCase(null);
     this.error.set(null);
     void this.stickers.load();
-    const res = await this.api.listMessages(room.chatRoomId, { beforePosition: room.lastPosition + 1, limit: MESSAGES_PAGE });
+    const res = await this.api.listMessages(room.chatRoomId, { beforePosition: room.lastPosition + 1, limit: MESSAGES_PAGE, seenSince: 0 });
     if (this.openedFor !== room.chatRoomId) return;
     if (!res.ok) {
       this.error.set(`/list-messages: ${reasonOf(res)}`);
       return;
     }
+    this.takeSeen(room.chatRoomId, res.body);
     const shown = await this.shown(room, res.body.messages);
     if (this.openedFor !== room.chatRoomId) return;
     this.messages.set(shown);
@@ -874,12 +887,14 @@ export class ChatRoomPage {
     });
   }
 
-  /** New messages after the newest shown: quiet from the timer, logged after a send. The thread follows them only when the reader is near the bottom. */
+  /** New messages after the newest shown: quiet from the timer, logged after a send. The thread follows them only when the reader is near the bottom. Since 2026-11-24 the same read brings the members' seen positions that changed since the read before (takeSeen); they are taken before the return for an answer with no message. */
   private async poll(quiet: boolean): Promise<void> {
     const room = this.room();
     if (!room || !this.ready || this.openedFor !== room.chatRoomId || !this.session.hasSession() || (quiet && this.busy())) return;
-    const res = await this.api.listMessages(room.chatRoomId, { afterPosition: this.newest }, quiet);
-    if (!res.ok || this.openedFor !== room.chatRoomId || res.body.messages.length === 0) return;
+    const res = await this.api.listMessages(room.chatRoomId, { afterPosition: this.newest, seenSince: this.seenSince }, quiet);
+    if (!res.ok || this.openedFor !== room.chatRoomId) return;
+    this.takeSeen(room.chatRoomId, res.body);
+    if (res.body.messages.length === 0) return;
     const shown = await this.shown(room, res.body.messages);
     if (this.openedFor !== room.chatRoomId) return;
     const follow = this.nearBottom();
@@ -888,6 +903,21 @@ export class ChatRoomPage {
     if (this.oldest === 0) this.oldest = shown[0].position;
     this.session.markSeen(room.chatRoomId, this.newest);
     if (follow) this.scrollToBottom();
+  }
+
+  /**
+   * What an answer of /list-messages says of the members' seen positions
+   * (2026-11-24; wallet spec 4.17; the plan is
+   * forclaude/chat-list-plan-1.md). `seen`, the members whose position
+   * changed after the `seenSince` that was sent, goes into the room's
+   * entry of the chat list in memory (chat.service's putSeen), where
+   * `marks` reads it; `seenSeq` is the next `seenSince`. An answer of a
+   * masterpod of before carries neither, and nothing changes: the
+   * positions then still come with every answer of /list-chat-rooms.
+   */
+  private takeSeen(chatRoomId: string, answer: MessagesAnswer): void {
+    if (answer.seen) this.chat.putSeen(chatRoomId, answer.seen);
+    if (typeof answer.seenSeq === 'number') this.seenSince = answer.seenSeq;
   }
 
   /**

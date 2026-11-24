@@ -224,7 +224,7 @@ export interface SecurityRecords {
 export interface RoomMember {
   anopodId: string;
   username: string;
-  /** The highest message position this member has seen in the room (2026-11-19, masterpod spec 21). Only an entry of a room's `members` carries it: the invited and a listing's owner do not, and a masterpod of before sends none. */
+  /** The highest message position this member has seen in the room (2026-11-19, masterpod spec 21). Only an entry of a room's `members` carries it: the invited and a listing's owner do not, and a masterpod of before sends none. Since 2026-11-24 (masterpod spec 29) it is as old as the room's entry in the list, which comes anew only when the room's people or facts change; for the conversation that is open, the page's own read of /list-messages keeps it fresh (SeenItem). */
   seenPosition?: number;
 }
 
@@ -288,8 +288,34 @@ export interface JoinRequestItem {
   createdAt: string;
 }
 
+/** The chat list as the wallet keeps it in memory (session.chatRooms): every room this pod is in, the invites to this pod and the join requests on its rooms. Until 2026-11-24 it was also the type of /list-chat-rooms' answer; that is RoomsRead now. */
 export interface RoomsAnswer {
   rooms: RoomItem[];
+  invites: InviteItem[];
+  joinRequests: JoinRequestItem[];
+}
+
+/** A room of which only the newest message is new, as /list-chat-rooms sends it to a request with `since` (2026-11-24, masterpod spec 29): three fields, where a room that is sent whole is a RoomItem. */
+export interface RoomNews {
+  chatRoomId: string;
+  lastMessage: MessageItem | null;
+  lastPosition: number;
+}
+
+/**
+ * What /list-chat-rooms answers (2026-11-24, masterpod spec 29; wallet spec
+ * 4.17). `seq` is the number to send as the next `since`, and `counts` is how
+ * many rooms, invites and join requests this pod has now; a masterpod of
+ * before sends neither, and its answer is always the whole list. To a request
+ * without `since` the three lists are whole. To a request with `since` they
+ * hold only what changed after it: a room whole (a RoomItem) when its people
+ * or its facts changed, the three fields (a RoomNews) when only a message
+ * came, and the invites and join requests written after it.
+ */
+export interface RoomsRead {
+  seq?: number;
+  counts?: { rooms: number; invites: number; joinRequests: number };
+  rooms: (RoomItem | RoomNews)[];
   invites: InviteItem[];
   joinRequests: JoinRequestItem[];
 }
@@ -319,11 +345,25 @@ export interface MessageItem {
   createdAt: string;
 }
 
-/** The query of /list-messages: the messages after a position, or with `beforePosition` the newest `limit` below it, afterPosition then ignored. */
+/** The query of /list-messages: the messages after a position, or with `beforePosition` the newest `limit` below it, afterPosition then ignored. With `seenSince` (2026-11-24, masterpod spec 29) the answer also says which members' seen positions changed after that number: 0 asks for every member who has seen anything. */
 export interface MessagesQuery {
   afterPosition?: number;
   beforePosition?: number;
   limit?: number;
+  seenSince?: number;
+}
+
+/** How far one member of a room has read, as /list-messages answers it to a request with `seenSince` (2026-11-24, masterpod spec 29). */
+export interface SeenItem {
+  anopodId: string;
+  seenPosition: number;
+}
+
+/** What /list-messages answers. `seen` and `seenSeq` come only to a request with `seenSince` (2026-11-24, masterpod spec 29): the members whose seen position changed after it, and the number to send as the next `seenSince`. A masterpod of before sends neither. */
+export interface MessagesAnswer {
+  messages: MessageItem[];
+  seen?: SeenItem[];
+  seenSeq?: number;
 }
 
 export interface ChatKeyItem {
@@ -951,8 +991,9 @@ export class MasterpodApiService {
     return this.signed('/leave-chat-room', { chatRoomId });
   }
 
-  listChatRooms(quiet = false): Promise<ApiResponse<RoomsAnswer>> {
-    return this.signed('/list-chat-rooms', {}, quiet);
+  /** The chat list. Without `since` the whole list; with it (2026-11-24, masterpod spec 29) only what changed after that number, the `seq` of the answer the wallet last put into its list. A masterpod of before does not read `since` and answers the whole list. */
+  listChatRooms(quiet = false, since?: number): Promise<ApiResponse<RoomsRead>> {
+    return this.signed('/list-chat-rooms', since === undefined ? {} : { since }, quiet);
   }
 
   /** The public rooms, the ones with the most members first; `search` narrows them by name (2026-11-22, masterpod spec 26). A masterpod of before takes no search word and answers the newest first. */
@@ -974,8 +1015,8 @@ export class MasterpodApiService {
     return this.signed('/get-chat-room-picture', { chatRoomId }, quiet);
   }
 
-  /** The room's messages after a position (the poll), or with `beforePosition` the newest `limit` below it (opening a room, loading older ones). */
-  listMessages(chatRoomId: string, query: MessagesQuery, quiet = false): Promise<ApiResponse<{ messages: MessageItem[] }>> {
+  /** The room's messages after a position (the poll), or with `beforePosition` the newest `limit` below it (opening a room, loading older ones). With `seenSince` in the query (2026-11-24, masterpod spec 29) the answer also carries the members' seen positions that changed after it. */
+  listMessages(chatRoomId: string, query: MessagesQuery, quiet = false): Promise<ApiResponse<MessagesAnswer>> {
     return this.signed('/list-messages', { chatRoomId, ...query }, quiet);
   }
 
