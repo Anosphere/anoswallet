@@ -141,8 +141,19 @@ nothing is stored. Since 2026-11-22 a refresh (Lock, the Update button,
 the box "You are logged out") loads the page again, and the wallet then
 follows the browser again.
 
-Everything secret lives in RAM and dies with the tab; nothing touches
-browser storage. A new tab unlocks again.
+Everything secret lives in RAM and dies with the tab: no key, no blob
+and no session is written to browser storage. A new tab unlocks again.
+What the wallet does keep in the browser's own storage (`localStorage`)
+is five small things that are no secret, each under a name that begins
+with `anopod-wallet.`: how far this device has read each chat
+(`chat-seen.<anopodId>`), which things on the Attesting and Moderation
+pages this device has seen (`work-seen.<anopodId>`), the country and
+the currency picked last in the marketplace (`marketplace-filters`),
+the sound's switch (`sound`) and, since 2026-11-23, the stickers sent
+lately from this phone (`stickers-sent`). Where the browser refuses its
+storage, the wallet works without them. On a phone where the security
+alerts were turned on, the browser also keeps the notification worker
+(`public/alerts-worker.js`) and that phone's delivery address.
 
 ## The wallet servers
 

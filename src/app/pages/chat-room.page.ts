@@ -165,7 +165,14 @@ const REST_CHECK_MS = 40;
  * the person can go on typing. Without that, Safari on an iPhone took
  * the cursor out of the box at the tap, and, as the tapped sticker left
  * the page with its strip, marked a word of the top bar as selected. A
- * reader at the thread's end stays there when the strip comes up.
+ * reader at the thread's end stays there when the strip comes up. The
+ * two traders of a marketplace chat get no strip (2026-11-23, later the
+ * same day): the pinned listing card does not give way to it, and on a
+ * short phone the strip pushed their message box under the
+ * conversation's lower edge. No suggestion is worked out for them, so
+ * nothing is fetched and nothing moves while they type; they send a
+ * sticker from the panel. A guest in such a chat, who has no card, has
+ * the strip.
  */
 @Component({
   selector: 'app-chat-room-page',
@@ -480,8 +487,8 @@ export class ChatRoomPage {
   });
   /** The stickers sent lately from this phone, the newest first (2026-11-23): read when this login's list arrives, when the stickers panel opens and after every sticker this page sends. The suggestions put them first. */
   private readonly sentLately = signal<Sticker[]>([]);
-  /** The stickers suggested for what stands in the message box (2026-11-23, suggestedStickers in ../stickers): the strip above the message box draws them. None while the stickers panel is open: the panel then holds every sticker, and the thread keeps its room. */
-  protected readonly suggested = computed(() => (!this.showStickers() ? suggestedStickers(this.stickers.sets(), this.messageText(), this.sentLately()) : []));
+  /** The stickers suggested for what stands in the message box (2026-11-23, suggestedStickers in ../stickers): the strip above the message box draws them. None while the stickers panel is open: the panel then holds every sticker, and the thread keeps its room. None for the two traders of a marketplace chat either (2026-11-23, later): the pinned listing card does not give way to the strip, and on a short phone the strip pushed their message box under the conversation's lower edge. */
+  protected readonly suggested = computed(() => (!this.showStickers() && !this.trader() ? suggestedStickers(this.stickers.sets(), this.messageText(), this.sentLately()) : []));
   /** True while the strip of suggestions shows (2026-11-23). */
   private readonly stripShown = computed(() => this.suggested().length > 0);
   protected readonly inviteName = signal('');

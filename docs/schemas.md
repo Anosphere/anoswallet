@@ -3340,7 +3340,9 @@ eight points). Stickers work in every chat. What a person sees:
   the next opening, so nothing moves under a finger.
 - The suggestions. While a person types and the panel is closed, a strip
   above the message box shows up to four stickers whose tags fit what
-  was typed (`suggestedStickers` in stickers.ts). A sticker fits when
+  was typed (`suggestedStickers` in stickers.ts), in every chat but for
+  the two traders of a marketplace chat (the last point). A sticker
+  fits when
   the text ends with one of its tags, whole, of two characters or more
   and not in the middle of an English word, or when the last word, of
   three characters or more, is the beginning of one of its tags.
@@ -3358,8 +3360,16 @@ eight points). Stickers work in every chat. What a person sees:
   comes up.
 - A marketplace chat. While the panel is open, the pinned card of the
   room's two traders is out of sight, so that the messages keep their
-  room; it is back, as it was, when the panel closes. The strip does
-  not move the card.
+  room; it is back, as it was, when the panel closes. The two traders
+  get no strip of suggestions (2026-11-23, later the same day, section
+  11, the note after "Stickers"): the card does not give way to a
+  strip, and on a short phone the strip pushed their message box under
+  the conversation's lower edge. No suggestion is worked out for them
+  (the page's `suggested` is empty while its `trader()` is true), so
+  while they type no strip is in the page, no picture is fetched for
+  one, and the thread stays where it is. They send a sticker from the
+  panel. A guest in such a chat, who has no card, has the strip like
+  everybody else.
 
 The pinned card (2026-11-06, section 11), in a private room about a
 listing, under the header and its panels and above the thread, drawn for
@@ -18348,6 +18358,134 @@ new package and nothing new under `deploy/`.
   /list-stickers once and gets 404, and nothing shows. A wallet that
   is open on a phone meanwhile keeps the script it has until it is
   loaded again.
+
+### Stickers: no strip of suggestions for the two traders of a marketplace chat (2026-11-23)
+
+No plan file. This is the mend of the one thing that the note before
+this one saw and left as it is: "A marketplace chat on a short screen,
+while the strip shows", which ends "Put to the user with pictures from
+both phones; not answered when this was written." That step is commit
+2e84007, and the user deployed it on wallet1 and wallet2 the same
+evening. Their answer, 2026-11-23, about 21:45: "I went ahead and
+commited pushed merged and deployed on the wallet servers 1 and 2. Now,
+let's start a new chat for the mend. Anything other files that were
+left out of date or anything like that can also be taken care of in the
+new chat." The mend had been named to them as "one style line. A
+marketplace chat shows no strip while its trade box shows; the smiling
+face and all stickers stay." Built in that new chat on top of 2e84007,
+the working tree clean. Three files, one commit.
+
+- What a person sees. In a marketplace chat the room's two traders, who
+  have the pinned card at the top, get no strip of suggestions while
+  they type, on a screen of any size. On a short phone their message
+  box therefore stays whole, and the thread keeps the little room it
+  has. Everything else is as it was: in that chat the smiling face and
+  the stickers under the message box, with the card out of sight while
+  they are open; the strip in every other chat; and the strip for a
+  guest in a marketplace chat, who has no card.
+- Changed, `src/app/pages/chat-room.page.ts`: one line of script. The
+  computed `suggested` is empty while `trader()` is true, as it is
+  while the panel is open: `!this.showStickers() && !this.trader()`.
+  `trader()` asks what the template asks before it draws the card
+  (`chat.isTrader(room)`), so there is no strip exactly where there is
+  a card. The comment over `suggested` and the class comment say so. No
+  style line, no change of the template, no new word.
+- Why it is not the style line that was named. That line was tried
+  first: `app-pinned-listing ~ .suggested { display: none; }`. It gave
+  the same sight, but the strip was still in the page, only not drawn,
+  and two things followed. For a typed word that fits a tag the phone
+  fetched the strip's pictures all the same: four of four for "hello",
+  counted at the masterpod with the browser's keeping of pictures
+  switched off. And the page's rule that keeps a reader at the thread's
+  end when the strip comes up ran too: a reader who had scrolled up 30,
+  60 or 100 pixels was moved to the thread's end, with nothing on the
+  screen to say why. With the line of script no strip is in the page,
+  none of the four pictures is asked for, and the reader stays where
+  they are. The page's styles are not changed (4,178 bytes by the note
+  before).
+- Changed, this spec: 8.2 (Chat, "Stickers": the points "The
+  suggestions" and "A marketplace chat") and this note.
+- Changed, `README.md`, on the user's word about files left out of
+  date: the sentence "nothing touches browser storage", which the notes
+  of 2026-11-12, 2026-11-19 and 2026-11-21 name as out of date. It now
+  says that no secret is written to browser storage, and names what the
+  wallet does keep there: five entries of `localStorage` (how far this
+  device has read each chat, the seen ids of the Attesting and
+  Moderation pages, the marketplace's country and currency, the sound's
+  switch, the stickers sent lately) and, on a phone where the security
+  alerts were turned on, the notification worker and that phone's
+  delivery address. The other papers that were brought in line that day
+  are outside this repository; the work note
+  `forclaude/notes/project-chat-stickers-new-start.md` names them.
+- Checked: `npx ng build` from the wallet folder into a scratch folder:
+  clean, with no warning. The script is `main-AVAFMBCC.js`, 2,336,227
+  bytes, 17 more than `main-UCJ34XZG.js` of 2e84007; the style sheet is
+  `styles-HGVKDO6M.css`, as before; ten files. A scratch copy of
+  2e84007 with this step's files built the same bytes under another
+  name (`cmp`), and every trial below ran on that copy's builds.
+- Checked on the trial stand of the note before, brought up again from
+  its kept tools: the copy's own `server/app.js` in front of the
+  masterpod's own app (masterpodsoftware 73f2551) on a scratch
+  PostgreSQL 17 on 127.0.0.1 with the eight made-up sets, development
+  builds with the made-up login, Google Chrome 158 with no window.
+  - The short screens. A marketplace chat with "hello" typed, at the
+    eight page sizes of the note before (320 by 568 to 411 by 789), in
+    English and Thai: no strip, nothing of the message box under the
+    chat's lower edge, and the thread as high as with an empty box, in
+    all sixteen. The sixteen lines of a chat with one person are the
+    lines of the note before, character for character: the strip of
+    71.3 pixels, nothing cut.
+  - The walk of the note before: 77 results and none bad at 390 by 760
+    and at 360 by 560, and 76 of 77 at 1280 by 800, as before, each
+    line with the same result.
+  - "Did anything else move", with no set in the database: the
+    conversation of 2e84007 against this one, 48 looks, 3,576 numbers
+    and styles, the same in every one.
+  - The mend's own walk, a build of 2e84007 beside this build, both
+    with sets: 60 results and none bad. In one run, at those eight
+    sizes and at 375 by 549, the build of 2e84007 cut the message box
+    of the trader's chat with "hello" typed by 11, 43, 19, 32 and 30
+    pixels at 320 by 568, 360 by 536, 360 by 560, 375 by 547 and 375 by
+    549 (31, 15, none, 4 and 2 in Thai), and this build cut nothing at
+    any size. The trader's chat at 360 by 536: with "hello" typed no
+    strip is in the page, every measured part stands where it stands
+    with an empty box, Enter sends the word as an ordinary message, the
+    smiling face opens the panel and one tap sends a sticker, the card
+    is back when the panel closes, and a closed listing, whose card is
+    lower, has no strip either. A guest
+    in a marketplace chat has the strip of four, and a tap on one sends
+    it. And every other look, part by part: eight chats (the public
+    room, a group, three chats with one person, the one with two
+    pictures that fail, the guest's and the trader's marketplace chat)
+    at seven sizes from 320 by 568 to 1280 by 800, in English and Thai,
+    each with an empty box, with "hello" typed and with the panel open:
+    336 looks, 29,708 numbers and styles, the same in 2e84007 and in
+    this build but for the trader's chat with "hello" typed (14 looks),
+    which here is the same as with an empty box.
+- Checked by a look on the simulated phones, with real taps and the
+  on-screen keyboard, the same builds and servers. Safari on iPhone SE
+  with iOS 26.5 (a page of 375 by 549) and Chrome on the emulator
+  small-phone-android-17 (360 by 536): the marketplace chat with
+  "hello" typed has no strip, the message box is whole and the word
+  shows (in 2e84007: 32 and 43 of its 57 pixels under the edge); a chat
+  with one person with "hello" typed has the strip of four, as before;
+  the marketplace chat with the panel open is as before, and on the
+  Android one tap sent a sticker from it. Safari on iPhone 17 with iOS
+  26.5 (402 by 714), the marketplace chat with "hello" typed: in
+  2e84007 the strip, with everything fitting; in this build no strip.
+- Seen and left as it is: on a tall phone the strip fitted in a
+  marketplace chat, and the two traders lose it there too. That is the
+  mend as it was named to the user and chosen: no strip while the card
+  shows, the smiling face and all stickers stay.
+- Not checked: a real phone; the live wallet; the team's own stickers;
+  Thai on a phone (it was measured in Chrome); Safari on iOS 18.6 and
+  27.0, which the note before looked at (this step changes one test in
+  the script and no layout); the wallet opened from the Home Screen; a
+  phone held sideways; the attestor's and the moderator's editions,
+  which draw the same pages; `ng serve`.
+- For the deploy: the wallet alone, the user's two lines on wallet1 and
+  then on wallet2, with no `npm ci` (no package file changed). The
+  masterpod is not touched.
 
 ## 12. Recovery and the moderator edition
 
