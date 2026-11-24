@@ -3877,7 +3877,10 @@ of you opens when it exists, else a private room is created with a new
 room key wrapped to this pod's chat keys, the person is invited with it
 wrapped to theirs (their chat public keys are read first, so someone
 without them makes no room) and the room opens; finding yourself reads
-"That is you.".
+"That is you.". Since 2026-11-24 (section 11) a chat about a listing
+and a chat about an attestor case do not count as that private chat:
+Start chat passes a marketplace chat or a case chat with the person
+over, and creates a room when the two of you have no other.
 
 Find public rooms, since 2026-11-22: a box "Search public rooms", and
 under it the public rooms with the most members first, 50 at a time
@@ -10308,7 +10311,9 @@ the proxy (`server/`) is not touched.
   the chat pages; the plan's section 2 names no place for them. New
   chat's Message someone opens the private room that holds exactly the
   two people when there is one (8.2); a case chat is such a room, as a
-  chat about a listing is.
+  chat about a listing is. (Since 2026-11-24, the note "Message someone
+  passes a marketplace chat and a case chat over": neither is such a
+  room for Message someone any more.)
 - Put right on the user's word of 2026-11-12 ("Yes, update them"), after
   the first report of this build listed thirteen places as left because
   the plan does not name them. Nine comments in the code and no line of
@@ -19573,6 +19578,79 @@ nothing in `server/` and nothing new under `deploy/`.
   every member of every chat is sent again every 5 seconds" on the
   after-production list is ticked with this step (the plan's section 4,
   point 5).
+
+### Message someone passes a marketplace chat and a case chat over (2026-11-24)
+
+No plan file. The user's point, in talk: "Currently if I make a chat
+with say bob on the marketplace, and we finish and close. Later if I
+want to message bob, the only option is to use that old marketplace
+chat. What it should do is make a new non marketplace chat." Of the
+things talked through the user took this one alone: "let's just do only
+this one for now". Built on top of af5ef5b, the working tree clean. One
+commit: `src/app/pages/chat-new.page.ts` and this file. One test of the
+script and two comments; no template, no style and no word of the
+dictionaries changed, and nothing on the masterpod.
+
+- What was wrong. Start chat on the tab Message someone (8.2) looks
+  through the rooms of the chat list in memory for the private chat the
+  two already have: a room of type `private` whose members and invited
+  are exactly this pod and the found person (`justUs`). It opens the
+  first one it finds. A chat about a listing is such a room, a private
+  room made with a `listingId`, and so is a chat about an attestor
+  case, made with a `caseId`. The list has the newest room first. So a
+  person who had traded with someone before ever writing to them had no
+  way to a chat that is about no listing: Start chat opened the
+  marketplace chat and made no room. A person who had such a chat first
+  came into the newest marketplace chat after every trade. The note
+  "The case chats, step 2 (2026-11-12)" has this under "Known and left
+  as it is"; a dated clause there now points here.
+- `src/app/pages/chat-new.page.ts`, `startChat`: the test is
+  `room.type === 'private' && !room.listingId && !room.caseId &&
+  justUs(room, me, target.anopodId)`; its two middle parts are new.
+  `justUs` is as it was. A room about neither has null in both fields,
+  and a missing field reads as none. The comment of `startChat` and the
+  class's comment say it. The two other places that look for a room
+  have tests of their own and are as they were: Connect on a listing
+  (`myRoomAbout`) and an attestor's Start chat on a case
+  (`caseRoomWith`).
+- What a person sees. With no chat between the two that is about
+  neither, Start chat creates a private room, invites the person and
+  opens the room, as it does for someone they never wrote to; the
+  person finds the request under Requests. From then on Start chat
+  opens that room, whatever trades and cases come between. A
+  marketplace chat and a case chat stay in the chat list as they were,
+  and are reached as before.
+- Known and left as it is, on the user's word. While the found person's
+  own invitation to a private chat waits unanswered under Requests,
+  Start chat does not see it, since the test reads the list's rooms and
+  not its invites, and makes a second room. That is as before this
+  change. The user asked for a line on the after-production list for
+  it.
+- Tried in a scratch folder, nothing kept: the test's line and
+  `justUs`, cut out of the file as it is at af5ef5b and as it is with
+  this change, both run in Node over sixteen made-up lists of rooms,
+  the newest room first. The old line opened a marketplace chat or a
+  case chat in seven of them. The new line opens the chat about neither
+  where there is one, and nothing in the others, so a room is made. A
+  room whose two fields are missing counts as a chat about neither. A
+  group of three, a marketplace chat with an attestor in it, a room of
+  type `marketplace` and a public room are passed over by both lines.
+- Not checked: a browser, a phone, the live wallet and a real
+  masterpod. The lines of `startChat` after the test, which create the
+  room and invite the person, are as they were and were not run.
+- `npx ng build` from the wallet folder into a scratch folder: clean,
+  no warning. The script is `main-5ANNHURS.js`, 2,339,254 bytes: 25
+  bytes more than the script of af5ef5b, built the same way from a
+  scratch copy. One place differs, the test, where
+  `!S.listingId&&!S.caseId&&` is new. The style sheet
+  `styles-HGVKDO6M.css` and every other file are the same;
+  `index.html` differs in the script's name. The development build is
+  clean too.
+- Spec: this note; in 8.2 one sentence after Start chat's; a dated
+  clause in the note "The case chats, step 2 (2026-11-12)". README
+  unchanged.
+- For the deploy: the wallet alone, the user's two lines on wallet1 and
+  then on wallet2, with no `npm ci` (no package file changed).
 
 ## 12. Recovery and the moderator edition
 
