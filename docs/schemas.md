@@ -18743,6 +18743,154 @@ changes.
 - For the deploy: the wallet alone, the user's two lines on wallet1 and
   then on wallet2, with no `npm ci` (no package file changed).
 
+### The line under an input box takes the room it needs (2026-11-24)
+
+No plan file. The fourth of the five kinds of mistake that gets built
+(the note "A word that is longer than its line may break" above names
+them), after the user moved the two kinds that were still open to a
+fresh chat, on top of ae917ec, the working tree clean. One commit: two
+files of `src/app` and this file. Two lines of two templates; no style
+line and no word of the dictionaries changes.
+
+- The mistake: Angular Material keeps room for one line of small text
+  under an input box, 20 px (`subscriptSizing` is `fixed` unless it is
+  set), and lays the small text (`<mat-hint>`) over that room with
+  `position: absolute`. A text of two lines is then written over
+  whatever stands under the box. With `subscriptSizing="dynamic"` the
+  text stands in the flow, and the box is as high as its lines.
+- The count: the wallet has 87 `mat-form-field`. 31 have
+  `subscriptSizing="dynamic"` and 56 have not. Of the 56, five have a
+  line under them, each a `<mat-hint>` (the wallet has no `<mat-error>`
+  and no `hintLabel`); the other 51 show no small text and cannot have
+  the flaw. Each of the five was looked at in a page: two are mended
+  and three are left as they are.
+- `src/app/pages/create.page.ts`: the Username box has
+  `subscriptSizing="dynamic"`. Its line is never empty: the rule,
+  "checking…", the answer to the check, or a refusal.
+- `src/app/components/identity-form.component.ts`: each of the seven
+  text boxes of the birth record form has `[subscriptSizing]` bound to
+  `hasBar(state().texts()[field.key]) ? 'dynamic' : 'fixed'`. The red
+  line under such a box ("The bar character | is not allowed") is
+  there only while the box holds a bar. Angular Material has no
+  setting for "one line of room at the least, more when the text needs
+  it", and plain `dynamic` drops the empty room as well: in a first
+  trial at 360 px each of the seven boxes was 56 px high where it is
+  76, and what stands under the form stood 140 px higher. So a box
+  stays `fixed` while it has no line and is `dynamic` while it has
+  one. One line of small text is 20 px high, as much as the room that
+  `fixed` keeps, so nothing moves until the line takes a second line.
+- Left as they are, three of the five: the Name box of a new passkey
+  (`account-passkeys.page.ts`, "For example: Spare security key") and
+  the two boxes of New proposal (`dao-new.page.ts`, the counters,
+  "100/100" and "5000/5000" at the most). Each is one line at every
+  width in both languages, and with `dynamic` tried on them nothing
+  moved.
+- What was wrong on the create page. The Username box is as wide as
+  its step and 260 px at the most: 170, 210, 225 and 240 px at 320,
+  360, 375 and 390 px. Its line has 32 px less than the box.
+  - The masterpod's refusal of a name it does not take, "HTTP 400:
+    invalid username: 3 to 32 characters, a-z, 0-9 and _": two lines
+    at every width from 375 px up, at 1280 px too; three at 360 px,
+    four at 320 px. The wallet asks 400 ms after the last key, so a
+    person who types two letters and stops gets it.
+  - No network, "HTTP 0: could not reach the wallet proxy (network
+    error)": three lines at 320 px, two at every other width. Its Thai
+    words: four lines at 320 px, three at 360 and 375 px, two from
+    390 px up.
+  - "<username> is available": two lines from a name of 10 letters at
+    320 px, of 17 at 360, 19 at 375, 22 at 390 and 24 from 412 px up.
+    "<username> is taken": from 14, 20, 23, 24 and 27 letters. In
+    Thai: from 17, 23, 24, 27 and 29 letters, and from 13, 19, 22, 23
+    and 26.
+  - One line at every width, in both languages: the rule ("3 to 32
+    characters"), "checking…" and "mai is available".
+  The lines stand 16 px apart, and every line after the first stood
+  under the box: the last one ended 15, 31 and 47 px under the box's
+  lower edge with two, three and four lines. Back and Next stand right
+  under the box, so the text lay across both buttons (14 px of a
+  line's 16 inside them).
+- What was wrong in the birth record form. On the locked-out page
+  (`/recover/open`) the form stands in a step of the stepper and a
+  text box is 170, 210 and 225 px wide at 320, 360 and 375 px. There
+  the red line takes two lines in English, and at 320 px in Thai. Its
+  second line ended 15 px under the box: 11 px into the box under it,
+  and across that box's label where the label stands on the box's
+  upper edge, which is a box that is filled in and every "Known?" box
+  (10 to 14 px of the label's line). From 390 px up, and on the setup
+  page (`/identity`) and the Public ledger id page
+  (`/account/ledger-id`) at every width, the red line is one line
+  (their boxes are 254 px wide at 320 px) and nothing was wrong.
+- What changes. While a line is one line, and while a box of the form
+  has none: nothing, at any width; no part of a page changes its place
+  or its size. When a line takes more lines, its box grows by 16 px a
+  line and what stands under the box stands lower by as much. On the
+  create page Back and Next stand 16, 32 or 48 px lower with two,
+  three or four lines. In the form everything under a box with a bar
+  stands 16 px lower; with a bar in each of the seven, 112 px at the
+  form's end. Nothing else: in no look does a part change its width or
+  move sideways, and no other text gets other lines.
+- What it costs: Back and Next move while a person types. At 360 px
+  two letters and a pause bring the refusal on three lines and the
+  buttons 32 px down; the third letter brings "checking…" and the
+  buttons back up. Until now the buttons stood still and the text was
+  written through them.
+- Seen here, in a development build of a scratch copy of ae917ec with
+  the two lines (its `src` folder the same in every file as the wallet
+  folder's, `diff -r`), served from a scratch folder, in Google Chrome
+  158 run without a window, with no server (only `/api/config` was
+  asked, and answered 404). The create page and the locked-out page
+  with no session, the setup page with a made-up session before setup
+  is complete, the other pages with a made-up full session. The
+  masterpod's answer to the username check was a stand-in in the page
+  that answers the words of the masterpod's code (`USERNAME_RULE` in
+  `masterpodsoftware/src/anopods/anopods.service.js`); the page's own
+  code made the line from it. 19 views: the Username step seven ways
+  (the box empty; while the check runs; "mai" available; a name of 32
+  letters available and taken; "ab" refused; no network); the birth
+  record form on the locked-out page, on the setup page and on the
+  Public ledger id page, each with no bar, with a bar in the first box
+  and with a bar in each of the seven; the Passkeys page; New proposal
+  with its counters at 0 and full. At 320, 360, 375, 390, 412, 430,
+  600, 768, 1024 and 1280 px wide, in English and in Thai: 380 looks.
+  In each look every box under trial (its height, the room under it,
+  the lines of its small text, how far the text ends under the box and
+  what it lies on), every piece of text (13,960 in all) and every part
+  of the page (79,140) was measured with the box's `subscriptSizing`
+  set to `fixed`, set as this change has it, and set to `fixed` again,
+  each time through the box's own Angular input. The same 380 looks
+  were made in a development build of ae917ec as it is, with the same
+  switches. Every number is the same in the two builds, so a box that
+  is switched in the page stands as a box that is built that way.
+- Seen besides, and left as it is: the small text is a part of a flex
+  row of Angular Material's own (`.mat-mdc-form-field-hint-wrapper`),
+  so a word in it that is longer than the row is not broken; that is
+  the second of the five kinds. With a username of 32 letters, the
+  longest there is, the text's first line ends 50.5 px right of the
+  box at 320 px (26.5 px of it cut off by the step's frame) and
+  10.5 px right of the box at 360 px, uncut; from 375 px up it fits.
+  It is the same before and after this change. Not changed here: it
+  belongs to the kind that is still open.
+- Not seen: Safari; a phone, where the Thai letters come from another
+  font than on this Mac; the live wallet and the real masterpod's
+  answer; a refusal in other words (a 429 of the doormen, a 502 of the
+  proxy); the line while it comes in (Angular Material fades it in
+  over 300 ms) and the buttons while they move; a box while it is
+  tapped; a screen narrower than 320 px; `ng serve`.
+- A picture of the create page's Username step at 360 px with "ab"
+  typed, today beside the change, was shown to the user.
+- `npx ng build` from the wallet folder into a scratch folder: clean,
+  no warning. The script is `main-GKMFMQQY.js`, 2,336,590 bytes: byte
+  for byte the script of the scratch copy that was measured (`cmp`),
+  and 161 bytes more than the script built from ae917ec in a second
+  scratch copy. Nine places differ: eight in the birth record form's
+  template (the new input, and the numbers of the parts after it) and
+  one in the create page's. The style sheet `styles-HGVKDO6M.css` and
+  every other file are the same; `index.html` differs in the script's
+  name.
+- Spec: this note only. README unchanged.
+- For the deploy: the wallet alone, the user's two lines on wallet1 and
+  then on wallet2, with no `npm ci` (no package file changed).
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`

@@ -47,7 +47,7 @@ import { SessionService } from '../services/session.service';
           </mat-step>
 
           <mat-step [completed]="usernameAvailable()" [label]="t().create.stepUsername">
-            <mat-form-field appearance="outline" class="first">
+            <mat-form-field appearance="outline" class="first" subscriptSizing="dynamic">
               <mat-label>{{ t().common.username }}</mat-label>
               <input matInput [ngModel]="username()" (ngModelChange)="username.set($event)" autocomplete="username" [placeholder]="t().create.usernamePlaceholder" />
               <mat-hint>{{ usernameHint() }}</mat-hint>
