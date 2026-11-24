@@ -32,6 +32,11 @@ import { SessionService } from '../services/session.service';
  * the last read came back full. New public room shows, under its name
  * box, the public rooms whose name holds the typed one (the hint), at
  * most LIKE_NAMED_ROOMS; the hint never stops a creation.
+ *
+ * Since 2026-11-24 a chat about a listing (a marketplace chat) and a chat
+ * about an attestor case do not count as the private chat the two of you
+ * already have: Start chat passes them over, and makes a room when the
+ * two of you have no other.
  */
 @Component({
   selector: 'app-chat-new-page',
@@ -207,7 +212,9 @@ export class ChatNewPage {
    * The private chat with the found person: the one that already has just
    * the two of you, else a new room (its key wrapped to this pod's chat
    * keys) with the person invited (the key wrapped to theirs, read first so
-   * someone without chat keys makes no room).
+   * someone without chat keys makes no room). Since 2026-11-24 a room
+   * about a listing or about an attestor case is passed over: a
+   * marketplace chat or a case chat with the person is not that chat.
    */
   protected startChat(): Promise<void> {
     return this.run(async () => {
@@ -215,7 +222,7 @@ export class ChatNewPage {
       const me = this.session.anopodId();
       if (!target || me === null) throw new Error(this.t().common.findUsernameFirst);
       if (target.anopodId === me) throw new Error(this.t().chatNew.thatIsYou);
-      const existing = (this.session.chatRooms()?.rooms ?? []).find((room) => room.type === 'private' && justUs(room, me, target.anopodId));
+      const existing = (this.session.chatRooms()?.rooms ?? []).find((room) => room.type === 'private' && !room.listingId && !room.caseId && justUs(room, me, target.anopodId));
       if (existing) {
         await this.router.navigate(['/chat', existing.chatRoomId]);
         return null;
