@@ -250,8 +250,8 @@ function groupByTransaction<T extends { transactionId: string }>(items: T[]): Ma
   styles: `
     .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
     .form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
-    .wide { min-width: 360px; flex: 1; }
-    .filter { min-width: 320px; }
+    .wide { min-width: min(360px, 100%); flex: 1; }
+    .filter { min-width: min(320px, 100%); }
     .item { display: flex; gap: 16px; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid var(--mat-sys-outline-variant); }
     .avatar { width: 56px; height: 56px; object-fit: cover; border-radius: 50%; flex-shrink: 0; }
     .avatar-icon { width: 56px; height: 56px; font-size: 56px; color: var(--mat-sys-on-surface-variant); flex-shrink: 0; }

@@ -167,7 +167,7 @@ const EMPTY: VoteList = { items: [], loaded: false, more: false, error: null };
     .proposer { display: flex; align-items: center; gap: 12px; margin: 8px 0 16px; }
     .body { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0 0 16px; }
     .numbers { display: flex; flex-direction: column; gap: 6px; margin: 16px 0; }
-    .large { font-size: 1.6rem; font-weight: 700; }
+    .large { font-size: 1.6rem; font-weight: 700; line-height: 1.3; }
     .small { font-size: 13px; }
     .you { display: flex; align-items: center; gap: 6px; }
     .action { display: flex; gap: 8px; margin: 12px 0 4px; }

@@ -154,7 +154,7 @@ const PRICE_UNITS = 100_000_000n;
   `,
   styles: `
     .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
-    .dates { min-width: 280px; }
+    .dates { min-width: min(280px, 100%); }
     .chips { margin: 4px 0 8px; }
     .totals { font-weight: 500; margin: 8px 0 0; }
     .day { margin: 16px 0 0; font-size: 13px; font-weight: 500; color: var(--mat-sys-on-surface-variant); }

@@ -394,7 +394,7 @@ function storedAttestations(events: CaseEvent[]): StoredAttestation[] {
     .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
     .grow { flex: 1; min-width: 160px; }
     .form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
-    .wide { min-width: 360px; flex: 1; }
+    .wide { min-width: min(360px, 100%); flex: 1; }
     .person { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
     .selfie { width: 160px; height: 160px; object-fit: cover; border-radius: 8px; }
     .facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; align-items: center; }

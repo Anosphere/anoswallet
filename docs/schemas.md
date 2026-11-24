@@ -1586,8 +1586,13 @@ until setup is complete; home first, then wallet, chat, marketplace, DAO
 isSeed. The Chat entry carries the number of unread rooms (8.2, Chat;
 2026-11-05, section 11) and the Notifications entry the number of unread
 notifications (2026-11-06); the side panel and the Home tiles draw one
-list, navigation.service (8.3). The toolbar's "anoPod wallet" is a link
-to /home once setup is complete.
+list, navigation.service (8.3). The toolbar's brand is a link to /home
+once setup is complete. Since 2026-11-24 (section 11) the brand is one
+short word in bold letters of 18 px: "anoPod", and in the staff's
+editions "Moderator" (12.1) and "Attestor" (13.1). It read "anoPod
+wallet", "Moderator wallet" and "Attestor wallet" before, in letters of
+22 px. The username beside it ends in "…" when the top bar has no room
+for all of it.
 
 Two more entries carry a number since 2026-11-12 (section 11; the plan
 is forclaude/wallet-case-chats-plan-1.md, its decisions 15 and 25): the
@@ -1692,6 +1697,10 @@ On a screen narrower than 600 px the username is not shown while the
 button is there, and the wallet's name is cut with "…" when the row has
 no room (Thai at 360 and 375 px; English fits from 360 up). Both rules
 hold only while the button shows (the class `updating` on the toolbar).
+Since 2026-11-24 (section 11) the wallet's name is the one short word
+"anoPod" in letters of 18 px, which has room beside the button from 320
+px up in both languages and in the staff's editions, so the second rule
+finds nothing to cut on a phone.
 The button has 12 px at each side where Material gives 24, so it is 70
 px wide in English and 64 in Thai. A tap refreshes at once, with no
 question in between (the refresh, the paragraph after the next). A
@@ -14274,7 +14283,9 @@ passkey is in 8.9.
   rule since the testnet copy. It is the kind of fault the birth record
   form had until 2026-11-18. On no list; nothing was changed in this
   step. The account page's box is mended in the next note, in a commit
-  of its own; the staff pages are as they were.
+  of its own; the staff pages are as they were. (The staff pages are
+  mended on 2026-11-23: the note "A box with a least width in pixels
+  is no wider than its row" below.)
 - Brought in line on the user's word of 2026-11-19 ("go ahead and fix
   the older comments"), before this step was committed and in its
   commit: two comments that the step left out of date and the plan does
@@ -14388,7 +14399,8 @@ only: one style line, and no word of the dictionaries changes.
   page, with "Meeting link (https)" and the Note boxes. The four case
   pages scroll sideways at 360, 375 and 390 pixels, as the note above
   says; the attestors' page was not looked at. Not asked for here, and
-  on no list.
+  on no list. (Mended on 2026-11-23: the note "A box with a least
+  width in pixels is no wider than its row" below.)
 - Spec: this note, and one sentence of the note above ("Seen in
   passing").
 - Checked. `git status` showed the twenty files of the note above and
@@ -17152,7 +17164,9 @@ sentence.
   real phone ("we have witnessed and can confirm"). Three: on a phone
   narrower than 386 pixels the three boxes of the create page lose
   their right edge, 11 pixels at 375 wide and 16 at 360
-  (`mat-form-field { min-width: 260px; }`, line 96).
+  (`mat-form-field { min-width: 260px; }`, line 96). (Mended on
+  2026-11-23: the note "A box with a least width in pixels is no wider
+  than its row" below.)
 - Tried and not taken: `height: 100%` for the shell. It is right in the
   Android state above and gave the same as `100dvh` in every number on
   the upright walks (Safari on iOS 18.6 and 26.5, Chrome on Android,
@@ -18487,6 +18501,566 @@ the working tree clean. Three files, one commit.
   then on wallet2, with no `npm ci` (no package file changed). The
   masterpod is not touched.
 
+### A box with a least width in pixels is no wider than its row (2026-11-23)
+
+No plan file. The second of the five kinds of mistake named to the
+user (the note "A word that is longer than its line may break" above
+has the first), built on the user's word ("Yes, pixel widths") on top
+of 2879195, the working tree clean. One commit: ten page files and
+this file. Twelve style lines; no line of script and no word of the
+dictionaries changes.
+
+- The mistake: a box was told `min-width: 260px`, `280px`, `320px` or
+  `360px`, and a least width in pixels holds whatever the room is. A
+  card leaves its content the screen's width less 66 px, and a step of
+  a vertical stepper in a card the width less 150 px. So on a phone
+  the box was wider than its row: it passed its card, was cut off by
+  the step's frame, or let the page be pushed sideways.
+- Ten lines get `min-width: min(Npx, 100%)` where they had
+  `min-width: Npx`, the form that `.wide` of `account.page.ts` has had
+  since 2026-11-19: N px at the least, or the row's whole width where
+  the row is narrower. They are `.dates` (280) in
+  `src/app/pages/noted-transactions.page.ts` and
+  `transaction-history.page.ts`; `.wide` (360) in `attesting.page.ts`,
+  `attesting-trade-case.page.ts`, `attesting-recovery-case.page.ts`,
+  `attesting-dispute-case.page.ts` and `moderation-case.page.ts`;
+  `.filter` (320) in `attesting.page.ts` and `moderation.page.ts`;
+  `.column` (280) in `attesting-dispute-case.page.ts`. Each of these
+  boxes is a part of a flex row.
+- Two lines get `mat-form-field { width: 260px; max-width: 100%; }`
+  where they had `mat-form-field { min-width: 260px; }`, the form that
+  `recover-open.page.ts` has had since 2026-11-10: `create.page.ts`
+  and `account-recovery.page.ts`. The first form is not enough there.
+  Three of their boxes are no part of a flex row (Username on the
+  create page, Email and Phone number on the recovery page), and such
+  a box keeps the 212 px that Angular Material gives it (180 px to
+  type in and 32 px of padding). In a first trial with the first form
+  it stood 212 px wide in a step of 170 px at 320 px, with 18 px cut
+  off. With a width and `max-width: 100%` a box is 260 px wide where
+  its step has the room and as wide as the step where not, in a flex
+  row and out of one. `.wide` of the recovery page sets its own
+  `width` and `max-width`, as before.
+- Left as they are, three of the fifteen lines that were named to the
+  user: `.dates { min-width: 280px; ... }` in `dao.page.ts` and in
+  `guardians.page.ts`, and `.request { width: 320px; }` in
+  `seed.page.ts`. The DAO page and the Guardians page have no card: at
+  320 px their tab leaves the Dates box 288 px, more than the 280 it
+  asks for, and with a range picked the box is 288 px wide in 288. The
+  seed page's card has a `width` and no least width, and it is a part
+  of a flex row, so it gets narrower by itself: 254 px wide in 254 at
+  320 px, 294 in 294 at 360 px. All three were measured in the look
+  below.
+- Seen here, in a development build of a scratch copy of 2879195 with
+  the twelve lines (its `src` folder the same in every file as the
+  wallet folder's, `diff -r`), served from a scratch folder, in Google
+  Chrome 158 run without a window, with a made-up session and no
+  server (only `/api/config` was asked, and answered 404). The staff
+  pages were opened with a made-up edition and a made-up case each (a
+  trade case, a recovery case, a dispute case with the case key held
+  and a moderator's case, all in review and with no event), answered
+  in the browser. 21 views: the create page's steps 1 and 2; Noted
+  transactions and the transaction history, each empty and with a
+  range picked; the Decided tab of the DAO page and of the Guardians
+  page, the same two ways; the recovery page's Email, Phone, Contact,
+  Bank and last step; Attesting, the three attestor case pages,
+  Moderation and the moderator's case page. At 320, 360, 375, 390,
+  412, 430, 600, 768, 1024 and 1280 px wide, in English and in Thai:
+  420 looks. In each look every box under a changed rule, every piece
+  of text (23,060 in all) and every part of the page (69,700) was
+  measured with the rule's old declarations put back into the page's
+  own style sheet, with the new ones, and with the old ones again.
+- What changes. At 430, 768, 1024 and 1280 px: nothing. At 600 px the
+  side menu stands beside the page and leaves it 360 px, so a page
+  behind the login is there as on a phone of 360 px. In no look does a
+  part outside the changed boxes change its size or its place.
+  - The create page and the recovery page: a step leaves a box 170,
+    210, 225 and 240 px at 320, 360, 375 and 390 px. The boxes were
+    260 px wide and the step's frame cut off their right end, 66, 26
+    and 11 px of it at 320, 360 and 375 px; at 390 px they stood 20 px
+    past their row, uncut. Now each is as wide as its step. From
+    412 px up (262 px of room) they are 260 px wide as before. (The
+    note of 2026-11-22 has 16 px at 360; this look measured 26.)
+  - Noted transactions and the transaction history, at 320 px only,
+    where the card leaves 254 px: the Dates box was 280 px wide, 26 px
+    past its row and 9 px past the card's edge. Now 254.
+  - The `.wide` boxes of the staff pages ("Anos account", "Meeting
+    link (https)", "Note", "Share the case key with"): the card leaves
+    254, 294, 309, 324 and 346 px at 320, 360, 375, 390 and 412 px.
+    The boxes were 360 px wide and ended 73, 33, 18 and 3 px right of
+    the screen's edge at 320, 360, 375 and 390 px, and the page could
+    be pushed sideways by as much; at 412 px they stood 14 px past
+    their row, inside the card. Now each is as wide as its row, and
+    the page cannot be pushed sideways.
+  - `.filter` on Attesting and on Moderation, 320 px wide in 254, 294
+    and 309 px of room: it ended 33 px right of the screen's edge at
+    320 px (the Moderation page could be pushed sideways by 33 px),
+    9 px past the card's edge at 360 px, and 11 px past its row,
+    inside the card, at 375 px. Now as wide as its row.
+  - The two columns of a dispute case's files, at 320 px only: 280 px
+    wide in 254, 9 px past the card's edge. Now 254.
+- What the narrower boxes cost, all of it inside a box:
+  - On the recovery page a label that is longer than its box ends in
+    "…" while the box is empty and not tapped: "Anything else, one per
+    line" at 360 px and narrower (13 px of it at 360, 53 at 320), and
+    at 320 px also "Name on the account" (16 px) and "Their phone
+    number" (6 px). In Thai: the label of the last step at 375 px and
+    narrower (9, 24 and 64 px), and "Their phone number" at 320 px
+    (30 px). Until now the box was cut off instead; at 360 px the
+    label in it was whole.
+  - With a range picked on Noted transactions or on the transaction
+    history at 320 px, each of the two dates is 6 to 7 px longer than
+    its room, and its end is out of sight. In the old box of 280 px
+    both dates were whole.
+  - The Moderation page's Status box shows the picked statuses in one
+    line, "Open, In review, Approved, Delivering". The line ends in
+    "…" at 375 px and narrower (10, 25 and 65 px of it at 375, 360 and
+    320 px). At 375 px the old box stood inside the card, so there the
+    change costs the end of that line and mends nothing a person saw.
+    In Thai the line is longer than the box at every width, as before
+    (52 px at 1280 px).
+  - The account pickers of the staff pages show the account's kind and
+    its id of 64 characters, which a box of 360 px cut short as well;
+    66 px more of it is out of sight at 360 px.
+- Not seen: Safari; a phone; the live wallet; a real case of an
+  attestor or of a moderator; a box with something typed in, the dates
+  apart; a label while its box is tapped; a screen narrower than
+  320 px; `/account/recovery/selfie`, which is the recovery page
+  opened at its first step; `ng serve`.
+- A picture of the create page's first step at 360 px, today beside
+  the change, was shown to the user.
+- `npx ng build` from the wallet folder into a scratch folder: clean,
+  no warning. The script is `main-SROSCGUF.js`, 2,336,349 bytes: byte
+  for byte the script of the scratch copy that was measured (`cmp`),
+  and 122 bytes more than the script built from 2879195 in a second
+  scratch copy. Twelve places differ, the twelve rules. The style
+  sheet `styles-HGVKDO6M.css` and every other file are the same;
+  `index.html` differs in the script's name.
+- Spec: this note, and one sentence added to each of three older
+  notes of this section that the change left out of date: "The
+  passkey wherever the wallet signs with an account's key"
+  (2026-11-19, under "Seen in passing"), "The Recipient box of the
+  Send form fits its card" (2026-11-19, under "Left as they are") and
+  "The shell is as high as the screen shows, and the Username label
+  of the create page is whole" (2026-11-22, after "Three:"). README
+  unchanged.
+- `Z-TestNet/after_production_todos/things-to-do-after-production.md`
+  has the line "create page: the boxes lose their right edge on a
+  narrow phone". This change mends it. The list is another folder and
+  is not touched by this commit.
+- For the deploy: the wallet alone, the user's two lines on wallet1 and
+  then on wallet2, with no `npm ci` (no package file changed).
+
+### A line of big letters is as high as its letters (2026-11-23)
+
+No plan file. The third of the five kinds of mistake that gets built
+(the note "A word that is longer than its line may break" above names
+them), on the user's word ("Yes, line heights") on top of e074a03, the
+working tree clean. One commit: five page files and this file. Five
+style lines; no line of script and no word of the dictionaries
+changes.
+
+- The mistake: `src/material-theme.scss` gives `body` the font
+  `var(--mat-sys-body-medium)`, which the built style sheet holds as
+  `400 .875rem / 1.25rem Roboto`. The line height in it is a length,
+  so every element inherits 20 px, whatever the size of its letters. A
+  rule that makes the letters bigger than that and sets no line height
+  of its own gets lines 20 px apart for letters whose own box is
+  higher. On one line nothing shows. On two lines the second line is
+  written into the first.
+- Five rules gain `line-height: 1.3`: `.headline` (2rem, 32 px) in
+  `src/app/pages/vouching.page.ts`; `.large` (1.6rem, 25.6 px) in
+  `dao-proposal.page.ts` and in `guardian-proposal.page.ts`; `.price`
+  (1.6rem) in `listing.page.ts`; `.greeting h2` (24 px) in
+  `home.page.ts`. A number with no unit, so the line follows the size
+  of the letters. 1.3 is what `.title` of `landing.page.ts` has; the
+  two balances (`balance-card.component.ts`, `wallet.page.ts`) have
+  1.2. These five hold words, in Thai too, and Thai writes marks over
+  and under a letter, so they get the bigger of the two. Both values
+  were looked at in pictures of the five texts, in English and in
+  Thai; both keep the lines apart.
+- What it changes on two lines: the lines stand 41.6, 33.3 and 31.2 px
+  apart (1.3 times 32, 25.6 and 24 px) where they stood 20 px apart.
+  The letters' own boxes are 38, 30 and 28 px high, so until now the
+  second line lay 18, 10 and 8 px into the first. Now it does not.
+- What it changes on one line: the text's box is as high as its line
+  (41.6, 33.3 and 31.2 px) where it was 20 px, so what stands under it
+  stands lower. Under the headline of the Get vouched page 21.6 px;
+  under the vote line of a proposal in its vote (the DAO's and the
+  fund's) and under a listing's price 13.3 px. On Home nothing moves:
+  the greeting's row is 56 px high from the picture beside it, and one
+  line stands in its middle as before. With two lines it is 43.2 px
+  under the headline, 26.5 px under a vote line or a price, and on
+  Home the row is 62.4 px high, the picture in it stands 3.2 px lower
+  and everything under the row 6.4 px lower.
+- When each text takes two lines, as measured:
+  - "You've been vouched" and its Thai words: at 320 and 360 px, and
+    at 600 px, where the side menu leaves the page 360 px. One line
+    from 375 px up.
+  - The greeting on Home: with a long first name only. "Hello,
+    Christopher Alexander" at 390 px and narrower; a Thai first name
+    of two long words at 320 px. "Hello, Mai" is one line at every
+    width.
+  - The vote line of a DAO proposal: in English one line at every
+    width, also as "For 1234 · Against 567"; in Thai two lines at 320
+    and 360 px with those numbers.
+  - The vote line of a fund proposal: "For 12500 · Against 4300" at
+    320 px; its Thai at 390 px and narrower.
+  - A listing's price: "1,250,000.00 IDR per anos" at 320 px, in both
+    languages. "35.50 THB per anos" is one line at every width.
+- Seen here, in a development build of a scratch copy of e074a03 with
+  the five lines (its `src` folder the same in every file as the
+  wallet folder's, `diff -r`), served from a scratch folder, in Google
+  Chrome 158 run without a window, with a made-up session and no
+  server (only `/api/config` was asked, and answered 404); a made-up
+  DAO proposal, fund proposal and listing were answered in the
+  browser. Nine views: the Get vouched page once vouched; Home with a
+  short first name and with one of two long words; a DAO proposal in
+  its vote and a fund proposal in its vote, each with small and with
+  big numbers; a listing with a short and with a long price. At 320,
+  360, 375, 390, 412, 430, 600, 768, 1024 and 1280 px wide, in English
+  and in Thai: 180 looks. In each look the changed text (its lines,
+  how far apart they stand, how high the letters' own box is), every
+  piece of text (7,280 in all) and every part of the page (7,340) was
+  measured with the line height taken out of the page's own style
+  sheet, put back, and taken out again. In no look does anything
+  change but straight down: no part changes its width or moves
+  sideways, no other text gets other lines, and no text takes more or
+  fewer lines than before.
+- Seen besides, and left as it is: ten rules give a heading letters of
+  20 px (`1.25rem`) on the same 20 px lines, the `h2` of
+  `dao-proposal.page.ts` with a proposal's title among them. There the
+  letters are as big as the line is high, not bigger. A title of three
+  lines at 360 px was looked at in a picture: in English the lines
+  stand close and no letter meets another; in Thai the marks over the
+  letters of a line touch the line above. Not changed and not asked
+  for; told to the user.
+- Not seen: Safari; a phone, where the Thai letters come from another
+  font than on this Mac; the live wallet; a proposal that is decided
+  or waiting (its vote line has no large type); the attestor's and the
+  moderator's editions, which draw the same pages; a screen narrower
+  than 320 px; `ng serve`.
+- A picture of the Get vouched page at 360 px, today beside the
+  change, was shown to the user.
+- `npx ng build` from the wallet folder into a scratch folder: clean,
+  no warning. The script is `main-KURZCXI3.js`, 2,336,429 bytes: byte
+  for byte the script of the scratch copy that was measured (`cmp`),
+  and 80 bytes more than the script built from e074a03 in a second
+  scratch copy. Five places differ, the five rules. The style sheet
+  `styles-HGVKDO6M.css` and every other file are the same;
+  `index.html` differs in the script's name.
+- Spec: this note only. README unchanged.
+- For the deploy: the wallet alone, the user's two lines on wallet1 and
+  then on wallet2, with no `npm ci` (no package file changed).
+
+### The line under an input box takes the room it needs (2026-11-24)
+
+No plan file. The fourth of the five kinds of mistake that gets built
+(the note "A word that is longer than its line may break" above names
+them), after the user moved the two kinds that were still open to a
+fresh chat, on top of ae917ec, the working tree clean. One commit: two
+files of `src/app` and this file. Two lines of two templates; no style
+line and no word of the dictionaries changes.
+
+- The mistake: Angular Material keeps room for one line of small text
+  under an input box, 20 px (`subscriptSizing` is `fixed` unless it is
+  set), and lays the small text (`<mat-hint>`) over that room with
+  `position: absolute`. A text of two lines is then written over
+  whatever stands under the box. With `subscriptSizing="dynamic"` the
+  text stands in the flow, and the box is as high as its lines.
+- The count: the wallet has 87 `mat-form-field`. 31 have
+  `subscriptSizing="dynamic"` and 56 have not. Of the 56, five have a
+  line under them, each a `<mat-hint>` (the wallet has no `<mat-error>`
+  and no `hintLabel`); the other 51 show no small text and cannot have
+  the flaw. Each of the five was looked at in a page: two are mended
+  and three are left as they are.
+- `src/app/pages/create.page.ts`: the Username box has
+  `subscriptSizing="dynamic"`. Its line is never empty: the rule,
+  "checking…", the answer to the check, or a refusal.
+- `src/app/components/identity-form.component.ts`: each of the seven
+  text boxes of the birth record form has `[subscriptSizing]` bound to
+  `hasBar(state().texts()[field.key]) ? 'dynamic' : 'fixed'`. The red
+  line under such a box ("The bar character | is not allowed") is
+  there only while the box holds a bar. Angular Material has no
+  setting for "one line of room at the least, more when the text needs
+  it", and plain `dynamic` drops the empty room as well: in a first
+  trial at 360 px each of the seven boxes was 56 px high where it is
+  76, and what stands under the form stood 140 px higher. So a box
+  stays `fixed` while it has no line and is `dynamic` while it has
+  one. One line of small text is 20 px high, as much as the room that
+  `fixed` keeps, so nothing moves until the line takes a second line.
+- Left as they are, three of the five: the Name box of a new passkey
+  (`account-passkeys.page.ts`, "For example: Spare security key") and
+  the two boxes of New proposal (`dao-new.page.ts`, the counters,
+  "100/100" and "5000/5000" at the most). Each is one line at every
+  width in both languages, and with `dynamic` tried on them nothing
+  moved.
+- What was wrong on the create page. The Username box is as wide as
+  its step and 260 px at the most: 170, 210, 225 and 240 px at 320,
+  360, 375 and 390 px. Its line has 32 px less than the box.
+  - The masterpod's refusal of a name it does not take, "HTTP 400:
+    invalid username: 3 to 32 characters, a-z, 0-9 and _": two lines
+    at every width from 375 px up, at 1280 px too; three at 360 px,
+    four at 320 px. The wallet asks 400 ms after the last key, so a
+    person who types two letters and stops gets it.
+  - No network, "HTTP 0: could not reach the wallet proxy (network
+    error)": three lines at 320 px, two at every other width. Its Thai
+    words: four lines at 320 px, three at 360 and 375 px, two from
+    390 px up.
+  - "<username> is available": two lines from a name of 10 letters at
+    320 px, of 17 at 360, 19 at 375, 22 at 390 and 24 from 412 px up.
+    "<username> is taken": from 14, 20, 23, 24 and 27 letters. In
+    Thai: from 17, 23, 24, 27 and 29 letters, and from 13, 19, 22, 23
+    and 26.
+  - One line at every width, in both languages: the rule ("3 to 32
+    characters"), "checking…" and "mai is available".
+  The lines stand 16 px apart, and every line after the first stood
+  under the box: the last one ended 15, 31 and 47 px under the box's
+  lower edge with two, three and four lines. Back and Next stand right
+  under the box, so the text lay across both buttons (14 px of a
+  line's 16 inside them).
+- What was wrong in the birth record form. On the locked-out page
+  (`/recover/open`) the form stands in a step of the stepper and a
+  text box is 170, 210 and 225 px wide at 320, 360 and 375 px. There
+  the red line takes two lines in English, and at 320 px in Thai. Its
+  second line ended 15 px under the box: 11 px into the box under it,
+  and across that box's label where the label stands on the box's
+  upper edge, which is a box that is filled in and every "Known?" box
+  (10 to 14 px of the label's line). From 390 px up, and on the setup
+  page (`/identity`) and the Public ledger id page
+  (`/account/ledger-id`) at every width, the red line is one line
+  (their boxes are 254 px wide at 320 px) and nothing was wrong.
+- What changes. While a line is one line, and while a box of the form
+  has none: nothing, at any width; no part of a page changes its place
+  or its size. When a line takes more lines, its box grows by 16 px a
+  line and what stands under the box stands lower by as much. On the
+  create page Back and Next stand 16, 32 or 48 px lower with two,
+  three or four lines. In the form everything under a box with a bar
+  stands 16 px lower; with a bar in each of the seven, 112 px at the
+  form's end. Nothing else: in no look does a part change its width or
+  move sideways, and no other text gets other lines.
+- What it costs: Back and Next move while a person types. At 360 px
+  two letters and a pause bring the refusal on three lines and the
+  buttons 32 px down; the third letter brings "checking…" and the
+  buttons back up. Until now the buttons stood still and the text was
+  written through them.
+- Seen here, in a development build of a scratch copy of ae917ec with
+  the two lines (its `src` folder the same in every file as the wallet
+  folder's, `diff -r`), served from a scratch folder, in Google Chrome
+  158 run without a window, with no server (only `/api/config` was
+  asked, and answered 404). The create page and the locked-out page
+  with no session, the setup page with a made-up session before setup
+  is complete, the other pages with a made-up full session. The
+  masterpod's answer to the username check was a stand-in in the page
+  that answers the words of the masterpod's code (`USERNAME_RULE` in
+  `masterpodsoftware/src/anopods/anopods.service.js`); the page's own
+  code made the line from it. 19 views: the Username step seven ways
+  (the box empty; while the check runs; "mai" available; a name of 32
+  letters available and taken; "ab" refused; no network); the birth
+  record form on the locked-out page, on the setup page and on the
+  Public ledger id page, each with no bar, with a bar in the first box
+  and with a bar in each of the seven; the Passkeys page; New proposal
+  with its counters at 0 and full. At 320, 360, 375, 390, 412, 430,
+  600, 768, 1024 and 1280 px wide, in English and in Thai: 380 looks.
+  In each look every box under trial (its height, the room under it,
+  the lines of its small text, how far the text ends under the box and
+  what it lies on), every piece of text (13,960 in all) and every part
+  of the page (79,140) was measured with the box's `subscriptSizing`
+  set to `fixed`, set as this change has it, and set to `fixed` again,
+  each time through the box's own Angular input. The same 380 looks
+  were made in a development build of ae917ec as it is, with the same
+  switches. Every number is the same in the two builds, so a box that
+  is switched in the page stands as a box that is built that way.
+- Seen besides, and left as it is: the small text is a part of a flex
+  row of Angular Material's own (`.mat-mdc-form-field-hint-wrapper`),
+  so a word in it that is longer than the row is not broken; that is
+  the second of the five kinds. With a username of 32 letters, the
+  longest there is, the text's first line ends 50.5 px right of the
+  box at 320 px (26.5 px of it cut off by the step's frame) and
+  10.5 px right of the box at 360 px, uncut; from 375 px up it fits.
+  It is the same before and after this change. Not changed here: it
+  belongs to the kind that is still open.
+- Not seen: Safari; a phone, where the Thai letters come from another
+  font than on this Mac; the live wallet and the real masterpod's
+  answer; a refusal in other words (a 429 of the doormen, a 502 of the
+  proxy); the line while it comes in (Angular Material fades it in
+  over 300 ms) and the buttons while they move; a box while it is
+  tapped; a screen narrower than 320 px; `ng serve`.
+- A picture of the create page's Username step at 360 px with "ab"
+  typed, today beside the change, was shown to the user.
+- `npx ng build` from the wallet folder into a scratch folder: clean,
+  no warning. The script is `main-GKMFMQQY.js`, 2,336,590 bytes: byte
+  for byte the script of the scratch copy that was measured (`cmp`),
+  and 161 bytes more than the script built from ae917ec in a second
+  scratch copy. Nine places differ: eight in the birth record form's
+  template (the new input, and the numbers of the parts after it) and
+  one in the create page's. The style sheet `styles-HGVKDO6M.css` and
+  every other file are the same; `index.html` differs in the script's
+  name.
+- Spec: this note only. README unchanged.
+- For the deploy: the wallet alone, the user's two lines on wallet1 and
+  then on wallet2, with no `npm ci` (no package file changed).
+
+### The top bar says anoPod in smaller letters, and its username gives way (2026-11-24)
+
+No plan file. The end of the work on text that runs out of its borders
+(four notes above this one: "A word that is longer than its line may
+break", "A box with a least width in pixels is no wider than its row",
+"A line of big letters is as high as its letters" and "The line under
+an input box takes the room it needs"). The last kind of mistake named
+in the first of them was a long word in a part of a row. A walk of
+every page, with ordinary names and with the longest ones, showed that
+with ordinary names one thing alone stood out of its borders: the
+wallet's own top bar. The user settled
+how to mend it in talk, the last two turns of it: "what if we just keep
+the word anoPod, take out the wallet part, and make it smaller but
+still keep it bold so that a tap on it goes to the home", then "Yes, 18
+px". Built on top of 5d8495c, the working tree clean. One commit: four
+files of `src/app` and this file. No template changes, and of the
+script only six words of the two dictionaries and one comment.
+
+- What was wrong. `app.html` puts the brand, the username (`.who`) and
+  the Lock button into one row of Angular Material's toolbar, which is
+  `display: flex; white-space: nowrap` (`.mat-toolbar-single-row`), and
+  `app.css` let neither text give way. The brand stood in the toolbar's
+  own letters of 22 px: "anoPod wallet" was 139.4 px wide and
+  "กระเป๋าเงิน anoPod" 177.6 px. The row was wider than a phone's screen
+  as soon as the username had more letters than these. In Thai: none at
+  320 px (three letters were 13 px too many), 7 at 360 px, 9 at 375, 12
+  at 390 and 393, 13 at 402, 15 at 412, 18 at 430. In English: 6, 13,
+  15, 16, 18, 18, 20, 23. With one letter more the Lock button began to
+  run off the screen's right edge, and every page of that person could
+  be pushed sideways; with a long username the button stood off the
+  screen whole, and the round "+" buttons of Marketplace, DAO and
+  Guardians with it. So this was no rare case: a Thai phone 375 px wide
+  and a username of 10 letters.
+- `src/app/i18n/en.ts` and `src/app/i18n/th.ts`: the brand's three names
+  lose the word "wallet". `brandWallet` is "anoPod" in both languages
+  (it was "anoPod wallet" and "กระเป๋าเงิน anoPod"), `brandModerator` is
+  "Moderator" and "ผู้ดูแล" ("Moderator wallet", "กระเป๋าเงินผู้ดูแล"),
+  `brandAttestor` is "Attestor" and "ผู้ยืนยัน" ("Attestor wallet",
+  "กระเป๋าเงินผู้ยืนยัน"). Lines 8 and 10 of `app.html` are their only
+  use and are not changed: the brand is a link to /home once setup is
+  complete, as before, and plain text until then. The name in the web
+  app manifest, "anoPod wallet" (section 2), is another thing and
+  stays.
+- `src/app/app.css`: `.brand` gains `font-size: 18px`; its weight stays
+  500. `.who` gains `min-width: 0; overflow: hidden; text-overflow:
+  ellipsis`: of the row's parts the username is the one that gives way,
+  and it ends in "…". The two rules of the Update button's time
+  (`.updating .brand`, and `.updating .who` under 600 px; 8.1) are not
+  changed.
+- `src/app/app.ts`: the comment over the shell names the brand as it
+  reads now.
+- What a person sees. "anoPod" is 61.7 px wide. A username stands whole
+  up to 16 letters at 320 px, 20 at 360, 23 at 375, 26 at 390 and 393,
+  28 at 402, 30 at 412, and all 32 at 430 (of the lengths tried: every
+  one from 5 to 16 and from 22 to 32, and 18 and 20). A longer one
+  ends in "…": one of 20 letters shows 15 of them at 320 px. In the
+  staff's editions "Moderator" is 83.9 px wide and "Attestor" 65.1
+  ("ผู้ดูแล" 43, "ผู้ยืนยัน" 55); at 320 px a username of 12 letters
+  stands whole beside "Moderator" and one of 16 beside the other three.
+- A correction of what the user was told before the build: 18 letters
+  at 320 px, 24 at 360, 26 at 375, 29 at 390, 32 at 412. Those numbers
+  were measured without the "…" rule, where the row's parts may stand in
+  the bar's own 16 px of padding at the right. With the rule the row
+  keeps that padding, and the username gives way two to four letters
+  sooner: the numbers of the paragraph above.
+- Seen here, in development builds served from a scratch folder, in
+  Google Chrome 158 run without a window, with made-up sessions and
+  made-up rows and no server: the build of 5d8495c beside the build of
+  a scratch copy of it with the change, the same looks in both.
+  (1) The top bar by itself: Home in the three editions, usernames of 3
+  to 32 letters, eight widths (320, 360, 375, 390, 393, 402, 412 and
+  430 px), English and Thai, 608 looks in each build. In the build of
+  5d8495c 349 of them can be pushed sideways and the Lock button is off
+  the screen in 346; in the build with the change none can and it is
+  off in none, and no text or part outside the top bar stands
+  elsewhere than before.
+  (2) Every page: 4 pages before a login; 41 looks of a logged-in
+  person's pages (38 addresses, and Home and Wallet once more with
+  balances and an account right after a send), once with ordinary names
+  and once with the longest; 30 views with made-up rows (chats,
+  requests, listings, proposals, alerts, the staff's cases, three
+  people in each list), once with ordinary usernames and once with
+  usernames of 7, 16 and 32 letters. Ten widths from 320 to 1280 px,
+  English and Thai: 2,920 looks in each build, 139,070 texts and
+  493,684 parts. With ordinary names no text stands out of a frame in
+  either build; 65 looks can be pushed sideways in the build of 5d8495c
+  (every page of a logged-in person in Thai at 320 px, by 9 px) and
+  none in the build with the change. With the longest names 852 looks
+  can be pushed sideways in the build of 5d8495c (every one from 320 to
+  430 px, by 88 to 209 px) and 4 in the build with the change (the
+  listing page at 320 px; "Known and left as it is" below); the texts
+  that stand out of a frame are 1,745 against 40, and the Lock button
+  is off the screen in 852 looks against none. Outside the top bar the
+  two builds differ in 102 looks. 78 are looks of Marketplace, DAO and
+  Guardians: their round "+" button, which the too-wide bar had moved
+  off the screen with the page's width (in English at 360 px with the
+  long username it stood 131 px further right and 233 px lower than its
+  place), stands at its place in the build with the change. 24 are
+  looks of the Log page, whose first line is the time of that run's
+  newest call. No other text or part stands elsewhere.
+  (3) While the Update button shows: the three editions, usernames of 3
+  to 32 letters, seven widths from 320 to 600 px, both languages, 252
+  looks in each build. No look can be pushed sideways in either. The
+  build of 5d8495c cuts the brand with "…" at 320 px in every edition
+  and both languages, at 360 px in three of those six (Thai in the
+  wallet and the attestor edition, English in the moderator edition)
+  and at 375 px in two; the build with the change cuts it in no look.
+- Tried before this, in the same walk, and not taken: two rules for the
+  whole wallet, each switched on in the page on top of 5d8495c.
+  `overflow-wrap: anywhere` in place of `break-word` on `body`: with
+  ordinary names it changes nothing in 1,500 looks; with the longest it
+  mends 40 texts, breaks 38 others in the middle of a word that stood
+  inside their frame before (the name on a marketplace card, the
+  sender's name in a chat, the "Waiting for …" button of a listing),
+  and leaves the top bar as it is, since the toolbar does not wrap.
+  That is what the note "A word that is longer than its line may break"
+  says of `anywhere`, now seen. `* { min-width: 0; }`: worse, it lays
+  the top bar's own texts over each other (154 texts out of a frame
+  with ordinary names, where there were none).
+- Thai is not the long word. The wallet's 1,359 Thai texts (all of
+  `th.ts`, the blanks filled) at 14 px: the widest piece a browser
+  cannot break is 124.8 px, the English word "breakGlassTransfer:" in a
+  Thai sentence; the widest Thai piece is 85 to 97 px. Thai names and
+  sentences typed with no space break into pieces of at most 61 px. The
+  same in Chrome 158 on a Mac, in Safari of a simulated iPhone SE with
+  iOS 18.6 and with iOS 27.0, and in Chrome 149 of an Android 17
+  emulator: all four break Thai between words by a dictionary. What
+  does not break is Latin letters and digits in one piece: a username
+  (a to z, 0 to 9 and _ by the masterpod's rule; 223.6 px for one of 32
+  letters, 110.2 px for one of 16), an email address, a long name
+  written in Latin letters.
+- Known and left as it is: with a username of 32 letters, a name of 24
+  letters in one piece or a title typed in one piece, three pages have
+  a text that stands out of its row at 320 to 430 px: the cards of the
+  DAO list (their title and their line), the owner block of a listing,
+  and a name on Vouch requests. A person with a username of 16 letters
+  stands out of nothing on any page at any width. This is the kind of
+  the first note's list that was not built (a text part of a row keeps
+  `min-width: auto`); the user: "It's unusual for anyone to have such a
+  long username. Even 16 would be highly unusual."
+- Not seen: Safari and a phone for the top bar itself (the breaking of
+  Thai was seen there, the bar was not); the live wallet; a screen
+  narrower than 320 px.
+- Pictures of the top bar in Thai at 375 px with a username of 10
+  letters were shown to the user in the talk before the build: the ways
+  that were talked through, and "anoPod" at 18 and at 16 px.
+- `npx ng build` from the wallet folder into a scratch folder: clean,
+  no warning. The script is `main-HXXDI3RK.js`, 2,336,436 bytes: byte
+  for byte the script of the scratch copy that was measured (`cmp`),
+  and 154 bytes less than the script of 5d8495c. Five places differ:
+  the brand's names in the English dictionary, two stretches of them in
+  the Thai one, and the two rules. The style sheet
+  `styles-HGVKDO6M.css` and every other file are the same; `index.html`
+  differs in the script's name.
+- Spec: this note; in 8.1 the brand's sentence and one sentence after
+  the rules of the Update button's time; in 12.1 and 13.1 what an
+  edition changes; the shell's line in the table of 13.4; one clause in
+  the build notes of 12.7 and of 13.7. README unchanged.
+- For the deploy: the wallet alone, the user's two lines on wallet1 and
+  then on wallet2, with no `npm ci` (no package file changed).
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`
@@ -18511,7 +19085,9 @@ live on 4200 through the same `proxy.conf.json`, one at a time.
 
 What the edition changes: the navigation shows Moderation (12.3) when the
 edition is moderator and a session is open; the landing card's title says
-Moderator wallet; and, since 2026-11-12 (section 11), the wallet reads
+Moderator wallet (as built, 12.7: the toolbar's brand; since 2026-11-24
+it reads "Moderator", section 11); and, since 2026-11-12 (section 11),
+the wallet reads
 the recovery cases that are open or in review every 15 seconds, for the
 number on the Moderation entry (8.1; work-badge.service, 8.3). Nothing
 else. A moderator's pod is an ordinary pod
@@ -19130,7 +19706,8 @@ clean. What this section left open and how it was decided:
   the app reads as the wallet edition.
 - The shell: `Moderation` (icon `gavel`) after the status entries and
   before Notifications, when the edition is moderator and a session is
-  open; the toolbar's brand reads "Moderator wallet" in that edition.
+  open; the toolbar's brand reads "Moderator wallet" in that edition
+  (since 2026-11-24 "Moderator", section 11).
   Approved change 5 placed "the landing card's title" in the shell; the
   landing page's own card title ("Your anoPod") lives in
   `pages/landing.page.ts`, which is not on the approved list, and was
@@ -19332,7 +19909,8 @@ pointing at the same backends; the masterpod lists its origin in
 
 What the edition changes: the navigation shows Attesting (13.3) when the
 edition is attestor and a session is open; the toolbar's brand reads
-"Attestor wallet"; and, since 2026-11-12 (section 11), the wallet reads
+"Attestor" ("Attestor wallet" until 2026-11-24, section 11); and, since
+2026-11-12 (section 11), the wallet reads
 the three lists of the Attesting page every 15 seconds, for the number
 on the Attesting entry (8.1; work-badge.service, 8.3). Nothing else. An
 attestor's pod is an ordinary pod
@@ -19727,7 +20305,8 @@ Notifications).
                             2026-11-12 recoveryCaseScheduled too, linking to /cases/recovery/:caseId
     constants               CASES_POLL_MS (15 s)
     shell                   Attesting in the navigation when the edition is attestor and a session is open;
-                            Cases when setup is complete; the brand "Attestor wallet"
+                            Cases when setup is complete; the brand "Attestor" ("Attestor wallet"
+                            until 2026-11-24, section 11)
 
 ### 13.5 Running it on this machine
 
@@ -19784,7 +20363,8 @@ and how it was decided:
   the status entries and before Notifications; Cases (icon
   `folder_shared`) after Wallet in the setup-complete block; the brand
   reads "Attestor wallet" in the attestor edition, "Moderator wallet" in
-  the moderator one. `attestingGuard` is `moderationGuard` with
+  the moderator one (since 2026-11-24 "Attestor" and "Moderator",
+  section 11). `attestingGuard` is `moderationGuard` with
   `attestor`; a session in another edition lands on the landing page.
 - `MasterpodApiService`: the eighteen methods under three headings (the
   attestor reads, the attestor writes, the person's side) with the shapes

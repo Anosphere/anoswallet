@@ -128,7 +128,7 @@ export class IdentityFormState {
     <div class="grid">
       @for (field of textFields; track field.key) {
         <div class="field-row">
-          <mat-form-field appearance="outline" class="grow">
+          <mat-form-field appearance="outline" class="grow" [subscriptSizing]="hasBar(state().texts()[field.key]) ? 'dynamic' : 'fixed'">
             <mat-label>{{ t().identityForm.fields[field.key] }}</mat-label>
             <input matInput [ngModel]="state().texts()[field.key]" (ngModelChange)="state().setText(field.key, $event)" [disabled]="state().unknown()[field.key]" />
             @if (hasBar(state().texts()[field.key])) {

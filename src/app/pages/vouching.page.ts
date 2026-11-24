@@ -115,7 +115,7 @@ interface SentRequest {
   `,
   styles: `
     .vouched { text-align: center; padding: 24px 0; }
-    .headline { font-size: 2rem; font-weight: 500; margin: 0 0 8px; }
+    .headline { font-size: 2rem; font-weight: 500; line-height: 1.3; margin: 0 0 8px; }
     .lead { font-size: 1.125rem; margin: 0 0 24px; }
     .big { height: 52px; font-size: 1.125rem; padding: 0 40px; }
     .how ol { padding-left: 20px; }

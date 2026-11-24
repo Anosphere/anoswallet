@@ -13,7 +13,9 @@
   display: none;
 }
 
+/* The brand is one short word in bold letters of 18 px, where the toolbar's own letters are 22 px, so that the username beside it has room on a phone (2026-11-24). */
 .brand {
+  font-size: 18px;
   font-weight: 500;
   color: inherit;
   text-decoration: none;
@@ -23,10 +25,14 @@
   flex: 1;
 }
 
+/* The username gives way when the top bar has no room for all of it, and ends in "…". Without this a long username pushed the Lock button off the screen, and every page could be pushed sideways (2026-11-24). */
 .who {
   margin-right: 8px;
   font-size: 14px;
   opacity: 0.85;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .update {

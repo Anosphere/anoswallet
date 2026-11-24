@@ -352,7 +352,7 @@ function accepted(result: SentResult): boolean {
     .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
     .grow { flex: 1; min-width: 160px; }
     .form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
-    .wide { min-width: 360px; flex: 1; }
+    .wide { min-width: min(360px, 100%); flex: 1; }
     .parties { display: flex; gap: 24px; flex-wrap: wrap; }
     .person { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
     .selfie { width: 120px; height: 120px; object-fit: cover; border-radius: 8px; }
@@ -362,7 +362,7 @@ function accepted(result: SentResult): boolean {
     .value { word-break: break-all; }
     .note { white-space: pre-wrap; }
     .columns { display: flex; gap: 24px; flex-wrap: wrap; }
-    .column { flex: 1; min-width: 280px; }
+    .column { flex: 1; min-width: min(280px, 100%); }
     .file { margin: 8px 0; }
     .file img { width: 200px; max-height: 160px; object-fit: cover; border-radius: 8px; display: block; }
     .locked { color: var(--mat-sys-on-surface-variant); }

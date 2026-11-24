@@ -148,7 +148,7 @@ interface ListBody {
   `,
   styles: `
     .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
-    .dates { min-width: 280px; }
+    .dates { min-width: min(280px, 100%); }
     .day { margin: 16px 0 0; font-size: 13px; font-weight: 500; color: var(--mat-sys-on-surface-variant); }
     .entry { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 4px; border: 0; border-bottom: 1px solid var(--mat-sys-outline-variant); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
     .entry:hover { background: var(--mat-sys-surface-container-low); }
