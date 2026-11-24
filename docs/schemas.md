@@ -17771,6 +17771,69 @@ is in 8.1.
   byte, since only comments changed in the source. The walks were not
   made again for it.
 
+### A word that is longer than its line may break (2026-11-23)
+
+No plan file. The user asked why text runs out of its borders in
+places, and which CSS rules are set wrong. Five kinds of mistake were
+named from the code. This is the first of them, built on the user's
+word ("Yes, the one line") on top of 0996e9c, the working tree clean.
+One commit: `src/styles.css` and this note. No line of script changed.
+
+- `src/styles.css`: the `body` rule gains `overflow-wrap: break-word`,
+  with a comment over it. Until now nothing set `overflow-wrap` for the
+  whole wallet, so the browser's `normal` held: a line broke only at a
+  space, and a word that holds no space (a transaction id, a username,
+  an address) ran on in one piece, out of its card and off the screen.
+  The property is inherited, so the one rule reaches every page and
+  every box, sheet and menu laid over a page. A rule that sets
+  `overflow-wrap`, `word-break` or `white-space: nowrap` for its own
+  element still holds there: the five `overflow-wrap: anywhere`, `code`
+  and `.value` with `word-break: break-all`, a button, a tab, a row of
+  one line.
+- What it changes: a word that is longer than the whole line of its
+  box, and nothing else. Such a word breaks at the box's edge and goes
+  on in the next line. `break-word` and not `anywhere`: `anywhere` also
+  counts when the parts of a row are sized, so a tight row would begin
+  to break its short words in the middle.
+- What it does not mend: a long word in a part of a flex row, in a grid
+  column written `1fr` or in a table cell. Such a part is never
+  narrower than its longest word (`min-width: auto`), so the word is
+  not longer than its line, and the part itself runs out. Those places
+  need `min-width: 0` on the part (`minmax(0, 1fr)` in a grid) as well.
+  None of that is changed here, nor the three other kinds named to the
+  user: a least width in bare pixels, big letters on the body's 20 px
+  lines, and the one-line room under an input box.
+- Seen here, in a development build of the wallet folder served from a
+  scratch folder, in Google Chrome 158 run without a window, with a
+  made-up session and no server (only `/api/config` was asked, and
+  answered 404): 44 pages (the four pages before a login; 37 addresses
+  of a logged-in person, the ones with an id in them under a made-up
+  id; Home and Wallet once more with balances; an account right after
+  a send) at 320, 360, 390, 430 and 1280 px wide, in English and in
+  Thai. Every piece of text was measured with the declaration taken
+  out of the page's style sheet and put back: 440 looks, 14,735 texts.
+  One thing differs, on one page: the green line under the Send form,
+  "accepted: <the transaction id>". Without the rule the id stands in
+  one piece on the line after "accepted:" and ends 207, 167, 137 and
+  97 px right of the screen's edge at 320, 360, 390 and 430 px, and
+  the page can be pushed sideways by as much. With the rule the id
+  breaks at the card's edge and takes two lines, nothing stands right
+  of the card, and the page cannot be pushed sideways; the four texts
+  under the line stand 20 px lower. At 1280 px the line fits and
+  nothing differs.
+- Not seen: a list filled with data, on any page but Home, Wallet and
+  the account; a long username or a long name; the attestor's and the
+  moderator's editions, which load the same style sheet; Safari; a
+  phone; the live wallet.
+- `npx ng build` from the wallet folder into a scratch folder: clean,
+  no warning. The script is `main-HNH3CYZO.js`, byte for byte the one
+  built at 0996e9c (`cmp`). The style sheet is `styles-HGVKDO6M.css`:
+  the one of 0996e9c with the 25 characters `;overflow-wrap:break-word`
+  put in (8,560 bytes for 8,535).
+- Spec: this note only. README unchanged.
+- For the deploy: the wallet alone, the user's two lines on wallet1 and
+  then on wallet2, with no `npm ci` (no package file changed).
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`
