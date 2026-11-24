@@ -20,10 +20,10 @@ const server = createApp(config).listen(config.port, () => {
 });
 
 // Each proxy listens for the server closing; Node warns above ten
-// listeners, so the limit is raised. The local defaults make thirteen
-// proxies. network/wallet.env makes 55 on the wallet servers: the masterpod,
-// 25 validators, 25 keyholders, and two routes for each of the two signing
-// servers.
+// listeners, so the limit is raised. The local defaults make fourteen
+// proxies. network/wallet.env makes 56 on the wallet servers: the masterpod,
+// 25 validators, 25 keyholders, two routes for each of the two signing
+// servers, and, since 2026-11-23, the stickers' pictures.
 server.setMaxListeners(64);
 
 function shutdown(signal) {

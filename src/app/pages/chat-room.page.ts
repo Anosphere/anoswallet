@@ -20,6 +20,8 @@ import { ApiResponse, reasonOf } from '../services/log.service';
 import { MasterpodApiService, MessageItem, Profile, RoomItem, RoomMember } from '../services/masterpod-api.service';
 import { RoomPictureCacheService } from '../services/room-picture-cache.service';
 import { SessionService } from '../services/session.service';
+import { StickersService } from '../services/stickers.service';
+import { Sticker, Suggestion, recentStickers, rememberSticker, stickerCode, stickerNamed, stickerSrc, suggestedStickers } from '../stickers';
 import { TradeMessageKind, tradeMessageKind } from '../trade-messages';
 import { REVIEW_STATUSES } from './attesting.page';
 
@@ -34,6 +36,8 @@ interface ShownMessage {
   pending: boolean;
   /** For the two traders of a marketplace chat (2026-11-19): what the message is when the pinned card posted it, and the thread then draws a grey line in its place; null for every other message, and always for a guest and in every other room. */
   notice: TradeMessageKind | null;
+  /** The sticker the message's text names (2026-11-23, ../stickers): its whole text is a sticker's code; null for every other message. The thread draws that sticker's picture where the bubble would stand, from the code alone (pictureOf). */
+  sticker: Sticker | null;
 }
 
 /** Messages by one sender within GROUP_MINUTES of each other on one day: the name once on top (someone else's, in a room that is not direct), the time once below. */
@@ -131,7 +135,37 @@ const REST_CHECK_MS = 40;
  * sent at once, as the middle of it in a square of at most
  * ROOM_PICTURE_SIDE pixels (/set-chat-room-picture, masterpod spec 27);
  * the creator can put another in its place the same way, and cannot take
- * the picture away.
+ * the picture away. Since 2026-11-23
+ * (forclaude/stickers-database-plan-1.md; wallet spec 4.16) a message
+ * whose whole text is a sticker's code (../stickers) shows as that
+ * sticker's picture, with no bubble around it. The picture's address is
+ * made of the code alone, so a sticker is drawn whether or not the
+ * wallet has the list of the sets; where the picture cannot be fetched,
+ * the word "Sticker" stands in a bubble in its place, until the
+ * conversation is opened again. The list of the sets is asked of the
+ * masterpod once after each login, when a conversation is first opened
+ * (stickers.service.ts). While that list holds at least one set, a
+ * stickers button, a smiling face, stands in front of the message box.
+ * It opens a panel under the message box, or closes it. At the panel's
+ * top stands a row of small pictures, one for each set: the set's first
+ * sticker. Under the row stand the stickers of the set that was tapped,
+ * and no other set's pictures are on the page. Once a sticker has been
+ * sent from this phone, a clock stands first in the row: the stickers
+ * sent lately, the newest first, as the phone keeps them. A tap on a
+ * sticker sends it at once, and the panel stays open. A tap into the
+ * message box closes the panel. While the panel is open, the pinned
+ * listing card of a marketplace chat is out of sight, so that the
+ * messages keep their room; it is back, as it was, when the panel
+ * closes. While a person types and the panel is closed, a strip above
+ * the message box shows the stickers that fit the end of the text, at
+ * most four (suggestedStickers in ../stickers); a tap on one sends it
+ * and takes the word that brought it up out of the message box. The
+ * cursor stays in the message box through that tap (the button's
+ * mousedown is told not to move it), so a phone's keyboard stays up and
+ * the person can go on typing. Without that, Safari on an iPhone took
+ * the cursor out of the box at the tap, and, as the tapped sticker left
+ * the page with its strip, marked a word of the top bar as selected. A
+ * reader at the thread's end stays there when the strip comes up.
  */
 @Component({
   selector: 'app-chat-room-page',
@@ -218,7 +252,7 @@ const REST_CHECK_MS = 40;
         </div>
       }
       @if (chat.isTrader(room)) {
-        <app-pinned-listing [room]="room" [accountIds]="accountIds()" (disputeCase)="setDisputeCase($event)" />
+        <app-pinned-listing [class.away]="showStickers()" [room]="room" [accountIds]="accountIds()" (disputeCase)="setDisputeCase($event)" />
       }
       <div class="thread" #threadBox>
         @if (canLoadOlder()) {
@@ -239,19 +273,25 @@ const REST_CHECK_MS = 40;
                   <span class="sender">{{ item.group.senderName }}</span>
                 }
                 @for (m of item.group.messages; track m.messageId) {
-                  <div class="bubble" [class.pending]="m.pending">
-                    <span class="text">
-                      @for (piece of m.pieces; track $index) {
-                        @if (piece.accountId) {
-                          <code>{{ piece.text }}</code>
-                          @if (!trader()) {
-                            <app-copy-button [text]="piece.text" [label]="t().common.copyAccountId" />
+                  <div class="bubble" [class.pending]="m.pending" [class.sticker]="pictureOf(m) !== null">
+                    @if (pictureOf(m); as picture) {
+                      <img [src]="picture" [alt]="t().chatRoom.sticker" width="148" height="128" (error)="pictureFailed(picture)" />
+                    } @else if (m.sticker) {
+                      <span class="text">{{ t().chatRoom.sticker }}</span>
+                    } @else {
+                      <span class="text">
+                        @for (piece of m.pieces; track $index) {
+                          @if (piece.accountId) {
+                            <code>{{ piece.text }}</code>
+                            @if (!trader()) {
+                              <app-copy-button [text]="piece.text" [label]="t().common.copyAccountId" />
+                            }
+                          } @else {
+                            <span class="plain">{{ piece.text }}</span>
                           }
-                        } @else {
-                          <span class="plain">{{ piece.text }}</span>
                         }
-                      }
-                    </span>
+                      </span>
+                    }
                     @if (m.mine) {
                       <span class="state">
                         @if (m.pending) {
@@ -277,13 +317,40 @@ const REST_CHECK_MS = 40;
       @if (error(); as text) {
         <p class="error note">{{ text }}</p>
       }
+      @if (suggested().length > 0) {
+        <div class="suggested">
+          @for (s of suggested(); track s.sticker.set + '/' + s.sticker.number) {
+            <button type="button" class="cell" (mousedown)="$event.preventDefault()" (click)="sendSuggested(s)" [disabled]="busy()" [attr.aria-label]="t().chatRoom.sticker"><img [src]="stickerSrc(s.sticker)" alt="" /></button>
+          }
+        </div>
+      }
       <div class="composer">
+        @if (stickerSets().length > 0) {
+          <button mat-icon-button type="button" class="stickers-button" (click)="toggleStickers()" [attr.aria-label]="t().chatRoom.stickers" [attr.aria-expanded]="showStickers()"><mat-icon>mood</mat-icon></button>
+        }
         <mat-form-field appearance="outline" class="grow" subscriptSizing="dynamic">
           <mat-label>{{ t().chatRoom.message }}</mat-label>
-          <textarea matInput cdkTextareaAutosize cdkAutosizeMinRows="1" cdkAutosizeMaxRows="5" [ngModel]="messageText()" (ngModelChange)="messageText.set($event)" (keydown.enter)="enter($event)"></textarea>
+          <textarea matInput cdkTextareaAutosize cdkAutosizeMinRows="1" cdkAutosizeMaxRows="5" [ngModel]="messageText()" (ngModelChange)="messageText.set($event)" (keydown.enter)="enter($event)" (focus)="closeStickers()"></textarea>
         </mat-form-field>
         <button mat-mini-fab type="button" class="send" (click)="send()" [disabled]="busy() || !messageText().trim()" [attr.aria-label]="t().common.send"><mat-icon>send</mat-icon></button>
       </div>
+      @if (showStickers()) {
+        <div class="stickers">
+          <div class="sets">
+            @if (recentShown().length > 0) {
+              <button type="button" class="set" [class.on]="stickerTab() === ''" (click)="pickStickerTab('')" [attr.aria-label]="t().chatRoom.stickersSentLately"><mat-icon>schedule</mat-icon></button>
+            }
+            @for (set of stickerSets(); track set.name) {
+              <button type="button" class="set" [class.on]="stickerTab() === set.name" (click)="pickStickerTab(set.name)" [attr.aria-label]="t().chatRoom.stickerSet"><img [src]="set.src" alt="" /></button>
+            }
+          </div>
+          <div class="grid" #stickerGrid>
+            @for (sticker of tabStickers(); track sticker.set + '/' + sticker.number) {
+              <button type="button" class="cell" (click)="tapSticker(sticker)" [disabled]="busy()" [attr.aria-label]="t().chatRoom.sticker"><img [src]="stickerSrc(sticker)" alt="" /></button>
+            }
+          </div>
+        </div>
+      }
     } @else if (!loaded()) {
       <p class="muted note">{{ t().chatRoom.loading }}</p>
     } @else {
@@ -323,6 +390,9 @@ const REST_CHECK_MS = 40;
     .group.mine .bubble { background: var(--mat-sys-primary-container); }
     .bubble.pending { opacity: 0.6; }
     .bubble code { font-size: 12px; word-break: break-all; }
+    .bubble.sticker, .group.mine .bubble.sticker { display: flex; align-items: flex-end; padding: 0; background: none; }
+    .bubble.sticker img { display: block; width: 148px; height: 128px; object-fit: contain; object-position: left bottom; }
+    .group.mine .bubble.sticker img { object-position: right bottom; }
     .plain { white-space: pre-wrap; }
     .state { display: inline-flex; align-items: center; margin-left: 6px; font-size: 11px; color: var(--mat-sys-on-surface-variant); vertical-align: bottom; }
     .tick { font-size: 14px; width: 14px; height: 14px; }
@@ -332,12 +402,28 @@ const REST_CHECK_MS = 40;
     .composer { display: flex; gap: 8px; align-items: flex-end; padding: 8px 12px; border-top: 1px solid var(--mat-sys-outline-variant); }
     .grow { flex: 1; min-width: 0; }
     .send { flex: none; margin-bottom: 4px; }
+    .stickers-button { flex: none; margin-bottom: 4px; }
+    .suggested { flex: none; display: flex; gap: 4px; overflow-x: auto; padding: 4px 12px; border-top: 1px solid var(--mat-sys-outline-variant); }
+    .suggested .cell { flex: none; width: 72px; }
+    .stickers { flex: 0 1 284px; min-height: 0; display: flex; flex-direction: column; border-top: 1px solid var(--mat-sys-outline-variant); }
+    .sets { flex: none; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding: 6px 0 2px 12px; }
+    .sets::after { content: ''; flex: none; width: 8px; }
+    .set { flex: 0 0 calc(100% / 6.5 - 4px); height: 44px; display: flex; align-items: center; justify-content: center; border: 0; padding: 3px; border-radius: 10px; background: none; color: var(--mat-sys-on-surface-variant); cursor: pointer; }
+    .set.on { background: var(--mat-sys-surface-container-high); }
+    .set img { display: block; width: 100%; height: 100%; object-fit: contain; }
+    .grid { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); align-content: start; gap: 4px; padding: 8px 12px; }
+    .cell { aspect-ratio: 37 / 32; border: 0; padding: 4px; border-radius: 12px; background: none; cursor: pointer; }
+    .cell img { display: block; width: 100%; height: 100%; object-fit: contain; }
+    app-pinned-listing.away { display: none; }
     .note { padding: 12px; margin: 0; }
     .empty { text-align: center; margin: auto; }
     .muted { color: var(--mat-sys-on-surface-variant); }
     .error { color: var(--mat-sys-error); }
     @media (max-width: 839px) {
       .back { display: inline-flex; }
+    }
+    @media (max-height: 640px) {
+      .stickers { flex-basis: 202px; }
     }
   `,
 })
@@ -372,6 +458,32 @@ export class ChatRoomPage {
   protected readonly showMembers = signal(false);
   /** The menu's Room picture opens the panel, or closes it (2026-11-22). */
   protected readonly showPicture = signal(false);
+  /** The list of the sets of stickers, asked of the masterpod once after each login (2026-11-23, stickers.service.ts). */
+  private readonly stickers = inject(StickersService);
+  /** The row of sets at the top of the stickers panel (2026-11-23, ../stickers): each set's name and its small picture, which is the set's first sticker (a set of the list has at least one). Empty while this login's list has not arrived and while the masterpod has no set: the message box then has no stickers button. */
+  protected readonly stickerSets = computed(() => this.stickers.sets().map((set) => ({ name: set.name, src: stickerSrc({ set: set.name, number: set.stickers[0].number }) })));
+  protected readonly stickerSrc = stickerSrc;
+  private readonly stickerGrid = viewChild<ElementRef<HTMLElement>>('stickerGrid');
+  /** The addresses of the stickers' pictures that failed to load in the thread since the conversation was opened (2026-11-23): the thread writes the word "Sticker" in a bubble in the place of each. Emptied when a conversation opens, so every picture is tried again then. */
+  private readonly failedPictures = signal<ReadonlySet<string>>(new Set());
+  /** The stickers button opens the panel under the message box, or closes it (2026-11-23). */
+  protected readonly showStickers = signal(false);
+  /** Which part of the panel shows (2026-11-23): a set's name, or '' for the stickers sent lately. */
+  protected readonly stickerTab = signal('');
+  /** The stickers sent lately from this phone, the newest first, as they stood when the panel was opened (2026-11-23). The clock stands in the row of sets only while this holds a sticker. A sticker sent while the panel is open joins it at the next opening, so that nothing moves under a finger. */
+  protected readonly recentShown = signal<Sticker[]>([]);
+  /** The stickers of the part that shows: the ones sent lately, or the tapped set's in the set's own order. */
+  protected readonly tabStickers = computed<Sticker[]>(() => {
+    const tab = this.stickerTab();
+    if (tab === '') return this.recentShown();
+    return (this.stickers.sets().find((set) => set.name === tab)?.stickers ?? []).map((entry) => ({ set: tab, number: entry.number }));
+  });
+  /** The stickers sent lately from this phone, the newest first (2026-11-23): read when this login's list arrives, when the stickers panel opens and after every sticker this page sends. The suggestions put them first. */
+  private readonly sentLately = signal<Sticker[]>([]);
+  /** The stickers suggested for what stands in the message box (2026-11-23, suggestedStickers in ../stickers): the strip above the message box draws them. None while the stickers panel is open: the panel then holds every sticker, and the thread keeps its room. */
+  protected readonly suggested = computed(() => (!this.showStickers() ? suggestedStickers(this.stickers.sets(), this.messageText(), this.sentLately()) : []));
+  /** True while the strip of suggestions shows (2026-11-23). */
+  private readonly stripShown = computed(() => this.suggested().length > 0);
   protected readonly inviteName = signal('');
   protected readonly inviteTarget = signal<Profile | null>(null);
   protected readonly messageText = signal('');
@@ -539,6 +651,18 @@ export class ChatRoomPage {
       el.addEventListener('scroll', scrolled, { passive: true });
       onCleanup(() => el.removeEventListener('scroll', scrolled));
     });
+    // The strip of suggestions takes its height from the thread (2026-11-23). A reader who is at the thread's end when the strip comes up stays there.
+    effect(() => {
+      if (!this.stripShown()) return;
+      untracked(() => {
+        if (this.nearBottom()) this.scrollToBottom();
+      });
+    });
+    // This login's list of the sets of stickers arrived (2026-11-23, stickers.service.ts): the stickers sent lately from this phone are read, since only the ones the list has count.
+    effect(() => {
+      const sets = this.stickers.sets();
+      untracked(() => this.sentLately.set(recentStickers(sets)));
+    });
   }
 
   /** The menu's Members opens the list, or closes it. It opens with an empty search box and its first MEMBERS_PAGE rows (2026-11-22). */
@@ -623,7 +747,63 @@ export class ChatRoomPage {
     void this.send();
   }
 
-  /** The room's newest page; whatever was shown before is dropped. */
+  /** The address of the picture the thread draws for a message (2026-11-23): the message is a sticker (`sticker`), and its picture has not failed to load since the conversation was opened. Null for every other message, and for a sticker whose picture failed: the thread then writes the word "Sticker" in a bubble. */
+  protected pictureOf(m: ShownMessage): string | null {
+    if (!m.sticker) return null;
+    const src = stickerSrc(m.sticker);
+    return this.failedPictures().has(src) ? null : src;
+  }
+
+  /** A sticker's picture in the thread could not be fetched, or is no picture (2026-11-23): the word "Sticker" takes its place, in every message that is that sticker. */
+  protected pictureFailed(src: string): void {
+    this.failedPictures.update((failed) => new Set(failed).add(src));
+  }
+
+  /** The stickers button (2026-11-23): opens the panel under the message box, or closes it. Opening takes the cursor out of the message box, so a phone's keyboard goes away and the panel stands in its place; a reader who was at the thread's end stays there. The first opening shows the stickers sent lately when this phone has some, and the first set when it has none; a later opening shows the part that was left, and the first set when the set that was left is not in the list. */
+  protected toggleStickers(): void {
+    if (this.showStickers()) {
+      this.closeStickers();
+      return;
+    }
+    const sets = this.stickers.sets();
+    if (sets.length === 0) return;
+    const follow = this.nearBottom();
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    const recent = recentStickers(sets);
+    this.sentLately.set(recent);
+    this.recentShown.set(recent);
+    const tab = this.stickerTab();
+    if (tab === '' ? recent.length === 0 : !sets.some((set) => set.name === tab)) this.stickerTab.set(sets[0].name);
+    this.showStickers.set(true);
+    if (follow) this.scrollToBottom();
+  }
+
+  /** Closes the stickers panel (2026-11-23): by the stickers button, by a tap into the message box, and when the room changes. */
+  protected closeStickers(): void {
+    this.showStickers.set(false);
+  }
+
+  /** A tap in the row of sets (2026-11-23): the panel shows that set's stickers, or the ones sent lately for the clock, from their first row. */
+  protected pickStickerTab(tab: string): void {
+    this.stickerTab.set(tab);
+    this.stickerGrid()?.nativeElement.scrollTo({ top: 0 });
+  }
+
+  /** A tap on a sticker in the panel sends it at once (2026-11-23). Nothing while another action runs. */
+  protected tapSticker(sticker: Sticker): void {
+    if (this.busy()) return;
+    void this.send(sticker);
+  }
+
+  /** A tap on a suggested sticker (2026-11-23) sends it, and the word that brought it up leaves the message box; whatever stood in front of that word stays. Nothing while another action runs. */
+  protected sendSuggested(suggestion: Suggestion): void {
+    if (this.busy()) return;
+    const text = this.messageText();
+    this.messageText.set(text.slice(0, text.length - suggestion.cut));
+    void this.send(suggestion.sticker);
+  }
+
+  /** The room's newest page; whatever was shown before is dropped. Since 2026-11-23 the list of the sets of stickers is asked for here, which asks the masterpod only when this login has no list yet (stickers.service.ts). */
   private async open(room: RoomItem): Promise<void> {
     this.ready = false;
     this.messages.set([]);
@@ -635,9 +815,12 @@ export class ChatRoomPage {
     this.showInvite.set(false);
     this.showMembers.set(false);
     this.showPicture.set(false);
+    this.closeStickers();
+    this.failedPictures.set(new Set());
     this.inviteTarget.set(null);
     this.setDisputeCase(null);
     this.error.set(null);
+    void this.stickers.load();
     const res = await this.api.listMessages(room.chatRoomId, { beforePosition: room.lastPosition + 1, limit: MESSAGES_PAGE });
     if (this.openedFor !== room.chatRoomId) return;
     if (!res.ok) {
@@ -720,7 +903,7 @@ export class ChatRoomPage {
     else if (this.openedFor === room.chatRoomId && this.toldSeen === position) this.toldSeen = 0;
   }
 
-  /** The messages decrypted with the room key and split into pieces; the two reasons a text cannot show, as before. For the two traders of a marketplace chat (2026-11-19) each message also says what it is when the pinned card posted it (`notice`, from tradeMessageKind); null for every other message. */
+  /** The messages decrypted with the room key and split into pieces; the two reasons a text cannot show, as before. For the two traders of a marketplace chat (2026-11-19) each message also says what it is when the pinned card posted it (`notice`, from tradeMessageKind); null for every other message. Since 2026-11-23 each message also says which sticker its text names (`sticker`, from stickerNamed in ../stickers); null for every other message. */
   private async shown(room: RoomItem, items: MessageItem[]): Promise<ShownMessage[]> {
     const hasKey = (await this.chat.roomKeyOf(room)) !== null;
     const me = this.session.anopodId();
@@ -736,6 +919,7 @@ export class ChatRoomPage {
         mine: m.senderAnopodId === me,
         pending: false,
         notice: this.chat.isTrader(room) ? tradeMessageKind(text) : null,
+        sticker: stickerNamed(text),
       });
     }
     return list;
@@ -745,10 +929,13 @@ export class ChatRoomPage {
    * The message shows at once as a pending bubble and the box empties; the
    * answer gives the bubble its id and position, and the poll that follows
    * brings in whatever else arrived. A refusal, or a key that fails, takes
-   * the bubble away and puts the text back.
+   * the bubble away and puts the text back. With a sticker (2026-11-23)
+   * the message is that sticker's code, and send() leaves the message box
+   * as it is. A sticker that went through is noted as sent lately
+   * (rememberSticker in ../stickers).
    */
-  protected send(): Promise<void> {
-    const text = this.messageText().trim();
+  protected send(sticker: Sticker | null = null): Promise<void> {
+    const text = sticker ? stickerCode(sticker) : this.messageText().trim();
     if (!text) return Promise.resolve();
     return this.run(async () => {
       const room = this.room();
@@ -764,24 +951,29 @@ export class ChatRoomPage {
         mine: true,
         pending: true,
         notice: null,
+        sticker,
       };
       this.messages.update((list) => [...list, pending]);
-      this.messageText.set('');
+      if (!sticker) this.messageText.set('');
       this.scrollToBottom();
       let res: ApiResponse<{ messageId: string; position: number }>;
       try {
         res = await this.api.sendMessage(room.chatRoomId, await this.crypto.encryptText(key, text));
       } catch (err) {
         this.messages.update((list) => list.filter((m) => m !== pending));
-        this.messageText.set(text);
+        if (!sticker) this.messageText.set(text);
         throw err;
       }
       if (!res.ok) {
         this.messages.update((list) => list.filter((m) => m !== pending));
-        this.messageText.set(text);
+        if (!sticker) this.messageText.set(text);
         return res;
       }
       const sent: ShownMessage = { ...pending, messageId: res.body.messageId, position: res.body.position, pending: false };
+      if (sticker) {
+        rememberSticker(sticker);
+        this.sentLately.set(recentStickers(this.stickers.sets()));
+      }
       this.messages.update((list) => list.map((m) => (m === pending ? sent : m)));
       this.session.markSeen(room.chatRoomId, res.body.position);
       await this.poll(false);

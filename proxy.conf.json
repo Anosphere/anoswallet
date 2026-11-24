@@ -3,5 +3,10 @@
     "target": "http://localhost:4300",
     "secure": false,
     "changeOrigin": false
+  },
+  "/stickers": {
+    "target": "http://localhost:4300",
+    "secure": false,
+    "changeOrigin": false
   }
 }

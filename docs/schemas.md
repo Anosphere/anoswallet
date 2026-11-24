@@ -107,6 +107,10 @@ Routes
     anything else under /api          404 { error: "Not Found", path }; since 2026-11-13 that is also the answer to
                                       POST /api/sign and GET /api/sign/public-keys, the two signing routes until then,
                                       so a tab loaded before the change cannot sign until it is reloaded
+    GET  /stickers/<set>/<number>     a sticker's picture (2026-11-23, 4.16; the point on the stickers' pictures, below):
+                                      asked of MASTERPOD_URL/sticker-picture/<set>/<number> and handed on as image/webp,
+                                      marked to be kept for a year
+    anything else under /stickers     404 { error: "Not Found", path }, also for a method other than GET
     everything else                   the files of DIST_DIR; index.html for a path that is not a file (the router's deep links)
 
 The Home Screen files (2026-11-21, section 11). Four of the files of
@@ -252,7 +256,10 @@ Behaviour
     data: address (a selfie inside an answer; since 2026-11-22 also a
     public room's picture, 4.15) or a blob: address (a
     picture opened in the browser: src/app/images.ts, the camera, the
-    recovery page, the evidence pictures of the case pages).
+    recovery page, the evidence pictures of the case pages). Since
+    2026-11-23 a sticker's picture, /stickers/<set>/<number> (4.16), is
+    one more picture of the wallet's own address, so 'self' covers it
+    and the policy is as it was.
   - "connect-src 'self'": the page's code calls only the wallet's own
     address, where every call goes to /api.
   - "frame-ancestors 'none'": no page may show the wallet inside a
@@ -278,13 +285,47 @@ Behaviour
   place of the "close" that nginx in front of it sends with every call.
   The masterpod, the keyholders and the signing servers get a new
   connection for every call, as before.
+- The stickers' pictures (2026-11-23, section 11; 4.16). One address
+  outside /api is asked of a backend: GET /stickers/<set>/<number>, in
+  front of the build's files. The set's name is 1 to 32 small letters,
+  digits and hyphens and the number two digits, as the masterpod has
+  them; the address is taken only in exactly that form, with nothing
+  after it. The proxy asks the masterpod for
+  /sticker-picture/<set>/<number>, a read that needs no login, and
+  sends none of the browser's headers with it, not even the three that
+  go with a call under /api. Only one answer is handed on as a picture:
+  a 200 that the masterpod calls image/webp. It goes to the browser as
+  "Content-Type: image/webp" with its length and "Cache-Control:
+  public, max-age=31536000, immutable", and with no other header of the
+  masterpod's: the browser keeps the picture for a year and does not
+  ask in that time whether it has changed. That is safe because a
+  picture never changes under its number (4.16). Every other answer of
+  the masterpod's goes on with its status and its body, as JSON when
+  the masterpod said JSON and as plain text for anything else, with
+  "Cache-Control: no-store": a sticker that is not there (404 { error:
+  "no sticker" }), an answer of another type, an error. The browser
+  does not keep such an answer and asks again the next time the picture
+  is to show. The same mark stands on what the proxy answers under
+  /stickers by itself: 502 { error: "masterpod unavailable" }, and 404
+  { error: "Not Found", path } for an address of another form and for
+  any method but GET, HEAD among them, for which the masterpod is not
+  asked. The masterpod answers 304 with no body to a caller that sends
+  a picture's ETag back. That never happens here: the browser's
+  If-None-Match stops at the proxy with its other headers, so the
+  masterpod always answers with the whole picture, and the proxy hands
+  the browser no ETag to ask with. A picture carries the three safety
+  headers and the page's policy, as every answer outside /api does. The
+  wait and what is logged are those of every forward: 120 seconds, and
+  a line for a 502.
 - The signed envelope's path is the backend path: the browser signs
   "/complete-setup" and posts to /api/masterpod/complete-setup; the proxy
   strips its prefix and the masterpod sees /complete-setup.
 - Nothing is logged but boot lines and 502s.
 
 Development: proxy.conf.json sends /api to http://localhost:4300, so ng
-serve on 4200 goes through the real proxy. `npm run server` starts the
+serve on 4200 goes through the real proxy; since 2026-11-23 it sends
+/stickers there too, so a development page shows the stickers'
+pictures. `npm run server` starts the
 proxy; `npm run build` then `npm run server` serves the built app on 4300
 for a production-like check.
 
@@ -1038,6 +1079,106 @@ in server/ changed but the words of one comment (section 11). The
 wallet's side is the chat list, the conversation and New chat (8.2,
 Chat), room-picture-cache.service and masterpod-api.service (8.3), and
 the room's round mark (8.6).
+
+### 4.16 Stickers
+
+Added 2026-11-23 (forclaude/stickers-database-plan-1.md, its steps 1
+and 2; section 11): the wallet's chat has stickers, as LINE has them. A
+sticker is a picture, still or moving, that the team makes; stickers are
+free and the same for everybody. They are kept in the masterpod's
+database, the pictures too. Until then the chat had text alone. The
+masterpod's side is its own spec's section 28, which holds the three
+tables, the two reads, the script that puts a set in and what is left
+as it is. The masterpod gained three things there. Three tables:
+`sticker_sets` (a set's name and its place in the row of sets),
+`stickers` (a sticker's set, its number, its place in the set and its
+picture) and `sticker_tags` (the words that bring a sticker up while a
+person types). One read at level setup that lists every set, text only.
+And one read with no login that hands out one picture, the masterpod's
+first GET that hands out data. A set comes into the database by a
+script that the operator runs on a masterpod server (`npm run stickers
+-- look <folder>` and `-- write <folder>`); no route writes a sticker.
+No env variable and no npm package.
+
+    POST /list-stickers (setup), new
+    body: {}
+    answer: 200 { sets: [ { name, stickers: [ { number, tags: [ ... ] } ] } ] }: every set in the order of
+            the row of sets, each set's stickers in their order, each sticker with its number and its tags;
+            the tags in small letters; a set without a sticker is left out; no set at all: { sets: [] };
+            about 23 KB for 200 stickers
+    checks: the session's, as for every route at level setup
+    a masterpod of before: 404, as for any route it does not have
+
+    GET /sticker-picture/<set>/<number> (no login), new
+    answer: 200, Content-Type image/webp, the picture's bytes; an ETag of its own, and 304 with no body
+            to a caller that sends that ETag back as If-None-Match; no Cache-Control
+    a sticker that is not there, and a name or a number that cannot be one: 404 { error: "no sticker" }
+    an address with a part more or less, and any method but GET: the masterpod's plain 404
+            { error: "Not Found", path }
+    a masterpod of before: that plain 404
+
+A set's name is 1 to 32 small letters, digits and hyphens. A sticker's
+number is two digits, 01 to 99. A picture is WebP, at most 150,000
+bytes and at most 370 by 320 pixels. A picture never changes under its
+number: a sticker that is drawn again gets a new number. That rule is
+what lets a phone keep a picture for a year (below).
+
+A sticker that somebody sends is no new kind of message. It is an
+ordinary chat message, sent with /send-message and encrypted like any
+other, whose whole text is the sticker's code:
+
+    [sticker:<set>/<number>]          for example [sticker:bun/07]
+
+The masterpod stores it as it stores every message and cannot tell it
+from a text. The reader's wallet draws the picture from that text
+alone: it needs no list for it (8.2, Chat; src/app/stickers.ts).
+
+The wallet asks for the list once after each login, when a conversation
+is first opened: /list-stickers through the proxy, as any masterpod
+path (section 2), signed like every chat call, and quiet. It keeps the
+answer in the page's memory until the login ends. There is no timer. A
+read that is refused or not answered keeps nothing, and the next
+conversation that is opened asks again (stickers.service, 8.3). The
+list is for what the wallet offers: the smiling face in front of the
+message box, the stickers under the message box, and the suggestions
+while a person types. While the masterpod has no set, the wallet shows
+none of the three and the chat looks as it did before. A set that is
+put in while a wallet is open shows in that wallet after its next
+login; a sticker of that set that somebody sends to it is drawn at
+once, since a picture needs no list.
+
+A picture does not come through /api. Every answer under /api is JSON
+or plain text that a browser may not keep (section 2), and a picture on
+a page is fetched by its address alone, with nothing signed. So the
+proxy has one address outside /api for it (section 2):
+
+    GET /stickers/<set>/<number>      for example /stickers/bun/07
+    asked of the masterpod as GET /sticker-picture/<set>/<number>, with none of the browser's headers
+    the masterpod's 200 image/webp: handed on as image/webp, with its length and
+            "Cache-Control: public, max-age=31536000, immutable" (a year), and no other header of the masterpod's
+    any other answer of the masterpod's, a sticker that is not there among them: handed on with its status
+            and its body, as JSON or plain text, with "Cache-Control: no-store"
+    a masterpod that cannot be reached: 502 { error: "masterpod unavailable" }, "no-store"
+    an address of another form under /stickers, and any method but GET: 404 { error: "Not Found", path },
+            "no-store", and the masterpod is not asked
+
+A phone fetches a picture when it is about to show it, keeps it for a
+year, and does not ask in that time whether it has changed. An answer
+that is no picture is not kept, so the picture is asked for again the
+next time it is to show. The question "has it changed?" never reaches
+the masterpod: the proxy passes none of the browser's headers on
+(If-None-Match among them) and hands the browser no ETag to ask with,
+so the masterpod always answers with the whole picture, and its 304
+never comes into play. Both wallet servers hand out the same picture
+from the one database. nginx on the wallet servers hands every such
+address to the proxy and adds no keep time of its own
+(deploy/nginx/wallet.conf, `location /`), so that file did not change,
+and the doormen in front of the masterpod pass a GET as they pass a
+POST.
+
+The wallet's side is the conversation and the chat list (8.2, Chat),
+stickers.service, session.service and masterpod-api.service (8.3), the
+words (8.8), and src/app/stickers.ts.
 
 ## 5. Validator changes (anossoftware)
 
@@ -2991,7 +3132,10 @@ decrypted as one line, "You: " before this pod's own, "No messages yet"
 without one, "(cannot read)" when it will not open, and, for the two
 traders of a marketplace chat, the grey line's words in the place of a
 message the pinned card posted, with no "You: " before them (2026-11-19,
-section 11; the words are in the paragraph "One conversation", below);
+section 11; the words are in the paragraph "One conversation", below),
+and the word "Sticker" in the place of a newest message that is a
+sticker, after "You: " when it is this pod's own (2026-11-23, section
+11; 4.16; the paragraph "Stickers", below);
 and the time (today
 the time, yesterday "Yesterday", within six days the weekday, else the
 date); an unread room (below) has a dot under the time and a bold
@@ -3135,6 +3279,87 @@ puts another picture in its place the same way, at any time, and cannot
 take the picture away. The other members see a new picture within about
 5 seconds, by the shell's read of the room list, and a person on Find
 public rooms at the next read of that list.
+
+Stickers (2026-11-23, section 11; 4.16; the plan is
+forclaude/stickers-database-plan-1.md, whose section 1 is the look in
+eight points). Stickers work in every chat. What a person sees:
+- A sticker in the conversation. A message whose whole text is a
+  sticker's code, "[sticker:<set>/<number>]" (the spaces around it
+  aside), shows as that sticker's picture with no bubble around it: 148
+  by 128 pixels, the picture whole inside that box, at the left for
+  someone else's and at the right for this pod's own, with the tick or
+  "Sending" beside it and the words Sent and Seen under it as under any
+  message. The picture's address, /stickers/<set>/<number>, is made of
+  the code alone (`stickerSrc` in stickers.ts), so the page needs no
+  list of the sets to draw it, and a wallet that has no list draws a
+  sticker all the same. A moving sticker moves.
+- A picture that cannot be fetched. Where the picture does not load (the
+  masterpod has no such sticker, the masterpod cannot be reached, the
+  answer is no picture), the word "Sticker" stands in its place, in an
+  ordinary bubble. Nobody sees a code. The word stands in every message
+  that is that sticker, until the conversation is opened again: then
+  the picture is tried again.
+- The chat list. A newest message that is a sticker reads "Sticker" in
+  the row's line, "You: Sticker" for this pod's own. That is worked out
+  from the message's text alone, whether or not the picture can be
+  fetched; the chat list asks for no list of the sets.
+- The smiling face. While this login's list holds at least one set
+  (stickers.service, 8.3), a round button with a smiling face (the icon
+  `mood`) stands to the left of the message box, which is 48 pixels
+  narrower for it. A tap opens the stickers under the message box, and
+  a second tap closes them. While the list has not arrived, and while
+  the masterpod has no set, there is no button, no panel and no strip,
+  and the conversation is, part for part, the page of before.
+- The stickers under the message box. A panel under the message box, at
+  most 284 pixels high, and 202 on a screen that is 640 pixels high or
+  less; it gives way when the frame is shorter still. At its top a row of small
+  pictures, one for each set in the order of the masterpod's row: the
+  set's first sticker. Six and a half fit, so a seventh shows that the
+  row slides. Under the row stand the stickers of the set that is
+  picked, in the set's order, in columns of at least 64 pixels; a set
+  that does not fit scrolls inside the panel. A tap on another set
+  shows that set from its first row. No other set's pictures are on the
+  page, so a picture travels only when it is about to be shown.
+  Opening the panel takes the cursor out of the message box, so a
+  phone's keyboard goes away and the panel stands where it was. A tap
+  into the message box closes the panel. The panel is closed when the
+  page goes on to another conversation.
+- One tap sends. A tap on a sticker sends it at once: the message is the
+  sticker's code, sent as any message is. The panel stays open and the
+  message box keeps what it holds. A send that fails takes the sticker
+  out of the conversation again and shows the refusal in the
+  conversation's red line.
+- The clock. Once a sticker was sent from this phone, a clock stands
+  first in the row of sets. It shows the stickers sent lately, the
+  newest first, at most 24, as the phone keeps them (its own storage,
+  the entry `anopod-wallet.stickers-sent`; for the phone, not for one
+  pod), and of those only the ones the list has. The first opening of
+  the panel shows the clock's stickers when there are some and the
+  first set when there are none; a later opening shows the part that
+  was left. A sticker sent while the panel is open joins the clock at
+  the next opening, so nothing moves under a finger.
+- The suggestions. While a person types and the panel is closed, a strip
+  above the message box shows up to four stickers whose tags fit what
+  was typed (`suggestedStickers` in stickers.ts). A sticker fits when
+  the text ends with one of its tags, whole, of two characters or more
+  and not in the middle of an English word, or when the last word, of
+  three characters or more, is the beginning of one of its tags.
+  Nothing while the box is empty or the text ends in a space. The
+  order: the stickers sent lately first; then the ones a whole tag
+  fits, before the ones only a tag's beginning fits; and within each of
+  those two, one from every set in turn, in the order of the sets. Four
+  stand side by side, so the strip does not slide. A tap on one sends
+  it and takes the word that brought it up out of the message box;
+  whatever stood before that word stays. The cursor stays in the
+  message box through that tap, so a phone's keyboard stays up and the
+  person can go on typing. The matching is done on the phone, from the
+  tags of the list: what a person types never reaches the masterpod
+  for it. A reader at the conversation's end stays there when the strip
+  comes up.
+- A marketplace chat. While the panel is open, the pinned card of the
+  room's two traders is out of sight, so that the messages keep their
+  room; it is back, as it was, when the panel closes. The strip does
+  not move the card.
 
 The pinned card (2026-11-06, section 11), in a private room about a
 listing, under the header and its panels and above the thread, drawn for
@@ -4033,7 +4258,10 @@ excepted, with the keyholder and anos calls included.
                             compared with the two the session kept; since 2026-11-20 (section 11; 4.11) an account
                             in the list carries firstKeyOnly beside keyBlob (AnosAccountItem), and the keyBlob the
                             session keeps is the account's first key blob, pair one alone, once it has one, and
-                            the blob with both pairs only until then
+                            the blob with both pairs only until then; since 2026-11-23 (section 11; 4.16)
+                            stickerSets, a signal: the stickers' list as /list-stickers answered it for this
+                            login, the sets in the order of their row, null until that answer has arrived and
+                            null again at close, so the next login asks anew (stickers.service, below)
     masterpod-api.service   the keyholder test app's api.service.ts, base path /api/masterpod, the two changed
                             routes and the four new ones added; the marketplace routes of 2026-11-06: getListing,
                             listingId on createChatRoom, mine and status any on listListings, no hpkeKey on
@@ -4073,7 +4301,11 @@ excepted, with the keyholder and anos calls included.
                             none, and a missing one reads as null), and two methods:
                             setChatRoomPicture(chatRoomId, picture), which sends { chatRoomId, picture }, and
                             getChatRoomPicture(chatRoomId, quiet), which sends { chatRoomId } and is quiet unless
-                            asked otherwise, since the room pictures are read as the faces are
+                            asked otherwise, since the room pictures are read as the faces are;
+                            the stickers (2026-11-23, section 11; 4.16): one method, listStickers(quiet), which
+                            sends {} to /list-stickers and is quiet unless asked otherwise, since it is nothing
+                            the person did; its answer is typed unknown, and readStickerSets (src/app/stickers.ts)
+                            reads it and trusts nothing in it
     keyholder-api.service   the keyholder test app's, base path /api/keyholder/<n>
     anos-api.service        the anos test app's account-api.service.ts, base path /api/anos/<the session's
                             validator> (2026-11-10, below; /api/anos/<defaultValidator> until then),
@@ -4251,6 +4483,30 @@ excepted, with the keyholder and anos calls included.
                             after-production item "faces: a failed read is asked again at once, over and over");
                             nothing is kept past a page load, and since 2026-11-22 (section 11) a Lock is such a
                             load (the refresh, 8.1)
+    stickers.service        the stickers' list (2026-11-23, section 11; 4.16): sets, a signal, every set of this
+                            login's list in the order of the row of sets, empty until the list has arrived and
+                            while the masterpod has no set; load(), which the conversation page calls each time it
+                            opens a room, asks /list-stickers (masterpod-api.service, quiet) only while this
+                            login has no list and no ask is on its way; the answer is read by readStickerSets
+                            (src/app/stickers.ts) and kept in session.stickerSets, which a login's end empties,
+                            so the list is asked for once after each login, when a conversation is first
+                            opened, and never on a timer; a refusal, no answer and an answer that is no list
+                            keep nothing, so the next conversation that is opened asks again; an answer that
+                            comes once the login it was asked for has ended is dropped
+    src/app/stickers.ts     no service, the plain functions the chat pages share for stickers (2026-11-23,
+                            section 11; 4.16): the types StickerSet ({ name, stickers }), StickerEntry ({ number,
+                            tags }), Sticker ({ set, number }) and Suggestion ({ sticker, cut }); readStickerSets
+                            (the sets of a /list-stickers answer, with nothing in it trusted: a set whose name
+                            has not the form of a name, a second set of a name, a sticker whose number is not
+                            two digits, a second sticker of a number and a set left with no sticker are passed
+                            over; null when the body has no "sets" that is a list); stickerNamed (the sticker a
+                            message's text names, when its whole text is a code), stickerCode (the code that
+                            sends a sticker), stickerSrc (a picture's address, /stickers/<set>/<number>),
+                            hasSticker; recentStickers and rememberSticker (the stickers sent lately from this
+                            phone, the newest first, at most 24, in the browser's own storage under
+                            anopod-wallet.stickers-sent, for the phone and not for one pod; where the storage is
+                            blocked nothing is kept and no clock shows); and suggestedStickers (the strip's
+                            stickers for a typed text, 8.2, Chat)
     signing.service         the signing servers through the proxy (2026-11-13, section 11; until then
                             /api/sign/public-keys and /api/sign on one server): publicKeys(), GET
                             /api/sign/<n>/public-keys, and sign(transaction, signerAccountId), POST /api/sign/<n>, n
@@ -4949,6 +5205,18 @@ again and of the box (8.1), none of them a function; the English is the
 plan's, letter for letter, and the Thai is the planning chat's (the
 plan's decision 22), in which "เข้าสู่ระบบ" is the wallet's word for Log in
 (`landing.unlock`), and no Thai reader has read it.
+Stickers (2026-11-23, section 11; 4.16): `chatRoom` gains four entries
+after `pictureWhat`, none of them a function: `stickers`, "Stickers",
+the name of the smiling face in front of the message box; `sticker`,
+"Sticker", the word that stands in the place of a picture that cannot
+be fetched and in the chat list's line, and the name of a sticker's
+button; `stickersSentLately`, "Stickers you sent lately", the name of
+the clock; and `stickerSet`, "Sticker set", the name of a set's button.
+Only `sticker` is drawn as a word on the page; the three others, and
+`sticker` on a button, are names for a screen reader. The Thai is
+"สติกเกอร์", "สติกเกอร์", "สติกเกอร์ที่ส่งล่าสุด" and "ชุดสติกเกอร์". Both
+languages are the words of the patch that the plan names (its section
+7), and no Thai reader has read the Thai.
 
 ### 8.9 The confirmation box
 
@@ -17770,6 +18038,316 @@ is in 8.1.
   clean, with the same script as before, `main-HNH3CYZO.js`, byte for
   byte, since only comments changed in the source. The walks were not
   made again for it.
+
+### A word that is longer than its line may break (2026-11-23)
+
+No plan file. The user asked why text runs out of its borders in
+places, and which CSS rules are set wrong. Five kinds of mistake were
+named from the code. This is the first of them, built on the user's
+word ("Yes, the one line") on top of 0996e9c, the working tree clean.
+One commit: `src/styles.css` and this note. No line of script changed.
+
+- `src/styles.css`: the `body` rule gains `overflow-wrap: break-word`,
+  with a comment over it. Until now nothing set `overflow-wrap` for the
+  whole wallet, so the browser's `normal` held: a line broke only at a
+  space, and a word that holds no space (a transaction id, a username,
+  an address) ran on in one piece, out of its card and off the screen.
+  The property is inherited, so the one rule reaches every page and
+  every box, sheet and menu laid over a page. A rule that sets
+  `overflow-wrap`, `word-break` or `white-space: nowrap` for its own
+  element still holds there: the five `overflow-wrap: anywhere`, `code`
+  and `.value` with `word-break: break-all`, a button, a tab, a row of
+  one line.
+- What it changes: a word that is longer than the whole line of its
+  box, and nothing else. Such a word breaks at the box's edge and goes
+  on in the next line. `break-word` and not `anywhere`: `anywhere` also
+  counts when the parts of a row are sized, so a tight row would begin
+  to break its short words in the middle.
+- What it does not mend: a long word in a part of a flex row, in a grid
+  column written `1fr` or in a table cell. Such a part is never
+  narrower than its longest word (`min-width: auto`), so the word is
+  not longer than its line, and the part itself runs out. Those places
+  need `min-width: 0` on the part (`minmax(0, 1fr)` in a grid) as well.
+  None of that is changed here, nor the three other kinds named to the
+  user: a least width in bare pixels, big letters on the body's 20 px
+  lines, and the one-line room under an input box.
+- Seen here, in a development build of the wallet folder served from a
+  scratch folder, in Google Chrome 158 run without a window, with a
+  made-up session and no server (only `/api/config` was asked, and
+  answered 404): 44 pages (the four pages before a login; 37 addresses
+  of a logged-in person, the ones with an id in them under a made-up
+  id; Home and Wallet once more with balances; an account right after
+  a send) at 320, 360, 390, 430 and 1280 px wide, in English and in
+  Thai. Every piece of text was measured with the declaration taken
+  out of the page's style sheet and put back: 440 looks, 14,735 texts.
+  One thing differs, on one page: the green line under the Send form,
+  "accepted: <the transaction id>". Without the rule the id stands in
+  one piece on the line after "accepted:" and ends 207, 167, 137 and
+  97 px right of the screen's edge at 320, 360, 390 and 430 px, and
+  the page can be pushed sideways by as much. With the rule the id
+  breaks at the card's edge and takes two lines, nothing stands right
+  of the card, and the page cannot be pushed sideways; the four texts
+  under the line stand 20 px lower. At 1280 px the line fits and
+  nothing differs.
+- Not seen: a list filled with data, on any page but Home, Wallet and
+  the account; a long username or a long name; the attestor's and the
+  moderator's editions, which load the same style sheet; Safari; a
+  phone; the live wallet.
+- `npx ng build` from the wallet folder into a scratch folder: clean,
+  no warning. The script is `main-HNH3CYZO.js`, byte for byte the one
+  built at 0996e9c (`cmp`). The style sheet is `styles-HGVKDO6M.css`:
+  the one of 0996e9c with the 25 characters `;overflow-wrap:break-word`
+  put in (8,560 bytes for 8,535).
+- Spec: this note only. README unchanged.
+- For the deploy: the wallet alone, the user's two lines on wallet1 and
+  then on wallet2, with no `npm ci` (no package file changed).
+
+### Stickers (2026-11-23)
+
+Step 2 of `~/Desktop/Z-TestNet/forclaude/stickers-database-plan-1.md`
+(FINAL, 2026-11-23), the wallet's part, built on the user's word ("go
+ahead and start the step 2 build in a fresh new chat") on top of
+ac1c985. Twelve files changed and two new ones, one commit. Why: the
+user, 2026-11-23: "I want to add the ability for my users to add
+stickers to their chats, much like how LINE does it." The stickers are
+kept in the masterpod's database, and the masterpod's part is the plan's
+step 1 (4.16; the masterpod's spec, section 28), committed there the
+same day as 73f2551. After this step the chat looks as before until a
+set is in the database (the plan's step 3, the operator's own lines). No
+new package and nothing new under `deploy/`.
+
+- New, `src/app/stickers.ts`, as 8.3 now says: the types, the reading of
+  the masterpod's list, a sticker's code and its picture's address, the
+  stickers sent lately from this phone, and the suggestions.
+- New, `src/app/services/stickers.service.ts`, as 8.3 now says: `sets`
+  and `load()`, one ask after each login.
+- Changed, `server/app.js`, as section 2 now says: the two constants
+  `STICKER_PATH` and `STICKER_KEEP`, the function `ownPictureHeaders`,
+  and in `createApp`, after the 404 of `/api` and in front of the
+  build's files, three things under `/stickers`: the mark `no-store`
+  and the dropping of the browser's headers, the forward to the
+  masterpod, and the 404. The file's opening comment gained a
+  paragraph.
+- Changed, `server/index.js`: two numbers of one comment. The local
+  defaults now make fourteen forwards and `network/wallet.env` 56,
+  under the 64 the file allows.
+- Changed, `src/app/services/session.service.ts`: the signal
+  `stickerSets`, which `close()` empties.
+- Changed, `src/app/services/masterpod-api.service.ts`: the method
+  `listStickers`, after `markMessagesSeen`.
+- Changed, `src/app/pages/chat-room.page.ts`, as 8.2 (Chat, "Stickers")
+  now says: the message type's field `sticker`; in the thread, the
+  picture or the word "Sticker" in the bubble's place; the strip, the
+  smiling face and the panel in the template; sixteen style lines and
+  one for screens of 640 pixels' height or less; twelve fields, among
+  them `failedPictures`; two effects in the constructor; the methods
+  `pictureOf`, `pictureFailed`, `toggleStickers`, `closeStickers`,
+  `pickStickerTab`, `tapSticker` and `sendSuggested`; `open()` closes
+  the panel, empties `failedPictures` and calls the service's `load()`;
+  `shown()` fills `sticker`; `send()` takes a sticker. The class
+  comment gained a passage at its end.
+- Changed, `src/app/pages/chat.page.ts`: `preview()` writes the word
+  "Sticker" for a newest message whose text is a sticker's code. The
+  class comment gained two sentences.
+- Changed, `src/app/i18n/en.ts` and `th.ts`, group `chatRoom`, four new
+  last entries (8.8).
+- Changed, `angular.json`: the build's warning line for the styles of
+  one component, 6 kB where it was 4 kB (below). `proxy.conf.json`:
+  `/stickers` goes to port 4300 as `/api` does (below).
+- Changed, this spec (section 2, the new 4.16, 8.2, 8.3, 8.8, this
+  note) and `README.md` (the proxy's paragraph and four lines of the
+  Layout).
+- What is taken from the old trial's patch, as the plan's section 7
+  says (`/Volumes/owc2tb/emulators/tools/stickers-look/plan-3/tried-copy-plan-3.patch`,
+  against 0996e9c): the look's code in `chat-room.page.ts` and
+  `chat.page.ts`, `stickers.ts`, and the four words in both languages.
+  Not taken: its `stickers.service.ts` (it read a file every five
+  minutes), its lines in `app.ts`, `.gitignore` and
+  `deploy/nginx/wallet.conf`, and its two timers in `constants.ts`.
+  Changed against it. A set is known by its `name` and a sticker by its
+  `number`, the masterpod's words, where the patch said `id` for both;
+  a number is two digits. A picture's address is
+  `/stickers/<set>/<number>`. A message that is a sticker's code is
+  drawn as a picture whether or not the list has that sticker (the
+  patch asked the list first), so `stickerOf` and the page's
+  `drawnStickers` are gone, and the chat list reads the code alone and
+  no longer the list. The word "Sticker" stands where a picture fails.
+  The effect that followed a change of the list keeps one line, since a
+  login's list does not change.
+- Readings where the plan left a small point open, each the smallest
+  way seen:
+  1. The picture address is taken only in exactly the form
+     `/stickers/<set>/<number>`, with the masterpod's own forms of a
+     name and a number. Anything else under `/stickers`, and any method
+     but GET, is answered 404 by the proxy itself, and the masterpod is
+     not asked.
+  2. The masterpod's 304. None of the browser's headers goes to the
+     masterpod and no ETag goes to the browser, so the masterpod always
+     answers with the whole picture and a 304 never comes. A picture's
+     mark is `public, max-age=31536000, immutable`.
+  3. Where the list is kept: in the session (`stickerSets`), which a
+     login's end empties. A list read that fails keeps nothing, and the
+     next conversation that is opened asks again. No timer.
+  4. A picture that fails in the conversation: the word "Sticker" in an
+     ordinary bubble, until the conversation is opened again. In the
+     panel and in the strip a picture that cannot be fetched leaves its
+     square empty.
+  5. `angular.json`. The conversation page's styles are 4,178 bytes
+     minified with the panel's lines (2,712 before), and the production
+     build warned, "exceeded maximum budget. Budget 4.00 kB was not met
+     by 178 bytes". The warning line is now 6 kB, as the patch had it;
+     the error line stays 8 kB. Without it every deploy would print
+     that warning.
+  6. `proxy.conf.json` sends `/stickers` to port 4300 like `/api`.
+     Without it the pictures do not load under `ng serve`.
+  7. A tap on a suggested sticker leaves the cursor in the message box
+     (`(mousedown)="$event.preventDefault()"` on the strip's buttons),
+     so a phone's keyboard stays up. Without it Safari on the simulated
+     iPhone 17 with iOS 26.5 took the cursor out of the box, closed the
+     keyboard and left the word "anoPod" of the top bar marked as
+     selected, in three taps of three at the simulator tool's
+     ordinary length (about 110 ms; not in one of 35 ms, and not when
+     the box had no cursor). With it: nothing selected, the
+     keyboard up, on iOS 26.5, 27.0 and 18.6 and in Chrome on Android.
+- Checked: `node --check` of the two server files. `npx ng build` from
+  the wallet folder into a scratch folder: clean, with no warning. The
+  script is `main-UCJ34XZG.js`, 2,336,210 bytes, which is 10,544 more
+  than a build of ac1c985 made the same way; the style sheet is
+  `styles-HGVKDO6M.css`, as at ac1c985; the build's folder has ten
+  files as before. A copy of ac1c985 with the step's files in it, in
+  the build chat's scratch folder, built the same bytes under another
+  name (`cmp`), and every trial below ran on that copy's builds.
+- Checked, the proxy for real: the scratch copy's `server/app.js` on
+  127.0.0.1, in front of the masterpod's own app (`createApp()` of
+  masterpodsoftware at 73f2551) on a scratch PostgreSQL 17 on
+  127.0.0.1, whose database was built from the masterpod's
+  `db/schema.sql` and filled by the masterpod's own script
+  (`scripts/stickers.js`, `look` and then `write`) with eight made-up
+  sets of 72 real WebP pictures, five of them moving. Asked with
+  node:http, 114 results and none bad: each of the 72 pictures came as
+  `image/webp` with the year's mark, its own length and the stored
+  bytes; no ETag, no Last-Modified, no cookie and no Access-Control
+  header reached the caller; asked with If-None-Match, with
+  If-Modified-Since and with Range, the whole picture came each time
+  (the masterpod's own log shows those asks arrive there without the
+  header); a sticker and a set that are not there and the number 00
+  came as the masterpod's 404, as JSON, marked `no-store`; seventeen
+  addresses of another form (a capital letter, one digit, three digits,
+  `.webp` behind the number, a slash behind it, a part too many or too
+  few, a question mark, a percent sign, two dots, a zero byte,
+  `/STICKERS`) and POST, PUT, DELETE, PATCH, OPTIONS and HEAD came as
+  the proxy's own 404, marked `no-store`, and none of them reached the
+  masterpod; `/`, a deep link, `/stickersfoo`, `/api/config` and a call
+  under `/api` are as before. Against a stand-in that answers what a
+  masterpod should never answer, 25 results and none bad: of a 200
+  `image/webp` with an ETag, a cookie, a Location, a Cache-Control of
+  its own and an Access-Control header only the type and the length
+  went on; a PNG, an SVG with a script, a page of HTML, JSON, an answer
+  with no type, a 206, a 304, a 302, a 500 and a 404 called
+  `image/webp` each went on as plain text or JSON marked `no-store`;
+  the ask reached the stand-in as GET with no header of the caller's
+  but Host and Connection; an address where nothing listens came as
+  502 { error: "masterpod unavailable" }, `no-store`, with one line in
+  the log.
+- Checked by a walk in Google Chrome 158 with no window, a development
+  build of the copy behind that proxy and that masterpod. The login was
+  made up, but its session keys were the wallet's own fresh ones, and
+  the trial told the scratch masterpod of them as a login does: so the
+  wallet's own signed /list-stickers was checked by the masterpod's own
+  code, and every picture came by /stickers. The chats were made up and
+  answered inside the page, with real ciphertexts. 77 results and none
+  bad at 390 by 760 and at 360 by 560 (at 1280 by 800 the 25 stickers
+  of a set stand in nine columns and need no scroll): the chat list
+  asks for no list; the first conversation asks once, and three more
+  conversations ask nothing; the smiling face, the row of eight sets in
+  the database's order, a set of 12 and one of 25 that scrolls; one tap
+  sends, the panel stays, the clock comes at the next opening with the
+  newest first; the strip's order for eleven typed texts (the stickers
+  sent lately first, a whole tag before a tag's beginning, one from
+  each set in turn, a Thai tag, a tag of two words, nothing in the
+  middle of an English word, nothing after a space); a tap on a
+  suggestion sends it, takes the word out and leaves the cursor in the
+  box; a sticker from someone else is drawn by the page's own
+  3-second read; a code typed by hand is drawn as its sticker; a
+  refused send takes the sticker out again and notes nothing as sent;
+  the pinned card is out of sight with the panel open and back as it
+  was; two stickers the masterpod does not have read "Sticker" in a
+  bubble and are asked for again when the conversation is opened
+  again, while a picture that came is not asked for again; a list read
+  that is refused shows no smiling face and is made again at the next
+  conversation; a closed session forgets the list and the next one
+  asks again; with no set in the database there is no smiling face and
+  no strip; the Thai words.
+  And the production build's own page behind the same proxy, which
+  has no debugging names and so was not walked: it is drawn under its
+  content security policy, a sticker's picture put into it as an
+  `<img>` loads, one that is not there gives the `<img>` an error, and
+  Chrome names no breach of the policy.
+- Checked, "did anything else move": the conversation of ac1c985
+  against this step's with no set in the database, in two chats that
+  hold no sticker, at 320 by 568, 360 by 560, 360 by 640, 390 by 760,
+  430 by 900 and 1280 by 800, in English and Thai, with an empty
+  message box and with a word typed: 48 looks, 3,576 numbers and
+  styles, the same in every one. With sets and an empty message box
+  three things differ: the smiling face is there, and the message box
+  begins 48 pixels further right and is 48 pixels narrower.
+- Checked by a look on the simulated phones, with real taps and the
+  on-screen keyboard, the same development build and servers. Safari
+  on iPhone 17 with iOS 26.5 (a page of 402 by 714) and Chrome on the
+  Android 17 emulator Pixel_10a (411 by 789), each the whole round:
+  the chat closed; a word typed with the keyboard up and the strip of
+  four above the message box; a tap on a suggestion; a tap on the
+  smiling face with the keyboard up, which takes the keyboard away and
+  opens the panel in its place; a set picked; a sticker sent and one
+  received; the clock; a marketplace chat closed and with the panel
+  open; two pictures that fail; the chat list; and a chat with no set
+  in the database beside the same chat at ac1c985. The short screens:
+  Safari on iPhone SE with iOS 26.5 (375 by 549) and Chrome on the
+  emulator small-phone-android-17 (360 by 536): closed, the panel (203
+  pixels high there, the thread keeps 127 and 114), the strip. A tap on
+  a suggestion once more on iPhone SE with iOS 27.0 and on iPhone 16
+  with iOS 18.6, where the strip stood over the phone's real keys.
+- Seen and left as it is:
+  - A marketplace chat on a short screen, while the strip shows. The
+    pinned card does not give way to the strip, so on a short screen
+    the two traders' message box is pushed under the chat's lower edge
+    for as long as a typed word brings the strip up: 43 of its 57
+    pixels in Chrome on the small Android (360 by 536; the typed word
+    cannot be seen), 32 in Safari on iPhone SE (375 by 549; the word
+    shows, cut at its foot), 19 at 360 by 560, nothing from 360 by 640
+    up; in Thai, whose card is lower, 15 and 4 pixels and nothing at
+    360 by 560. With no strip nothing is cut, at ac1c985 and now, and
+    with the panel open the card is out of sight and everything fits.
+    The plan hides the card for the panel and says nothing for the
+    strip. Put to the user with pictures from both phones; not
+    answered when this was written.
+  - After a tap on the round Send the keyboard goes away on an iPhone,
+    as it did before this step; after a tap on a suggestion it stays
+    (reading 7).
+  - A masterpod that takes the ask and never answers: after the
+    proxy's 120 seconds the caller's connection is closed with no
+    answer, under `/stickers` as under `/api` (tried with the wait cut
+    to 0.7 seconds). A picture that breaks off halfway reaches the
+    caller broken, and the connection stays open until that wait is
+    over. Neither is kept by a browser.
+- Not checked: a real phone; the live wallet, its nginx and the
+  doormen; the masterpod's servers; the team's own stickers (the 200
+  were not at hand; the made-up ones are 296 by 256 pixels and 3 to 25
+  KB each); a list of some hundred stickers on a phone; a slow
+  connection; the wallet opened from the Home Screen; a phone held
+  sideways; Safari and Firefox on a computer; the attestor's and the
+  moderator's editions, which draw the same pages; `ng serve` with the
+  new line of `proxy.conf.json`. No Thai reader has read the Thai
+  words.
+- For the deploy: the masterpod's step 1 first, with its schema line
+  before its first restart (the masterpod's spec, 28). Then the wallet,
+  the user's two lines on wallet1 and then on wallet2, with no `npm ci`
+  (no package file changed); the second line's install script restarts
+  the three units, which the changed `server/app.js` needs. Against a
+  masterpod of before, each conversation that is opened asks
+  /list-stickers once and gets 404, and nothing shows. A wallet that
+  is open on a phone meanwhile keeps the script it has until it is
+  loaded again.
 
 ## 12. Recovery and the moderator edition
 

@@ -7,6 +7,8 @@ body {
   font-family: Roboto, "Helvetica Neue", sans-serif;
   background: var(--mat-sys-surface);
   color: var(--mat-sys-on-surface);
+  /* A word that is longer than its whole line may break at the edge of its box. Without this a transaction id, a username or an address, which hold no space, ran on in one piece out of their card (2026-11-23). */
+  overflow-wrap: break-word;
 }
 
 code {

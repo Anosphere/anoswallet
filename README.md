@@ -45,7 +45,15 @@ calls: the proxy closes one that sat unused for 10 seconds and keeps at
 most 32 unused ones per validator (`validatorIdleMs` and
 `validatorIdleConnections` in `server/config.js`), while the masterpod,
 the keyholders and the signing servers get a new connection for every
-call. Everything else is the Angular build (`dist/wallet/browser`),
+call. One address outside `/api` is asked of a backend too, since
+2026-11-23: `GET /stickers/<set>/<number>`, the picture of a sticker
+of the wallet's chat. The proxy asks the masterpod for it
+(`/sticker-picture/<set>/<number>`, a read with no login) and hands it
+to the browser as `image/webp`, marked to be kept for a year
+(`Cache-Control: public, max-age=31536000, immutable`). An answer that
+is no picture, a sticker that is not there among them, goes on marked
+`no-store`, and anything else under `/stickers` is a 404 (the spec's
+4.16). Everything else is the Angular build (`dist/wallet/browser`),
 with `index.html` for the router's deep links. Every answer of the
 proxy, the build's files and the answers under `/api` alike, carries
 three safety headers: `X-Content-Type-Options: nosniff` (the browser
@@ -71,7 +79,7 @@ before that change), `DIST_DIR`, `RP_ID` localhost,
 ```
 server/
   index.js                 boots the proxy on PORT
-  app.js                   createApp(config): /api/config, the forwarders, the build
+  app.js                   createApp(config): /api/config, the forwarders, the stickers' pictures under /stickers, the build
   config.js                the variables with their local defaults
 src/app/
   app.ts, app.html         the shell: toolbar, side navigation by status, the notification poll and its sound; since 2026-11-22 the Update button, the box "You are logged out" and the load of the page after them and after Lock (spec 8.1)
@@ -81,6 +89,7 @@ src/app/
   countries.ts             the ISO 3166-1 alpha-2 codes for the identity form
   escrow-boxes.ts          the five boxes of an escrow trade for the confirmation box: Release, Dispute, the question before a cancel, "Do not cancel this trade" and Cancel; and the Start box, the question before the seller puts the anos in escrow from the marketplace chat's pinned card (spec 8.7, 8.9)
   trade-messages.ts        the three messages the pinned card posts into a marketplace chat, known by their words in every language, so the chat can draw them as grey lines (spec 8.2, 8.7)
+  stickers.ts              the stickers of the chat: a sticker message's code, [sticker:<set>/<number>], the address of its picture, the reading of the masterpod's list of sets, the stickers sent lately from this phone, and the suggestions for a typed word (spec 4.16, 8.2, 8.3)
   i18n/en.ts, th.ts        the words of each language, one section per page (spec 8.8)
   unlock.ts                the unlock flow, shared by the landing page, setup, the finish of a recovery and the walk-through of the locked-out page; at its end a login stores the first key blob, pair one alone, of each anos account that has none yet (spec 4.11)
   passkey-check.ts         the passkey check before the wallet signs with an account's key: the device is asked for the passkey that opened the session. Two functions: askSigningPasskey, for everything a signing server signs but a new account, asks for exactly what was built, and its answer goes to the signing server with the request; checkSessionPasskey, the wallet's own check, is left for the box before a new anos account and a moderator's Sign (spec 8.9)
@@ -114,6 +123,7 @@ src/app/
     sound.service.ts       the wallet's one sound, two short notes, and its switch, kept on the device (spec 8.1, 8.3)
     alerts.service.ts      the security alerts: the pod's list of emails and phones that are told when a transfer starts to wait, and the phone's own part: whether the wallet was opened from the Home Screen, the kind of device, and turnOn, which asks the phone for its permission and switches the worker on (spec 8.2, 8.3)
     room-picture-cache.service.ts   the pictures of public rooms: one read per room and picture for the tab's life (it ends at a load of the page, which a Lock is since 2026-11-22), five at a time; a read that failed is asked again half a minute later at the earliest (spec 8.3)
+    stickers.service.ts    the stickers' list: every set the masterpod has, asked for once after each login, when a conversation is first opened, and kept until the login ends; no timer (spec 4.16, 8.3)
     update.service.ts      the update check and the refresh: whether the wallet's server holds a newer build than this page runs, which shows the Update button, and the load of the page after that button, after Lock and after the box "You are logged out", made only once the server has answered (spec 8.1, 8.3)
 public/                    plain files that the build copies beside index.html as they are
   manifest.webmanifest     says the wallet is an app once it is added to a phone's Home Screen: the name anoPod, no address bar (spec 2)
@@ -121,7 +131,7 @@ public/                    plain files that the build copies beside index.html a
   apple-touch-icon.png     the logo an iPhone puts on its Home Screen, 180 pixels a side
   alerts-worker.js         the notification worker: the browser starts it when the masterpod sends this phone a security alert; it shows the alert and opens the wallet at a tap; it keeps no copy of the wallet (spec 8.3)
 docs/                      schemas.md (the spec, build notes in section 11), public-ledger-id.md, build-plan.md
-proxy.conf.json            ng serve forwards /api to the proxy
+proxy.conf.json            ng serve forwards /api, and since 2026-11-23 /stickers, to the proxy
 ```
 
 The app speaks English and Thai (spec 8.8). The language follows the
