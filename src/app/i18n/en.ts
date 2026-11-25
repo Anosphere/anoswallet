@@ -871,6 +871,8 @@ export const en = {
     empty: 'Ask Joy anything: a question, something to write or to translate, a plan to think through.',
     message: 'Message Joy',
     writing: 'Joy is writing…',
+    searching: 'Joy is searching the web…',
+    sources: 'Sources',
     off: 'Joy is switched off right now. Try again later.',
     dailyLimit: (time: string) => `You have sent Joy as many messages as an anoPod may send in one day. You can write to her again after ${time}.`,
     messageTooLong: 'This message is too long for Joy. Shorten it, or send it in parts.',

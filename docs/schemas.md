@@ -1406,6 +1406,8 @@ one npm package. The wallet gained no package and no env variable.
                                                              the last line of an answer that failed
             an empty line may stand between two lines and means nothing; the masterpod writes one every
             10 seconds while an answer is under way
+            since 2026-11-24 (4.20): one kind of line more, { "searching": true }, each time Joy starts a
+            web search, and one field more in the last line of an answer that ended, `sources`
     a masterpod of before: 404
 
 What leaves the wallet. A message to Joy is the one thing in the wallet
@@ -1416,7 +1418,11 @@ them to write the answer. The masterpod writes neither into a table or
 a log (its spec, 30.2). The Joy page says so in one line that always
 stands under its header: "Joy is an AI. What you write to her leaves
 your wallet to be answered." The page of the memory file says the same
-of the file (8.2, Joy).
+of the file (8.2, Joy). (Since 2026-11-24, 4.20: Joy can search the
+web. For a search she writes a query, which can hold words of the
+member's message, and the query goes to a search engine that Anthropic
+uses. What the wallet sends is as before, and the one line stays as it
+is.)
 
 The chat. There is one chat with Joy at a time, and the wallet holds
 it: joy.service (8.3) keeps its messages in the page's memory, so an
@@ -1443,6 +1449,8 @@ database, IndexedDB, the wallet's first use of it:
                 { v: 1, messages: [ { role: "user" | "assistant", text, at, end? } ] }
                 at: when the message was sent, or when the answer ended (ISO 8601)
                 end: only on an answer that did not end as an answer should: "length", "refused" or "cut"
+                since 2026-11-24 (4.20) a message can have one field more, sources: only on an answer of
+                Joy's for which she cited web pages
 
 When a Joy page opens for the first time in a login, the wallet reads
 the pod's entry and opens it. A blob that does not open under this
@@ -1550,7 +1558,9 @@ Left as it is:
   30.10): two devices that write to Joy within the same minutes can
   lose a line that one of them saved.
 - Joy's words are plain text: nothing is read as Markdown, and a web
-  address in an answer is no link.
+  address in an answer is no link. (Since 2026-11-24, 4.20: the web
+  pages Joy cited for an answer stand under it as links. An address in
+  her own words is still no link.)
 
 The proxy has one forward more for this (section 2), and nothing under
 deploy/ changed. The wallet's side is the two Joy pages (8.1; 8.2,
@@ -1761,6 +1771,184 @@ nothing in server/ and nothing under deploy/ changed. The wallet's side
 is the conversation and the chat list (8.2, Chat), the shell's sound
 (8.1), masterpod-api.service and chat.service (8.3), the confirmation
 box (8.9) and the words (8.8).
+
+### 4.20 Joy looks things up on the web
+
+Added 2026-11-24 (forclaude/joy-web-search-plan-1.md, FINAL on the
+user's word, its steps 1 and 2; section 11): Joy, the wallet's AI of
+4.18, searches the web when an answer needs something recent or
+something that changes, and answers from what she found. The user,
+after day one: "So, why can't joy access the internet?" Anthropic's own
+web search tool is added to the request that the masterpod sends
+already, and Anthropic runs the search inside that request. The
+masterpod's side is its own spec's section 32, which holds the rules,
+the tool in the request and the ways a request ends, the stream, the
+column that counts the searches, what Joy is told and what it costs.
+The masterpod gained there: one column on `joy_usage` (`searches`), two
+env variables and new words in its shared memory file. No table, no
+route and no npm package. The wallet gained no package, no env variable
+and no route.
+
+    POST /ask-joy (setup), the request as before (4.18), two additions to its answer
+    body: { messages: [ { role, text } ], memory }, as before: of each message the wallet sends its role
+          and its text and nothing else; the sources of an earlier answer are not sent back
+    answer: the stream of 4.18, with one kind of line more and one field more in the last line:
+            { "searching": true }                            Joy starts a web search. One line for each
+                                                             search she starts, written before the search
+                                                             runs, also for one that then fails
+            { "done": true, "stop": "end" | "length" | "refused", "memory": "<the whole file>" | null,
+              "sources": [ { "title": "...", "url": "https://..." } ] }
+                                                             the last line of an answer that ended
+            sources: the web pages Joy cited, in the order of their first use, each address once, ten at
+                 most, only addresses that begin with https:// or http://. An empty list when she cited
+                 none: an answer without a search, a search that failed, a request without the tool.
+                 A title has at most 200 characters, and it is an empty text when the page gave none.
+                 A page that a search found and Joy did not cite is not among them
+            { "error": ... } has no sources
+            when Joy wrote words before a search, her words after it begin a new paragraph: the blank
+            line is in the text itself
+    a masterpod of before: no `searching` line, and no `sources` in the last line
+
+What the wallet does with it (8.2, Joy; 8.3).
+
+- While a search runs. A line `{ "searching": true }` sets
+  joy.service's `searching`, and the page says "Joy is searching the
+  web…". While no word of the answer has come, that stands in the
+  waiting bubble, where "Joy is writing…" stands. When Joy wrote some
+  words before the search, the bubble holds those words and the
+  searching words stand under it as a small grey line. The next piece
+  of the answer takes them away, and so does the answer's end, however
+  it ends; a search that follows a search keeps them. The line says
+  that she asked, not for which words: her query is in no line (the
+  masterpod's spec, 32.3). In the first real call Joy wrote nothing
+  before the search, so a member mostly sees the waiting bubble.
+- The sources. The `sources` of the last line are kept with that
+  answer, as one more field of the message, in the page's memory and
+  in the chat's blob (below). A message for which no page is left has
+  no such field: an answer without a search is kept exactly as before
+  this step. Under the answer's bubble the page draws the word
+  "Sources" and one row for each page (8.2, Joy).
+- The check. The wallet checks the sources itself, when the last line
+  comes and again when a kept chat is opened (joy.service's
+  `sourcesOf`). The value must be a list. An entry is taken when its
+  `title` is a text, which may be empty, and its `url` is a text that
+  begins with `https://` or `http://` and that the browser reads as an
+  address with a site. Each address is taken once, and the first ten
+  are taken. Anything else is passed over. A title is kept without the
+  spaces around it and cut at 200 characters, and an address is kept
+  as it came. Sources stay only on an answer of Joy's. The masterpod
+  sends nothing else (its spec, 32.3); the wallet checks all the same,
+  so that a link on the Joy page is made of nothing else, whatever a
+  line or a kept chat holds.
+- A row. It shows the page's title and after it the page's site: the
+  address's host as the browser reads it, without a leading "www.", so
+  it names where the link leads. A page that gave no title shows its
+  site in the title's place. The row is a link with the address as it
+  came, `target="_blank"` and `rel="noopener"`, as the wallet's other
+  links to outside pages are (the meeting links of the case pages). So
+  the page opens in a new tab, and the wallet's own tab stays as it
+  is, with its login, which lives in that tab's memory. The opened
+  page has no hold on the wallet's tab (`window.opener` is null) and
+  is told nothing of where the visitor came from: the wallet's page is
+  served with `Referrer-Policy: no-referrer` (section 2). In the
+  wallet opened from an iPhone's Home Screen the page opens in the
+  app's own browser sheet over the wallet, and a cross closes it
+  (tried, section 11).
+- What is sent. The request does not change: of each message the
+  wallet sends its role and its text (`conversationOf`). So a later
+  message carries an earlier searched answer as its words alone, and
+  Joy is told so in the masterpod's shared memory file (its spec,
+  32.5).
+- Which answers show sources. Every answer that ended, whatever its
+  `stop`: one that was cut at the model's limit or stopped by the
+  safety check shows the pages cited up to there, the rows between its
+  bubble and the grey line that says how it ended. An answer that is
+  cut off in the middle shows none: the sources travel in the last
+  line, and such an answer has none (the plan's section 4, point 6).
+- Past the daily number of searches, and with web search switched off
+  on the masterpod, nothing tells the wallet. The message is answered
+  like any other, with an empty list, and Joy says herself that she
+  cannot search when a member asks her to (the plan's section 4,
+  point 5). The wallet shows no red line for it.
+
+The kept chat (4.18, "The chat survives a reload"), as it is since
+this step. The database, the place, the key and the version are the
+ones of 4.18:
+
+    value       the blob as bytes: iv || ciphertext || tag of the JSON
+                { v: 1, messages: [ { role: "user" | "assistant", text, at, end?, sources? } ] }
+                sources: only on an answer of Joy's for which she cited web pages:
+                [ { title, url } ], one to ten entries, as the wallet's check left them
+
+A chat that was kept before this step has no `sources` and opens as it
+is. The other way round holds too: a wallet of before this step opens a
+chat that this step's wallet kept, reads the fields it knows, draws no
+sources, and leaves the field on the message when it writes the chat
+again (tried, section 11).
+
+What leaves the wallet. Nothing that the wallet sends changes. One
+thing is new behind the masterpod: for a search Joy writes a query,
+which can hold words of the member's message, and the query goes to a
+search engine that Anthropic uses. The one line under Joy's header
+does not say that in particular and stays as it is (the plan's section
+4, point 9): it is still true. A tap on a source takes the member to
+that page's site, as any link does.
+
+What a wallet tab does that was loaded before this step's deploy (the
+plan's section 4, point 11; tried by the masterpod's step, its spec
+32.10, and again here, section 11). It keeps the wallet of before until
+it is loaded again. It passes the `searching` line over and reads no
+`sources`: it says "Joy is writing…" while a search runs, shows a
+searched answer without its sources, and keeps such an answer as its
+words alone. It ends with a reload, and the tab shows the Update button
+by itself (8.1). This is why the wallet's step is deployed before the
+masterpod's (the plan's section 4, point 10): an answer that used a
+search has to show its sources. After the wallet's deploy nothing has
+changed for anybody, and after the masterpod's deploy Joy looks things
+up.
+
+What this step's wallet does in front of a masterpod of before, which
+is how things stand between the two deploys (tried, section 11): no
+`searching` line comes and no last line has `sources`, so nothing new
+shows and nothing fails.
+
+Decided while building, each a small thing the plan had not named:
+
+- The thread follows the grey line. The page's effect that keeps a
+  reader at the thread's end also reads `searching` (8.2, Joy).
+  Without that, a searching line that reaches the page alone, some
+  time after Joy's last words, stands under the thread's lower edge,
+  out of sight (tried with that line taken out, section 11).
+- A list with no entry left is not kept: the message then has no
+  `sources` field, and the page draws the word "Sources" only over a
+  list with an entry.
+- The rows stand between the bubble and the grey line of an answer
+  that stopped early.
+- The check also asks that the browser can read the address, since the
+  site that is shown comes from that reading. An address with a space
+  in its site passes the masterpod's own check; Chrome reads the space
+  as `%20` and keeps the entry, and a browser that cannot read such an
+  address passes it over.
+- Sources that a kept chat holds on a member's own message are
+  dropped when the chat is opened.
+- The two numbers of the check, ten pages and 200 characters, are
+  constants in joy.service.ts beside the check, not in constants.ts:
+  the plan names this step's files, and constants.ts is not one.
+
+Left as it is (the plan's section 6): opening a link that a member
+pastes; marks inside an answer that point to a source; Joy reading the
+pages again in a later message; telling a searched answer from one in
+which Joy named a source from memory; choosing the sites; showing the
+member what Joy searched for; a page that shows the searches. And of
+this build: a site whose name has letters outside ASCII shows in the
+form the browser gives it (`xn--…`); a title is drawn as it came, in
+whatever letters, cut where the row ends; and a member cannot tell
+from the rows which of Joy's sentences came from which page.
+
+The proxy forwards the call as before (section 2): it hands the stream
+on and reads no line of it. Nothing in server/ and nothing under
+deploy/ changed. The wallet's side is the Joy page (8.2, Joy),
+joy.service and masterpod-api.service (8.3) and the words (8.8).
 
 ## 5. Validator changes (anossoftware)
 
@@ -4501,6 +4689,28 @@ and the buttons Cancel and New chat, and then empties the chat. The
 chat is joy.service's (8.3), not the page's: leaving the page and
 coming back shows the chat as it stands, an answer that is still being
 written with it, and the message box keeps what was typed.
+Since 2026-11-24 (section 11; 4.20) Joy can search the web, and the
+chat shows two things more. While a search runs, "Joy is searching the
+web…" stands in the waiting bubble, in the place of "Joy is writing…".
+When Joy wrote some words before the search, the bubble holds those
+words and the searching words stand under it as a small grey line, 12
+px, as the line under an answer that stopped early is; the next piece
+of the answer takes it away. Under a finished answer for which Joy
+cited web pages stands the word "Sources", grey and 12 px, and under
+it one row for each page, ten at most. A row is 32 px high: the page's
+title in the primary colour, 13 px, cut with an ellipsis where the row
+ends, and after it the page's site in grey, 12 px, which keeps up to
+45 percent of the row. A page that gave no title shows its site in the
+title's place, in the primary colour. The rows are as wide as their
+longest row needs, and at most as wide as a bubble of Joy's may be,
+less 8 px at each side. That does not hang on the answer's own bubble:
+under an answer of one word a long title still gets that room. A row
+is a link that opens the page in a new tab
+(`target="_blank"`, `rel="noopener"`), so the wallet's own tab stays
+as it is. Under an answer that stopped early the rows stand between
+the bubble and its grey line. The thread follows the grey line and the
+rows as it follows the answer, and leaves a reader who has gone up
+where they are. An answer without a search looks as it did.
 Joy's memory, at /joy/memory: one outlined card, as the Account pages
 are. The title "Joy's memory of you"; a back link "Joy"; three
 paragraphs: "This is what Joy remembers about you. She reads it with
@@ -5112,7 +5322,12 @@ excepted, with the keyholder and anos calls included.
                             optional since a masterpod of before sends neither; and a new type LastMessage
                             for the `lastMessage` of a RoomItem and of a RoomNews: a message's five fields,
                             `message` a string or null, with `editPosition` and `deleted`, both optional for
-                            the same reason
+                            the same reason;
+                            Joy's web search (2026-11-24, section 11; 4.20): the type JoySource ({ title, url }),
+                            one web page that Joy cited for an answer, its title an empty text when the page
+                            gave none; no method changed: the `onLine` of askJoy now also gets a line
+                            { searching: true } each time Joy starts a search, and the last line of an answer
+                            that ended carries `sources`, which joy.service reads and checks
     keyholder-api.service   the keyholder test app's, base path /api/keyholder/<n>
     anos-api.service        the anos test app's account-api.service.ts, base path /api/anos/<the session's
                             validator> (2026-11-10, below; /api/anos/<defaultValidator> until then),
@@ -5531,7 +5746,22 @@ excepted, with the keyholder and anos calls included.
                             the login before is dropped. utf8Length(text), exported, counts a text as the
                             masterpod does. The four constants are in constants.ts: JOY_MAX_MESSAGES (200),
                             JOY_MAX_CONVERSATION_BYTES (120,000), JOY_MEMORY_MAX_BYTES (10,240) and
-                            JOY_SILENCE_MS (60 seconds)
+                            JOY_SILENCE_MS (60 seconds).
+                            Web search (2026-11-24, section 11; 4.20): one signal more, searching (true while Joy
+                            searches the web for the answer that is being written: a line { searching: true }
+                            sets it; the next { text } line, the answer's end and a login's end clear it). A
+                            JoyChatMessage can carry sources (a list of JoySource, one to ten, only on an answer
+                            of Joy's for which she cited web pages): send() takes them from the last line's
+                            `sources` through sourcesOf(value), exported, and the reading of a kept chat puts
+                            every message's sources through it again and drops them from a member's own
+                            message. sourcesOf answers an empty list for a value that is no list, and takes of
+                            a list each entry whose title is a text and whose address is a text that begins
+                            with https:// or http:// and that the browser reads as an address: each address
+                            once, the first MAX_SOURCES (10), a title without the spaces around it and cut at
+                            SOURCE_TITLE_MAX_CHARS (200); both constants stand beside it in joy.service.ts.
+                            siteOf(url), exported: the address's host without a leading "www.", empty for a
+                            text that is no such address; the Joy page shows it beside a title. What is sent
+                            to /ask-joy is as before: conversationOf takes each message's role and text
     log.service             the activity log; since 2026-11-24 (section 11; 4.18) also postLines(path, body,
                             onLine, silenceMs), for an answer that a backend writes as a stream of lines, each
                             one JSON object (/ask-joy): it posts through the browser's own fetch, where every
@@ -6110,6 +6340,15 @@ Memory, "แชทใหม่" New chat (the word of `common.newChat`) and
 "ลบทั้งหมด" Delete all. The words are the build chat's in both
 languages. The user had seen none of them when this was written, the
 one line among them, and no Thai reader has read the Thai.
+Since 2026-11-24 (section 11; 4.20) the group `joy` has 32 entries:
+two stand after `writing`, neither a function. `searching`, "Joy is
+searching the web…", the words while Joy searches the web, in the
+waiting bubble or as the grey line under her words; and `sources`,
+"Sources", the word over the pages under an answer. The Thai is "Joy
+กำลังค้นหาในเว็บ…" and "แหล่งที่มา". Both languages are the plan's
+words, letter for letter (its section 4, point 8), which the user read
+with the plan; the Thai is the planning chat's, and no Thai reader has
+read it.
 Edit and delete (2026-11-24, section 11; 4.19): `chat` gains one entry
 and `chatRoom` ten, after `stickerSet`. `chat.messageDeleted`, "Message
 deleted", the chat list's line for a deleted newest message. In
@@ -6733,6 +6972,11 @@ Cloud machines.
   long chat's oldest messages are no longer sent; the chat on a second
   device; and any change of the shared memory file from the wallet,
   which is a file of the masterpod's repository (its spec, 30.7).
+  (Since 2026-11-24, 4.20: Joy looks things up on the web, so "a look
+  into the internet" is built, as a web search. Not built of it:
+  opening a link that a member pastes, and the other things that 4.20
+  lists under "Left as it is". The pages Joy cited stand under an
+  answer as links; a web address in her own words is still no link.)
 - From the chat edit and delete plan
   (forclaude/chat-edit-delete-plan-1.md, 2026-11-24, its section 6;
   4.19), not built: a history of a message's earlier texts, which the
@@ -20954,6 +21198,242 @@ variable, nothing in `server/` and nothing under `deploy/`.
   the older fault of a message drawn twice ("Seen and left as it is",
   above) is a line of the after-production list,
   `~/Desktop/Z-TestNet/after_production_todos`, with a details file.
+
+### Joy looks things up on the web (2026-11-24)
+
+Step 2 of `~/Desktop/Z-TestNet/forclaude/joy-web-search-plan-1.md`
+(FINAL, 2026-11-24, on the user's word "Final"), the wallet's part,
+built in a fresh chat that the user started from the card of the
+masterpod's build chat, on top of 438bbe1, the working tree clean. Five
+files of `src/app`, `README.md` and this file, one commit; `README.md`
+joined after the build's report, on the user's word (the last point of
+this note). Why: the user, after day
+one: "So, why can't joy access the internet?" The masterpod's part is
+the plan's step 1 (4.20; the masterpod's spec, section 32). The user
+committed it there the same evening as 889c439, while this step was
+being tried; its code, its schema file and its shared memory file are,
+byte for byte, the files that this step's trial ran on. No new package,
+no env variable, nothing in `server/` and nothing under `deploy/`.
+
+- Changed, `src/app/services/masterpod-api.service.ts`, as 8.3 now
+  says: the type `JoySource` after `JoyStop`. The comment of `askJoy()`
+  names the `searching` line and `sources`.
+- Changed, `src/app/services/joy.service.ts`, as 4.20 and 8.3 now say:
+  `sources` on a `JoyChatMessage` and on the type `LastLine`; the
+  signal `searching`; in `send()` a line `{ searching: true }` sets it
+  and a `{ text }` line clears it, the last line's `sources` go through
+  `sourcesOf()`, the signal is cleared when the stream is over, and an
+  answer that ended is kept with its sources when one is left;
+  `openKept()` puts the sources of every kept message through
+  `sourcesOf()` again and takes them off a member's own message;
+  `reset()` clears the signal; and beside the class the constants
+  `MAX_SOURCES` and `SOURCE_TITLE_MAX_CHARS` and the functions
+  `sourcesOf()` and `siteOf()`, both exported. The class comment gained
+  a paragraph, and the comments of what changed say so.
+- Changed, `src/app/pages/joy.page.ts`, as 8.2 (Joy) now says. The
+  template: under a message's bubble the block of sources, drawn only
+  for a list with an entry; under the words of the answer that is being
+  written the grey line; and the waiting bubble's words. Five style
+  lines (`.sources`, `.sources-title`, `.source`, `.source-title`,
+  `.source-site`). In the class: `site`, which is `siteOf`; and the
+  effect that keeps a reader at the thread's end reads `searching` too.
+  The class comment gained a paragraph.
+- Changed, `src/app/i18n/en.ts` and `th.ts`: two entries each,
+  `joy.searching` and `joy.sources` (8.8), compared with the plan's
+  table by a script, letter for letter.
+- Not changed: `server/app.js`, which was read for this step: its
+  forward of POST /api/masterpod/ask-joy sets headers and reads no
+  line; `src/app/services/log.service.ts`, whose `postLines` hands on
+  every line that is JSON; `src/app/constants.ts`.
+- Changed, this spec: the new 4.20; in 4.18 four dated clauses (the
+  stream's lines, what leaves the wallet, the kept chat's form, and the
+  point that a web address in an answer is no link); in 8.2 the
+  paragraph "Joy"; in 8.3 the rows of masterpod-api.service and
+  joy.service; in 8.8 the paragraph "Joy"; this note; and, on the
+  user's word after the build's report, one dated clause in section 10
+  (the last point of this note). `README.md`: one dated clause in the
+  row of `joy.service.ts` under "Layout", on the same word.
+- What the plan left open and the build decided is in 4.20, "Decided
+  while building": six small things.
+- The trial, on this Mac, nothing of it kept in this repository. This
+  step's files as a development build of a scratch copy, behind the
+  wallet's own server program, behind the masterpod's own app of step 1
+  on a scratch PostgreSQL of its own, with a stand-in for Anthropic's
+  API behind the masterpod: a small server that answers in Anthropic's
+  form with a web search's events, as the first real call of that
+  evening had them. So nothing was billed, and no real answer, no real
+  title and no real address was seen: the user's first searched message
+  in the live wallet is the proof still owed. The login was made up (no
+  passkey: fresh session keys from the wallet's own code, written onto
+  a pod's row, and an encryption key of the trial's). Everything after
+  it was real: every request signed by the wallet's code and checked by
+  the masterpod's, the answer a stream through the wallet's own server,
+  nothing of the wallet replaced but the sound. The page was driven in
+  Google Chrome with no window: 108 checks, none bad, 104 of them in
+  one run of the whole walk on the files as they are committed.
+  - A searched answer in the form of the real call, with no word before
+    the search: the waiting bubble said "Joy is writing…" for 0.8
+    seconds and then "Joy is searching the web…" for the 1.3 seconds of
+    the search; the first piece of the answer took those words away;
+    the answer was kept with its two pages in the order of their first
+    use, and drawn as the bubble, the word "Sources" and two rows. Each
+    row: a link with the page's own address, `target="_blank"`,
+    `rel="noopener"`, 32 px high, the title in the theme's primary
+    colour and the site in its grey.
+  - Words before a search: her words in the bubble, the grey line under
+    them for the search's 1.6 seconds, and never a waiting bubble that
+    says searching. Three searches in one answer: the grey line came
+    and went twice, and a search that follows a search kept it. A
+    search and a saved line in one message: one answer with its sources
+    and the memory file stored.
+  - An answer without a search: only the writing words, the kept
+    message with the three fields of before, the bubble alone.
+  - Ten sources under an answer of six letters: the masterpod's ten in
+    order, a title of 200 characters cut with an ellipsis and its site
+    whole after it, a page with no title as its site alone, a page on
+    plain http. At 360 by 560 and 360 by 640 every row was inside the
+    thread, the rows 250 px wide beside a bubble of 66 px.
+  - What is sent with a later message, read from the request itself:
+    `messages` and `memory`, and of each message `role` and `text` and
+    nothing else.
+  - A reload: the kept chat a blob in which no title, no address and no
+    word could be read, and after the login every message back with its
+    sources, drawn row for row as before.
+  - A chat that the wallet of before this step (a build of 438bbe1)
+    had kept, opened by this step's wallet in the same browser at the
+    same address: the same eight messages, none with a field more, the
+    grey lines of before; the next searched answer got its sources. And
+    the other way round: the wallet of before opened the chat that this
+    step's wallet had kept, showed every message and no sources, wrote
+    the chat again, and the sources were still there for this step's
+    wallet afterwards.
+  - A last line whose sources are not what the masterpod sends. The
+    trial's stand changed the last line on its way out, since the
+    masterpod's own code never sends such a thing. A text, an object,
+    null and no field at all: the answer kept and drawn as one without
+    a search. A list of 24 entries (`javascript:` in small and in
+    capital letters, a `data:` address, an address with no scheme, a
+    path of the wallet itself, `HTTPS://` in capitals, a space in
+    front, `ftp:`, no site, backslashes for slashes, entries that are
+    no objects, a title that is a number, a missing title, a missing
+    address, an address twice): the two good ones kept, each once, and
+    two rows drawn. Fourteen good entries: the first ten. A title of
+    500 letters with spaces around it: 200 letters. A Thai site name:
+    shown as `xn--o3cw4h.example`. An address with
+    "wallet.anocloud.com@" in front of another site: that other site
+    shown. An address with a space in its site: Chrome reads it and it
+    is kept (4.20).
+  - A kept chat that holds what the wallet never writes, put into the
+    browser's database by the trial with the wallet's own `wrapJson`:
+    at its opening only good sources stayed, ten at most, on Joy's
+    answers alone, and a message left with none had no such field.
+  - Answers that searched and did not end as an answer should: one cut
+    at the model's limit and one stopped by the safety check, each with
+    its page and its grey line under the rows; one cut off in the
+    middle, with its words and no sources; a search that failed inside
+    the answer; an answer with no word at all, where the searching
+    words stood to the end and nothing said searching afterwards; and a
+    first request that searched and a second that failed.
+  - Another page of the wallet while a search ran: back on the Joy
+    page the waiting bubble still said searching.
+  - The thread at 360 by 560, 296 px high over 1,374 px: the grey line
+    was in sight each time it came, also when it reached the page alone
+    half a second after her words, and the rows were in sight at the
+    answer's end; a reader who had gone to the top stayed there.
+  - Both languages at 360 by 536, 360 by 560, 375 by 547, 390 by 760,
+    412 by 915, 600 by 800 and 1280 by 800, with 20 rows of sources in
+    the chat: nothing wider than the screen, every row inside the
+    thread and 32 px high, the thread not movable sideways, the header
+    and the message box as before. In Thai the waiting bubble, the grey
+    line and the word over the rows read as the plan has them.
+  - A tap on a row with Chrome's own touch tap, and a click at 1280 by
+    800: a new tab at the page's address, served by a made-up outside
+    site of the trial's; that site got no Referer and no cookie, and
+    its page had no `window.opener` and no `document.referrer`; the
+    wallet's tab was the same page, never loaded again, logged in, the
+    chat whole.
+  - This step's wallet in front of the masterpod of before step 1
+    (d3d07d3 on that commit's tables), which is how things stand
+    between the two deploys: a message, Joy saving a line, an answer
+    that was cut and one at the limit, a reload, all as before, and
+    nothing new on the page. And in front of the masterpod of step 1
+    with web search switched off by its own setting
+    (`JOY_MAX_SEARCHES=0`): the same, and that masterpod told Joy in
+    the request that web search is switched off.
+- Faults put in, to see that the checks notice one: five copies of this
+  step's wallet with one change each (the page's effect without
+  `searching`; `siteOf` without the question for `https://` or
+  `http://`; a kept chat opened without the check; a piece of the
+  answer that does not clear `searching`; a row without `target` and
+  `rel`). The walk named each, with one to three bad checks. In the
+  last copy the tap took the wallet's own tab to the outside page, and
+  the login was gone: that is what `target="_blank"` is for.
+- Day one's own walk of the Joy page (the 89 checks of the note "Joy,
+  the wallet's AI", above) ran again on this step's wallet, in front of
+  the masterpod of step 1 with day one's stand-in: 89 results, none
+  bad.
+- On phones, each with a real finger's tap on a row, the page a
+  development build served from this Mac. A simulated iPhone 17 with
+  iOS 26.5, Safari: the answer came as a stream and was kept with its
+  three pages; the tap opened the outside page in a new tab in front,
+  with no Referer and no opener; the wallet's tab stayed behind it,
+  logged in and not loaded again; Safari's back arrow closed the new
+  tab and the wallet was in front again with its chat. The same phone
+  with the wallet opened from its Home Screen: the page opened in the
+  app's own browser sheet over the wallet, and its cross brought the
+  wallet back as it was. A simulated iPhone SE with iOS 18.6, Safari,
+  375 by 547: the grey line and the rows drawn, the kept blob
+  unreadable, and the tap as on the other phone. Chrome 149 on our
+  small emulated Android 17, 360 by 536: the tap opened a new tab, and
+  the phone's Back closed it and showed the wallet again, logged in.
+- `npx ng build` from the wallet folder into a scratch folder: clean,
+  no warning. The script is `main-XI5Z25VB.js`, 2,379,979 bytes: 2,594
+  more than the script of 438bbe1, `main-74W73EVG.js`, built the same
+  way from a copy, which is the script the live wallet served that
+  evening. The style sheet is `styles-HGVKDO6M.css`, 8,560 bytes, the
+  same file as before: the page's styles are in the script. That build
+  behind the wallet's own server, eight checks, none bad: its first
+  page drawn under its own content security policy with no error named
+  by Chrome, /joy leading to the first page with no login, the script
+  holding this step's four words, and the page served with
+  `Referrer-Policy: no-referrer`. The live wallet's first page carries
+  that header too (looked at that evening, with no login).
+- Not tried. Anthropic itself, so no real search, no real title and no
+  real address. nginx and the doormen, which this step does not touch.
+  A real phone, and a login with a passkey. iOS 27.0, Android 16 and
+  15, Firefox, Safari on a Mac. The wallet from the Home Screen on iOS
+  18.6 and on Android. A long press on a row, which opens the phone's
+  own menu for a link. A row reached with a keyboard. A screen reader.
+  A Thai reader. The attestor's and the moderator's editions, which run
+  the same code. The user's own development server (`ng serve`).
+- Sentences of before this step that said less than there is now, two,
+  in places the plan does not name: in section 10 the item on Joy
+  listed "a look into the internet" among what is not built, and
+  `README.md`, in the row of `joy.service.ts` under "Layout", named the
+  chat and the memory file and not the sources. The build left both as
+  they were and named them in its report. They are brought in line
+  since (the last point of this note).
+- For the deploy. The plan's order is the wallet first: the user's two
+  lines on wallet1 and then on wallet2, with no `npm ci` (no package
+  file changed); then the masterpod (its spec, 32.10), with the search
+  on from its first restart. After the wallet's deploy alone nothing
+  has changed for anybody. On the evening of this build a list was on
+  the table for some minutes that deploys the masterpod first, with web
+  search switched off by its own setting (`JOY_MAX_SEARCHES=0`); it was
+  withdrawn before a server line of it ran, and the plan's order stood.
+  This wallet was tried in front of all three: the masterpod of before,
+  the masterpod of step 1 with the search switched off, and with it on.
+  A wallet that is open on a phone during the deploy keeps the script
+  it has until it is loaded again, and shows a searched answer without
+  its sources until then (4.20).
+- After the build's report, the same evening, on the user's word
+  ("Update the out of date lines and give me a new commit line to
+  paste."). The two older sentences are brought in line, each with one
+  dated clause beside its old words: in section 10 the item on Joy, and
+  in `README.md` the row of `joy.service.ts`. Text of this spec and of
+  the README only, no line of code, so the build and every check of
+  this note are as they were. The commit has seven files with
+  `README.md`.
 
 ## 12. Recovery and the moderator edition
 

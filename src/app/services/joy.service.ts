@@ -3,15 +3,16 @@ import { JOY_MAX_CONVERSATION_BYTES, JOY_MAX_MESSAGES, JOY_MEMORY_MAX_BYTES } fr
 import { CryptoService } from './crypto.service';
 import { LanguageService } from './language.service';
 import { ApiError, ApiResponse, reasonOf } from './log.service';
-import { JoyMessage, JoyStop, MasterpodApiService } from './masterpod-api.service';
+import { JoyMessage, JoySource, JoyStop, MasterpodApiService } from './masterpod-api.service';
 import { SessionService } from './session.service';
 
-/** One message of the chat with Joy as the wallet keeps it (wallet spec 4.18): who wrote it, its text and when it was sent (ISO 8601; for an answer of Joy's, when it ended). `end` stands only on an answer of Joy's that did not end as an answer should: `length`, it was cut off where the model reached its limit; `refused`, the safety check of the model's company stopped it; `cut`, the answer failed after a part of it had come. */
+/** One message of the chat with Joy as the wallet keeps it (wallet spec 4.18): who wrote it, its text and when it was sent (ISO 8601; for an answer of Joy's, when it ended). `end` stands only on an answer of Joy's that did not end as an answer should: `length`, it was cut off where the model reached its limit; `refused`, the safety check of the model's company stopped it; `cut`, the answer failed after a part of it had come. `sources` stands only on an answer of Joy's for which she cited web pages (wallet spec 4.20; 2026-11-24): those pages, as sourcesOf() checked them, never an empty list. */
 export interface JoyChatMessage {
   role: 'user' | 'assistant';
   text: string;
   at: string;
   end?: 'length' | 'refused' | 'cut';
+  sources?: JoySource[];
 }
 
 /** What the chat's blob holds (wallet spec 4.18): version 1 and the messages, oldest first. */
@@ -26,8 +27,8 @@ interface JoyMemoryBlob {
   text: string;
 }
 
-/** The last line of an answer of /ask-joy (masterpod spec 30): how an answer ended and the memory file after it, or the reason an answer failed. */
-type LastLine = { done: true; stop: JoyStop; memory: string | null } | { error: string };
+/** The last line of an answer of /ask-joy (masterpod spec 30 and 32): how an answer ended, the memory file after it and the web pages Joy cited, as sourcesOf() checked them, or the reason an answer failed. */
+type LastLine = { done: true; stop: JoyStop; memory: string | null; sources: JoySource[] } | { error: string };
 
 /**
  * Joy, the wallet's AI (wallet spec 4.18 and 8.3; 2026-11-24): the one chat
@@ -50,6 +51,14 @@ type LastLine = { done: true; stop: JoyStop; memory: string | null } | { error: 
  * A message to Joy carries the newest messages of the chat that fit the
  * masterpod's limits (JOY_MAX_MESSAGES, JOY_MAX_CONVERSATION_BYTES), the
  * first of them the member's. The chat on the screen is not cut.
+ *
+ * Since 2026-11-24 (wallet spec 4.20) Joy can search the web. While a
+ * search runs the page says so (searching). The web pages she cited come
+ * in the last line of her answer and are kept with that answer, here and
+ * in the kept chat. The wallet checks them when they come and again when
+ * a kept chat is opened (sourcesOf), since the Joy page makes its links
+ * of them. A message to Joy still carries the role and the text of each
+ * message and nothing else: the sources are never sent back.
  */
 @Injectable({ providedIn: 'root' })
 export class JoyService {
@@ -64,6 +73,8 @@ export class JoyService {
   readonly answer = signal<string | null>(null);
   /** True from a send until its answer has ended or failed. */
   readonly writing = signal(false);
+  /** True while Joy searches the web for the answer that is being written (wallet spec 4.20): from a line of the answer that says so until the answer's next piece comes, or until the answer ends. */
+  readonly searching = signal(false);
   /** What the message box holds. It is kept here so that it outlives a visit to another page, and so that a message that was refused can be put back into it. */
   readonly draft = signal('');
   /** The page's red line: why the last message was refused or failed, or why the memory file could not be read or stored. Null when there is nothing to say. */
@@ -163,9 +174,13 @@ export class JoyService {
     let last: LastLine | null = null;
     const res = await this.api.askJoy(conversationOf(this.messages()), memory, (line) => {
       if (login !== this.login || typeof line !== 'object' || line === null) return;
-      const piece = line as { text?: unknown; done?: unknown; stop?: unknown; memory?: unknown; error?: unknown };
-      if (typeof piece.text === 'string') this.answer.update((answer) => (answer ?? '') + piece.text);
-      else if (piece.done === true) last = { done: true, stop: piece.stop === 'length' || piece.stop === 'refused' ? piece.stop : 'end', memory: typeof piece.memory === 'string' ? piece.memory : null };
+      const piece = line as { text?: unknown; searching?: unknown; done?: unknown; stop?: unknown; memory?: unknown; sources?: unknown; error?: unknown };
+      if (typeof piece.text === 'string') {
+        // The next piece of the answer takes the words on a search away.
+        this.searching.set(false);
+        this.answer.update((answer) => (answer ?? '') + piece.text);
+      } else if (piece.searching === true) this.searching.set(true);
+      else if (piece.done === true) last = { done: true, stop: piece.stop === 'length' || piece.stop === 'refused' ? piece.stop : 'end', memory: typeof piece.memory === 'string' ? piece.memory : null, sources: sourcesOf(piece.sources) };
       else if (typeof piece.error === 'string') last = { error: piece.error };
     });
     if (login !== this.login) return;
@@ -173,10 +188,11 @@ export class JoyService {
     const written = this.answer() ?? '';
     const ended = last as LastLine | null;
     this.answer.set(null);
+    this.searching.set(false);
     if (ended !== null && 'done' in ended) {
-      // An answer that ended. One with no text at all and no word on why is shown as cut off.
+      // An answer that ended. One with no text at all and no word on why is shown as cut off. The web pages Joy cited are kept with it; an answer that failed has none, since they come in the last line.
       const end = ended.stop !== 'end' ? ended.stop : written.trim() === '' ? 'cut' : undefined;
-      this.messages.update((list) => [...list, { role: 'assistant', text: written, at: new Date().toISOString(), ...(end ? { end } : {}) }]);
+      this.messages.update((list) => [...list, { role: 'assistant', text: written, at: new Date().toISOString(), ...(end ? { end } : {}), ...(ended.sources.length > 0 ? { sources: ended.sources } : {}) }]);
       this.keep();
       // The memory file that Joy changed is stored before the next message can be sent.
       if (ended.memory !== null) {
@@ -335,7 +351,15 @@ export class JoyService {
       if (blob === null) return null;
       const chat = await this.crypto.unwrapJson<JoyChatBlob>(blob, key);
       if (chat?.v !== 1 || !Array.isArray(chat.messages)) return null;
-      return chat.messages.filter((m) => (m?.role === 'user' || m?.role === 'assistant') && typeof m.text === 'string' && typeof m.at === 'string');
+      const kept = chat.messages.filter((m) => (m?.role === 'user' || m?.role === 'assistant') && typeof m.text === 'string' && typeof m.at === 'string');
+      // The sources of a kept answer are checked again, as they were when they came (wallet spec 4.20): the Joy page makes its links of them. A chat that was kept before the wallet knew of sources has none, and opens as it is.
+      for (const message of kept) {
+        if (!('sources' in message)) continue;
+        const sources = message.role === 'assistant' ? sourcesOf(message.sources) : [];
+        if (sources.length > 0) message.sources = sources;
+        else delete message.sources;
+      }
+      return kept;
     } catch {
       return null;
     }
@@ -349,10 +373,58 @@ export class JoyService {
     this.messages.set([]);
     this.answer.set(null);
     this.writing.set(false);
+    this.searching.set(false);
     this.draft.set('');
     this.error.set(null);
     this.memory.set(null);
     this.ready.set(false);
+  }
+}
+
+/** The most web pages that are kept and shown for one answer, and the most characters of a page's title: the masterpod's own two numbers (its spec, 32.3). */
+const MAX_SOURCES = 10;
+const SOURCE_TITLE_MAX_CHARS = 200;
+
+/**
+ * The web pages Joy cited for an answer, as the wallet keeps them (wallet
+ * spec 4.20): what the last line of /ask-joy's answer names as `sources`,
+ * or what a kept chat holds for an answer. The masterpod checks what it
+ * sends. The wallet checks it again here, when it comes and when a kept
+ * chat is opened, since a link on the Joy page is made of nothing else.
+ *
+ * An entry is taken when its title is a text, which may be empty, and its
+ * address is a text that begins with https:// or http:// and names a site
+ * (siteOf): each address once, and the first MAX_SOURCES of them.
+ * Anything else is passed over, and a value that is no list gives an
+ * empty list. A title is kept without the spaces around it and cut at
+ * SOURCE_TITLE_MAX_CHARS characters; an address is kept as it came.
+ */
+export function sourcesOf(value: unknown): JoySource[] {
+  if (!Array.isArray(value)) return [];
+  const sources: JoySource[] = [];
+  for (const entry of value) {
+    if (sources.length === MAX_SOURCES) break;
+    if (typeof entry !== 'object' || entry === null) continue;
+    const { title, url } = entry as { title?: unknown; url?: unknown };
+    if (typeof title !== 'string' || typeof url !== 'string' || siteOf(url) === '') continue;
+    if (sources.some((source) => source.url === url)) continue;
+    sources.push({ title: title.trim().slice(0, SOURCE_TITLE_MAX_CHARS), url });
+  }
+  return sources;
+}
+
+/**
+ * The site of a web address, which the Joy page shows beside a source's
+ * title: the address's host as the browser reads it, without a leading
+ * "www.". Empty for a text that does not begin with https:// or http://,
+ * and for one that the browser cannot read as an address with a host.
+ */
+export function siteOf(url: string): string {
+  if (!url.startsWith('https://') && !url.startsWith('http://')) return '';
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return '';
   }
 }
 

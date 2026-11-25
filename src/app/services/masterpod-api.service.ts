@@ -157,6 +157,12 @@ export interface JoyMessage {
 /** How an answer of Joy's ended, as the last line of /ask-joy's answer says it (masterpod spec 30): `end`, an answer that ended by itself; `length`, cut off where the model reached its limit; `refused`, stopped by the safety check of Anthropic, the company whose model writes Joy's answers. */
 export type JoyStop = 'end' | 'length' | 'refused';
 
+/** One web page that Joy used for an answer, as the last line of /ask-joy's answer names it (masterpod spec 32; wallet spec 4.20; 2026-11-24): the page's title, which is an empty text when the page gave none, and its address. */
+export interface JoySource {
+  title: string;
+  url: string;
+}
+
 
 export interface CreateAnswer {
   anopodId: string;
@@ -1183,9 +1189,13 @@ export class MasterpodApiService {
    *
    * The answer is read while it arrives (LogService.postLines), each line
    * handed to `onLine` as it comes: `{ text }` for a piece of Joy's
-   * answer; then one last line, `{ done: true, stop, memory }` for an
-   * answer that ended (`stop` a JoyStop; `memory` the whole memory file
-   * after Joy changed it, or null when she did not), or `{ error }` for an
+   * answer; `{ searching: true }` each time she starts a web search
+   * (since 2026-11-24, masterpod spec 32; wallet spec 4.20); then one
+   * last line, `{ done: true, stop, memory, sources }` for an answer that
+   * ended (`stop` a JoyStop; `memory` the whole memory file after Joy
+   * changed it, or null when she did not; `sources` the web pages she
+   * cited, each a JoySource, an empty list when she cited none, and no
+   * field at all from a masterpod of before), or `{ error }` for an
    * answer that failed: `joy busy`, `joy unavailable` or `joy was cut
    * off`.
    *

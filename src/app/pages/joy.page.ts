@@ -8,7 +8,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { RouterLink } from '@angular/router';
 import { askConfirm } from '../components/confirm-dialog.component';
-import { JoyService } from '../services/joy.service';
+import { JoyService, siteOf } from '../services/joy.service';
 import { LanguageService } from '../services/language.service';
 
 /** While an answer is being written the thread follows it only when the reader is this close to the bottom. */
@@ -33,6 +33,15 @@ const FOLLOW_PX = 120;
  * that was refused, or whose answer failed before any of it came, goes
  * back into the message box, with the reason in red above the box.
  *
+ * Since 2026-11-24 (wallet spec 4.20) Joy can search the web. While she
+ * searches, "Joy is searching the web…" stands where "Joy is writing…"
+ * stands, and when she wrote some words before the search, it stands as
+ * a small grey line under those words. Under a finished answer for which
+ * she cited web pages stands the word Sources and one row for each page:
+ * the page's title and, in grey, its site, or the site alone for a page
+ * that gave no title. A row is a link that opens the page in a new tab,
+ * so the wallet's own tab stays as it is, with its login.
+ *
  * There is one chat. It is kept by joy.service, not by this page, so an
  * answer goes on while the member looks at another page, and the chat is
  * there after a reload of the page. New chat empties it, after a box that
@@ -56,6 +65,14 @@ const FOLLOW_PX = 120;
             @if (m.text) {
               <div class="bubble">{{ m.text }}</div>
             }
+            @if (m.sources?.length) {
+              <div class="sources">
+                <span class="sources-title">{{ t().joy.sources }}</span>
+                @for (s of m.sources; track s.url) {
+                  <a class="source" [href]="s.url" target="_blank" rel="noopener"><span class="source-title">{{ s.title || site(s.url) }}</span>@if (s.title) {<span class="source-site">{{ site(s.url) }}</span>}</a>
+                }
+              </div>
+            }
             @if (m.end) {
               <span class="mark">{{ m.end === 'length' ? t().joy.stopLength : m.end === 'refused' ? t().joy.stopRefused : t().joy.cutOff }}</span>
             }
@@ -66,9 +83,14 @@ const FOLLOW_PX = 120;
           }
         }
         @if (joy.answer(); as written) {
-          <div class="message"><div class="bubble">{{ written }}</div></div>
+          <div class="message">
+            <div class="bubble">{{ written }}</div>
+            @if (joy.searching()) {
+              <span class="mark">{{ t().joy.searching }}</span>
+            }
+          </div>
         } @else if (joy.answer() !== null) {
-          <div class="message"><div class="bubble waiting">{{ t().joy.writing }}</div></div>
+          <div class="message"><div class="bubble waiting">{{ joy.searching() ? t().joy.searching : t().joy.writing }}</div></div>
         }
       </div>
       @if (joy.error(); as text) {
@@ -97,6 +119,11 @@ const FOLLOW_PX = 120;
     .message.mine .bubble { background: var(--mat-sys-primary-container); }
     .bubble.waiting { color: var(--mat-sys-on-surface-variant); }
     .mark { font-size: 12px; color: var(--mat-sys-on-surface-variant); margin: 0 8px 2px; }
+    .sources { display: flex; flex-direction: column; align-self: stretch; min-width: 0; margin: 2px 8px 4px; font-size: 13px; }
+    .sources-title { font-size: 12px; color: var(--mat-sys-on-surface-variant); }
+    .source { display: flex; align-items: baseline; gap: 6px; min-width: 0; padding: 7px 0; line-height: 18px; color: var(--mat-sys-primary); text-decoration: none; }
+    .source-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .source-site { flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--mat-sys-on-surface-variant); }
     .composer { flex: none; display: flex; gap: 8px; align-items: flex-end; padding: 8px 12px; border-top: 1px solid var(--mat-sys-outline-variant); }
     .grow { flex: 1; min-width: 0; }
     .send { flex: none; margin-bottom: 4px; }
@@ -119,16 +146,20 @@ export class JoyPage {
 
   constructor() {
     void this.joy.open();
-    // The thread follows what is added at its end, a message or the next piece of an answer, while the reader is near the end. A reader who has gone up to read stays there.
+    // The thread follows what is added at its end, a message, the next piece of an answer or the line on a search, while the reader is near the end. A reader who has gone up to read stays there.
     effect(() => {
       this.joy.messages();
       this.joy.answer();
+      this.joy.searching();
       this.joy.error();
       untracked(() => {
         if (this.nearBottom()) this.scrollToBottom();
       });
     });
   }
+
+  /** The site of a source's address, which stands beside its title, or in the title's place when the page gave none. */
+  protected readonly site = siteOf;
 
   /** Enter sends; Shift+Enter is left to the textarea, a new line, and so is an Enter that only ends a word of an input method. */
   protected enter(event: Event): void {
