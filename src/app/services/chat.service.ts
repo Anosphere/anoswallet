@@ -5,6 +5,7 @@ import { LanguageService } from './language.service';
 import { ApiResponse } from './log.service';
 import { InviteItem, MasterpodApiService, RoomItem, RoomListing, RoomMember, RoomNews, RoomsAnswer, RoomsRead, SeenItem } from './masterpod-api.service';
 import { Bytes } from './passkey.service';
+import { RoomCopiesService } from './room-copies.service';
 import { SessionService } from './session.service';
 
 /** A piece of a shown message: plain text, or an account id, which shows in code font with a copy button (wallet spec 8.5), the button not for the two traders of a marketplace chat (2026-11-19). */
@@ -129,7 +130,10 @@ function withNews(list: RoomsAnswer, answer: RoomsRead): { list: RoomsAnswer; un
  * makes every 5 seconds (refreshNews), and the members' seen positions
  * that the open conversation's read brings (putSeen); and the calendar
  * day as a signal (today), which that 5-second read moves, for the words
- * of the chat that depend on today's date.
+ * of the chat that depend on today's date. And since 2026-11-25
+ * (forclaude/chat-rooms-kept-plan-1.md; wallet spec 8.3) a whole chat
+ * list that arrives takes away the copy the browser keeps of every room
+ * that is not in it (putWhole; room-copies.service).
  */
 @Injectable({ providedIn: 'root' })
 export class ChatService {
@@ -137,6 +141,8 @@ export class ChatService {
   private readonly api = inject(MasterpodApiService);
   private readonly crypto = inject(CryptoService);
   private readonly lang = inject(LanguageService);
+  /** The copies the browser keeps of the rooms' threads (2026-11-25): a whole chat list tells it which rooms there are (putWhole). */
+  private readonly copies = inject(RoomCopiesService);
 
   /** The rooms this tab asked to join (public rooms, listings), so their button reads "Requested". */
   readonly requestedRooms = signal<ReadonlySet<string>>(new Set());
@@ -239,15 +245,17 @@ export class ChatService {
     this.session.chatRooms.set({ ...list, rooms });
   }
 
-  /** A whole list from /list-chat-rooms becomes the list in memory, and its `seq` the list's number: null when the answer carries none, a masterpod of before, so the next read asks for the whole list again. Where the list already holds a room, a member's seen position does not fall (keepSeen). */
+  /** A whole list from /list-chat-rooms becomes the list in memory, and its `seq` the list's number: null when the answer carries none, a masterpod of before, so the next read asks for the whole list again. Where the list already holds a room, a member's seen position does not fall (keepSeen). Since 2026-11-25 (forclaude/chat-rooms-kept-plan-1.md, section 3.3) the copy the browser keeps of a room's thread is deleted for every room that is not in the list: a room the person left, on this phone or on another. */
   private putWhole(answer: RoomsRead): void {
     const held = new Map((this.session.chatRooms()?.rooms ?? []).map((room) => [room.chatRoomId, room]));
+    const rooms = answer.rooms.filter(isWhole).map((room) => keepSeen(room, held.get(room.chatRoomId)));
     this.session.chatRooms.set({
-      rooms: answer.rooms.filter(isWhole).map((room) => keepSeen(room, held.get(room.chatRoomId))),
+      rooms,
       invites: answer.invites,
       joinRequests: answer.joinRequests,
     });
     this.session.chatRoomsSeq = typeof answer.seq === 'number' ? answer.seq : null;
+    this.copies.keepOnly(new Set(rooms.map((room) => room.chatRoomId)));
   }
 
   // --- keys -----------------------------------------------------------------

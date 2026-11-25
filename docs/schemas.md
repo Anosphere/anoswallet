@@ -1679,7 +1679,10 @@ What the wallet does with it (8.2, Chat, "Edit and delete"; 8.3).
 - The rows of an open conversation. The page's reads are the ones of
   before: the room's newest 50 rows when it opens, the 50 before the
   lowest position on scrolling up, and every 3 seconds the rows after
-  the highest position. Their rows are now of three kinds, and the
+  the highest position. (Since 2026-11-25, section 11 and 8.2, Chat, a
+  room that the browser has a copy of opens with another read: the rows
+  after the copy's highest position, at most 100.) Their rows are now of
+  three kinds, and the
   positions the page keeps for its reads are the lowest and the highest
   of the rows it read, drawn or not. So a page of 50 rows can show
   fewer than 50 messages. An edit or a delete is never drawn as a
@@ -2295,6 +2298,9 @@ as in the test apps; a new tab unlocks again. (Since 2026-11-24 one
 thing of a pod's outlives the tab: the chat with Joy that is under way,
 kept in the browser's own database as a blob under the anoPod
 encryption key, which only the passkey brings back; 4.18, section 11.)
+(Since 2026-11-25 a second thing does: a copy of the thread of each
+chat room the person has opened, kept the same way, one blob for each
+room, in a database of the rooms' own; 8.2, Chat, 8.3 and section 11.)
 
 ### 8.1 Shell, routes, guards
 
@@ -4002,7 +4008,11 @@ section 11 and 4.17, the opening read and every such poll also ask, with
 edit and a delete of a message are two kinds with no bubble of their
 own: the newest 50 rows can show fewer than 50 messages, and the
 positions the page reads from are those of the rows it read, drawn or
-not); the thread
+not; and since 2026-11-25, section 11, a room that this browser has
+opened before does not open at its newest 50 rows: the messages the
+browser kept are drawn at once, and the one read asks for what is after
+them, by the paragraph "A room keeps its messages in the browser",
+below); the thread
 scrolls
 to the bottom after opening and after a send, and for a message that
 arrives only while the reader is within 120 px of the bottom. Messages
@@ -4062,7 +4072,9 @@ afterwards only the positions that changed, so "Seen" follows within 3
 seconds where it was 5. Against a masterpod of before, which hands the
 positions out with the whole room list alone, it is 5 as it was. The
 room is marked seen (Unread, below) when it opens and when
-new messages show. While the conversation is on the screen the page also
+new messages show (since 2026-11-25, in a room that opens from its copy:
+when the read that follows the copy is answered). While the conversation
+is on the screen the page also
 tells the masterpod how far this pod has read (/mark-messages-seen,
 4.10; 2026-11-19, section 11): the newest position shown, after the
 thread opens, after each 3-second poll and after a send, and only when
@@ -4260,6 +4272,114 @@ sees:
   "This message was already deleted." in red, and the grey line then
   stands in the message's place.
 
+A room keeps its messages in the browser (2026-11-25, section 11; 8.3,
+room-copies.service; the plan is forclaude/chat-rooms-kept-plan-1.md,
+whose section 1 is what a person sees). Until that day every opening of
+a conversation emptied the thread and read the room's newest 50 rows
+again. Going from one room to another loaded everything again, and the
+thread said "No messages yet." meanwhile, also in a room full of
+messages. Since then the wallet keeps a copy of the thread of every
+room a person has opened: in the page's memory and, encrypted, in the
+browser's own database (8.3 has where and how). The masterpod is as it
+was: no route, no field and no table changed. What a person sees:
+- Back into a room. The room's messages are there at once. What was
+  written since comes a moment later, with the masterpod's answer.
+- After a load of the page: a reload, a new login, Lock, a phone that
+  dropped the page. A room that was opened before has its messages at
+  once, from the browser's database: the newest 200 of them at most.
+  Older ones load on scrolling up, as before. Messages that were loaded
+  by scrolling up stay for as long as the page lives.
+- A room this browser has never shown. The thread says "Loading the
+  chat." until the messages have come. "No messages yet." stays for a
+  room that has none.
+- No connection. The room's kept messages, and the red line with the
+  reason. When the connection is back, what is new comes within 3
+  seconds and the red line goes.
+- An edit or a delete that was made while the person was away. The
+  message shows as it was for a moment, until the masterpod's answer
+  has come. Then it changes.
+- A room opens at the end of its thread, as before. Everything else of
+  a conversation is as it was: the 3-second read, "Sent" and "Seen",
+  the unread dot, sending, editing, deleting, stickers, the pinned
+  card.
+
+How a room opens. The page looks for the room's copy: in the page's
+memory first, which answers at once, and then in the browser's
+database, where it is one read and one decryption. With a copy the page
+draws it, through the code that draws an answer of the masterpod, and
+is ready from that moment: the 3-second read and a send work before the
+masterpod has answered. Then it sends the request of the 3-second read,
+with the copy's highest position and a named limit:
+
+    POST /list-messages   { chatRoomId, afterPosition, limit: 100, seenSince: 0 }
+
+The masterpod answers the room's rows after that position, oldest
+first: the new messages, and the edits and the deletes written since,
+which are rows with a position of their own. With `seenSince` 0 it also
+answers how far every member has read, as at an opening before. 100 is
+the number the masterpod uses when a request names none, so the answer
+is the same (`NEW_ROWS_LIMIT` in chat-room.page.ts); the wallet names it
+to know what a full answer is. The answer goes into the thread as a
+3-second read's does. Then the room is marked seen up to the highest
+position and the masterpod is told (/mark-messages-seen), also when the
+answer held no row. Without a copy the room opens with the request of
+before, { chatRoomId, beforePosition: lastPosition + 1, limit: 50,
+seenSince: 0 }, and the thread it reads becomes the room's copy. It is
+one signed request for each opening, before and after: what got better
+is what a person sees, not the bytes.
+
+When a copy is dropped. The room then opens as before.
+- The room moved on too far. The answer holds 100 rows, so there may be
+  more. The copy is dropped, the page stops being ready, and the room's
+  newest 50 are read with the request of before. The old thread stays
+  on the screen until they have come, and then gives way to them.
+- The person is no longer in the room. When a whole chat list arrives
+  and a room is not in it, that room's copy is deleted. This covers
+  Leave, on this phone and on another.
+- The copy is ahead of the masterpod, whose database was put back from
+  a backup: a copy from the browser's database whose highest position
+  is above the room's `lastPosition` in the chat list.
+- The copy cannot be used: an entry that does not open under the anoPod
+  encryption key or does not hold a copy, a browser that refuses its
+  database, a browser that has cleared it.
+
+The red line of a read of the messages that failed. Since 2026-11-25 it
+goes when a later read of the messages succeeds, and only while the red
+line is still that line. Until then it stayed until the person's next
+action in the room. Two reads put such a line up: a conversation's
+opening and Load older messages. Every read of the messages that
+succeeds takes it away, the 3-second read first of all. So with a copy
+on the screen a failed opening mends itself: the page is ready, the
+3-second read asks again, and the line goes with its first answer. A
+room that the browser has no copy of and whose opening read fails stays
+empty under its red line until it is opened again, as before. Its
+thread then says neither "Loading the chat." nor "No messages yet.",
+since neither is known; until 2026-11-25 it said "No messages yet.".
+
+The order of the thread. Since 2026-11-25 the thread is kept in the
+order of the positions, and a row that comes a second time changes
+nothing. Until then such a message moved to the thread's end, also when
+newer messages stood there already. With a copy on the screen the page
+is ready before its opening read is answered, so the 3-second read or
+the read after a send can overtake that answer, which then brings rows
+the thread already holds.
+
+What it does not do, by the plan's section 6. The requests going up are
+as they were: one signed request for each opening, about 9.6 KB, and
+the 3-second read is not touched. The chat list and the faces are read
+again after a load of the page. A room's new messages are fetched when
+the room is opened, not before. The pinned card of a marketplace chat
+still reads the whole chat at each opening. A copy is this browser's: a
+second phone has its own. A message that was missed by the gap of the
+after-production line "chat: of two changes written at the same
+instant, a phone can miss one" stays missing in that browser until the
+copy is dropped, where until 2026-11-25 it showed when the chat was
+opened again. The fault of the line "chat: a message of your own can
+show twice" still goes away when the chat is opened again, since a copy
+holds each message once. And a text that was typed and not sent stays
+in the message box on a computer when another chat is opened, and is
+lost on a phone on the way back to the chat list, both as before.
+
 The pinned card (2026-11-06, section 11), in a private room about a
 listing, under the header and its panels and above the thread, drawn for
 the room's two traders only (2026-11-12, section 11: the person who made
@@ -4397,7 +4517,9 @@ after the Yes of the card's Release (below). Until the first check
 ends the box reads "Checking for a trade…", grey, and the row under it
 has "How a trade works" only (2026-11-17, section 11; until then the
 card said it in a line of its own where its two buttons go). The
-chat's account ids: the page holds the room's newest 50 messages only, so
+chat's account ids: the page holds the room's newest 50 messages only
+(since 2026-11-25, section 11, what the browser kept of the room, which
+can be more and is still not the whole chat), so
 the card reads every message of the room itself, once (/list-messages
 from the first position, 200 at a time, CARD_MESSAGES_PAGE, decrypted
 with the room key), and adds the ids the page feeds it, which carry what
@@ -5488,7 +5610,10 @@ excepted, with the keyholder and anos calls included.
                             depend on today's date ("Yesterday", "Today") are drawn again when the day changes;
                             since 2026-11-24 (section 11; 4.19) decryptMessage takes a row's `message` as it
                             comes, a string or null, and answers null for a row with no ciphertext, as for
-                            one that does not open: a message that was edited or deleted
+                            one that does not open: a message that was edited or deleted; since 2026-11-25
+                            (section 11; 8.2, Chat) putWhole, through which every whole chat list goes into the
+                            list in memory, hands the ids of the list's rooms to room-copies.service
+                            (keepOnly), which deletes the copy of every room that is not among them
     marketplace.service     what the marketplace pages share (2026-11-06): load, get, mine and close (the reads
                             and the close), sideWords, mySide and firstWords, the rooms and invites about a
                             listing out of session.chatRooms (roomsAbout, myRoomAbout, invitesAbout,
@@ -5520,6 +5645,71 @@ excepted, with the keyholder and anos calls included.
                             after-production item "faces: a failed read is asked again at once, over and over");
                             nothing is kept past a page load, and since 2026-11-22 (section 11) a Lock is such a
                             load (the refresh, 8.1)
+    room-copies.service     the chat rooms' copies (2026-11-25, section 11; 8.2, Chat; the plan is
+                            forclaude/chat-rooms-kept-plan-1.md, section 7): for every room a person has opened,
+                            a copy of the room's thread as the conversation page last had it. The page stays the
+                            one place that holds the open room's thread; this service holds the copies. A copy
+                            (RoomCopy) is { messages, changes, lowest, highest, olderLeft }. messages: each
+                            message once, by its id, oldest first, a KeptMessage { messageId, position,
+                            senderAnopodId, createdAt, own }, where own is the message's own decrypted text as a
+                            KeptText, { opened: true, text } or, for a text that did not open under the room
+                            key, { opened: false }, never the sentence the thread shows for it, which the page
+                            makes when it draws, in the language of that moment; own is null when the row came
+                            without its ciphertext, and when an edit or a delete names the message, so the text
+                            of before is not kept. changes: for each message that an edit or a delete names, the
+                            newest such row, { target, change }, target the named message's id and change a
+                            KeptChange, { kind: 'delete', position } or { kind: 'edit', position, text }, text a
+                            KeptText. lowest and highest: the lowest and the highest position the page's reads
+                            have covered, 0 and 0 for a room with no row; highest is never the position of a
+                            message the person has just sent, nor of their own edit or delete, since the read
+                            that follows brings those rows. olderLeft: whether the masterpod has rows below
+                            lowest. A copy holds nothing that the page works out from a text (the pieces, the
+                            sticker, a trade's grey line), no message that is still being sent, nothing of a
+                            read that was made without the room's key, and not how far the other members have
+                            read, which is in the chat list in memory. A copy is in two places. In the page's
+                            memory, by the room's id: everything the page has read of the room, never cut,
+                            until the page is loaded again, which Lock does too, or until another pod is in the
+                            tab (an effect on session.anopodId, and every call looks again). In the browser's
+                            own database (IndexedDB): the database `anopod-wallet-chat`, version 1, with one
+                            place, the object store `chat-messages`; one entry for each room, its key the
+                            anoPod's id, one space, the room's id; its value the bytes of wrapJson (7) of
+                            { v: 1 } and the copy, under the anoPod encryption key. No key is stored with it, so
+                            an entry opens only after a passkey login of the same pod, and another pod in the
+                            same browser has entries of its own. It stays after Lock. The database is the rooms'
+                            own, and the seven small functions that name its entries and read and write it stand
+                            at the end of the file (entryKey, openDb, inStore, readEntry, writeEntry,
+                            deleteEntry, entriesOf); the chat with Joy
+                            is in the database `anopod-wallet`, which nothing of this file opens, and
+                            joy.service is not changed. The cut for the browser's database (cut): the newest
+                            KEPT_MESSAGES (200) messages, and fewer when their texts are over KEPT_TEXT_BYTES
+                            (1,000,000) bytes of UTF-8 together, a message's texts being its own and that of the
+                            edit kept for it; the newest message is always kept; a copy that was cut has the
+                            position of its oldest kept message as lowest and olderLeft true, and keeps of the
+                            edits and the deletes those whose own position is above that lowest position, also
+                            when the message one names is not kept: that message comes without its ciphertext
+                            with a later read of older rows and is drawn by this row. Both constants stand in
+                            the file. Five methods. held(chatRoomId): the copy in memory, or null, at once.
+                            stored(chatRoomId, lastPosition): the copy from the browser's database, opened, one
+                            read and one decryption, after the writes that are still on their way; null when
+                            there is none, when the entry does not open under this anoPod encryption key, when
+                            what it holds is not a copy (another version, or a part that has not the form this
+                            file writes: copyOf checks every part and takes nothing else over), and when the
+                            browser refuses its database; a copy whose highest position is above lastPosition,
+                            the room's in the chat list, is ahead of the masterpod and is dropped; a copy that
+                            is found is in memory from then on. keep(chatRoomId, copy), the page's call each
+                            time an answer of the masterpod changed the thread: the copy into memory, and its
+                            cut into the browser's database; nothing for a room that is not in the chat list in
+                            memory, so an answer that was on its way while the person left brings no deleted
+                            copy back; without the anoPod encryption key the copy stays in memory alone; when a
+                            copy of the room already waits to be written, the new one takes its place.
+                            drop(chatRoomId), the page's call after a full answer: the copy out of memory and
+                            out of the browser's database. keepOnly(chatRoomIds), chat.service's call for every
+                            whole chat list: the copy of every other room is deleted, in memory and, for this
+                            pod's entries, in the browser's database, where another pod's entries are not
+                            touched; this look makes the database when it is not there yet, so a browser has
+                            it, empty, from a login's first chat list on. The writes to the browser's database
+                            go one after the other, and one that fails is passed over (private mode, blocked
+                            storage, no room): the copy then stays in the page's memory
     stickers.service        the stickers' list (2026-11-23, section 11; 4.16): sets, a signal, every set of this
                             login's list in the order of the row of sets, empty until the list has arrived and
                             while the masterpod has no set; load(), which the conversation page calls each time it
@@ -5781,7 +5971,15 @@ localStorage, sessionStorage or IndexedDB. (Since 2026-11-24, section
 11 and 4.18, IndexedDB holds one thing: the chat with Joy that is under
 way, as ciphertext under the anoPod encryption key. The key is never
 written there, so the sentence still holds for everything that can be
-read.)
+read.) (Since 2026-11-25, section 11, it holds a second thing, in a
+database of its own, `anopod-wallet-chat`: for each chat room the person
+has opened, the room's newest messages, as ciphertext under the same
+key, which is not written there either; room-copies.service, above.
+What the browser keeps of a pod is then, in all: in localStorage the
+five small things that are no secret; in IndexedDB the chat with Joy
+and the rooms' copies, both as ciphertext; and, on a phone where the
+security alerts were turned on, the notification worker and that
+phone's delivery address.)
 
 ### 8.4 The camera component
 
@@ -5926,7 +6124,10 @@ src/app/components/:
   too. It exports `FoundAccountId`. Since 2026-11-10 the card
   also reads the room's messages itself for their account ids (8.2,
   Chat): the page's computed holds the ids of the newest 50 messages and
-  of what arrived since, which is not the whole chat. Since 2026-11-12
+  of what arrived since, which is not the whole chat (since 2026-11-25,
+  section 11: of the messages the page holds, which in a room that
+  opened from its copy can be more than the newest 50, and is still not
+  the whole chat). Since 2026-11-12
   (section 11, step 6) the card is drawn for the room's two traders only
   (chat.service's `isTrader`, 8.3) and goes by the other trader: `other`,
   whose username the card shows (until 2026-11-19 the avatar too), is
@@ -6994,7 +7195,9 @@ Cloud machines.
   attestor case. The gap of the chat list plan, above, reaches an edit
   and a delete as it reaches any row: a phone that misses one keeps
   the old text, or leaves that message out, until the chat is opened
-  again.
+  again. (Since 2026-11-25, section 11 and 8.2, Chat: until the copy
+  that the browser keeps of the room is dropped. An opening no longer
+  reads the room's newest rows afresh.)
 
 ## 11. Build notes
 
@@ -21434,6 +21637,358 @@ no env variable, nothing in `server/` and nothing under `deploy/`.
   the README only, no line of code, so the build and every check of
   this note are as they were. The commit has seven files with
   `README.md`.
+
+### A chat room keeps its messages in the browser (2026-11-25)
+
+The one step of `~/Desktop/Z-TestNet/forclaude/chat-rooms-kept-plan-1.md`
+(FINAL since 2026-11-25, on the user's word "Yes, final"), the wallet
+only, built in a fresh chat that the user started from the planning
+chat's card, on top of c7e6921, the working tree clean. One new file
+and two changed files of `src/app`, `README.md` and this file, one
+commit; two more files of `src/app` joined after the build's report,
+with one comment each, on the user's word (the last point of this
+note). Why: the user, on 2026-11-24, of how Joy keeps her chat: "I
+think the chats should do the same", and of the chat rooms: "Going from
+one chat room to the other, everything seems to reload each time." The
+masterpod is not changed and not deployed: the request for what is new
+existed (/list-messages with `afterPosition`, the open room's 3-second
+read). No new package, no env variable, no new word (`chatRoom.loading`
+was in both dictionaries), nothing in `server/` and nothing under
+`deploy/`.
+
+- New, `src/app/services/room-copies.service.ts`, as 8.3 now says: the
+  types `KeptText`, `KeptMessage`, `KeptChange` and `RoomCopy`, the
+  root service `RoomCopiesService` with `held`, `stored`, `keep`,
+  `drop` and `keepOnly`, and beside the class the two constants, `cut`,
+  `bytesOf`, `copyOf`, `textOf`, `isPosition` and the seven functions
+  of the rooms' own database.
+- Changed, `src/app/pages/chat-room.page.ts`, as 8.2 (Chat) now says.
+  `open()` looks for the room's copy, draws it through `put`, is ready,
+  reads what is after the copy's highest position and, after a full
+  answer, drops the copy and reads the room as before. The last lines
+  of `poll()` are a function of their own, `take()`, which the read
+  that follows a copy uses too: the plan's "the answer goes into the
+  thread through the code that puts the answer of a 3-second read in".
+  New: `keep()`, which hands the thread over as the room's copy;
+  `rowsOf()`, a copy as the rows of an answer; `readFailed()` and
+  `readWorked()`, for the red line of a read; the signal `arrival`,
+  which the thread's empty branch reads; three plain fields, `opening`,
+  `keepable` and `readError`; `keyed` on the type `RowsRead`, set by
+  `read()`; the constant `NEW_ROWS_LIMIT` (100); and beside the class
+  `inOrder()` and `keptChange()`. `put()` ends the handing over of
+  copies after rows that were read without the room's key, and keeps
+  the thread in the order of the positions. `loadOlder()`, `send()` and
+  `drawChange()` hand the thread over; `loadOlder()` and `run()` keep
+  the red line's note right. The class comment gained a passage, and
+  the comments of what changed say so, each with its date.
+- Changed, `src/app/services/chat.service.ts`: it injects the new
+  service, and `putWhole()` hands it the ids of a whole chat list's
+  rooms (`keepOnly`). The class comment and the comment of `putWhole()`
+  say so.
+- Not changed: `src/app/services/joy.service.ts`, and Joy's database
+  `anopod-wallet` with its place `joy-chat`. That is the user's own
+  decision of 2026-11-25 against the plan's first draft, which had one
+  database for both: "Chats and joy are different things entirely".
+  The file was read as the example of how a chat is kept. Nothing of
+  the rooms' code is taken from it by an import, and nothing opens its
+  database. The price is the plan's: the lines that open a database
+  exist twice. Also not changed: the two dictionaries and
+  `session.service.ts`; and no line of code in `src/app/constants.ts`
+  and `masterpod-api.service.ts`, which each got a dated clause in a
+  comment after the build's report (the last point of this note).
+- Changed, this spec: in 8.2 the paragraph "A room keeps its messages
+  in the browser" and two dated clauses in "One conversation"; in 8.3
+  the new row `room-copies.service`, a dated clause in the row of
+  `chat.service`, and a dated sentence after the one that ends 8.3;
+  this note; and a dated sentence beside five older sentences that the
+  step made untrue (the point "Sentences of before this step", below).
+  `README.md`:
+  the row of the new file and a dated clause in the row of
+  `chat.service.ts` under "Layout", and a dated passage in the
+  paragraph on what the wallet keeps in the browser.
+- Decided while building, where the plan left it open. Its section 7
+  names the names of files and functions and the field names of an
+  entry as the build's; the rest are places where it says what and not
+  how.
+  1. The names: the file `room-copies.service.ts`, the class
+     `RoomCopiesService`, its five methods, the four types and an
+     entry's fields, as 8.3 has them. An entry is `{ v: 1, messages,
+     changes, lowest, highest, olderLeft }`.
+  2. The three numbers stand beside the code that uses them, not in
+     `constants.ts`: `KEPT_MESSAGES` and `KEPT_TEXT_BYTES` in the
+     service's file, `NEW_ROWS_LIMIT` in the page's.
+  3. What counts for the 1,000,000 bytes: of each kept message its own
+     text and the text of the edit kept for it. The newest message is
+     always kept. The text of an edit whose message is not kept is not
+     counted.
+  4. A room that the browser has no copy of and whose opening read
+     fails says neither sentence in its empty thread. The plan gives
+     "Loading the chat." to the wait and "No messages yet." to a room
+     that has none, and after such a failure neither is known. With a
+     copy on the screen a failed read changes nothing in the thread.
+  5. Which reads count for the red line: a conversation's opening and
+     Load older messages put such a line up, and every read of the
+     messages that succeeds takes it away. The page notes the line when
+     a read puts it up and forgets the note at the person's next
+     action, so a later line with the same words is not taken for it.
+  6. The answer to a read that was asked for before the thread was
+     begun anew is dropped. A thread is begun anew when a conversation
+     opens and when a copy is dropped after a full answer; the page
+     counts them (`opening`). Without this a 3-second read, or a read
+     of older messages, that was on its way at a full answer put its
+     rows into the newest 50.
+  7. The thread is kept in the order of the positions, so a row that
+     comes a second time changes nothing. See "Found in the trial",
+     below.
+  8. Nothing is kept for a room that is not in the chat list in
+     memory, so an answer that was on its way while the person left a
+     room brings no deleted copy back.
+  9. A copy is handed over after a read of older messages too, so they
+     stay while the page lives and count among the newest 200 of the
+     browser's database.
+  10. When a copy of a room waits to be written and a newer one comes,
+     only the newer one is written. `stored()` waits for the writes
+     that are on their way, and a copy that was handed over while it
+     read is taken in its place.
+  11. At a full answer the room's newest 50 are read from the room's
+     `lastPosition` as it was when the conversation opened, as the
+     request of before does.
+  12. After rows that were read without the room's key the page hands
+     no copy over until a thread is begun anew; the copy stays as it
+     was before that read, with its highest position, so the same rows
+     are read again at the next opening.
+  13. An entry that does not open, or that holds another version or a
+     part of another form, is not used and is not deleted: the next
+     copy of the room takes its place.
+  14. The look of `keepOnly` into the browser's database makes that
+     database when it is not there, so a browser has it, empty, from a
+     login's first whole chat list on.
+- Found in the trial and mended in this step. A message that was sent
+  while the copy was on the screen and the opening read's answer was
+  still on its way ended up above an older one. `put()` took a row that
+  the thread already held out of its place and put it at the thread's
+  end, also when newer messages stood there; the committed wallet has
+  the same trait for a 3-second read that a send's own read overtakes.
+  With a copy the page is ready before its opening read is answered, so
+  this became a thing of every opening. `put()` now puts the thread in
+  the order of the positions (`inOrder`, a bubble that is still being
+  sent last), which makes the plan's own sentence true: "a row that
+  comes twice changes nothing".
+- The trial, on this Mac, nothing of it kept in this repository. This
+  step's files as a development build of a scratch copy, behind the
+  wallet's own server program, behind the masterpod's own app as
+  committed (889c439) on a scratch PostgreSQL of its own. The login was
+  made up (no passkey: fresh session keys and chat keys from the
+  wallet's own code, written onto a pod's row, and an anoPod encryption
+  key worked out from the username, so the same person has the same key
+  after a load of the page). Everything after it was real: every chat,
+  key wrap and message made by the wallet's own pages and crypto, every
+  request signed by the wallet's code and checked by the masterpod's,
+  nothing of the wallet replaced but the sound. Each person had a
+  Google Chrome of their own with no window, at 390 by 760. A small
+  front of the trial's before the masterpod wrote down every request
+  and could hand an answer back late or refuse it. Four walks, 180
+  checks in their last runs on the files as they are committed (56,
+  40, 36 and 48), none bad.
+  - A room this browser had never shown, its answer held back 1.5
+    seconds: "Loading the chat." and never "No messages yet."; the
+    request of before; then the database `anopod-wallet-chat` at
+    version 1 with the one place `chat-messages` and one entry, its key
+    64 hex characters, one space and 64 more, its value bytes in which
+    no word of a message could be read, and which opened under the
+    person's anoPod encryption key to `{ v: 1 }` and the copy. Joy's
+    database was not made.
+  - Back to the chat list and into the room: the messages drawn within
+    20 ms of the navigation, the thread never empty, and ONE
+    read, `{ afterPosition, limit: 100, seenSince: 0 }` with the copy's
+    highest position, 9,749 bytes going up as for the request of
+    before; no read of the newest 50; /mark-messages-seen once, also
+    for an answer with no row; then the 3-second read as before.
+  - After a load of the page: the page's memory empty, the room from
+    the browser's database within 60 ms of the navigation, with
+    "Loading the chat." for a frame or two before it, and the same one
+    read.
+  - Three messages written while the room was closed: the kept ones at
+    once, the three new ones with the answer, which held exactly those
+    three rows; the room at the end of its thread; the chat no longer
+    unread; the copy stored again; "Seen" under the writer's newest.
+  - An edit and a delete by the other person while the room was
+    closed: both messages as they were for the held 2 seconds, then the
+    new text with "edited" and the grey line, from the two rows the
+    answer held. Afterwards the copy held the edit and the delete and
+    neither text of before, in the browser's database and in memory.
+  - The person's own edit and delete: right after the masterpod's 201
+    the copy held the edit, with its highest position still below the
+    edit's own; the read that followed brought it up.
+  - A full answer, 105 messages written while the room was closed,
+    both reads held back: 100 rows; between the two answers the copy
+    gone from memory and from the browser's database, the page not
+    ready and the old thread on the screen; then the newest 50 with the
+    request of before, in the old thread's place, and Load older
+    messages offered. A 3-second read that the page's timer had sent
+    while the copy was on the screen, answered after the new thread:
+    dropped. A read of older messages the same way: dropped.
+  - A message sent 0.5 seconds into an opening read that was held for
+    2.5: sent at once, and each message once and in its order when the
+    held answer had come (the point "Found in the trial", above).
+  - No connection, by Chrome's own switch, with a copy: the kept
+    messages at once and the red line "/list-messages: HTTP 0: could
+    not reach the wallet proxy (network error)"; both stayed for 4
+    seconds; 0.6 seconds after the connection was back the message
+    written meanwhile was there and the line gone. Without a copy:
+    "Loading the chat.", then an empty thread with no sentence under
+    the red line, staying so with the connection back, and the room
+    reading when opened again. The committed wallet in the same place:
+    "No messages yet." and the red line, in a room it had just had on
+    the screen.
+  - The masterpod failing the read that follows a copy (the front
+    answered 503 in its place): the copy under the red line, gone with
+    the timer's next read. A failed read of older messages, then a
+    failed send with the same words while the 3-second read failed too:
+    the send's line stayed through the reads that then succeeded. A
+    failed read of older messages alone: its line gone with the next
+    3-second read.
+  - A room that was left: by the conversation's menu, the copy gone
+    from memory and from the browser's database with the whole chat
+    list that Leave reads, the other room's copy untouched; left "on
+    another phone" (the route alone), gone 4.7 seconds later, with the
+    whole list that the 5-second read asks for when its count differs;
+    left while a 3-second read of the room was on its way, here and
+    from elsewhere with the room open: no copy came back.
+  - A second anoPod in the same browser: an entry of her own under her
+    own id, the first pod's entry byte for byte as before, the first
+    pod's entry not opening under the second's key; a login of the
+    first pod in the same page emptied the memory, and her room opened
+    from her own entry.
+  - Joy. The committed wallet and this build one after the other on
+    one address, as before and after a deploy. A chat with Joy that the
+    committed wallet had kept opened in this build message for message;
+    her database was still version 1 with the one place `joy-chat` and
+    the same entry byte for byte after a chat room had been kept beside
+    it; Joy answered on (a stand-in for Anthropic behind the masterpod,
+    nothing billed) and kept the longer chat. And back: the committed
+    wallet opened that chat again and saved to it. With a database of
+    their own for the rooms, a tab that still runs the wallet of before
+    is not shut out of Joy's.
+  - The words: a room with no message, kept with 0 and 0 as its
+    positions, says "No messages yet." at once when opened again and
+    asks for what is after position 0; one never shown says "Loading
+    the chat." and then "No messages yet."; both in Thai.
+  - A text that did not open (a row of bytes that are no ciphertext,
+    written into the table): kept as "did not open", and drawn from the
+    copy with the Thai sentence after a switch to Thai. An account id
+    from a copy: in code font with its copy button. A sticker: a
+    sticker again.
+  - The cut. A room of 264 messages read whole into the page: 264 in
+    memory, 200 in the browser's database, 51 KB, the lowest position
+    that of the oldest kept. An edit and a delete of two messages below
+    the cut were kept in the entry. After a load of the page: the 200
+    at once, the room at the end of its thread, and after two reads of
+    older rows the whole thread line for line as before, the edit and
+    the grey line of the two old messages among them. Twenty messages
+    of 60,000 bytes each: 16 kept, 960,000 bytes of text, the entry
+    964,139 bytes.
+  - A copy that cannot be used: three rows deleted from the table, as
+    a database put back from a backup would lack them, so that the copy
+    was ahead: dropped, the room read as before; one byte of an entry
+    changed: the room read as before, nothing said, a new copy in the
+    entry's place; `indexedDB.open` made to throw: the room read as
+    before, the copy in memory alone, the way back from memory, no
+    error raised.
+  - A read without the room's key (the tab's chat keys taken away):
+    "(no room key)" as before, and the copy as it was before that
+    read; with the keys back the same row was read again and opened.
+  - A message put into the thread twice by hand, the fault of the
+    after-production line: once in the copy, and once when the chat was
+    opened again.
+  - A computer, 1280 by 800, where one page goes from room to room:
+    three rooms in a row, each there at once with no empty thread
+    between them, one read each for what is new, and the page's
+    3-second read going on for the room that was open.
+- Faults put in, to see that the checks notice one: four copies of
+  this step's wallet with one rule taken out each. Without the count of
+  threads (point 6): the thread had 105 and 100 lines where it should
+  have had the newest 50. Without the order of the thread: the message
+  out of its place, as in the first run. Without the look at the chat
+  list in `keep` (point 8): the copy of a room that was left came back,
+  in memory and in the browser's database. Without `keyed` and without
+  the look at `lastPosition`: the rows read without a key were kept,
+  and the copy that was ahead was used.
+- On two simulated iPhones, Safari, the page a development build
+  served from this Mac and taking its steps from the trial's door: an
+  iPhone SE with iOS 18.6, 375 by 547, and an iPhone 17 with iOS 26.5,
+  402 by 714, 14 and 14 checks, none bad. On both Safari kept the
+  room in `anopod-wallet-chat` at version 1 as bytes in which no word
+  could be read; the way back into the room drew it from memory 26 and
+  39 ms after the navigation; and after a load of the page it came from
+  the browser's database after 81 and 58 ms, before the masterpod's
+  answer, with the message written meanwhile right after it. Each
+  Safari held a chat with Joy that an earlier trial had left at that
+  address: it was as before, entry for entry and byte for byte.
+- `npx ng build` from the wallet folder into a scratch folder: clean,
+  no warning. The script is `main-LXSP7ZKE.js`, 2,387,631 bytes: 7,652
+  more than the script of c7e6921, 2,379,979 bytes. The style sheet is
+  `styles-HGVKDO6M.css`, 8,560 bytes, the same file as before: no style
+  line changed. That build behind the wallet's own server, 3 checks,
+  none bad: its first page drawn under its own content security policy
+  with no error named by Chrome.
+- Seen and left as it is: older than this step, in the committed
+  wallet as in this build. A 3-second read whose answer brings a
+  message and arrives after the person has gone back to the chat list
+  marks that message as read on this device, so its chat shows no dot,
+  and then fails at the scroll that follows (Angular's "NG0911: View
+  has already been destroyed", in the browser's console alone). With
+  this step no copy is handed over in that case; the next opening reads
+  the row. It is no part of the plan and is named in the build's
+  report.
+- Not tried. A login with a passkey, and a real phone. Chrome on
+  Android, Firefox, Safari on a Mac, iOS 27.0. A private window, where
+  a browser may refuse its database: the trial made `indexedDB.open`
+  throw in its place. A browser that clears its storage, and one that
+  is out of room. Two tabs of one pod in one browser. How long the
+  write of a 1 MB entry takes on a phone. The gap of the
+  after-production line "chat: of two changes written at the same
+  instant, a phone can miss one", by the plan. The production build
+  beyond its first page: it has no debugging names. nginx and the
+  doormen, which this step does not touch. The attestor's and the
+  moderator's editions, which run the same code. The user's own
+  development server (`ng serve`).
+- Sentences of before this step that it made untrue, five, each with a
+  dated sentence beside it now, as the plan's section 7 says for the
+  documentation: in 4.19 the reads of an open conversation; in the
+  opening of section 8 the one thing that outlives the tab; in 8.2
+  what the page holds for the pinned card's account ids; in 8.7 the
+  same; and in section 10 how long a missed edit or delete stays
+  missed. Two comments in files that the plan does not name say less
+  than there is now and are as they were: in `src/app/constants.ts`
+  the comment of `MESSAGES_PAGE` ("A conversation opens with this many
+  of its newest messages"), and in
+  `src/app/services/masterpod-api.service.ts` the comment of
+  `listMessages()` ("opening a room" beside the read with
+  `beforePosition` alone). The build left both and named them in its
+  report. They are brought in line since (the last point of this note).
+- For the deploy: the user's two lines on wallet1 and then on wallet2,
+  with no `npm ci` (no package file changed) and no masterpod deploy.
+  A wallet that is open on a phone keeps the script it has until it is
+  loaded again. With the new script the first opening of each room is
+  as before, since the browser has no copy yet; from the second on the
+  room is there at once. A step back to the wallet of before leaves the
+  rooms' database in the browser, unused: that wallet does not know it.
+- The after-production list: the details files of the two lines "chat:
+  of two changes written at the same instant, a phone can miss one" and
+  "chat: a message of your own can show twice" each got a dated
+  paragraph, in their own folder and with a commit of their own (the
+  plan's section 6 and its section 4, point 8).
+- After the build's report, the same morning, on the user's word
+  ("Probably bring the sentences in line that need to be brought in
+  line, and then give me a new paste to commit message"). The two older
+  comments are brought in line, each with one dated clause beside its
+  old words: in `src/app/constants.ts` the comment of `MESSAGES_PAGE`,
+  and in `src/app/services/masterpod-api.service.ts` the comment of
+  `listMessages()`. Comments only, no line of code: `npx ng build`,
+  made again from the wallet folder, gave the same script,
+  `main-LXSP7ZKE.js`, byte for byte, so the build and every check of
+  this note are as they were. The commit has seven files.
 
 ## 12. Recovery and the moderator edition
 

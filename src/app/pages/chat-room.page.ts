@@ -20,6 +20,7 @@ import { CryptoService } from '../services/crypto.service';
 import { LanguageService } from '../services/language.service';
 import { ApiError, ApiResponse, reasonOf } from '../services/log.service';
 import { MasterpodApiService, MessageItem, MessagesAnswer, Profile, RoomItem, RoomMember } from '../services/masterpod-api.service';
+import { KeptChange, KeptMessage, KeptText, RoomCopiesService, RoomCopy } from '../services/room-copies.service';
 import { RoomPictureCacheService } from '../services/room-picture-cache.service';
 import { SessionService } from '../services/session.service';
 import { StickersService } from '../services/stickers.service';
@@ -59,12 +60,13 @@ interface Opened {
 /** The newest row that names a message, as the page keeps it (2026-11-24; wallet spec 4.19): a delete, or an edit with its text. An edit that came without its text is not kept: a newer row names the same message, and that row says how the message stands. */
 type Change = { kind: 'delete'; position: number } | { kind: 'edit'; position: number; text: Opened };
 
-/** What one answer of /list-messages held, decrypted (2026-11-24): its messages in the answer's order, each with its own text, null for one that came without; the edits and deletes that can be drawn, each with the message it names; and the lowest and the highest position of all its rows, drawn or not, 0 for an answer with no row. */
+/** What one answer of /list-messages held, decrypted (2026-11-24): its messages in the answer's order, each with its own text, null for one that came without; the edits and deletes that can be drawn, each with the message it names; and the lowest and the highest position of all its rows, drawn or not, 0 for an answer with no row. Since 2026-11-25 also `keyed`: whether the rows were opened with the room's key. A room's copy, which the browser keeps, is drawn as such rows too (rowsOf), and nothing of a read that was made without the key goes into a copy (put). */
 interface RowsRead {
   messages: { row: MessageItem; own: Opened | null }[];
   changes: { target: string; change: Change }[];
   lowest: number;
   highest: number;
+  keyed: boolean;
 }
 
 /** The edit that is going on (2026-11-24): the message, the text it had when Edit was tapped, and what the message box held then, which goes back into the box when the edit ends. */
@@ -98,6 +100,9 @@ const SEEN_NAMES = 3;
 
 /** Edit is in a message's menu for this many minutes after the message was sent, by this device's clock (2026-11-24). The masterpod decides by its own clock, and its number is the same (EDIT_MINUTES in its chat.service.js, masterpod spec 31). */
 const EDIT_MINUTES = 15;
+
+/** The read that follows a room's copy asks for at most this many rows (2026-11-25; forclaude/chat-rooms-kept-plan-1.md, section 4, point 3). It is the masterpod's own number for a request that names none (MESSAGES_DEFAULT_LIMIT in its chat.service.js), so the answer is the same. An answer that holds this many rows is full: there may be more, and the copy is dropped. */
+const NEW_ROWS_LIMIT = 100;
 
 /** Older messages load by themselves when the reader comes this close to the top of the thread (2026-11-22). */
 const OLDER_PX = 300;
@@ -247,7 +252,25 @@ const REST_CHECK_MS = 40;
  * "Seen" under an edited message is counted from the edit. The
  * masterpod's refusal of an edit as too late shows above the message
  * box as "This message can no longer be edited.", and the text stays in
- * the box.
+ * the box. Since 2026-11-25 (forclaude/chat-rooms-kept-plan-1.md; wallet
+ * spec 8.2, Chat, and 8.3) the browser keeps a copy of the thread of
+ * each room a person has opened (room-copies.service): in the page's
+ * memory, and encrypted in the browser's own database. A conversation
+ * that opens draws the room's copy at once, and then asks the masterpod
+ * only for the rows after the copy's highest position, with the request
+ * of the 3-second read. Until that day every opening emptied the thread
+ * and read the room's newest MESSAGES_PAGE rows again; a room the
+ * browser has no copy of still opens that way. An answer that comes
+ * back full, NEW_ROWS_LIMIT rows, means that the room moved on too far:
+ * the copy is dropped and the room is read as before, while the old
+ * thread stays on the screen until the newest rows have come. The page
+ * hands the open room's thread over as the room's copy each time an
+ * answer of the masterpod changed it. While a room's messages are on
+ * their way, the thread says "Loading the chat." where it said "No
+ * messages yet.", which stays for a room that has none. With a copy on
+ * the screen a read that fails leaves the messages readable under the
+ * red line, the 3-second read asks again, and the red line of a read of
+ * the messages that failed goes when a later one succeeds.
  */
 @Component({
   selector: 'app-chat-room-page',
@@ -398,7 +421,11 @@ const REST_CHECK_MS = 40;
             </div>
           }
         } @empty {
-          <p class="muted empty">{{ t().chatRoom.noMessages }}</p>
+          @if (arrival() === 'coming') {
+            <p class="muted empty">{{ t().chatRoom.loading }}</p>
+          } @else if (arrival() === 'here') {
+            <p class="muted empty">{{ t().chatRoom.noMessages }}</p>
+          }
         }
       </div>
       <span class="menu-anchor" #messageAnchor [matMenuTriggerFor]="messageMenu" [matMenuTriggerRestoreFocus]="false" aria-hidden="true"></span>
@@ -543,6 +570,8 @@ export class ChatRoomPage {
   private readonly crypto = inject(CryptoService);
   private readonly router = inject(Router);
   private readonly pictures = inject(RoomPictureCacheService);
+  /** The copies the browser keeps of the rooms' threads (2026-11-25; room-copies.service): this page hands the open room's thread over each time an answer of the masterpod changed it (keep), and takes the room's copy back when the room opens (open). */
+  private readonly copies = inject(RoomCopiesService);
   private readonly injector = inject(Injector);
   protected readonly lang = inject(LanguageService);
   protected readonly t = this.lang.words;
@@ -569,6 +598,8 @@ export class ChatRoomPage {
     return room !== null && this.chat.isTrader(room);
   });
   protected readonly messages = signal<ShownMessage[]>([]);
+  /** Where the room's messages are (2026-11-25; forclaude/chat-rooms-kept-plan-1.md, section 4, point 2): `coming` from the moment a conversation opens until its thread is drawn, from the room's copy or from the masterpod's answer, and again while a room whose copy was dropped is read afresh; `here` once the thread is drawn; `failed` when the read of the room's newest rows failed. An empty thread says "Loading the chat." while they are coming and "No messages yet." once they are here, which is then a room that has none. After a read that failed it says neither: the red line says why. */
+  protected readonly arrival = signal<'coming' | 'here' | 'failed'>('coming');
   protected readonly canLoadOlder = signal(false);
   protected readonly showInvite = signal(false);
   protected readonly showMembers = signal(false);
@@ -752,12 +783,18 @@ export class ChatRoomPage {
     return marks;
   });
 
-  /** The room the thread shows, whether its opening read is done, and the positions of the oldest and newest shown. Since 2026-11-24 the two positions are the lowest and the highest of the rows the page has read, drawn or not: an edit and a delete are rows with a position of their own, and no bubble. */
+  /** The room the thread shows, whether its opening read is done, and the positions of the oldest and newest shown. Since 2026-11-24 the two positions are the lowest and the highest of the rows the page has read, drawn or not: an edit and a delete are rows with a position of their own, and no bubble. Since 2026-11-25 `ready` is true as soon as a room's copy is drawn, before the read that follows it is answered, so the timer's read and a send work at once; and it is false again while a room whose copy was dropped is read afresh. The two positions are then the copy's until a read moves them. */
   private openedFor: string | null = null;
   private ready = false;
   private oldest = 0;
   private newest = 0;
-  /** For each message, by its id, the newest row that names it (2026-11-24; wallet spec 4.19): a delete, or the newest edit with its text. Kept for a message the page does not hold too: a row that names a message has a higher position than the message, so the page reads it first, and the message comes with a later read of older rows. Emptied when a conversation opens. */
+  /** Counts the threads this page has begun (2026-11-25): raised when a conversation opens, and again when a room's copy is dropped after a full answer and the room is read afresh. The answer to a read that was asked for under an earlier number is dropped: its rows belong to a thread the page no longer shows. */
+  private opening = 0;
+  /** False once the thread holds rows of a read that was made without the room's key (2026-11-25; forclaude/chat-rooms-kept-plan-1.md, section 7): nothing of such a read is kept, so the page hands no copy over from then on, until a thread is begun anew. */
+  private keepable = true;
+  /** The red line that a read of the messages put up when it failed, for as long as that line may still be showing (2026-11-25; the same plan, section 4, point 7); null when there is none. The next such read that succeeds takes the line away, and only while the red line is still this one (readWorked). */
+  private readError: string | null = null;
+  /** For each message, by its id, the newest row that names it (2026-11-24; wallet spec 4.19): a delete, or the newest edit with its text. Kept for a message the page does not hold too: a row that names a message has a higher position than the message, so the page reads it first, and the message comes with a later read of older rows. Emptied when a conversation opens, and since 2026-11-25 when a room whose copy was dropped is read afresh. */
   private readonly changes = new Map<string, Change>();
   /** The newest position this page told the masterpod it has seen, for the room it shows; 0 when none. */
   private toldSeen = 0;
@@ -948,9 +985,39 @@ export class ChatRoomPage {
     void this.send(suggestion.sticker);
   }
 
-  /** The room's newest page; whatever was shown before is dropped. Since 2026-11-23 the list of the sets of stickers is asked for here, which asks the masterpod only when this login has no list yet (stickers.service.ts). Since 2026-11-24 the same read asks with `seenSince` 0 for the seen position of every member who has seen anything (takeSeen). Since 2026-11-24, too, the page is the room's newest MESSAGES_PAGE rows, the edits and the deletes among them, so fewer messages than that can show; an edit that was going on ends, and the rows kept of the room before are dropped. */
+  /**
+   * The room's newest page; whatever was shown before is dropped. Since
+   * 2026-11-23 the list of the sets of stickers is asked for here, which
+   * asks the masterpod only when this login has no list yet
+   * (stickers.service.ts). Since 2026-11-24 the same read asks with
+   * `seenSince` 0 for the seen position of every member who has seen
+   * anything (takeSeen). Since 2026-11-24, too, the page is the room's
+   * newest MESSAGES_PAGE rows, the edits and the deletes among them, so
+   * fewer messages than that can show; an edit that was going on ends, and
+   * the rows kept of the room before are dropped.
+   *
+   * Since 2026-11-25 (forclaude/chat-rooms-kept-plan-1.md, sections 3.2,
+   * 3.3 and 7) the page first looks for the room's copy
+   * (room-copies.service): in the page's memory, which answers at once,
+   * else in the browser's database, one read and one decryption. With a
+   * copy the page draws it through `put`, as it draws an answer, at the
+   * thread's end, and is ready from that moment. Then it asks for the
+   * rows after the copy's highest position: the request of the 3-second
+   * read, with `limit` NEW_ROWS_LIMIT and `seenSince` 0. The answer goes
+   * into the thread through `take`, as a 3-second read's does. Then the
+   * room is marked seen up to the highest position and the masterpod is
+   * told (tellSeen), also when the answer held no row. When that read
+   * fails, the copy stays on the screen under the red line, and the
+   * timer's read asks again. An answer that is full, NEW_ROWS_LIMIT rows,
+   * means there may be more: the copy is dropped, the page stops being
+   * ready, and the room's newest MESSAGES_PAGE rows are read as before
+   * and take the place of the old thread when they have come. Without a
+   * copy the room opens as before. The page hands the thread over as the
+   * room's copy when the newest rows have come (keep).
+   */
   private async open(room: RoomItem): Promise<void> {
     this.ready = false;
+    this.opening += 1;
     this.endEdit();
     this.messages.set([]);
     this.changes.clear();
@@ -959,6 +1026,7 @@ export class ChatRoomPage {
     this.toldSeen = 0;
     this.seenSince = 0;
     this.olderArmed = true;
+    this.keepable = true;
     this.canLoadOlder.set(false);
     this.showInvite.set(false);
     this.showMembers.set(false);
@@ -968,38 +1036,76 @@ export class ChatRoomPage {
     this.inviteTarget.set(null);
     this.setDisputeCase(null);
     this.error.set(null);
+    this.readError = null;
+    this.arrival.set('coming');
     void this.stickers.load();
+    const copy = this.copies.held(room.chatRoomId) ?? (await this.copies.stored(room.chatRoomId, room.lastPosition));
+    if (this.openedFor !== room.chatRoomId) return;
+    if (copy !== null) {
+      this.put(room, this.rowsOf(copy), false);
+      this.oldest = copy.lowest;
+      this.newest = copy.highest;
+      this.canLoadOlder.set(copy.olderLeft);
+      this.ready = true;
+      this.arrival.set('here');
+      this.scrollToBottom();
+      const news = await this.api.listMessages(room.chatRoomId, { afterPosition: copy.highest, limit: NEW_ROWS_LIMIT, seenSince: 0 });
+      if (this.openedFor !== room.chatRoomId) return;
+      if (!news.ok) {
+        this.readFailed(`/list-messages: ${reasonOf(news)}`);
+        return;
+      }
+      if (news.body.messages.length < NEW_ROWS_LIMIT) {
+        await this.take(room, news.body);
+        if (this.openedFor !== room.chatRoomId) return;
+        this.session.markSeen(room.chatRoomId, this.newest);
+        void this.tellSeen();
+        return;
+      }
+      // A full answer: the room moved on too far for its copy. The old thread stays on the screen until the newest rows have come.
+      this.copies.drop(room.chatRoomId);
+      this.ready = false;
+      this.opening += 1;
+      this.arrival.set('coming');
+    }
     const res = await this.api.listMessages(room.chatRoomId, { beforePosition: room.lastPosition + 1, limit: MESSAGES_PAGE, seenSince: 0 });
     if (this.openedFor !== room.chatRoomId) return;
     if (!res.ok) {
-      this.error.set(`/list-messages: ${reasonOf(res)}`);
+      this.readFailed(`/list-messages: ${reasonOf(res)}`);
+      this.arrival.set('failed');
       return;
     }
     this.takeSeen(room.chatRoomId, res.body);
     const read = await this.read(room, res.body.messages);
     if (this.openedFor !== room.chatRoomId) return;
     this.messages.set([]);
+    this.changes.clear();
+    this.keepable = true;
     this.put(room, read, false);
     this.oldest = read.lowest;
     this.newest = read.highest;
     this.canLoadOlder.set(res.body.messages.length === MESSAGES_PAGE);
     this.ready = true;
+    this.arrival.set('here');
     this.session.markSeen(room.chatRoomId, this.newest);
     this.scrollToBottom();
     void this.tellSeen();
+    this.keep();
   }
 
-  /** The page before the oldest shown; the reader stays on the message they were looking at. Since 2026-11-24 the page is the MESSAGES_PAGE rows before the lowest position read, the edits and the deletes among them: a page of rows can hold fewer messages, or none, and the next page is then asked for from that page's lowest position. */
+  /** The page before the oldest shown; the reader stays on the message they were looking at. Since 2026-11-24 the page is the MESSAGES_PAGE rows before the lowest position read, the edits and the deletes among them: a page of rows can hold fewer messages, or none, and the next page is then asked for from that page's lowest position. Since 2026-11-25 the thread is handed over as the room's copy afterwards (keep), so older messages that were loaded stay while the page lives; an answer that arrives after the thread was begun anew is dropped (opening); and a read that fails is noted, so that the red line it puts up goes when a later read of the messages succeeds (readError). */
   protected loadOlder(): Promise<void> {
     const room = this.room();
     if (!room || this.oldest === 0) return Promise.resolve();
     return this.run(async () => {
+      const opening = this.opening;
       const res = await this.api.listMessages(room.chatRoomId, { beforePosition: this.oldest, limit: MESSAGES_PAGE });
-      if (!res.ok || this.openedFor !== room.chatRoomId) return res;
+      if (!res.ok) this.readError = reasonOf(res);
+      if (!res.ok || this.openedFor !== room.chatRoomId || this.opening !== opening) return res;
       const read = await this.read(room, res.body.messages);
       if (read.lowest > 0) {
         await this.threadAtRest();
-        if (this.openedFor !== room.chatRoomId) return res;
+        if (this.openedFor !== room.chatRoomId || this.opening !== opening) return res;
         const el = this.threadBox()?.nativeElement;
         // How far the reader is from the thread's end; the same distance is set again once the older messages are drawn (2026-11-22). A browser that has kept the place by itself is then moved by nothing.
         const fromEnd = el ? el.scrollHeight - el.scrollTop : 0;
@@ -1013,26 +1119,115 @@ export class ChatRoomPage {
         );
       }
       this.canLoadOlder.set(res.body.messages.length === MESSAGES_PAGE);
+      this.keep();
       return res;
     });
   }
 
-  /** New messages after the newest shown: quiet from the timer, logged after a send. The thread follows them only when the reader is near the bottom. Since 2026-11-24 the same read brings the members' seen positions that changed since the read before (takeSeen); they are taken before the return for an answer with no message. Since 2026-11-24, too, it brings the edits and the deletes written after the highest position read: this is how an edit or a delete by someone else reaches an open conversation, within MESSAGES_POLL_MS. */
+  /** New messages after the newest shown: quiet from the timer, logged after a send. The thread follows them only when the reader is near the bottom. Since 2026-11-24 the same read brings the members' seen positions that changed since the read before (takeSeen); they are taken before the return for an answer with no message. Since 2026-11-24, too, it brings the edits and the deletes written after the highest position read: this is how an edit or a delete by someone else reaches an open conversation, within MESSAGES_POLL_MS. Since 2026-11-25 what the answer brings is put into the page by `take`, which the read that follows a room's copy uses too (open); and an answer that arrives after the thread was begun anew is dropped (opening). */
   private async poll(quiet: boolean): Promise<void> {
     const room = this.room();
     if (!room || !this.ready || this.openedFor !== room.chatRoomId || !this.session.hasSession() || (quiet && this.busy())) return;
+    const opening = this.opening;
     const res = await this.api.listMessages(room.chatRoomId, { afterPosition: this.newest, seenSince: this.seenSince }, quiet);
-    if (!res.ok || this.openedFor !== room.chatRoomId) return;
-    this.takeSeen(room.chatRoomId, res.body);
-    if (res.body.messages.length === 0) return;
-    const read = await this.read(room, res.body.messages);
-    if (this.openedFor !== room.chatRoomId) return;
+    if (!res.ok || this.openedFor !== room.chatRoomId || this.opening !== opening) return;
+    await this.take(room, res.body);
+  }
+
+  /**
+   * What an answer to a read of the rows after the highest position held
+   * brings into the page (2026-11-25; until then these were the last
+   * lines of `poll`): the answer of the 3-second read, of the read after
+   * a send, an edit or a delete, and of the read that follows a room's
+   * copy when a conversation opens (forclaude/chat-rooms-kept-plan-1.md,
+   * section 3.2). The red line of an earlier read of the messages that
+   * failed goes (readWorked). The members' seen positions are taken, also
+   * from an answer with no row. The rows are opened and put into the
+   * thread, which follows them only when the reader is near the bottom;
+   * the highest position moves up; the room is marked seen on this
+   * device; and the thread is handed over as the room's copy (keep).
+   * Nothing is put when the thread was begun anew while the rows were
+   * opened.
+   */
+  private async take(room: RoomItem, answer: MessagesAnswer): Promise<void> {
+    this.readWorked();
+    this.takeSeen(room.chatRoomId, answer);
+    if (answer.messages.length === 0) return;
+    const opening = this.opening;
+    const read = await this.read(room, answer.messages);
+    if (this.openedFor !== room.chatRoomId || this.opening !== opening) return;
     const follow = this.nearBottom();
     this.put(room, read, false);
     this.newest = Math.max(this.newest, read.highest);
     if (this.oldest === 0) this.oldest = read.lowest;
     this.session.markSeen(room.chatRoomId, this.newest);
     if (follow) this.scrollToBottom();
+    this.keep();
+  }
+
+  /** A read of the messages failed, and its reason is the red line (2026-11-25): the line is noted, so that the next such read that succeeds takes it away (readWorked). */
+  private readFailed(line: string): void {
+    this.error.set(line);
+    this.readError = line;
+  }
+
+  /** A read of the messages succeeded (2026-11-25; forclaude/chat-rooms-kept-plan-1.md, section 4, point 7): the red line that an earlier such read put up when it failed goes, and only while the red line is still that line. Until that day it stayed until the person's next action in the room. Such a line is put up by a conversation's opening and by Load older messages. */
+  private readWorked(): void {
+    if (this.readError !== null && this.error() === this.readError) this.error.set(null);
+    this.readError = null;
+  }
+
+  /**
+   * Hands the open room's thread, as the page holds it now, to the
+   * browser's keeping as the room's copy (2026-11-25;
+   * forclaude/chat-rooms-kept-plan-1.md, section 7; room-copies.service).
+   * Called each time an answer of the masterpod changed the thread: after
+   * a conversation's opening read, after a read that brought rows, after
+   * a read of older rows, and after this pod's own send, edit or delete.
+   *
+   * The copy holds each message once, by its id, oldest first; a message
+   * that is still being sent is left out. A message's text is its own
+   * decrypted text. It is null for a message that an edit or a delete
+   * names, since the text of before is not kept, and for one that came
+   * without its text. A text that did not open is kept as that, never as
+   * the sentence the thread shows for it. With them goes the newest row
+   * that names each message, as `changes` has it, and the lowest and the
+   * highest position the reads have covered: `newest` is never the
+   * position of a message this pod has just sent, nor of its own edit or
+   * delete, and the read that follows brings those rows again.
+   *
+   * Nothing is handed over while the page is not ready, and nothing once
+   * the thread holds rows of a read that was made without the room's key
+   * (keepable): the copy then stays as it was before that read.
+   */
+  private keep(): void {
+    const chatRoomId = this.openedFor;
+    if (chatRoomId === null || !this.ready || !this.keepable) return;
+    const messages = new Map<string, KeptMessage>();
+    for (const m of this.messages()) {
+      if (m.pending || messages.has(m.messageId)) continue;
+      const own: KeptText | null = this.changes.has(m.messageId) || m.waiting ? null : m.text === null ? { opened: false } : { opened: true, text: m.text };
+      messages.set(m.messageId, { messageId: m.messageId, position: m.position, senderAnopodId: m.senderAnopodId, createdAt: m.createdAt, own });
+    }
+    this.copies.keep(chatRoomId, {
+      messages: [...messages.values()].sort((a, b) => a.position - b.position),
+      changes: [...this.changes].map(([target, change]) => ({ target, change: keptChange(change) })),
+      lowest: this.oldest,
+      highest: this.newest,
+      olderLeft: this.canLoadOlder(),
+    });
+  }
+
+  /** A room's copy as the rows of an answer, which `put` draws (2026-11-25): each message with its own text, and each edit and delete with the message it names. A text that did not open gets the sentence that says so, in the language of this moment. A copy holds nothing of a read without the room's key, so its rows count as opened with the key. */
+  private rowsOf(copy: RoomCopy): RowsRead {
+    const opened = (text: KeptText): Opened => (text.opened ? { text: text.text, opened: true } : { text: this.t().chatRoom.cannotDecrypt, opened: false });
+    return {
+      messages: copy.messages.map((m) => ({ row: { messageId: m.messageId, position: m.position, senderAnopodId: m.senderAnopodId, createdAt: m.createdAt, message: null }, own: m.own === null ? null : opened(m.own) })),
+      changes: copy.changes.map(({ target, change }) => ({ target, change: change.kind === 'delete' ? change : { kind: change.kind, position: change.position, text: opened(change.text) } })),
+      lowest: copy.lowest,
+      highest: copy.highest,
+      keyed: true,
+    };
   }
 
   /**
@@ -1082,7 +1277,8 @@ export class ChatRoomPage {
    * the message it names. A row of a kind this wallet does not know, and
    * an edit or a delete that names no message, is passed over. Nothing of
    * the page is changed here: `put` does that, once the page still shows
-   * the room the rows were read for.
+   * the room the rows were read for. Since 2026-11-25 the answer also says
+   * whether the room's key was there (`keyed`).
    */
   private async read(room: RoomItem, rows: MessageItem[]): Promise<RowsRead> {
     const hasKey = (await this.chat.roomKeyOf(room)) !== null;
@@ -1090,7 +1286,7 @@ export class ChatRoomPage {
       const text = await this.chat.decryptMessage(room, message);
       return text === null ? { text: hasKey ? this.t().chatRoom.cannotDecrypt : this.t().chatRoom.noRoomKey, opened: false } : { text, opened: true };
     };
-    const read: RowsRead = { messages: [], changes: [], lowest: 0, highest: 0 };
+    const read: RowsRead = { messages: [], changes: [], lowest: 0, highest: 0, keyed: hasKey };
     for (const row of rows) {
       if (read.lowest === 0 || row.position < read.lowest) read.lowest = row.position;
       if (row.position > read.highest) read.highest = row.position;
@@ -1151,9 +1347,19 @@ export class ChatRoomPage {
    * the place of an entry with the same id, as before. A message the
    * thread already holds is drawn anew when one of the answer's rows
    * names it: that is how an edit or a delete by someone else changes a
-   * bubble that is on the screen.
+   * bubble that is on the screen. Since 2026-11-25 a room's copy is drawn
+   * here too, as the rows of an answer (open, rowsOf); and rows that were
+   * read without the room's key end the handing over of copies for this
+   * thread (keepable). Since that day, too, the thread is then put in the
+   * order of the positions (inOrder), so a row that comes a second time
+   * changes nothing. Until then such a message moved to the thread's end,
+   * also when newer messages stood there already. With a copy on the
+   * screen the page is ready before the opening read is answered, so the
+   * timer's read or the read after a send can overtake that answer, which
+   * then brings rows the thread already holds.
    */
   private put(room: RoomItem, read: RowsRead, older: boolean): void {
+    if (!read.keyed) this.keepable = false;
     const named = new Set<string>();
     for (const { target, change } of read.changes) {
       if (this.keepChange(target, change)) named.add(target);
@@ -1163,14 +1369,15 @@ export class ChatRoomPage {
     const ids = new Set(fresh.map((m) => m.messageId));
     this.messages.update((list) => {
       const kept = list.filter((m) => !ids.has(m.messageId)).map((m) => (named.has(m.messageId) ? this.present(room, m, null, this.changes.get(m.messageId)) : m));
-      return older ? [...fresh, ...kept] : [...kept, ...fresh];
+      return inOrder(older ? [...fresh, ...kept] : [...kept, ...fresh]);
     });
   }
 
-  /** This pod's own edit or delete, drawn at once from the masterpod's 201 (2026-11-24): the row is kept as the newest that names the message, and the message is drawn anew. The read that follows brings the same row again, which changes nothing. */
+  /** This pod's own edit or delete, drawn at once from the masterpod's 201 (2026-11-24): the row is kept as the newest that names the message, and the message is drawn anew. The read that follows brings the same row again, which changes nothing. Since 2026-11-25 the thread is then handed over as the room's copy (keep). */
   private drawChange(room: RoomItem, target: string, change: Change): void {
     if (!this.keepChange(target, change)) return;
     this.messages.update((list) => list.map((m) => (m.messageId === target ? this.present(room, m, null, change) : m)));
+    this.keep();
   }
 
   /**
@@ -1182,6 +1389,8 @@ export class ChatRoomPage {
    * as it is. A sticker that went through is noted as sent lately
    * (rememberSticker in ../stickers). While a message is edited
    * (2026-11-24) Send saves the edit and sends no message (saveEdit).
+   * Since 2026-11-25 the thread is handed over as the room's copy once
+   * the answer has given the bubble its id (keep).
    */
   protected send(sticker: Sticker | null = null): Promise<void> {
     const edit = this.editing();
@@ -1231,6 +1440,7 @@ export class ChatRoomPage {
       }
       this.messages.update((list) => list.map((m) => (m === pending ? sent : m)));
       this.session.markSeen(room.chatRoomId, res.body.position);
+      this.keep();
       await this.poll(false);
       void this.tellSeen();
       return res;
@@ -1539,6 +1749,7 @@ export class ChatRoomPage {
     if (this.busy()) return;
     this.busy.set(true);
     this.error.set(null);
+    this.readError = null;
     try {
       const res = await action();
       if (!res.ok) this.error.set(reasonOf(res));
@@ -1558,4 +1769,16 @@ function dayKey(iso: string): string {
 
 function minutesBetween(fromIso: string, toIso: string): number {
   return Math.abs(Date.parse(toIso) - Date.parse(fromIso)) / 60_000;
+}
+
+/** The thread in the order of the positions, a bubble that is still being sent last (2026-11-25; forclaude/chat-rooms-kept-plan-1.md, section 7: a row that comes twice changes nothing). A thread that is in that order already is answered as it is. */
+function inOrder(list: ShownMessage[]): ShownMessage[] {
+  const at = (m: ShownMessage) => (m.pending ? Number.MAX_SAFE_INTEGER : m.position);
+  return list.every((m, i) => i === 0 || at(list[i - 1]) <= at(m)) ? list : [...list].sort((a, b) => at(a) - at(b));
+}
+
+/** The newest row that names a message, as a room's copy holds it (2026-11-25; room-copies.service): the page's own, with the text of an edit kept as the text, or as "did not open". */
+function keptChange(change: Change): KeptChange {
+  if (change.kind === 'delete') return change;
+  return { kind: change.kind, position: change.position, text: change.text.opened ? { opened: true, text: change.text.text } : { opened: false } };
 }

@@ -124,12 +124,13 @@ src/app/
     log.service.ts         the activity log, and the HTTP plumbing every call goes through
     notes.service.ts      the noted transactions: the last list read, the blobs opened on the phone, add, update, remove (spec 8.2)
     settings.service.ts   the wallet settings on the masterpod, one encrypted object: the Protect your passkey answer and the names of the added passkeys (spec 8.2)
-    chat.service.ts       what the chat pages share: the room keys, a room's title, from the reader's own side for a listing chat, and the chats about an attestor case: the room, the invites, Start chat, Invite again (spec 8.3)
+    chat.service.ts       what the chat pages share: the room keys, a room's title, from the reader's own side for a listing chat, and the chats about an attestor case: the room, the invites, Start chat, Invite again (spec 8.3); since 2026-11-25 a whole chat list that arrives also takes away the copy the browser keeps of every room that is not in it (room-copies.service.ts)
     work-badge.service.ts the numbers on the Attesting and Moderation menu entries: the things on each page that this device has not seen yet, read every 15 seconds in that edition, the seen ids kept on the device (spec 8.1, 8.3)
     escrow-actions.service.ts   a release, a cancel or a dispute of an escrow trade, in two steps: approve, which the box's Yes runs, builds the follow-up with pair one and asks the passkey for it, and send has it signed and posts it to /escrow-signature; and the validator's refusal in plain words (spec 8.3)
     sound.service.ts       the wallet's one sound, two short notes, and its switch, kept on the device (spec 8.1, 8.3)
     alerts.service.ts      the security alerts: the pod's list of emails and phones that are told when a transfer starts to wait, and the phone's own part: whether the wallet was opened from the Home Screen, the kind of device, and turnOn, which asks the phone for its permission and switches the worker on (spec 8.2, 8.3)
     room-picture-cache.service.ts   the pictures of public rooms: one read per room and picture for the tab's life (it ends at a load of the page, which a Lock is since 2026-11-22), five at a time; a read that failed is asked again half a minute later at the earliest (spec 8.3)
+    room-copies.service.ts   the chat rooms' copies: for every room a person has opened, a copy of the room's thread, whole in the page's memory and, as its newest 200 messages, encrypted in the browser's own database (IndexedDB), so that a way back into a room shows its messages at once and the masterpod is asked only for what is new; the code that opens that database is in this file (spec 8.2, 8.3)
     stickers.service.ts    the stickers' list: every set the masterpod has, asked for once after each login, when a conversation is first opened, and kept until the login ends; no timer (spec 4.16, 8.3)
     update.service.ts      the update check and the refresh: whether the wallet's server holds a newer build than this page runs, which shows the Update button, and the load of the page after that button, after Lock and after the box "You are logged out", made only once the server has answered (spec 8.1, 8.3)
     joy.service.ts         Joy, the wallet's AI: the one chat with her, sent to the masterpod with every message and kept encrypted in the browser's own database (IndexedDB) so that a reload does not lose it, and the member's memory file, a blob on the masterpod that only the anoPod encryption key opens (spec 4.18, 8.3); since 2026-11-24 also whether Joy is searching the web, and the web pages she cited for an answer, which are kept with the chat and checked by the wallet when they come and when a kept chat is opened (spec 4.20)
@@ -168,7 +169,15 @@ way. It is encrypted with the anoPod encryption key and kept in the
 browser's own database (IndexedDB, the database `anopod-wallet`), under
 the anoPod's id, so that a reload of the page does not lose it. No key
 is kept with it, so nothing opens it without the passkey (the spec's
-4.18).
+4.18). Since 2026-11-25 there is a second exception: for each chat room
+a person has opened, the room's newest 200 messages are written to
+browser storage too, one blob for each room, encrypted with the anoPod
+encryption key, in a database of the rooms' own (IndexedDB, the
+database `anopod-wallet-chat`, under the anoPod's id and the room's
+id). A room then shows its messages at once after a reload, and the
+masterpod is asked only for what is new. No key is kept with these
+blobs either. A room's blob is deleted when the person is no longer in
+the room, and it stays after Lock (the spec's 8.2, Chat, and 8.3).
 
 ## The wallet servers
 

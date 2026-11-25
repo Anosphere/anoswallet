@@ -1069,7 +1069,7 @@ export class MasterpodApiService {
     return this.signed('/get-chat-room-picture', { chatRoomId }, quiet);
   }
 
-  /** The room's messages after a position (the poll), or with `beforePosition` the newest `limit` below it (opening a room, loading older ones). With `seenSince` in the query (2026-11-24, masterpod spec 29) the answer also carries the members' seen positions that changed after it. Since 2026-11-24 (masterpod spec 31) the answer holds every row of the room, the edits and the deletes among the messages (MessageItem), and the positions and `limit` count every row. */
+  /** The room's messages after a position (the poll), or with `beforePosition` the newest `limit` below it (opening a room, loading older ones). With `seenSince` in the query (2026-11-24, masterpod spec 29) the answer also carries the members' seen positions that changed after it. Since 2026-11-24 (masterpod spec 31) the answer holds every row of the room, the edits and the deletes among the messages (MessageItem), and the positions and `limit` count every row. Since 2026-11-25 (wallet spec 8.2, Chat) a room that the browser keeps a copy of is opened with the read after a position too: after the copy's highest position, with `limit` 100. Only a room without a copy, and one whose copy was dropped, opens with `beforePosition`. */
   listMessages(chatRoomId: string, query: MessagesQuery, quiet = false): Promise<ApiResponse<MessagesAnswer>> {
     return this.signed('/list-messages', { chatRoomId, ...query }, quiet);
   }

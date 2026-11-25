@@ -20,7 +20,7 @@ export const REFRESH_WAIT_MS = 5_000;
 /** The profile cache keeps at most this many /get-anopod-profile reads in flight, so a page with many faces gets them a few at a time (wallet spec 8.3). */
 export const PROFILE_READS_AT_ONCE = 5;
 
-/** A conversation opens with this many of its newest messages and loads older ones by as many (wallet spec 8.2, Chat). */
+/** A conversation opens with this many of its newest messages and loads older ones by as many (wallet spec 8.2, Chat). Since 2026-11-25 a room that the browser keeps a copy of does not open that way: its copy is drawn and the rows after it are read (room-copies.service; wallet spec 8.2, Chat). A room without a copy, and one whose copy was dropped, still opens with this many, and older ones still load by as many. */
 export const MESSAGES_PAGE = 50;
 
 /** The Members list of a conversation draws this many people at first, and as many more each time the reader comes near its end (wallet spec 8.2, Chat; 2026-11-22). */
