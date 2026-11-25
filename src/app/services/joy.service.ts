@@ -1,18 +1,26 @@
 import { Injectable, effect, inject, signal, untracked } from '@angular/core';
 import { JOY_MAX_CONVERSATION_BYTES, JOY_MAX_MESSAGES, JOY_MEMORY_MAX_BYTES } from '../constants';
+import { IMAGE_CONTENT_TYPES, imageObjectUrl } from '../images';
 import { CryptoService } from './crypto.service';
 import { LanguageService } from './language.service';
 import { ApiError, ApiResponse, reasonOf } from './log.service';
 import { JoyMessage, JoySource, JoyStop, MasterpodApiService } from './masterpod-api.service';
 import { SessionService } from './session.service';
 
-/** One message of the chat with Joy as the wallet keeps it (wallet spec 4.18): who wrote it, its text and when it was sent (ISO 8601; for an answer of Joy's, when it ended). `end` stands only on an answer of Joy's that did not end as an answer should: `length`, it was cut off where the model reached its limit; `refused`, the safety check of the model's company stopped it; `cut`, the answer failed after a part of it had come. `sources` stands only on an answer of Joy's for which she cited web pages (wallet spec 4.20; 2026-11-24): those pages, as sourcesOf() checked them, never an empty list. */
+/** One message of the chat with Joy as the wallet keeps it (wallet spec 4.18): who wrote it, its text and when it was sent (ISO 8601; for an answer of Joy's, when it ended). `end` stands only on an answer of Joy's that did not end as an answer should: `length`, it was cut off where the model reached its limit; `refused`, the safety check of the model's company stopped it; `cut`, the answer failed after a part of it had come. `sources` stands only on an answer of Joy's for which she cited web pages (wallet spec 4.20; 2026-11-24): those pages, as sourcesOf() checked them, never an empty list. `picture` stands only on an answer of Joy's for which a picture was made (wallet spec 4.21; 2026-11-25). */
 export interface JoyChatMessage {
   role: 'user' | 'assistant';
   text: string;
   at: string;
   end?: 'length' | 'refused' | 'cut';
   sources?: JoySource[];
+  picture?: JoyPicture;
+}
+
+/** A picture that Joy had made for an answer, as the chat keeps it (wallet spec 4.21; 2026-11-25): the id that the wallet made up for it, under which the picture's bytes are kept in the browser's database as an entry of their own, and the description that Joy wrote for it. The bytes themselves are never in the chat's blob. */
+export interface JoyPicture {
+  id: string;
+  description: string;
 }
 
 /** What the chat's blob holds (wallet spec 4.18): version 1 and the messages, oldest first. */
@@ -59,6 +67,18 @@ type LastLine = { done: true; stop: JoyStop; memory: string | null; sources: Joy
  * a kept chat is opened (sourcesOf), since the Joy page makes its links
  * of them. A message to Joy still carries the role and the text of each
  * message and nothing else: the sources are never sent back.
+ *
+ * Since 2026-11-25 (wallet spec 4.21) Joy can have a picture made. While
+ * one is made the page says so (drawing). The picture comes as one line
+ * of the answer. The wallet checks that line (pictureOf), shows the
+ * picture in the answer, and keeps its bytes in the browser's database
+ * as an entry of their own, encrypted with the anoPod encryption key,
+ * under an id that the wallet makes up. The chat's blob holds only that
+ * id and the description that Joy wrote. When a kept chat is opened its
+ * pictures are read and opened again, and New chat takes them out with
+ * the chat. No picture is ever sent back: in a later message an answer
+ * that had a picture carries a note of the wallet's with Joy's
+ * description in front of its words (pictureNote).
  */
 @Injectable({ providedIn: 'root' })
 export class JoyService {
@@ -75,6 +95,12 @@ export class JoyService {
   readonly writing = signal(false);
   /** True while Joy searches the web for the answer that is being written (wallet spec 4.20): from a line of the answer that says so until the answer's next piece comes, or until the answer ends. */
   readonly searching = signal(false);
+  /** True while a picture is being made for the answer that is being written (wallet spec 4.21): from a line of the answer that says Joy started on one until the picture comes, the answer's next piece comes, or the answer ends. */
+  readonly drawing = signal(false);
+  /** The picture of the answer that is being written, once it has come; null before that and while no answer is under way. */
+  readonly answerPicture = signal<JoyPicture | null>(null);
+  /** The pictures the Joy page can draw, by id: for each one an address of its bytes in this page's memory (an object URL). A picture whose id is not here is no longer kept in this browser. */
+  readonly pictureUrls = signal<Record<string, string>>({});
   /** What the message box holds. It is kept here so that it outlives a visit to another page, and so that a message that was refused can be put back into it. */
   readonly draft = signal('');
   /** The page's red line: why the last message was refused or failed, or why the memory file could not be read or stored. Null when there is nothing to say. */
@@ -94,8 +120,10 @@ export class JoyService {
   private starting = false;
   /** Counts the times the memory file was set from this page, by an answer of Joy's or by the member's own Save. A read of the masterpod's blob that began before such a set is dropped: what it brings is the older file. */
   private memorySets = 0;
-  /** The writes to the browser's database, one after the other, so an older chat never lands on a newer one. */
+  /** The writes to the browser's database, one after the other, so an older chat never lands on a newer one, and a picture is there before the chat that names it. */
   private keeping: Promise<void> = Promise.resolve();
+  /** The pictures' bytes and types, by id, for Download: a file is made of them inside the tap. */
+  private readonly pictureFiles = new Map<string, { bytes: Uint8Array; type: string }>();
 
   constructor() {
     // Another pod in this tab, or none: nothing of the pod before stays here.
@@ -109,9 +137,10 @@ export class JoyService {
 
   /**
    * Called when a Joy page opens. The first time in a login it looks for
-   * the chat this browser keeps for the pod and opens it. Every time it
-   * reads the memory file from the masterpod, unless an answer is under
-   * way: the file may have been changed on another device.
+   * the chat this browser keeps for the pod and opens it, and the
+   * pictures of that chat with it. Every time it reads the memory file
+   * from the masterpod, unless an answer is under way: the file may have
+   * been changed on another device.
    */
   async open(): Promise<void> {
     const anopodId = this.session.anopodId();
@@ -121,7 +150,14 @@ export class JoyService {
       this.loadedFor = anopodId;
       const login = this.login;
       const kept = await this.openKept(anopodId);
-      if (login !== this.login) return;
+      // The chat's pictures are opened before the chat shows, so that no picture is drawn as gone while its bytes are still being read.
+      const pictures = kept === null ? [] : await this.openPictures(anopodId, kept);
+      if (login !== this.login) {
+        for (const picture of pictures) URL.revokeObjectURL(picture.url);
+        return;
+      }
+      for (const picture of pictures) this.pictureFiles.set(picture.id, { bytes: picture.bytes, type: picture.type });
+      this.pictureUrls.set(Object.fromEntries(pictures.map((picture) => [picture.id, picture.url])));
       if (kept !== null) this.messages.set(kept);
       this.ready.set(true);
     }
@@ -174,25 +210,31 @@ export class JoyService {
     let last: LastLine | null = null;
     const res = await this.api.askJoy(conversationOf(this.messages()), memory, (line) => {
       if (login !== this.login || typeof line !== 'object' || line === null) return;
-      const piece = line as { text?: unknown; searching?: unknown; done?: unknown; stop?: unknown; memory?: unknown; sources?: unknown; error?: unknown };
+      const piece = line as { text?: unknown; searching?: unknown; drawing?: unknown; picture?: unknown; done?: unknown; stop?: unknown; memory?: unknown; sources?: unknown; error?: unknown };
       if (typeof piece.text === 'string') {
-        // The next piece of the answer takes the words on a search away.
+        // The next piece of the answer takes the words on a search away, and the words on a picture: Joy's words can follow a picture that she started on and that was not made.
         this.searching.set(false);
+        this.drawing.set(false);
         this.answer.update((answer) => (answer ?? '') + piece.text);
       } else if (piece.searching === true) this.searching.set(true);
+      else if (piece.drawing === true) this.drawing.set(true);
       else if (piece.done === true) last = { done: true, stop: piece.stop === 'length' || piece.stop === 'refused' ? piece.stop : 'end', memory: typeof piece.memory === 'string' ? piece.memory : null, sources: sourcesOf(piece.sources) };
       else if (typeof piece.error === 'string') last = { error: piece.error };
+      else if ('picture' in piece) this.takePicture(anopodId, piece.picture);
     });
     if (login !== this.login) return;
 
     const written = this.answer() ?? '';
     const ended = last as LastLine | null;
+    const picture = this.answerPicture();
     this.answer.set(null);
     this.searching.set(false);
+    this.drawing.set(false);
+    this.answerPicture.set(null);
     if (ended !== null && 'done' in ended) {
-      // An answer that ended. One with no text at all and no word on why is shown as cut off. The web pages Joy cited are kept with it; an answer that failed has none, since they come in the last line.
-      const end = ended.stop !== 'end' ? ended.stop : written.trim() === '' ? 'cut' : undefined;
-      this.messages.update((list) => [...list, { role: 'assistant', text: written, at: new Date().toISOString(), ...(end ? { end } : {}), ...(ended.sources.length > 0 ? { sources: ended.sources } : {}) }]);
+      // An answer that ended. One with no text at all, no picture and no word on why is shown as cut off. The web pages Joy cited are kept with it; an answer that failed has none, since they come in the last line. A picture that came is kept with it, as its id and Joy's description.
+      const end = ended.stop !== 'end' ? ended.stop : written.trim() === '' && picture === null ? 'cut' : undefined;
+      this.messages.update((list) => [...list, { role: 'assistant', text: written, at: new Date().toISOString(), ...(end ? { end } : {}), ...(ended.sources.length > 0 ? { sources: ended.sources } : {}), ...(picture ? { picture } : {}) }]);
       this.keep();
       // The memory file that Joy changed is stored before the next message can be sent.
       if (ended.memory !== null) {
@@ -201,9 +243,9 @@ export class JoyService {
       }
       if (ended.memory !== null || this.memoryUnsaved) await this.storeMemory(this.memory() ?? '');
       if (login !== this.login) return;
-    } else if (res.ok && written.trim() !== '') {
-      // The answer failed after a part of it had come: that part stays.
-      this.messages.update((list) => [...list, { role: 'assistant', text: written, at: new Date().toISOString(), end: 'cut' }]);
+    } else if (res.ok && (written.trim() !== '' || picture !== null)) {
+      // The answer failed after a part of it had come: that part stays, and a picture that had come stays with it.
+      this.messages.update((list) => [...list, { role: 'assistant', text: written, at: new Date().toISOString(), end: 'cut', ...(picture ? { picture } : {}) }]);
       this.keep();
     } else {
       // Nothing was answered: the message goes back into the box.
@@ -215,12 +257,51 @@ export class JoyService {
     this.writing.set(false);
   }
 
-  /** New chat: the chat is emptied, here and in the browser's database. Not while an answer is under way. */
+  /** New chat: the chat is emptied, here and in the browser's database, and its pictures go with it. Not while an answer is under way. */
   newChat(): void {
     if (this.writing()) return;
     this.messages.set([]);
     this.error.set(null);
+    this.forgetPictures();
     this.keep();
+  }
+
+  /** True when the chat holds a picture that this page can still draw, and so one that can still be downloaded. The box of New chat says one sentence more then. */
+  hasPictures(): boolean {
+    const urls = this.pictureUrls();
+    return this.messages().some((message) => message.picture !== undefined && urls[message.picture.id] !== undefined);
+  }
+
+  /**
+   * Download (wallet spec 4.21): hands a picture to the person as a file
+   * named joy-, the date and the time. On an iPhone or an iPad it opens
+   * the phone's own share sheet, where Apple's "Save Image" puts the
+   * picture into Photos. Everywhere else it is a plain download, as the
+   * CSV download of the noted transactions is. Tried on 2026-11-25: a
+   * plain download on an iPhone lands in the Files app from Safari, and
+   * from the Home Screen it saves nothing; on an Android phone the share
+   * sheet has nothing that saves. No browser has a call that saves into
+   * Photos, so the device is told by the browser's user agent. The file
+   * is made here, inside the tap, from bytes that the page holds: a share
+   * sheet opens only then. An iPhone whose browser cannot share a file
+   * gets the plain download.
+   */
+  download(id: string): void {
+    const kept = this.pictureFiles.get(id);
+    if (!kept) return;
+    const name = `joy-${fileStamp(new Date())}.${kept.type === 'image/png' ? 'png' : kept.type === 'image/webp' ? 'webp' : 'jpg'}`;
+    const file = new File([kept.bytes as BlobPart], name, { type: kept.type });
+    if (onIphoneOrIpad() && typeof navigator.share === 'function' && (typeof navigator.canShare !== 'function' || navigator.canShare({ files: [file] }))) {
+      // Closing the sheet rejects the call: that is no failure.
+      navigator.share({ files: [file] }).catch(() => {});
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = name;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   /**
@@ -322,7 +403,74 @@ export class JoyService {
     return next.toLocaleTimeString(this.lang.tag(), { hour: 'numeric', minute: '2-digit' });
   }
 
-  /** The chat as it stands goes into the browser's database, encrypted; an empty chat takes the pod's entry out. Without the encryption key, and where the browser refuses its database, the chat stays in the page's memory alone. */
+  /**
+   * The picture's line of an answer (wallet spec 4.21). The making is
+   * over, so the words on it go, and the words on a search with them:
+   * what follows a picture is Joy's sentence. The line is checked
+   * (pictureOf). A picture that passes gets an id that the wallet makes
+   * up, shows in the answer that is being written, and goes into the
+   * browser's database as an entry of its own. A line that does not pass
+   * is passed over, and so is a second picture in one answer: the
+   * masterpod sends one at most.
+   */
+  private takePicture(anopodId: string, line: unknown): void {
+    this.drawing.set(false);
+    this.searching.set(false);
+    if (this.answerPicture() !== null) return;
+    const picture = pictureOf(line);
+    if (picture === null) return;
+    const url = imageObjectUrl(picture.bytes, picture.type);
+    if (url === null) return;
+    const id = this.crypto.randomHex(16);
+    this.pictureFiles.set(id, { bytes: picture.bytes, type: picture.type });
+    this.pictureUrls.update((urls) => ({ ...urls, [id]: url }));
+    this.answerPicture.set({ id, description: picture.description });
+    this.keepPicture(anopodId, id, picture.type, picture.bytes);
+  }
+
+  /** A picture's bytes go into the browser's database as an entry of their own, encrypted with the anoPod encryption key, in the row of the chat's own writes, so the picture is there before the chat that names it. Where the browser refuses the write, the picture stays in the page's memory until a reload, and the page shows a grey line in its place after that. */
+  private keepPicture(anopodId: string, id: string, type: string, bytes: Uint8Array): void {
+    const key = this.session.getEncryptionKey();
+    if (key === null) return;
+    this.keeping = this.keeping.then(async () => {
+      try {
+        await writePicture(pictureKey(anopodId, id), await this.crypto.encrypt(key, packPicture(type, bytes)));
+      } catch {
+        // Private mode, blocked storage or no room: the tab keeps its copy.
+      }
+    });
+  }
+
+  /** The pictures of a kept chat, each read from the browser's database and opened under the anoPod encryption key: its id, its type, its bytes and an address for the page. A picture whose entry is gone, does not open under this key, or does not name one of the wallet's three picture types is left out: the page shows a grey line in its place. */
+  private async openPictures(anopodId: string, messages: JoyChatMessage[]): Promise<{ id: string; type: string; bytes: Uint8Array; url: string }[]> {
+    const key = this.session.getEncryptionKey();
+    if (key === null) return [];
+    const ids = [...new Set(messages.flatMap((message) => (message.picture ? [message.picture.id] : [])))];
+    const opened = await Promise.all(
+      ids.map(async (id) => {
+        try {
+          const blob = await readPicture(pictureKey(anopodId, id));
+          if (blob === null) return null;
+          const picture = unpackPicture(await this.crypto.decrypt(key, blob));
+          if (picture === null) return null;
+          const url = imageObjectUrl(picture.bytes, picture.type);
+          return url === null ? null : { id, ...picture, url };
+        } catch {
+          return null;
+        }
+      }),
+    );
+    return opened.filter((picture) => picture !== null);
+  }
+
+  /** Every picture goes out of this page's memory, and its address is given back to the browser. What the browser's database keeps is not touched here. */
+  private forgetPictures(): void {
+    for (const url of Object.values(this.pictureUrls())) URL.revokeObjectURL(url);
+    this.pictureUrls.set({});
+    this.pictureFiles.clear();
+  }
+
+  /** The chat as it stands goes into the browser's database, encrypted; an empty chat takes the pod's entry out, and the pod's pictures with it. Without the encryption key, and where the browser refuses its database, the chat stays in the page's memory alone. */
   private keep(): void {
     const anopodId = this.loadedFor;
     const key = this.session.getEncryptionKey();
@@ -359,6 +507,13 @@ export class JoyService {
         if (sources.length > 0) message.sources = sources;
         else delete message.sources;
       }
+      // The picture of a kept answer is checked too (wallet spec 4.21): its id is one of the form the wallet makes up, and its description is what goes back to Joy as words. A chat that was kept before the wallet knew of pictures has none, and opens as it is.
+      for (const message of kept) {
+        if (!('picture' in message)) continue;
+        const picture = message.role === 'assistant' ? keptPictureOf(message.picture) : null;
+        if (picture !== null) message.picture = picture;
+        else delete message.picture;
+      }
       return kept;
     } catch {
       return null;
@@ -374,6 +529,9 @@ export class JoyService {
     this.answer.set(null);
     this.writing.set(false);
     this.searching.set(false);
+    this.drawing.set(false);
+    this.answerPicture.set(null);
+    this.forgetPictures();
     this.draft.set('');
     this.error.set(null);
     this.memory.set(null);
@@ -428,6 +586,92 @@ export function siteOf(url: string): string {
   }
 }
 
+/**
+ * The largest picture the wallet takes, in bytes, and the most characters
+ * a picture's description may have (wallet spec 4.21). The masterpod
+ * sets no ceiling for a picture (its spec, 33.4), so this one is the
+ * wallet's: a picture at the masterpod's own settings is about 160 to
+ * 220 KB, and a PNG of 1024 by 1024 pixels still fits. The 1,000
+ * characters are the masterpod's own number for a description.
+ */
+const PICTURE_MAX_BYTES = 4 * 1024 * 1024;
+const PICTURE_DESCRIPTION_MAX_CHARS = 1000;
+
+/** The form of the id that the wallet makes up for a picture: 16 random bytes as hex. */
+const PICTURE_ID = /^[0-9a-f]{32}$/;
+
+/**
+ * The picture of one line of /ask-joy's answer, checked (wallet spec
+ * 4.21): what the line names as `picture`. The masterpod checks what it
+ * sends. The wallet checks it again here, since what passes is kept in
+ * the browser, drawn on the Joy page and handed out as a file.
+ *
+ * A picture is taken when its type is one of the wallet's own three
+ * (JPEG, PNG, WebP: images.ts), its description is a text of 1 to
+ * PICTURE_DESCRIPTION_MAX_CHARS characters once the spaces around it are
+ * taken off, and its data is base64 that opens to at least one byte and
+ * at most PICTURE_MAX_BYTES. Anything else gives null, and the line is
+ * passed over. The description is kept without the spaces around it.
+ */
+export function pictureOf(value: unknown): { type: string; bytes: Uint8Array; description: string } | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const { type, data, description } = value as { type?: unknown; data?: unknown; description?: unknown };
+  if (typeof type !== 'string' || !IMAGE_CONTENT_TYPES.includes(type)) return null;
+  const words = descriptionOf(description);
+  if (words === null) return null;
+  // Base64 is four characters for three bytes: a text that is longer than the ceiling allows is not opened at all.
+  if (typeof data !== 'string' || data.length > Math.ceil(PICTURE_MAX_BYTES / 3) * 4) return null;
+  let binary: string;
+  try {
+    binary = atob(data);
+  } catch {
+    return null;
+  }
+  if (binary.length === 0 || binary.length > PICTURE_MAX_BYTES) return null;
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return { type, bytes, description: words };
+}
+
+/** The picture of a kept answer, as the chat's blob holds it (wallet spec 4.21): an id of the form the wallet makes up, and a description. Null for anything else. */
+function keptPictureOf(value: unknown): JoyPicture | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const { id, description } = value as { id?: unknown; description?: unknown };
+  if (typeof id !== 'string' || !PICTURE_ID.test(id)) return null;
+  const words = descriptionOf(description);
+  return words === null ? null : { id, description: words };
+}
+
+/** A description as the wallet keeps it: without the spaces around it. Null for a value that is no text, for a text of spaces alone, and for one of more than PICTURE_DESCRIPTION_MAX_CHARS characters, which the masterpod never sends. */
+function descriptionOf(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const words = value.trim();
+  return words === '' || words.length > PICTURE_DESCRIPTION_MAX_CHARS ? null : words;
+}
+
+/**
+ * The note that stands for a picture in what goes back to Joy (wallet
+ * spec 4.21): she gets the words of her earlier answers and never a
+ * picture, so the wallet puts this line in front of the words of an
+ * answer that had one. The masterpod's shared memory file tells her what
+ * the line is (its spec, 33.6), and the words here are the ones it names.
+ */
+export function pictureNote(description: string): string {
+  return `[Note from the wallet: a picture stood here. You made it with make_picture from this description: ${description}]`;
+}
+
+/** True on an iPhone and on an iPad, told by the browser's user agent as alerts.service tells them: an iPad may call itself a Macintosh, and has a touch screen. */
+function onIphoneOrIpad(): boolean {
+  const agent = navigator.userAgent;
+  return agent.includes('iPhone') || agent.includes('iPad') || (agent.includes('Macintosh') && navigator.maxTouchPoints > 1);
+}
+
+/** A moment as a part of a file's name, by the person's own clock: 2026-11-25-21-03-07. */
+function fileStamp(moment: Date): string {
+  const two = (n: number) => String(n).padStart(2, '0');
+  return `${moment.getFullYear()}-${two(moment.getMonth() + 1)}-${two(moment.getDate())}-${two(moment.getHours())}-${two(moment.getMinutes())}-${two(moment.getSeconds())}`;
+}
+
 /** The bytes of a text as UTF-8, which is how the masterpod counts a message and the memory file. */
 export function utf8Length(text: string): number {
   return new TextEncoder().encode(text).length;
@@ -437,13 +681,17 @@ export function utf8Length(text: string): number {
  * The conversation one message to Joy carries: the chat's newest messages,
  * as many as fit the masterpod's limits, oldest first, and the first of
  * them the member's. A message with no text is left out: an answer that
- * was refused or failed before a word of it came.
+ * was refused or failed before a word of it came. An answer that had a
+ * picture carries the wallet's note of it, an empty line and its words,
+ * or the note alone when it has no words (wallet spec 4.21): of each
+ * message the role and the text are sent, and never a picture.
  */
 function conversationOf(messages: JoyChatMessage[]): JoyMessage[] {
   const sent: JoyMessage[] = [];
   let bytes = 0;
   for (let i = messages.length - 1; i >= 0 && sent.length < JOY_MAX_MESSAGES; i -= 1) {
-    const { role, text } = messages[i];
+    const { role, text: words, picture } = messages[i];
+    const text = picture ? `${pictureNote(picture.description)}${words.trim() === '' ? '' : `\n\n${words}`}` : words;
     if (text.trim() === '') continue;
     bytes += utf8Length(text);
     if (bytes > JOY_MAX_CONVERSATION_BYTES) break;
@@ -453,30 +701,47 @@ function conversationOf(messages: JoyChatMessage[]): JoyMessage[] {
   return sent;
 }
 
-/** The browser's own database of the wallet, and the place in it where the chat with Joy is kept: one entry for each pod, under the anoPod's id. */
+/**
+ * The browser's own database of the wallet, and its two places. In the
+ * first the chat with Joy is kept: one entry for each pod, under the
+ * anoPod's id. In the second, since 2026-11-25 (wallet spec 4.21), the
+ * pictures of that chat: one entry for each picture, under pictureKey().
+ * The second place came with version 2 of the database. A database of
+ * version 1 keeps its first place, and the chats in it, through the
+ * change.
+ */
 const DB_NAME = 'anopod-wallet';
+const DB_VERSION = 2;
 const STORE = 'joy-chat';
+const PICTURES = 'joy-pictures';
 
-/** Opens the database, and makes the place for the chats the first time. */
+/** Opens the database, and makes each of its two places when it is not there: both the first time, the pictures' alone in a browser that has the database of before. */
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 1);
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    let given = false;
     request.onupgradeneeded = () => {
-      if (!request.result.objectStoreNames.contains(STORE)) request.result.createObjectStore(STORE);
+      for (const place of [STORE, PICTURES]) {
+        if (!request.result.objectStoreNames.contains(place)) request.result.createObjectStore(place);
+      }
     };
-    request.onsuccess = () => resolve(request.result);
+    // A database that opens after the wait for it was given up is closed again at once, so that it holds nothing open.
+    request.onsuccess = () => (given ? request.result.close() : resolve(request.result));
     request.onerror = () => reject(request.error);
-    request.onblocked = () => reject(new Error('the database is blocked'));
+    request.onblocked = () => {
+      given = true;
+      reject(new Error('the database is blocked'));
+    };
   });
 }
 
-/** One read or write of the place, in a transaction of its own; resolves with what the request answered once the transaction is done. */
-async function inStore<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+/** One read or write of one place, in a transaction of its own; resolves with what the request answered once the transaction is done. */
+async function inStore<T>(place: string, mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
   const db = await openDb();
   try {
     return await new Promise<T>((resolve, reject) => {
-      const tx = db.transaction(STORE, mode);
-      const request = run(tx.objectStore(STORE));
+      const tx = db.transaction(place, mode);
+      const request = run(tx.objectStore(place));
       tx.oncomplete = () => resolve(request.result);
       tx.onerror = () => reject(tx.error);
       tx.onabort = () => reject(tx.error);
@@ -488,14 +753,65 @@ async function inStore<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore)
 
 /** The blob kept for the pod, or null. */
 async function readKept(anopodId: string): Promise<Uint8Array | null> {
-  const blob: unknown = await inStore('readonly', (store) => store.get(anopodId));
+  const blob: unknown = await inStore(STORE, 'readonly', (store) => store.get(anopodId));
   return blob instanceof Uint8Array ? blob : null;
 }
 
 function writeKept(anopodId: string, blob: Uint8Array): Promise<unknown> {
-  return inStore('readwrite', (store) => store.put(blob, anopodId));
+  return inStore(STORE, 'readwrite', (store) => store.put(blob, anopodId));
 }
 
-function dropKept(anopodId: string): Promise<unknown> {
-  return inStore('readwrite', (store) => store.delete(anopodId));
+/** The pod's chat goes out of the database, and every picture of the pod with it, in one transaction: either both are gone or neither. */
+async function dropKept(anopodId: string): Promise<void> {
+  const db = await openDb();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction([STORE, PICTURES], 'readwrite');
+      tx.objectStore(STORE).delete(anopodId);
+      tx.objectStore(PICTURES).delete(IDBKeyRange.bound(pictureKey(anopodId, ''), `${anopodId}!`, false, true));
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  } finally {
+    db.close();
+  }
+}
+
+/** The key of a picture's entry: the anoPod's id, one space, the picture's id. Both ids are hex, so the space parts them, every key of one pod lies between "<the id> " and "<the id>!", and another pod in the same browser has entries of its own. */
+function pictureKey(anopodId: string, id: string): string {
+  return `${anopodId} ${id}`;
+}
+
+/** The blob kept under a picture's key, or null. */
+async function readPicture(entry: string): Promise<Uint8Array | null> {
+  const blob: unknown = await inStore(PICTURES, 'readonly', (store) => store.get(entry));
+  return blob instanceof Uint8Array ? blob : null;
+}
+
+function writePicture(entry: string, blob: Uint8Array): Promise<unknown> {
+  return inStore(PICTURES, 'readwrite', (store) => store.put(blob, entry));
+}
+
+/**
+ * A picture as it is encrypted for its entry (wallet spec 4.21): one byte
+ * that says how long the type's name is, the type's name in ASCII
+ * ("image/jpeg"), and then the picture's own bytes as they came, with no
+ * base64 in between. So the type is inside the ciphertext with the
+ * picture, and the entry is one blob in which nothing can be read.
+ */
+function packPicture(type: string, bytes: Uint8Array): Uint8Array {
+  const name = new TextEncoder().encode(type);
+  const packed = new Uint8Array(1 + name.length + bytes.length);
+  packed[0] = name.length;
+  packed.set(name, 1);
+  packed.set(bytes, 1 + name.length);
+  return packed;
+}
+
+/** The reverse of packPicture(), for an opened entry: the type's name and the picture's bytes. Null when the bytes do not begin as packPicture() writes them, or hold no picture after the name. The type is not looked at here: imageObjectUrl() takes none but the wallet's three. */
+function unpackPicture(packed: Uint8Array): { type: string; bytes: Uint8Array } | null {
+  const length = packed[0];
+  if (length === undefined || packed.length <= 1 + length) return null;
+  return { type: new TextDecoder().decode(packed.subarray(1, 1 + length)), bytes: packed.subarray(1 + length) };
 }

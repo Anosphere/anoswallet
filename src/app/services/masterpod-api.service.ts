@@ -163,6 +163,13 @@ export interface JoySource {
   url: string;
 }
 
+/** A picture that Joy had made for an answer, as one line of /ask-joy's answer brings it (masterpod spec 33; wallet spec 4.21; 2026-11-25): the picture's type (image/jpeg, image/png or image/webp), its bytes as base64, and the description that Joy wrote for it, 1 to 1,000 characters. */
+export interface JoyPictureLine {
+  type: string;
+  data: string;
+  description: string;
+}
+
 
 export interface CreateAnswer {
   anopodId: string;
@@ -1190,7 +1197,11 @@ export class MasterpodApiService {
    * The answer is read while it arrives (LogService.postLines), each line
    * handed to `onLine` as it comes: `{ text }` for a piece of Joy's
    * answer; `{ searching: true }` each time she starts a web search
-   * (since 2026-11-24, masterpod spec 32; wallet spec 4.20); then one
+   * (since 2026-11-24, masterpod spec 32; wallet spec 4.20);
+   * `{ drawing: true }` each time she starts on a picture, also when no
+   * picture comes of it, and `{ picture }`, a JoyPictureLine, one line
+   * with the picture when one was made, one in an answer at most (since
+   * 2026-11-25, masterpod spec 33; wallet spec 4.21); then one
    * last line, `{ done: true, stop, memory, sources }` for an answer that
    * ended (`stop` a JoyStop; `memory` the whole memory file after Joy
    * changed it, or null when she did not; `sources` the web pages she

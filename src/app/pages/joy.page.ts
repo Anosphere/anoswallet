@@ -42,6 +42,16 @@ const FOLLOW_PX = 120;
  * that gave no title. A row is a link that opens the page in a new tab,
  * so the wallet's own tab stays as it is, with its login.
  *
+ * Since 2026-11-25 (wallet spec 4.21) Joy can have a picture made. While
+ * one is made, "Joy is making a picture…" stands where "Joy is writing…"
+ * stands, or as the small grey line under words that she wrote before
+ * it. The picture then stands in her answer, above her words, with the
+ * button Download directly under it. A tap on the picture does nothing.
+ * Download hands the picture over as a file (joy.service's download). A
+ * picture whose bytes this browser no longer keeps shows a grey line in
+ * its place. The box of New chat says one sentence more when the chat
+ * holds a picture, since the pictures go with the chat.
+ *
  * There is one chat. It is kept by joy.service, not by this page, so an
  * answer goes on while the member looks at another page, and the chat is
  * there after a reload of the page. New chat empties it, after a box that
@@ -62,6 +72,14 @@ const FOLLOW_PX = 120;
       <div class="thread" #threadBox>
         @for (m of joy.messages(); track $index) {
           <div class="message" [class.mine]="m.role === 'user'">
+            @if (m.picture; as p) {
+              @if (joy.pictureUrls()[p.id]; as url) {
+                <img class="picture" [src]="url" [alt]="p.description" (load)="pictureDrawn($event)" />
+                <button mat-stroked-button type="button" class="download" (click)="joy.download(p.id)"><mat-icon>download</mat-icon>{{ t().joy.download }}</button>
+              } @else {
+                <span class="mark">{{ t().joy.pictureGone }}</span>
+              }
+            }
             @if (m.text) {
               <div class="bubble">{{ m.text }}</div>
             }
@@ -82,15 +100,25 @@ const FOLLOW_PX = 120;
             <p class="muted empty">{{ t().joy.empty }}</p>
           }
         }
-        @if (joy.answer(); as written) {
+        @if (joy.answer() !== null) {
           <div class="message">
-            <div class="bubble">{{ written }}</div>
-            @if (joy.searching()) {
-              <span class="mark">{{ t().joy.searching }}</span>
+            @if (joy.answerPicture(); as p) {
+              @if (joy.pictureUrls()[p.id]; as url) {
+                <img class="picture" [src]="url" [alt]="p.description" (load)="pictureDrawn($event)" />
+                <button mat-stroked-button type="button" class="download" (click)="joy.download(p.id)"><mat-icon>download</mat-icon>{{ t().joy.download }}</button>
+              }
+            }
+            @if (joy.answer(); as written) {
+              <div class="bubble">{{ written }}</div>
+              @if (joy.drawing()) {
+                <span class="mark">{{ t().joy.drawing }}</span>
+              } @else if (joy.searching()) {
+                <span class="mark">{{ t().joy.searching }}</span>
+              }
+            } @else {
+              <div class="bubble waiting">{{ joy.drawing() ? t().joy.drawing : joy.searching() ? t().joy.searching : t().joy.writing }}</div>
             }
           </div>
-        } @else if (joy.answer() !== null) {
-          <div class="message"><div class="bubble waiting">{{ joy.searching() ? t().joy.searching : t().joy.writing }}</div></div>
         }
       </div>
       @if (joy.error(); as text) {
@@ -119,6 +147,8 @@ const FOLLOW_PX = 120;
     .message.mine .bubble { background: var(--mat-sys-primary-container); }
     .bubble.waiting { color: var(--mat-sys-on-surface-variant); }
     .mark { font-size: 12px; color: var(--mat-sys-on-surface-variant); margin: 0 8px 2px; }
+    .picture { display: block; width: 280px; max-width: 100%; height: auto; aspect-ratio: auto 1 / 1; border-radius: 16px; background: var(--mat-sys-surface-container); }
+    .download { margin: 2px 0 4px; }
     .sources { display: flex; flex-direction: column; align-self: stretch; min-width: 0; margin: 2px 8px 4px; font-size: 13px; }
     .sources-title { font-size: 12px; color: var(--mat-sys-on-surface-variant); }
     .source { display: flex; align-items: baseline; gap: 6px; min-width: 0; padding: 7px 0; line-height: 18px; color: var(--mat-sys-primary); text-decoration: none; }
@@ -146,11 +176,13 @@ export class JoyPage {
 
   constructor() {
     void this.joy.open();
-    // The thread follows what is added at its end, a message, the next piece of an answer or the line on a search, while the reader is near the end. A reader who has gone up to read stays there.
+    // The thread follows what is added at its end, a message, the next piece of an answer, the line on a search, the line on a picture or the picture itself, while the reader is near the end. A reader who has gone up to read stays there.
     effect(() => {
       this.joy.messages();
       this.joy.answer();
       this.joy.searching();
+      this.joy.drawing();
+      this.joy.answerPicture();
       this.joy.error();
       untracked(() => {
         if (this.nearBottom()) this.scrollToBottom();
@@ -176,10 +208,27 @@ export class JoyPage {
     this.scrollToBottom();
   }
 
-  /** New chat: a box asks first, since the chat is saved nowhere and cannot be brought back. */
+  /** New chat: a box asks first, since the chat is saved nowhere and cannot be brought back. When the chat holds a picture that can still be downloaded, the box says one sentence more: the pictures go with the chat. */
   protected async newChat(): Promise<void> {
     const words = this.t().joy;
-    if (await askConfirm(this.dialog, { title: words.newChatTitle, lines: [], notes: [words.newChatText], confirmLabel: words.newChat })) this.joy.newChat();
+    const notes = this.joy.hasPictures() ? [words.newChatText, words.newChatPictures] : [words.newChatText];
+    if (await askConfirm(this.dialog, { title: words.newChatTitle, lines: [], notes, confirmLabel: words.newChat })) this.joy.newChat();
+  }
+
+  /**
+   * Called when the browser has opened a picture's bytes. Until then the
+   * picture's box is a square, as wide as the picture is drawn; from then
+   * on it has the picture's own shape, which is taller for a picture
+   * that is higher than wide. A reader who was near the thread's end
+   * before the box grew is brought to the end again: without this they
+   * would see the picture's top only.
+   */
+  protected pictureDrawn(event: Event): void {
+    const el = this.threadBox()?.nativeElement;
+    const picture = event.target as HTMLElement;
+    if (!el) return;
+    const grew = Math.max(0, picture.offsetHeight - picture.offsetWidth);
+    if (el.scrollHeight - el.scrollTop - el.clientHeight <= FOLLOW_PX + grew) this.scrollToBottom();
   }
 
   /** True when the reader is within FOLLOW_PX of the thread's bottom, or the thread is not drawn. */
