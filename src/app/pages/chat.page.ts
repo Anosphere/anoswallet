@@ -9,7 +9,7 @@ import { RoomPictureComponent } from '../components/room-picture.component';
 import { ChatService } from '../services/chat.service';
 import { LanguageService } from '../services/language.service';
 import { reasonOf } from '../services/log.service';
-import { RoomItem } from '../services/masterpod-api.service';
+import { LastMessage, RoomItem } from '../services/masterpod-api.service';
 import { SessionService } from '../services/session.service';
 import { stickerNamed } from '../stickers';
 import { TradeMessageKind, tradeMessageKind } from '../trade-messages';
@@ -39,7 +39,13 @@ import { TradeMessageKind, tradeMessageKind } from '../trade-messages';
  * message that is a sticker, its whole text a sticker's code
  * (../stickers), shows in the preview as the word "Sticker". That is
  * worked out from the message's text alone: this page does not ask for
- * the list of the sets.
+ * the list of the sets. Since 2026-11-24
+ * (forclaude/chat-edit-delete-plan-1.md; wallet spec 4.19) a room's
+ * newest message comes as it stands now: one that was edited shows in
+ * the preview with its new text, and one that was deleted as the words
+ * "Message deleted", with no "You: " before them. An edit or a delete
+ * moves no row and lights no dot: the row's time, the order and the dot
+ * go by the message's own time and position, which neither changes.
  */
 @Component({
   selector: 'app-chat-page',
@@ -173,9 +179,9 @@ export class ChatPage {
     return answer ? this.t().chat.requestLine(answer.invites.length, answer.joinRequests.length) : '';
   });
   protected readonly error = signal<string | null>(null);
-  /** The newest message of each room, decrypted, by message id. */
+  /** The newest message of each room, decrypted, by the message's id and, since 2026-11-24, the position of its newest edit (previewKey): an edited message keeps its id, and its new text is another entry. */
   private readonly previews = signal(new Map<string, string>());
-  /** For a room whose newest message the pinned card posted, when this pod is one of its two traders (2026-11-19): what that message is, by message id. */
+  /** For a room whose newest message the pinned card posted, when this pod is one of its two traders (2026-11-19): what that message is, by the same key as `previews`. */
   private readonly notices = signal(new Map<string, TradeMessageKind>());
 
   constructor() {
@@ -188,37 +194,45 @@ export class ChatPage {
     });
   }
 
-  /** The one-line preview: "You: " before this pod's own message; the two texts for a room without messages or a message that will not open. For the two traders of a marketplace chat (2026-11-19), a newest message that the pinned card posted shows as the conversation's grey line does, with no account id: "You sent your account for this trade.", "mai sent their account for this trade." or "Trade update. Look at the box at the top of this chat." Since 2026-11-23 a newest message that is a sticker shows as the word "Sticker", after "You: " when it is this pod's own. */
+  /** The one-line preview: "You: " before this pod's own message; the two texts for a room without messages or a message that will not open. For the two traders of a marketplace chat (2026-11-19), a newest message that the pinned card posted shows as the conversation's grey line does, with no account id: "You sent your account for this trade.", "mai sent their account for this trade." or "Trade update. Look at the box at the top of this chat." Since 2026-11-23 a newest message that is a sticker shows as the word "Sticker", after "You: " when it is this pod's own. Since 2026-11-24 a newest message that was deleted shows as "Message deleted", with no "You: " before it, and one that was edited shows with its new text, which is what the masterpod hands out for it. */
   protected preview(room: RoomItem): string {
     const last = room.lastMessage;
     if (!last) return this.t().chat.noMessages;
+    if (last.deleted) return this.t().chat.messageDeleted;
     const mine = last.senderAnopodId === this.session.anopodId();
-    const notice = this.notices().get(last.messageId);
+    const notice = this.notices().get(previewKey(last));
     if (notice === 'trade') return this.t().chatRoom.tradeUpdate;
     if (notice === 'account') {
       const name = room.members.find((m) => m.anopodId === last.senderAnopodId)?.username ?? last.senderAnopodId.slice(0, 8);
       return mine ? this.t().chatRoom.youSentAccount : this.t().chatRoom.theySentAccount(name);
     }
-    const text = this.previews().get(last.messageId);
+    const text = this.previews().get(previewKey(last));
     if (text === undefined) return '';
     return (mine ? this.t().chat.youPrefix : '') + (stickerNamed(text) ? this.t().chatRoom.sticker : text);
   }
 
+  /** Decrypts the newest message of each room whose preview this page does not hold yet. Since 2026-11-24 a newest message that was deleted is passed over: it has no ciphertext, and its preview is words of the wallet's own. */
   private async decryptPreviews(rooms: RoomItem[]): Promise<void> {
     const have = this.previews();
-    const todo = rooms.filter((r) => r.lastMessage !== null && !have.has(r.lastMessage.messageId));
+    const todo = rooms.filter((r) => r.lastMessage !== null && !r.lastMessage.deleted && r.lastMessage.message !== null && !have.has(previewKey(r.lastMessage)));
     if (todo.length === 0) return;
     const added = new Map<string, string>();
     const noticed = new Map<string, TradeMessageKind>();
     for (const room of todo) {
       const last = room.lastMessage;
       if (!last) continue;
+      const key = previewKey(last);
       const text = await this.chat.decryptMessage(room, last.message);
-      added.set(last.messageId, text === null ? this.t().chat.cannotRead : text.replace(/\s+/g, ' ').trim());
+      added.set(key, text === null ? this.t().chat.cannotRead : text.replace(/\s+/g, ' ').trim());
       const kind = text !== null && this.chat.isTrader(room) ? tradeMessageKind(text) : null;
-      if (kind) noticed.set(last.messageId, kind);
+      if (kind) noticed.set(key, kind);
     }
     this.previews.update((map) => new Map([...map, ...added]));
     if (noticed.size > 0) this.notices.update((map) => new Map([...map, ...noticed]));
   }
+}
+
+/** The key under which the chat list keeps a newest message's preview (2026-11-24; wallet spec 4.19): the message's id and the position of its newest edit, 0 for a message that was never edited. An edited message keeps its id, so the id alone would keep the old text in the row. */
+function previewKey(last: LastMessage): string {
+  return `${last.messageId}:${last.editPosition ?? 0}`;
 }

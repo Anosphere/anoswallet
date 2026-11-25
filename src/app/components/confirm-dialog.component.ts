@@ -31,7 +31,7 @@ export interface ConfirmData {
   approve?: () => Promise<void>;
   /** What the second button waits for (2026-11-20): until it resolves the button is off and a moving bar shows under the notes. When it rejects, the error's message shows in red and the button stays off, so the first button is the way out. The Send box of the account page and the Start box of the marketplace chat's card give it: the read of the account's latest transaction id, started when the box opens. Left out, the button waits for CONFIRM_ARM_MS alone. */
   ready?: Promise<void>;
-  /** True puts the class `danger` on the second button (2026-11-12), which the global rule in src/styles.css makes red. Left out, the button keeps the theme's colour; the cancel of a locked transfer gives true, and so do the two boxes of an escrow trade whose second button disputes, the Dispute box and "Do not cancel this trade" (escrow-boxes.ts, 2026-11-17). */
+  /** True puts the class `danger` on the second button (2026-11-12), which the global rule in src/styles.css makes red. Left out, the button keeps the theme's colour; the cancel of a locked transfer gives true, and so do the two boxes of an escrow trade whose second button disputes, the Dispute box and "Do not cancel this trade" (escrow-boxes.ts, 2026-11-17). Since 2026-11-24 two boxes before a delete give true as well: Delete all on the page of Joy's memory (joy-memory.page.ts) and Delete in the menu of a person's own chat message (chat-room.page.ts). */
   danger?: boolean;
   /** True leaves the first button out (2026-11-22): the box has one button, the caller's, and tells something that has happened and cannot be refused. The shell's box "You are logged out" gives it (app.ts). Left out, the box has its two buttons. */
   single?: boolean;
@@ -98,7 +98,13 @@ export interface ConfirmData {
  * global rule in src/styles.css. A caller that gives neither keeps the box
  * as it was. Since 2026-11-22 a caller can ask for a box with one button
  * (single), and the shell's box "You are logged out" is the one box that
- * does.
+ * does. Since 2026-11-24 three more boxes are opened with askConfirm. None
+ * of them asks for the passkey, since none signs with an account's key:
+ * on the Joy page before a new chat (joy.page.ts), on the page of Joy's
+ * memory before Delete all (joy-memory.page.ts), and in a conversation
+ * before the delete of a person's own chat message (chat-room.page.ts;
+ * forclaude/chat-edit-delete-plan-1.md). The last two have the red
+ * second button.
  */
 @Component({
   selector: 'app-confirm-dialog',

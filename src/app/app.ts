@@ -126,7 +126,7 @@ export class App {
   }
 
   private polling = false;
-  /** What the shell has rung for already, for the pod of this session: each room's newest position, and the ids of the invites and join requests. Null with no session, and until the first answer of one. */
+  /** What the shell has rung for already, for the pod of this session: the position of each room's newest message (since 2026-11-24; until then the room's highest position, which an edit or a delete of a message raises too), and the ids of the invites and join requests. Null with no session, and until the first answer of one. */
   private heard: { anopodId: string; positions: Map<string, number>; requests: Set<string> } | null = null;
 
   private async poll(): Promise<void> {
@@ -165,7 +165,12 @@ export class App {
    * it did not know. The first read of a session rings for nothing, and so
    * does a room that is new to the list. Until 2026-11-24 the list was the
    * answer of /list-chat-rooms itself; since then it is the list in
-   * memory, after the read's answer was put into it (4.17).
+   * memory, after the read's answer was put into it (4.17). Since
+   * 2026-11-24, too (forclaude/chat-edit-delete-plan-1.md; 4.19), a room
+   * counts as new by the position of its newest message
+   * (`lastMessage.position`), where it was the room's highest position
+   * (`lastPosition`): an edit or a delete of a message raises the highest
+   * position and leaves the newest message's own, so it rings nothing.
    */
   private ring(list: RoomsAnswer): void {
     const me = this.session.anopodId();
@@ -176,9 +181,10 @@ export class App {
     const requests = new Set<string>();
     let news = false;
     for (const room of list.rooms) {
-      positions.set(room.chatRoomId, room.lastPosition);
+      const position = room.lastMessage?.position ?? 0;
+      positions.set(room.chatRoomId, position);
       const known = before?.positions.get(room.chatRoomId);
-      if (known === undefined || room.lastMessage === null || room.lastPosition <= known) continue;
+      if (known === undefined || room.lastMessage === null || position <= known) continue;
       if (room.lastMessage.senderAnopodId !== me && onScreen !== `/chat/${room.chatRoomId}`) news = true;
     }
     for (const id of [...list.invites.map((i) => i.inviteId), ...list.joinRequests.map((r) => r.joinRequestId)]) {

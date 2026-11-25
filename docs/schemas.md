@@ -1557,6 +1557,211 @@ deploy/ changed. The wallet's side is the two Joy pages (8.1; 8.2,
 Joy), joy.service, masterpod-api.service, log.service and
 navigation.service (8.3), and the words (8.8).
 
+### 4.19 A person edits and deletes their own chat messages
+
+Added 2026-11-24 (forclaude/chat-edit-delete-plan-1.md, FINAL on the
+user's word, its steps 1 and 2; section 11): in a chat a person gives a
+message of their own a new text, or deletes it, and the others in the
+chat see the new text, or a line that a message was deleted. The user,
+in the talk that settled it: "In the marketplace, editing and deleting
+of chats must be disabled, because those chats could end up being
+evidence. I believe we don't have edits or deletes open on the chats,
+so what we might have to do instead, is hide editied or deleted chats
+so they don't show in the wallet, and the edited chat just replaces the
+old one in the chat box." So an edit or a delete changes no row on the
+masterpod: it is a new row of the chat, with a position of its own,
+which names the message it is about. The masterpod's side is its own
+spec's section 31, which holds the rule, the two columns, the check and
+the index, the two routes, the changes of the two reads and what is
+left as it is. The masterpod gained there: two columns on
+`chat_room_messages` (`kind`, which is `edit` or `delete`, and
+`target_message_id`), two routes at level setup, two fields more on
+every row of /list-messages and a new form of `lastMessage` in
+/list-chat-rooms. No table, no env variable and no npm package. The
+wallet gained no package and no env variable either.
+
+    POST /edit-message (setup), new
+    body: { chatRoomId, messageId, message }: the message to edit, and the new text's ciphertext under
+          the room key, base64 of 1 to 65536 bytes, as for /send-message
+    answer: 201 { messageId, position }: the id and the position of the new row
+    refusals, the first check that fails:
+            400 bad request shape, 400 invalid chatRoomId, 400 invalid messageId,
+            400 message must be base64 of 1 to 65536 bytes
+            403 not a member
+            403 editing and deleting are off in this chat (a chat about a listing, an old marketplace
+                room, a chat about an attestor case)
+            404 message not found (no message of that chat; the id of an edit or of a delete is none)
+            403 not your message
+            409 message deleted
+            409 too late to edit (more than 15 minutes after the message was sent, by the database's
+                clock; a second edit counts from the message too)
+    a masterpod of before: 404, as for any route it does not have
+
+    POST /delete-message (setup), new
+    body: { chatRoomId, messageId }
+    answer: 201 { messageId, position }: the id and the position of the new row
+    refusals: those of /edit-message, without the 400 about `message` and without too late to edit: a
+            delete has no time limit
+    a masterpod of before: 404
+
+    POST /list-messages (setup), two fields more on every row, and rows that are no message
+    answer: as before (8.2, Chat; 4.17); `messages` holds every row of the room in the order of
+            position, each { messageId, position, senderAnopodId, message, createdAt, kind,
+            targetMessageId }
+            kind: null on a message, "edit" or "delete" on a row about one
+            targetMessageId: the message an edit or a delete is about; null on a message
+            message: the ciphertext, or null once a later row of the room names the same message: a
+                 message that was edited or deleted, an edit that a newer edit or a delete followed,
+                 and every delete. The masterpod hands the old ciphertext to nobody any more.
+            afterPosition, beforePosition and limit count every row
+    a masterpod of before: sends neither field, and every row is a message with its ciphertext
+
+    POST /list-chat-rooms (setup), `lastMessage` in a new form
+    lastMessage: the room's newest message as it stands now, never an edit or a delete:
+            { messageId, position, senderAnopodId, message, createdAt, editPosition, deleted }
+            messageId, position, senderAnopodId, createdAt: the message's own, which no edit and no
+                 delete moves
+            message: the newest edit's ciphertext for a message that was edited, null for one that was
+                 deleted
+            editPosition: the position of the newest edit, null for a message that was never edited;
+                 it stays what it was when an edited message is deleted
+            deleted: true once a delete names the message; a deleted newest message stays the room's
+                 lastMessage
+    lastPosition: the highest position of any row of the room, as before: above lastMessage.position
+            whenever the room's newest row is an edit or a delete, of the newest message or of an
+            older one
+    a masterpod of before: sends neither editPosition nor deleted
+
+What the wallet does with it (8.2, Chat, "Edit and delete"; 8.3).
+
+- Where a message has a menu. A tap on a bubble, a click on a computer,
+  opens a small menu at the bubble when four things hold: the chat is
+  none of the three kinds where the masterpod refuses (the chat's entry
+  has no `listingId` and no `caseId`, and its `type` is not
+  `marketplace`), the message is this pod's own, it has been sent, and
+  it is not deleted. So the menu shows only where the masterpod would
+  say yes. Its entries are Edit and Delete. Edit is in it only for a
+  text that opened and is no sticker, and only for 15 minutes after the
+  message's `createdAt`, by this device's clock (`EDIT_MINUTES` in
+  chat-room.page.ts, the masterpod's own number). The masterpod decides
+  by its own clock.
+- Edit. The message's text goes into the message box, under a line
+  "Editing a message". Send, or the Enter key, encrypts the box's text
+  with the room key, as a message's, and sends it with /edit-message.
+  From the 201 the bubble shows the new text and the word "edited" at
+  once, in its place, and the edit ends. An unchanged text sends nothing
+  and ends the edit; an empty box sends nothing. What the box held
+  before Edit was tapped goes back into it when the edit ends. The box
+  keeps the text until the masterpod has answered; when the person
+  typed on meanwhile, the edit does not end with the answer: the box
+  keeps what they typed, and the next Send saves it.
+- Delete. The wallet asks once, with the confirmation box (8.9), and
+  then sends /delete-message. From the 201 the grey line "This message
+  was deleted" stands in the message's place at once.
+- Two refusals have a sentence of the wallet's own, in the conversation's
+  red line above the message box. `409 too late to edit`: "This message
+  can no longer be edited."; the edit ends and the text stays in the
+  box. `409 message deleted`, for an edit or a delete of a message that
+  was deleted meanwhile from another device of the same person: "This
+  message was already deleted."; the text of an edit stays in the box,
+  and the grey line shows with the read that follows. Every other
+  refusal shows as the page shows one, and an edit then goes on.
+- The rows of an open conversation. The page's reads are the ones of
+  before: the room's newest 50 rows when it opens, the 50 before the
+  lowest position on scrolling up, and every 3 seconds the rows after
+  the highest position. Their rows are now of three kinds, and the
+  positions the page keeps for its reads are the lowest and the highest
+  of the rows it read, drawn or not. So a page of 50 rows can show
+  fewer than 50 messages. An edit or a delete is never drawn as a
+  bubble. The page keeps, for each message, the newest row that names
+  it: a delete, which is always the last, or else the edit with the
+  highest position; an edit that came without its text is not kept,
+  since a newer row names the same message. It is kept also for a
+  message the page does not hold yet: a row that names a message has a
+  higher position than the message, and the page reads a chat from its
+  newest rows backwards, so it holds that row before the message comes
+  with an older page.
+- How a message is drawn, by the rule the masterpod reads by too (its
+  spec, 31.4): the message is deleted when a delete names it; otherwise
+  its text is the newest edit's; otherwise its own. Deleted: the grey
+  line, the one of "Trade update" in a chat about a listing, small,
+  grey, in the middle, with no name and no time, and the same line for
+  the person who deleted. Edited: the edit's text, and the small word
+  "edited" in the bubble after the text, where the tick stands, for the
+  writer and for everyone else. A message whose row came without its
+  text while the page holds no row that names it is not drawn until a
+  read brings that row; this happens when a chat is opened in the
+  seconds after an edit, and it lasts until the next 3-second read.
+- This pod's own edit or delete is drawn from the masterpod's answer;
+  everyone else's reaches an open conversation with its 3-second read,
+  as a row like any other.
+- "Seen" (8.2, Chat). A member has seen an edited message once that
+  member's seen position has reached the edit's position, which is
+  above the message's own. So an edited newest message reads "Sent"
+  again until the other person's wallet has read the edit, and "Seen"
+  stands meanwhile under the newest message they did read. A deleted
+  message carries no word. The page tells the masterpod the highest
+  position it has read, as before; that can be an edit's or a
+  delete's.
+- The chat list (8.2, Chat). The row's line is `lastMessage.message`
+  decrypted, as before, which is the new text for an edited message,
+  and the words "Message deleted" when `deleted` is true, with no "You:
+  " before them and with nothing decrypted. The page keeps the decrypted
+  lines by the message's id and its `editPosition`, since an edited
+  message keeps its id. The row's time and the order of the rows go by
+  `lastMessage.createdAt`, the message's own time, so an edit or a
+  delete moves no chat.
+- The unread dot goes by `lastMessage`'s sender and position, as before
+  (session.service's `unreadRooms`), and neither moves: an edit or a
+  delete lights no dot and takes none away.
+- The sound (8.1). The shell rang when a room's `lastPosition` had
+  risen; it now rings when the position of the room's newest message
+  has (`lastMessage.position`). An edit or a delete raises the first
+  and leaves the second, so it rings nothing.
+- The pinned card of a chat about a listing (8.7) reads the chat's
+  messages on its own. Editing and deleting are off in those chats, so
+  no row there comes without its text, and the card is as it was.
+  chat.service's `decryptMessage` answers null for a row with no
+  ciphertext, as for one that does not open.
+
+What a wallet tab does that was loaded before this step's deploy (the
+plan's section 4, point 10; tried, section 11). It keeps the wallet of
+before until it is loaded again. In an open chat it draws an edit as a
+second bubble with the new text at the chat's end, and a delete as a
+bubble "(cannot decrypt)" at the chat's end; a message that it had read
+before keeps its old text, and one that was edited or deleted before
+the tab read it is a bubble "(cannot decrypt)" in the message's place.
+Its chat list lights no dot and moves no chat; the row keeps the text
+the tab had decrypted, and after a reload of the same old wallet the
+row of a deleted newest message reads "(cannot read)". It plays its
+sound once for an edit or a delete in a chat whose newest message is
+somebody else's, when that chat is not the page on the screen. Nothing
+stops: the tab goes on reading and sending, and it is right after the
+Update button or any reload (8.1).
+
+What a wallet of this step does in front of a masterpod of before (not
+the plan's order, which deploys the masterpod first; tried, section
+11): every row is a message and every `lastMessage` is as before, so
+the chat reads and sends as it did. The menu opens, since the wallet
+cannot tell, and Edit and Delete end in "HTTP 404: Not Found" in the
+conversation's red line.
+
+Left as it is (the plan's section 6): no history of a message's earlier
+texts; no taking back of a text that somebody has read, or that an old
+tab still shows; no edit and no delete after leaving a chat; nobody
+edits or deletes another person's message, a public room's creator
+among them; a reply to a message. And one thing of this build: a chat
+whose newest 50 rows are all edits and deletes, which takes 50 of them
+in a row with no message between, opens with no bubble, the words "No
+messages yet." and the button Load older messages, which brings the
+rows before them.
+
+The proxy forwards both routes as any masterpod path (section 2);
+nothing in server/ and nothing under deploy/ changed. The wallet's side
+is the conversation and the chat list (8.2, Chat), the shell's sound
+(8.1), masterpod-api.service and chat.service (8.3), the confirmation
+box (8.9) and the words (8.8).
+
 ## 5. Validator changes (anossoftware)
 
 ### 5.1 A nonces table and two variables
@@ -2014,7 +2219,11 @@ poll's read of the chat rooms asks only for what is new, and what the
 shell looks at for the sound is the chat list in memory, once that
 read's answer was put into it. What rings is the same: something that
 another read put into the list rings at the poll's next read, as it did
-before.
+before. Since 2026-11-24, too (section 11; 4.19), a room has a new
+newest message when the position of that message has risen
+(`lastMessage.position`), where the shell looked at the room's highest
+position (`lastPosition`): an edit or a delete of a message is a row of
+its own and raises the highest position, and it rings nothing.
 
 When the sound cannot ring. A browser lets a page make sound only after
 the person has touched the page, so the sound engine is made at the
@@ -3532,7 +3741,10 @@ message the pinned card posted, with no "You: " before them (2026-11-19,
 section 11; the words are in the paragraph "One conversation", below),
 and the word "Sticker" in the place of a newest message that is a
 sticker, after "You: " when it is this pod's own (2026-11-23, section
-11; 4.16; the paragraph "Stickers", below);
+11; 4.16; the paragraph "Stickers", below), and, since 2026-11-24
+(section 11; 4.19; the paragraph "Edit and delete", below), the new
+text of a newest message that was edited and the words "Message
+deleted", with no "You: " before them, for one that was deleted;
 and the time (today
 the time, yesterday "Yesterday", within six days the weekday, else the
 date); an unread room (below) has a dot under the time and a bold
@@ -3565,7 +3777,11 @@ today's date, follows a change of the day as before (4.17, "The words
 that depend on today's date"). Since 2026-11-19 (section 11) the
 shell's poll also rings the wallet's sound for what is new in that
 answer, a message from someone else or a chat request (8.1); the list's
-own read rings nothing. "No chat keys in this tab: unlock
+own read rings nothing. Since 2026-11-24 (section 11; 4.19) an edit or
+a delete of a message changes a row's line and nothing else of the
+list: it lights no dot, rings nothing and moves no row, since the dot,
+the sound and the order go by the newest message's own position and
+time. "No chat keys in this tab: unlock
 again." shows without chat keys.
 
 One conversation, at /chat/:chatRoomId: a header with the avatar or icon
@@ -3593,7 +3809,12 @@ the reader comes within 300 px of the thread's top, and the older
 messages are drawn once the thread is at rest); the
 3-second poll reads after the newest shown position (since 2026-11-24,
 section 11 and 4.17, the opening read and every such poll also ask, with
-`seenSince`, for the members' seen positions that changed); the thread
+`seenSince`, for the members' seen positions that changed; and since
+2026-11-24, section 11 and 4.19, these reads bring rows, of which an
+edit and a delete of a message are two kinds with no bubble of their
+own: the newest 50 rows can show fewer than 50 messages, and the
+positions the page reads from are those of the rows it read, drawn or
+not); the thread
 scrolls
 to the bottom after opening and after a send, and for a message that
 arrives only while the reader is within 120 px of the bottom. Messages
@@ -3628,7 +3849,11 @@ member of the room has seen, by the seen positions that come with
 they come with this conversation's own read of /list-messages and are
 written into the room's entry of the chat list in memory): a member has
 seen a message when that member's seen
-position is at or above the message's position. In a room with more than
+position is at or above the message's position (since 2026-11-24,
+section 11 and 4.19, for a message that was edited: at or above the
+position of its newest edit, so "Seen" never stands under a text the
+other person has not read, and a message that was deleted carries no
+word). In a room with more than
 one other member it reads "Seen by mai, joy", with the usernames of
 those who have seen it, for up to three names; with more it reads "Seen
 by 4 people". "Sent" stands under this pod's newest message while no
@@ -3785,6 +4010,67 @@ eight points). Stickers work in every chat. What a person sees:
   one, and the thread stays where it is. They send a sticker from the
   panel. A guest in such a chat, who has no card, has the strip like
   everybody else.
+
+Edit and delete (2026-11-24, section 11; 4.19; the plan is
+forclaude/chat-edit-delete-plan-1.md, whose section 1 is what a person
+sees). A person edits and deletes their own messages. What a person
+sees:
+- The menu. A tap on a message of your own, a click on a computer,
+  opens a small menu right under the bubble, its right edge at the
+  bubble's: Edit, with a pencil, and Delete, with a bin. A tap beside
+  it, and the Escape key, close it. A long press stays what it was, the
+  browser marking text. A tap on the copy button of an account id opens
+  no menu. Neither does a click that ends a marking of text on a
+  computer; a click on marked text takes the marking away, and the
+  click after it opens the menu.
+- Who has no menu. Somebody else's message has none, in any chat. No
+  message has one in a chat about a listing, in an old marketplace
+  room and in a chat about an attestor case: those chats can be
+  evidence, and the masterpod refuses an edit and a delete there (4.19).
+  A message that is still being sent has none, and a deleted one has
+  none: a tap there does nothing, as before.
+- Edit. It is in the menu for 15 minutes after the message was sent,
+  by the phone's clock, and never for a sticker. A tap on it puts the
+  message's text into the message box, with the cursor, so a phone's
+  keyboard comes up, and a line stands above the box: a pencil, the
+  words "Editing a message" and a cross that stops the edit. While it
+  stands, the stickers button and the suggested stickers are away. Send
+  saves, and so does the Enter key: the bubble keeps its place, shows
+  the new text and carries the small grey word "edited" after the
+  text, where the tick stands. Send with an unchanged text sends
+  nothing and ends the edit; with an empty box Send is off. When the
+  edit ends, by Send or by the cross, the box holds again what it held
+  before Edit was tapped. A message can be edited more than once, each
+  time within the 15 minutes of when it was first sent.
+- Too late. The masterpod decides about the 15 minutes by its own
+  clock. A person who typed past them, or whose phone's clock is off,
+  reads "This message can no longer be edited." in red above the
+  message box; the line "Editing a message" goes and the text stays in
+  the box.
+- Delete. It is in the menu at any time, for a sticker too. The wallet
+  asks once, with the confirmation box (8.9): the title "Delete this
+  message?", the sentence "Everyone in this chat will see that a
+  message was deleted. This cannot be undone.", Cancel and a red
+  Delete. After Delete a grey line stands in the message's place, in
+  the middle of the thread, with no name and no time: "This message was
+  deleted". The person who deleted reads the same line. Cancel, and a
+  step back in the browser, delete nothing.
+- The others in the chat see the same within 3 seconds, by their
+  conversation's own read: the new text with "edited", or the grey
+  line. In a room that is not a direct chat the sender's name stands
+  over an edited message as over any. Whoever opens the chat later
+  gets only the new text, or the grey line: the masterpod hands the old
+  text to nobody any more.
+- Seen. Under an edited message of your own, "Seen" is counted from the
+  edit: an edited newest message reads "Sent" again until the other
+  person's wallet has read the edit ("One conversation", above).
+- The chat list. The row of a chat whose newest message was edited
+  shows the new text, and one whose newest message was deleted reads
+  "Message deleted". No dot is lit, nothing rings, and no row moves.
+- Deleted meanwhile. An edit or a delete of a message that was deleted
+  a moment ago from another phone or computer of the same person reads
+  "This message was already deleted." in red, and the grey line then
+  stands in the message's place.
 
 The pinned card (2026-11-06, section 11), in a private room about a
 listing, under the header and its panels and above the thread, drawn for
@@ -4815,7 +5101,18 @@ excepted, with the keyholder and anos calls included.
                             so `onLine` gets each line of the answer as it comes, and which resolves, when the
                             answer has ended, to how many lines came and whether it was read to its end (a
                             LinesRead), or to the refusal with its status; the types JoyMessage ({ role, text })
-                            and JoyStop ("end", "length" or "refused")
+                            and JoyStop ("end", "length" or "refused");
+                            editing and deleting a message (2026-11-24, section 11; 4.19): two methods after
+                            sendMessage, editMessage(chatRoomId, messageId, message), which sends { chatRoomId,
+                            messageId, message } to /edit-message, and deleteMessage(chatRoomId, messageId),
+                            which sends { chatRoomId, messageId } to /delete-message; each answers the new
+                            row's { messageId, position }, and neither is quiet, since the person did it; a
+                            MessageItem, one row of /list-messages, has `message` as a string or null and two
+                            fields more, `kind` ("edit", "delete" or null) and `targetMessageId`, both
+                            optional since a masterpod of before sends neither; and a new type LastMessage
+                            for the `lastMessage` of a RoomItem and of a RoomNews: a message's five fields,
+                            `message` a string or null, with `editPosition` and `deleted`, both optional for
+                            the same reason
     keyholder-api.service   the keyholder test app's, base path /api/keyholder/<n>
     anos-api.service        the anos test app's account-api.service.ts, base path /api/anos/<the session's
                             validator> (2026-11-10, below; /api/anos/<defaultValidator> until then),
@@ -4973,7 +5270,10 @@ excepted, with the keyholder and anos calls included.
                             positions that the open conversation's read brought, written into that room's entry;
                             today, a signal: the local calendar day, which refreshNews() sets at every call and
                             which the chat list's rows and the conversation's thread read, so the words that
-                            depend on today's date ("Yesterday", "Today") are drawn again when the day changes
+                            depend on today's date ("Yesterday", "Today") are drawn again when the day changes;
+                            since 2026-11-24 (section 11; 4.19) decryptMessage takes a row's `message` as it
+                            comes, a string or null, and answers null for a row with no ciphertext, as for
+                            one that does not open: a message that was edited or deleted
     marketplace.service     what the marketplace pages share (2026-11-06): load, get, mine and close (the reads
                             and the close), sideWords, mySide and firstWords, the rooms and invites about a
                             listing out of session.chatRooms (roomsAbout, myRoomAbout, invitesAbout,
@@ -5810,6 +6110,31 @@ Memory, "แชทใหม่" New chat (the word of `common.newChat`) and
 "ลบทั้งหมด" Delete all. The words are the build chat's in both
 languages. The user had seen none of them when this was written, the
 one line among them, and no Thai reader has read the Thai.
+Edit and delete (2026-11-24, section 11; 4.19): `chat` gains one entry
+and `chatRoom` ten, after `stickerSet`. `chat.messageDeleted`, "Message
+deleted", the chat list's line for a deleted newest message. In
+`chatRoom`: `edit`, "Edit", and `delete`, "Delete", the menu's two
+entries, and `delete` again on the box's second button; `editing`,
+"Editing a message", the line above the message box; `stopEditing`,
+"Stop editing", the name of that line's cross for a screen reader;
+`edited`, "edited", the word in an edited bubble; `messageDeleted`,
+"This message was deleted", the grey line; `deleteTitle`, "Delete this
+message?", and `deleteText`, "Everyone in this chat will see that a
+message was deleted. This cannot be undone.", the box before a delete;
+`tooLateToEdit`, "This message can no longer be edited.", and
+`alreadyDeleted`, "This message was already deleted.", the two
+refusals of the masterpod that have a sentence of the wallet's own.
+The box's first button is `common.cancel`. Three of these are the
+user's words, from the talk that settled the design: "edited", "This
+message was deleted" and "Message deleted". Six are the plan's, which
+the user read with it (its section 4, point 4): Edit, Delete, "Editing
+a message", the box's title and sentence, and "This message can no
+longer be edited." Two are the build's: "Stop editing" and "This
+message was already deleted." The Thai, in the same order: "ข้อความถูกลบแล้ว";
+"แก้ไข", "ลบ", "กำลังแก้ไขข้อความ", "ยกเลิกการแก้ไข", "แก้ไขแล้ว",
+"ข้อความนี้ถูกลบแล้ว", "ลบข้อความนี้หรือไม่", "ทุกคนในแชทนี้จะเห็นว่ามีข้อความถูกลบ
+การกระทำนี้ไม่สามารถยกเลิกได้", "ข้อความนี้แก้ไขไม่ได้แล้ว" and "ข้อความนี้ถูกลบไปแล้ว".
+The Thai is the build's, and no Thai reader has read it.
 
 ### 8.9 The confirmation box
 
@@ -6050,6 +6375,22 @@ the passkey line, "To
 confirm, this phone or computer will ask for your passkey, the one you
 log in with." (`passkeyCheck.note`). Each does nothing while a box is
 already open.
+
+Since 2026-11-24 (section 11; 4.19) the conversation opens it too, with
+`askConfirm`, from Delete in the menu of a person's own message (8.2,
+Chat, "Edit and delete"): the title "Delete this message?", no rows,
+one note, "Everyone in this chat will see that a message was deleted.
+This cannot be undone.", the first button as it is, Cancel, and the
+second button "Delete" with `danger`. It gives no `passkey`: a delete
+signs nothing with an account's key. A step back in the browser closes
+it with no answer, which deletes nothing. Since the same day Joy's two
+pages open it too, with `askConfirm` and no `passkey` (8.2, Joy; 4.18;
+named here on 2026-11-24, with the box before a delete, on the user's
+word): the Joy page before a new chat, with the title "Start a new
+chat?" and the second button "New chat"; and the page of Joy's memory
+before Delete all, with the title "Delete everything Joy remembers about
+you?" and the second button "Delete all" with `danger`. The paragraph
+"Five places use it", above, is as it was written before these three.
 
 Seven more buttons sign with an account's key and open no box
 (2026-11-19, section 11). They ask in the page or asked nothing until
@@ -6392,6 +6733,24 @@ Cloud machines.
   long chat's oldest messages are no longer sent; the chat on a second
   device; and any change of the shared memory file from the wallet,
   which is a file of the masterpod's repository (its spec, 30.7).
+- From the chat edit and delete plan
+  (forclaude/chat-edit-delete-plan-1.md, 2026-11-24, its section 6;
+  4.19), not built: a history of a message's earlier texts, which the
+  masterpod keeps and hands to nobody; taking a text back from someone
+  who has read it, or from a tab that is not loaded again; an edit or a
+  delete after leaving a chat; an edit or a delete of another person's
+  message, by a public room's creator or anyone else, which is the
+  block "Room admins" under the line "chat rooms: nobody can be taken
+  out" of the after-production list; a reply to a message, which is
+  the line "chat: reply to a message, and the three options on a
+  phone" of that list; and a database that itself refuses a change of
+  a stored message, the line "chat messages: the database itself does
+  not refuse a change". Editing and deleting stay off in a chat about
+  a listing, in an old marketplace room and in a chat about an
+  attestor case. The gap of the chat list plan, above, reaches an edit
+  and a delete as it reaches any row: a phone that misses one keeps
+  the old text, or leaves that message out, until the chat is opened
+  again.
 
 ## 11. Build notes
 
@@ -20218,6 +20577,383 @@ key for Anthropic.
   words come in lumps or all at the end, and an answer from which
   nothing reaches the page for 60 seconds is given up by the wallet
   (read from the code and from nginx's page, not tried).
+
+### A person edits and deletes their own chat messages (2026-11-24)
+
+Step 2 of `~/Desktop/Z-TestNet/forclaude/chat-edit-delete-plan-1.md`
+(FINAL, 2026-11-24, on the user's word "Final"), the wallet's part,
+built on the user's word (their click on the card "Build step 2: edit
+and delete a chat message, wallet", and their "Yes, committed" once
+step 1 was committed) on top of 6aee7e7, the working tree clean. Eight
+files of `src/app`, `README.md` and this file, one commit; the eighth
+file of `src/app` and `README.md` joined after the build's report, on
+the user's word (the last point of this note). Why: the user, in the
+talk that settled it: "what we might have to do instead, is hide
+editied or deleted chats so they don't show in the wallet, and the
+edited chat just replaces the old one in the chat box." The masterpod's
+part is the plan's step 1 (4.19; the masterpod's spec, section 31),
+committed there the same day as d3d07d3. No new package, no env
+variable, nothing in `server/` and nothing under `deploy/`.
+
+- Changed, `src/app/services/masterpod-api.service.ts`, as 8.3 now
+  says: `editMessage()` and `deleteMessage()` after `sendMessage()`; a
+  `MessageItem` has `message` as a string or null, and `kind` and
+  `targetMessageId`; the new type `LastMessage`, which `RoomItem` and
+  `RoomNews` take for `lastMessage`. Three comments.
+- Changed, `src/app/services/chat.service.ts`: `decryptMessage()` takes
+  a string or null and answers null for null. Two lines of code and its
+  comment. The plan had this file as read and, as far as it saw, not
+  changed (reading 2, below).
+- Changed, `src/app/app.ts`: `ring()` keeps and compares the position of
+  each room's newest message (`lastMessage.position`, 0 for a room with
+  none) where it kept `lastPosition`. Two comments.
+- Changed, `src/app/pages/chat.page.ts`: `preview()` answers "Message
+  deleted" for a deleted newest message, before anything else;
+  `decryptPreviews()` passes such a message over; the function
+  `previewKey()` beside the class, the message's id and its
+  `editPosition`, by which both maps are kept. The class comment gained
+  a passage.
+- Changed, `src/app/pages/chat-room.page.ts`, as 4.19 and 8.2 now say.
+  The types: four fields more on `ShownMessage` (`text`,
+  `editPosition`, `deleted`, `waiting`), and `Opened`, `Change`,
+  `RowsRead` and `Editing`; the constant `EDIT_MINUTES`. The template:
+  a click listener on every bubble; the word "edited" in the bubble's
+  `state`; one anchor element and the menu of a message, with its
+  entries as the menu's lazy content; the line "Editing a message"
+  above the message box; the stickers button away while a message is
+  edited; a name on the message box. Four style lines, and three
+  changed (the page's own element is the anchor's frame, a bubble has
+  no tap highlight, a gap in `state`). In the class: `shown()` became
+  `read()`, which only reads, and `present()`, `keepChange()`, `put()`
+  and `drawChange()` put what was read into the page; `open()`,
+  `loadOlder()` and `poll()` go through them and count rows; the map
+  `changes`; the signal `editing` and the computed `changeable`;
+  `canChange()`, `canEdit()`, `tapped()`, `startEdit()`, `stopEdit()`,
+  `endEdit()`, `saveEdit()`, `deleteMessage()` and `refusedChange()`;
+  `send()` hands over to `saveEdit()` while a message is edited;
+  `thread` draws a deleted message as the grey line and passes a
+  waiting one over; `marks` counts an edited message from its edit and
+  leaves deleted and waiting ones out; `suggested` is empty while a
+  message is edited. The class comment gained a passage, and the
+  comments of what changed say so with the date.
+- Changed, `src/app/i18n/en.ts` and `th.ts`: eleven entries each, one
+  in `chat` and ten in `chatRoom` (8.8).
+- Not changed: `src/app/services/session.service.ts`, whose
+  `unreadRooms` went by the newest message's own position already;
+  `src/app/components/pinned-listing.component.ts`, whose own read of a
+  chat about a listing meets no row without its text; the confirmation
+  box's component, which the page opens as it is (its comment alone
+  changed afterwards, the last point of this note);
+  `src/app/constants.ts`.
+- Changed, this spec: the new 4.19; in 8.1 the sound's paragraph; in
+  8.2 the chat list, "One conversation" and the new paragraph "Edit and
+  delete"; in 8.3 the rows of masterpod-api.service and chat.service;
+  in 8.8 the new words; in 8.9 the box before a delete; one item of
+  section 10; this note. `README.md` was unchanged when the build
+  reported, and has one row changed since (the last point of this
+  note).
+- Readings where the plan left a point open, each the smallest way
+  seen:
+  1. The section's number is 4.19: Joy took 4.18 on the day the plan
+     was written, which names "a new 4.18".
+  2. `chat.service.ts` is changed by two lines. A row's `message` is a
+     string or null since step 1, and the pinned card's own read hands
+     it to `decryptMessage()`. That component is the one the plan says
+     nothing changes for, so the function takes null, and the card's
+     file is as it was.
+  3. The menu opens from one anchor element of the page, laid over the
+     part of the tapped bubble that the thread shows, and opened by the
+     page. A menu trigger on each bubble would open at every click, and
+     the page has to pass some clicks over (the copy button, a click
+     that ends a marking of text, a bubble with no menu) and asks the
+     clock at the tap. The menu stands under the bubble with its right
+     edge at the bubble's, and Material moves it where that does not
+     fit.
+  4. The anchor is told of a mouse's press before the menu opens. A
+     menu that is opened by the page alone draws its first entry
+     darker, as a keyboard's choice; seen in the first picture of the
+     trial (Edit stood there as if picked) and mended so.
+  5. A bubble has no tap highlight (`-webkit-tap-highlight-color`).
+     Every bubble carries the listener, and a phone's browser flashes a
+     grey box over an element with one, also where the tap does
+     nothing.
+  6. When an edit ends, by Send or by the cross, the message box holds
+     again what it held before Edit was tapped, so a text a person was
+     typing is not lost. The plan says what the box holds while a
+     message is edited, not afterwards.
+  7. After `409 too late to edit` the edit ends and the text stays in
+     the box, as the plan has it. Send then sends that text as a new
+     message, since nothing is edited any more.
+  8. `409 message deleted` reads "This message was already deleted."
+     The plan names the refusal and not its words. The read that
+     follows brings the delete, so the grey line shows with the
+     sentence.
+  9. The box's second button is red (`danger`), as the wallet's other
+     box before a delete is (Joy's "Delete all"). The plan names the
+     buttons and not their colour.
+  10. Two icons in the menu, a pencil and a bin, as the conversation's
+      other menu has icons; a pencil and a cross in the line above the
+      box; the cross is named "Stop editing" for a screen reader.
+  11. An edit that came without its text is not kept, and a message
+      keeps what it shows until a row arrives that can be drawn. So a
+      bubble that is on the screen never leaves it for the seconds
+      between two reads; only a message the page has not yet drawn
+      waits.
+  12. Whether Edit is in the menu is told at the tap on the bubble.
+      The tap on Edit does not ask the clock again; the masterpod
+      decides at the save.
+  13. "Unchanged" is the same text, spaces at its ends aside.
+  14. A row of a kind this wallet does not know is passed over, and so
+      is an edit or a delete that names no message.
+  15. No read is added for a message that waits: it is drawn at the
+      next 3-second read, as the plan has it.
+  16. The message box keeps the text until the masterpod has answered
+      a save, so a refusal loses nothing. A person who goes on typing
+      meanwhile is still editing when the answer comes: what was sent
+      is saved and drawn, the box keeps what they typed, the line
+      "Editing a message" stays, and the next Send saves that. Found by
+      a second read of the code before the commit: as first built, the
+      answer put the box back to what it held before the edit, and the
+      words typed meanwhile were gone.
+- Checked: `npx ng build` from the wallet folder into a scratch folder:
+  clean, with no warning. The script is `main-74W73EVG.js`, 2,377,385
+  bytes, which is 10,510 more than the script of 6aee7e7 built from a
+  scratch copy (2,366,875); the style sheet is `styles-HGVKDO6M.css`,
+  as before; the build's folder has ten files as before. The
+  conversation page's own styles are 4,589 bytes as the build counts
+  them, 4,178 before; the build warns above 6 kB.
+- Checked by three walks in Google Chrome 158 with no window:
+  development builds of a scratch copy (6aee7e7 plus this step's
+  files) behind the wallet's own server program, in front of the
+  masterpod's own app (`createApp()` of d3d07d3) on a scratch
+  PostgreSQL 17 that was started for this build alone: a data folder of
+  its own, 127.0.0.1 port 63131 and nowhere else, no socket file. This
+  Mac's own PostgreSQL on port 5432 was not touched. The tools are the
+  chat list step's (the note "The chat list: only what is new", above)
+  with this step's on top. Each person in a Chrome of their own at 390
+  by 760. The login alone was made up: no passkey; everything else was
+  the wallet's own pages and crypto and the masterpod's own code, with
+  nothing of the wallet replaced but the sound, which was counted and
+  not played. A tap was Chrome's own touch gesture at the bubble's
+  place, typing went into the box that had the cursor, and what stood
+  on the screen was read from the page as drawn. 133 results, none bad:
+  - Two people in a chat of two. A tap on a message of one's own opens
+    the menu with Edit and Delete, right under the bubble; a tap beside
+    it closes it; a tap on the other person's message, and the other
+    person's tap on that message, open nothing. Edit: the text in the
+    box with the cursor, "Editing a message", the stickers button and
+    the suggested stickers away, also for a text that would bring four
+    up. Send: one /edit-message, 201, the bubble with the new text and
+    "edited" in its place; the other person had it 3.0 seconds after
+    the tap, with no second bubble. An unchanged text sent nothing and
+    ended the edit; the cross sent nothing; spaces alone switched Send
+    off; the Enter key saved a second edit; a half-typed text was back
+    in the box after the edit. Delete: the box, Cancel deleted nothing,
+    Delete sent one /delete-message, 201, the grey line in the
+    message's place on both sides, the other side after 0.9 seconds; a
+    tap on the grey line opened nothing; a step back in the browser
+    with the box open deleted nothing.
+  - The chat list, with a third person so that the other person has
+    two chats. An edit of the newest message: the row's new text after
+    3.7 seconds, no dot, no bold row, the Chat entry of the menu
+    counting nothing, no sound, the chat not moved and the row's time
+    the same. A delete: "Message deleted" after 2.9 seconds, and the
+    same four. The writer's own row: "Message deleted", with no "You:
+    ". A new message for comparison: the dot, the chat at the top, one
+    ring. That unread message edited: the new text, the dot kept,
+    nothing rung again. An older message edited: nothing of the row
+    changed, while the room's highest position rose in the list.
+  - "Seen". With the other person away, an edited newest message read
+    "Sent" and "Seen" stood under the message before it; when that
+    person opened the chat, "Seen" stood under the edited message after
+    2.6 seconds. In a chat of three: "Seen by nok, pim", then "Seen by
+    pim" alone after an edit while nok was away, then both again; and
+    the third person read the writer's name over the edited message.
+  - The refusals. A message's time was set back 16 minutes in the
+    table while it was being edited: Send got `409 too late to edit`,
+    the red line read "This message can no longer be edited.", the text
+    stayed and the line "Editing a message" went. With the wallet
+    loaded again that message's menu had Delete alone, and one set back
+    14 minutes had Edit, which the masterpod took. A message deleted by
+    the same anoPod's own request with no page around it, as from
+    another device, while it was edited: `409 message deleted`, "This
+    message was already deleted.", the text kept, the grey line there.
+    Delete on such a message before the page knew: the same sentence
+    and the grey line.
+  - No menu in a chat about a listing, made by Connect on the listing's
+    own page: neither for the person who connected nor for the
+    listing's owner; and the masterpod refused a delete and an edit
+    made by hand (`403 editing and deleting are off in this chat`). An
+    ordinary chat of two, where the menu opened, was made an old
+    marketplace room in the table and then a chat about an attestor
+    case: no menu in either, and the same refusal by hand.
+  - A sticker sent from the panel: its menu has Delete alone, and
+    Delete leaves the grey line; a tap on someone else's sticker opens
+    nothing.
+  - The rows. A chat opened seconds after an edit, with the chat list's
+    reads held back so that the list did not know of the edit: the
+    edited message was not drawn, and was drawn in its place with the
+    new text 2.9 seconds later. A chat of 60 messages with one deleted
+    and one edited, opened anew: 48 bubbles for its newest 50 rows, the
+    delete kept for a message the page did not hold, and after
+    scrolling up the grey line between its two neighbours. A chat whose
+    newest 50 rows were 50 edits of one message: no bubble, "No
+    messages yet." and Load older messages, whose tap brought the
+    message with its newest text.
+  - A computer, at 1280 by 800 with a mouse. A click opens the menu at
+    the bubble and the Escape key closes it. The mouse pressed, moved
+    along the text and let go marks the text and opens no menu; a click
+    on the marked text takes the marking away, and the next click opens
+    the menu; with a part marked, a click on another part of the bubble
+    opens it at once. A click on the copy button of an account id in
+    one's own message copies and opens no menu; a click beside it opens
+    it.
+  - Thai: the menu, the box, the line above the message box and its
+    cross's name, the word in an edited bubble, the grey line and the
+    chat list's line.
+  - No error in any page but Chrome's own line for each refusal a walk
+    asked for, and no line in the masterpod app's own error log.
+- Checked on phones, with a finger and not a script (a finger's tap by
+  the simulator's and the emulator's own input, and what the page felt
+  said back by the page). Each phone its own person, alone in a public
+  room.
+  - Chrome 149 on our small Android 17 phone, 360 by 536. A tap opens
+    the menu under the bubble, with no entry drawn darker. A long press
+    marks the word under the finger, with Chrome's own bar (Copy, Share,
+    Select all), and opens no menu; a tap beside it takes the marking
+    away. Edit brings the keyboard up with the text in the box and the
+    line above it, both in sight; the new text was typed and Send
+    saved it. Delete: the box, and the grey line. With the keyboard up,
+    a tap on a bubble takes the keyboard away and the menu stands
+    under the bubble.
+  - Safari on a simulated iPhone 17 with iOS 26.5, 402 by 714. A tap:
+    the page felt a touch and a click, and the menu opened under the
+    bubble. A long press: the word marked with Safari's own bar (Copy,
+    Find Selection, Look Up), no click, no menu. Edit: the keyboard up,
+    the text in the box, typed on with the phone's own keyboard, Send,
+    and "edited" in the bubble. Delete: the box and the grey line.
+  - Safari on a simulated iPhone SE with iOS 18.6, 375 by 547, the
+    smallest and oldest of ours: the tap, the long press and Edit as on
+    the other; with the keyboard up the edited message, the line and
+    the message box are all in sight.
+- Checked, a wallet tab of before this step (the plan's section 4,
+  point 10): the wallet as committed, 6aee7e7, in a Chrome of its own
+  on the same rows. The plan names 15bd065; the one commit between the
+  two, Joy's, touched none of the chat's files. It drew what the plan
+  says, word for word of 4.19's paragraph on it: the edit as a second
+  bubble at the end with the old text kept, the delete as "(cannot
+  decrypt)" at the end, and after a reload "(cannot decrypt)" in the
+  places of the two messages; its row kept the old text, lit no dot,
+  and after a reload read "(cannot read)"; its sound played once for
+  the edit and once for the delete. It went on sending and reading, and
+  its page had no error. Not looked at: that tab's Update button, which
+  is the refresh's own (8.1).
+- Checked by a second reader before the commit: a fresh agent that was
+  given the changed files, the plan and the masterpod's spec, and not
+  this build's own conclusions. It read the whole conversation page and
+  the seven changed files of `src/app`, and found no fault in how the
+  rows are kept and drawn (the same answer twice, answers in another
+  order, an answer cut by its limit, older pages, a change of the chat
+  while a request is on its way), in the two positions, in "Seen" and
+  "Sent", in the sound or in the chat list's line, also for a masterpod
+  that sends neither new field. It named five small things. One was a
+  fault of this build and is mended (reading 16). One is older than
+  this step, and three follow from the design; all four are in "Seen
+  and left as it is", below. Two of the five were then tried in a
+  browser (5 results, none bad): the double click, and a text typed
+  while a save was held back for 2.5 seconds, which stayed in the box
+  with the edit still going on, and which the next Send saved as a
+  second edit.
+- Checked, this step's wallet in front of the masterpod of before step
+  1 (5ca9e41 on that commit's tables), which is not the plan's order: 7
+  results, none bad. Messages, "Seen", the dot and the sound as before;
+  the menu opens; Edit and Delete end in "HTTP 404: Not Found" in the
+  red line, the text of an edit stays and nothing else changes.
+- Seen and left as it is:
+  - The chat whose newest 50 rows are all edits and deletes opens with
+    "No messages yet." over nothing, under Load older messages (4.19).
+    It takes 50 such rows in a row.
+  - On the small Android phone the box's Delete button lies where the
+    menu's Delete entry was, 2 pixels apart. A double tap's second tap
+    lands on a button that is off for its first half second
+    (`CONFIRM_ARM_MS`, 8.9), which is what that wait is for.
+  - While a message is edited, nothing in the thread marks which one.
+  - After a text that fills the bubble's last line, "edited" and the
+    tick stand on a line of their own at the bubble's left, as the
+    tick alone did.
+  - A wallet that is told `409 too late to edit` for a message of
+    another chat than the one on the screen, because the person went
+    on to another chat while the save was on its way, shows the
+    masterpod's own words in the red line, as it shows a refused send
+    there.
+  - On a computer a double click no longer marks a word in a message of
+    one's own: the first click opens the menu and the second closes it
+    (tried). Marking by dragging the mouse is as it was. It follows
+    from "a click opens the menu".
+  - A message that is edited on one phone and deleted from another
+    phone or computer of the same person meanwhile: the bubble turns
+    into the grey line within 3 seconds, and the line "Editing a
+    message" stays until Send, which then reads "This message was
+    already deleted." (4.19).
+  - A message that is sent and deleted again within the 5 seconds of
+    the other person's read of the chat list still rings there and
+    lights the dot, on a row that reads "Message deleted": a deleted
+    newest message stays the chat's newest (the plan's decision 8).
+  - Delete in the box does nothing when another action of the page
+    began while the box was open, since the page does one thing at a
+    time. That takes the thread scrolled to its top under the box. A
+    second tap on the message deletes.
+  - Read in the code and not seen in a run, and older than this step
+    (the same at 6aee7e7): a message of one's own can be drawn twice.
+    It takes a 3-second read that was asked before a send, was
+    answered by the masterpod after the send was written, and came
+    back before the send's own answer: the read then brings the new
+    message while its pale bubble still stands, and the send's answer
+    gives that bubble the same id. Both bubbles stay until the
+    conversation is opened again. Since this step a delete of such a
+    message would draw two grey lines. Not mended here: it is no part
+    of the plan. Since the user's word after the report it is the line
+    "chat: a message of your own can show twice" of the
+    after-production list.
+  - Two older sentences that list who opens the confirmation box did
+    not name the box before a delete when the build reported: the
+    comment at the top of
+    `src/app/components/confirm-dialog.component.ts` and that file's
+    row in `README.md`. Neither named Joy's two boxes either. The plan
+    names neither file. They are brought in line since (the last point
+    of this note).
+- Not checked: a real phone; iOS 27.0, Android 16 and 15; Firefox, and
+  Safari on a Mac; the wallet opened from a phone's Home Screen and a
+  phone held sideways; a screen reader; a Thai reader; the live wallet,
+  its nginx and the doormen; the masterpod's servers, PostgreSQL 16 and
+  PgBouncer; a slow connection; the attestor's and the moderator's
+  editions, which run the same code; `ng serve`.
+- For the deploy: the masterpod's step 1 first, with its schema line on
+  the leader before its first restart (the masterpod's spec, 31.9).
+  Then the wallet, the user's two lines on wallet1 and then on wallet2,
+  with no `npm ci` (no package file changed). Until the masterpod's
+  step is there, this wallet's Edit and Delete end in "HTTP 404". A
+  wallet that is open on a phone meanwhile keeps the script it has
+  until it is loaded again, and draws an edit and a delete as the
+  paragraph on a tab of before says (4.19).
+- After the build's report, the same evening, on the user's word ("Go
+  ahead and bring the older sentences forward and and add that line to
+  the after production list. Then bring me the commit paste again.").
+  The two older sentences about the confirmation box are brought in
+  line, by a small script that changes an old piece only where it
+  stands exactly once: the comment of
+  `src/app/components/confirm-dialog.component.ts` (the end of the
+  component's own comment, and the comment of the field `danger`) and
+  that file's row in `README.md`. Each names three boxes more: the box
+  before the delete of a chat message, and Joy's two, which the same
+  two sentences lacked since that afternoon; 8.9 names Joy's two beside
+  the box before a delete for the same reason. Comments and README
+  text only, no line of code: the production build made again from the
+  wallet folder is the same script, byte for byte, as the one all the
+  checks of this note ran on. The commit has ten files with them. And
+  the older fault of a message drawn twice ("Seen and left as it is",
+  above) is a line of the after-production list,
+  `~/Desktop/Z-TestNet/after_production_todos`, with a details file.
 
 ## 12. Recovery and the moderator edition
 
