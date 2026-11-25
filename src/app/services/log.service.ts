@@ -16,6 +16,12 @@ export interface ApiError {
   error: string;
 }
 
+/** What postLines resolves to for an answer with status 200 (wallet spec 4.18; 2026-11-24): how many lines of JSON came, and whether the answer was read to its end. `whole` is false when the connection broke in the middle, and when nothing came for the time limit. */
+export interface LinesRead {
+  lines: number;
+  whole: boolean;
+}
+
 /** One line of the activity log. */
 export interface LogEntry {
   time: string;
@@ -33,7 +39,9 @@ export interface LogEntry {
  * /api/keyholder/<n>/..., /api/sign/<n>. A post or a get may carry a time
  * limit (`timeoutMs`; the keyholder deposit does, a read from a validator
  * and both signing calls): past it the call answers like a network error,
- * status 0, with api.noAnswer as its reason.
+ * status 0, with api.noAnswer as its reason. Since 2026-11-24 (wallet spec
+ * 4.18) one kind of call is read while it is still arriving, postLines:
+ * the answer of /ask-joy, which the masterpod writes line by line.
  */
 @Injectable({ providedIn: 'root' })
 export class LogService {
@@ -72,6 +80,103 @@ export class LogService {
     }, timeoutMs);
     if (!quiet) this.record('GET', path, result);
     return result;
+  }
+
+  /**
+   * POST `body` as JSON to `path` on this origin, and read the answer while
+   * it arrives (wallet spec 4.18; 2026-11-24): for a backend that writes
+   * its answer as a stream of lines, each line one JSON object
+   * (application/x-ndjson), which is what /ask-joy does. Each line is
+   * handed to `onLine` as soon as it is whole. An empty line is passed
+   * over, and so is a line that is no JSON. The call goes through the
+   * browser's own fetch: HttpClient hands an answer over only once it has
+   * ended.
+   *
+   * An answer with another status than 200 is a refusal, as for post():
+   * `{ ok: false, status }` with the backend's body. For a 200 the call
+   * resolves when the answer has ended, with how many lines came and
+   * whether it was read to its end (LinesRead).
+   *
+   * `silenceMs` is how long nothing may arrive. Past it the call is given
+   * up: before the answer began that is `{ ok: false, status: 0 }` with
+   * api.noAnswer as its reason; in the middle of an answer it ends the
+   * reading with `whole` false. The Log gets one entry for the call, with
+   * its status and the two numbers, and none of the lines' own text.
+   */
+  async postLines(path: string, body: unknown, onLine: (line: unknown) => void, silenceMs: number): Promise<ApiResponse<LinesRead>> {
+    const result = await this.readLines(path, body, onLine, silenceMs);
+    this.record('POST', path, result);
+    return result;
+  }
+
+  private async readLines(path: string, body: unknown, onLine: (line: unknown) => void, silenceMs: number): Promise<ApiResponse<LinesRead>> {
+    const stop = new AbortController();
+    let silent = false;
+    let watch: ReturnType<typeof setTimeout> | undefined;
+    // The watch on silence: started now, and again each time something arrives.
+    const heard = () => {
+      clearTimeout(watch);
+      watch = setTimeout(() => {
+        silent = true;
+        stop.abort();
+      }, silenceMs);
+    };
+    heard();
+    try {
+      let res: Response;
+      try {
+        res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: stop.signal });
+      } catch {
+        const reason = silent ? this.lang.words().api.noAnswer(Math.round(silenceMs / 1000)) : this.lang.words().api.network;
+        return { ok: false, status: 0, body: { error: reason } as unknown as LinesRead };
+      }
+      if (res.status !== 200 || res.body === null) {
+        const text = await res.text().catch(() => '');
+        let refusal: unknown = text;
+        try {
+          refusal = JSON.parse(text);
+        } catch {
+          // Not JSON: the text itself, as HttpClient hands it over.
+        }
+        return { ok: false, status: res.status, body: refusal as LinesRead };
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let lines = 0;
+      let rest = '';
+      const take = (line: string) => {
+        if (line.trim() === '') return;
+        let value: unknown;
+        try {
+          value = JSON.parse(line);
+        } catch {
+          return;
+        }
+        lines += 1;
+        onLine(value);
+      };
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          heard();
+          rest += decoder.decode(value, { stream: true });
+          let end = rest.indexOf('\n');
+          while (end !== -1) {
+            take(rest.slice(0, end));
+            rest = rest.slice(end + 1);
+            end = rest.indexOf('\n');
+          }
+        }
+      } catch {
+        return { ok: true, status: 200, body: { lines, whole: false } };
+      }
+      // A last line that came with no line break after it.
+      take(rest + decoder.decode());
+      return { ok: true, status: 200, body: { lines, whole: true } };
+    } finally {
+      clearTimeout(watch);
+    }
   }
 
   private async request<T>(call: () => import('rxjs').Observable<import('@angular/common/http').HttpResponse<T>>, timeoutMs?: number): Promise<ApiResponse<T>> {

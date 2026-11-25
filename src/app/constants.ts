@@ -86,3 +86,15 @@ export const MILLIONTHS_PER_ANOS = 1_000_000n;
 
 /** A guardian stake goes in whole multiples of this many anos (wallet spec 8.2, Account; 2026-11-12): it is the validators' GUARDIAN_VOTE_ANOS, the anos staked for one guardian vote. */
 export const GUARDIAN_STAKE_STEP_ANOS = 1000;
+
+/** What one message to Joy may carry at most (wallet spec 4.18; 2026-11-24): the masterpod's own limits for /ask-joy (its spec, section 30). A conversation is sent as its newest messages, at most this many of them. */
+export const JOY_MAX_MESSAGES = 200;
+
+/** The texts of the messages that are sent to Joy have at most this many bytes of UTF-8 together (wallet spec 4.18): the masterpod's limit for /ask-joy. */
+export const JOY_MAX_CONVERSATION_BYTES = 120_000;
+
+/** The memory file Joy keeps for a member has at most this many bytes of UTF-8 (wallet spec 4.18): the masterpod's limit. */
+export const JOY_MEMORY_MAX_BYTES = 10_240;
+
+/** How long Joy's answer may bring nothing before the wallet gives it up as cut off (wallet spec 4.18). The masterpod sends an empty line every 10 seconds while an answer is under way, so this long with nothing at all means that the connection is dead. */
+export const JOY_SILENCE_MS = 60_000;
