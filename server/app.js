@@ -55,6 +55,12 @@ import { createProxyMiddleware } from 'http-proxy-middleware';
  * the wallet's chat. It is asked of the masterpod and handed to the
  * browser as a picture that the browser keeps; the lines are where
  * createApp mounts it.
+ *
+ * One answer under /api goes to the browser as a stream and with a type of
+ * its own (2026-11-24, wallet spec 4.18): the masterpod's answer to
+ * POST /api/masterpod/ask-joy, a message to Joy, the wallet's AI. Its
+ * lines are handed on as the masterpod writes them, so the browser shows
+ * Joy's answer while it is being written (ownStreamHeaders).
  */
 
 /**
@@ -170,6 +176,29 @@ function ownPictureHeaders(proxyRes) {
   proxyRes.headers['cache-control'] = picture ? STICKER_KEEP : 'no-store';
 }
 
+/**
+ * Called with the masterpod's answer to a message for Joy, the wallet's AI
+ * (2026-11-24, wallet spec 4.18), as ownAnswerHeaders is for every other
+ * answer under /api. The masterpod writes that answer as a stream: lines of
+ * JSON, sent one by one while Joy's answer is being written, with status
+ * 200 and the type application/x-ndjson. Only that answer is handed on as a
+ * stream: its type goes on as "application/x-ndjson; charset=utf-8", and it
+ * carries "X-Accel-Buffering: no", which tells nginx in front of this
+ * program to hand each piece to the browser as it comes. Without it nginx
+ * collects an answer before it sends it, and the words would show all at
+ * once at the end. nginx keeps that header to itself. This program holds
+ * nothing back either way: a forward hands on each piece as it arrives.
+ * Every other answer on that path, a refusal among them, goes on as every
+ * answer under /api does, JSON or plain text.
+ */
+function ownStreamHeaders(proxyRes) {
+  const lines = proxyRes.statusCode === 200 && /^application\/x-ndjson\s*(;|$)/i.test(proxyRes.headers['content-type'] ?? '');
+  ownAnswerHeaders(proxyRes);
+  if (!lines) return;
+  proxyRes.headers['content-type'] = 'application/x-ndjson; charset=utf-8';
+  proxyRes.headers['x-accel-buffering'] = 'no';
+}
+
 /** 502 { error: "<who> unavailable" } when a backend does not answer. */
 function unavailable(who) {
   return (err, req, res) => {
@@ -202,8 +231,12 @@ function unavailable(who) {
  * close after its answer. Without an agent (the masterpod, the keyholders,
  * the signing servers) http-proxy opens a new connection for every call and
  * sends "Connection: close".
+ *
+ * `answerHeaders` is what is called with the backend's answer before its
+ * headers go to the browser: ownAnswerHeaders, unless another is given
+ * (2026-11-24: ownStreamHeaders for a message to Joy).
  */
-function forward(config, target, who, prefix, replacement = '', method = null, agent = null) {
+function forward(config, target, who, prefix, replacement = '', method = null, agent = null, answerHeaders = ownAnswerHeaders) {
   return createProxyMiddleware({
     target,
     changeOrigin: true,
@@ -211,7 +244,7 @@ function forward(config, target, who, prefix, replacement = '', method = null, a
     timeout: config.proxyTimeoutMs,
     pathFilter: (path, req) => prefix.test(path) && (method === null || req.method === method),
     pathRewrite: (path) => path.replace(prefix, replacement) || '/',
-    on: { error: unavailable(who), proxyRes: ownAnswerHeaders },
+    on: { error: unavailable(who), proxyRes: answerHeaders },
     ...(agent === null ? {} : { agent, headers: { connection: 'keep-alive' } }),
   });
 }
@@ -285,6 +318,14 @@ export function createApp(config) {
   const httpAgent = new http.Agent(kept);
   const httpsAgent = new https.Agent(kept);
 
+  // A message to Joy (2026-11-24, wallet spec 4.18), in front of the
+  // masterpod's other paths: POST /api/masterpod/ask-joy is forwarded as
+  // they are, to /ask-joy, and its answer goes to the browser as the stream
+  // the masterpod writes (ownStreamHeaders). The proxy library's two time
+  // limits end a call on which nothing moved for config.proxyTimeoutMs,
+  // and the masterpod sends an empty line every 10 seconds while an
+  // answer is under way, so an answer that takes minutes is not cut.
+  app.use(forward(config, config.masterpodUrl, 'masterpod', /^\/api\/masterpod(?=\/ask-joy(?:\?|$))/, '', 'POST', null, ownStreamHeaders));
   app.use(forward(config, config.masterpodUrl, 'masterpod', /^\/api\/masterpod(?=\/|$)/));
   config.validatorUrls.forEach((target, i) => {
     const agent = target.startsWith('https:') ? httpsAgent : httpAgent;

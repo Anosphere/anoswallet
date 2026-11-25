@@ -27,6 +27,8 @@ import { GuardianProposalPage } from './pages/guardian-proposal.page';
 import { GuardiansPage } from './pages/guardians.page';
 import { HomePage } from './pages/home.page';
 import { IdentityPage } from './pages/identity.page';
+import { JoyMemoryPage } from './pages/joy-memory.page';
+import { JoyPage } from './pages/joy.page';
 import { LandingPage } from './pages/landing.page';
 import { ListingNewPage } from './pages/listing-new.page';
 import { ListingPage } from './pages/listing.page';
@@ -96,6 +98,8 @@ export const routes: Routes = [
       { path: ':chatRoomId', component: ChatRoomPage, title: 'Chat' },
     ],
   },
+  { path: 'joy', component: JoyPage, canActivate: [sessionGuard], title: 'Joy' },
+  { path: 'joy/memory', component: JoyMemoryPage, canActivate: [sessionGuard], title: "Joy's memory" },
   { path: 'marketplace', component: MarketplacePage, canActivate: [sessionGuard], title: 'Marketplace' },
   { path: 'marketplace/new', component: ListingNewPage, canActivate: [sessionGuard], title: 'New listing' },
   { path: 'marketplace/mine', component: MyListingsPage, canActivate: [sessionGuard], title: 'Your listings' },

@@ -1,7 +1,8 @@
 import { Injectable, inject } from '@angular/core';
+import { JOY_SILENCE_MS } from '../constants';
 import { AttestationPayload, Envelope, EscrowVerdictPayload, FollowUp, HybridPublicKey, SignOffMessage, Signatures, Verdict } from './crypto.service';
 import { LanguageService } from './language.service';
-import { ApiResponse, LogService } from './log.service';
+import { ApiResponse, LinesRead, LogService } from './log.service';
 import { CaseStatus, RecoveryPodAnswer } from './recovery.service';
 import { AnosAccountItem, NotificationItem, SessionService, StatusAnswer } from './session.service';
 
@@ -146,6 +147,15 @@ export interface NoteRange {
   from?: string;
   to?: string;
 }
+
+/** One message of a conversation with Joy as /ask-joy takes it (masterpod spec 30; 2026-11-24): who wrote it, the member (`user`) or Joy (`assistant`), and its text. */
+export interface JoyMessage {
+  role: 'user' | 'assistant';
+  text: string;
+}
+
+/** How an answer of Joy's ended, as the last line of /ask-joy's answer says it (masterpod spec 30): `end`, an answer that ended by itself; `length`, cut off where the model reached its limit; `refused`, stopped by the safety check of Anthropic, the company whose model writes Joy's answers. */
+export type JoyStop = 'end' | 'length' | 'refused';
 
 
 export interface CreateAnswer {
@@ -833,7 +843,8 @@ export interface ExistingEvidence {
  * the report of how far a chat was read, /mark-messages-seen, of masterpod
  * 21 (2026-11-19), and the store of an account's first key blob,
  * /store-first-key-blob, of masterpod 22 (2026-11-20), and the eight
- * routes of a pod's security alerts of masterpod 25 (2026-11-21); the read
+ * routes of a pod's security alerts of masterpod 25 (2026-11-21), and the
+ * three routes of Joy, the wallet's AI, of masterpod 30 (2026-11-24); the read
  * of one listing, /get-listing, is of 2026-11-06),
  * so no page builds URLs or envelopes. The session service holds the session and signs.
  */
@@ -1103,6 +1114,42 @@ export class MasterpodApiService {
 
   setWalletSettings(settingsBlob: string): Promise<ApiResponse<{ updatedAt: string }>> {
     return this.signed('/set-wallet-settings', { settingsBlob });
+  }
+
+  // --- level setup: Joy, the wallet's AI (masterpod spec 30; wallet spec 4.18) ---
+
+  /** The member's memory file for Joy as the wallet stored it: a blob under the anoPod encryption key, hex, and when it was last stored; both null before the first store. Quiet unless asked otherwise, since it is nothing the person did. */
+  getJoyMemory(quiet = true): Promise<ApiResponse<{ memoryBlob: string | null; updatedAt: string | null }>> {
+    return this.signed('/get-joy-memory', {}, quiet);
+  }
+
+  /** The memory file's blob, hex, 1 to 32768 bytes, which takes the place of the one before. 400 invalid memoryBlob for a blob of another length. */
+  setJoyMemory(memoryBlob: string): Promise<ApiResponse<{ updatedAt: string }>> {
+    return this.signed('/set-joy-memory', { memoryBlob });
+  }
+
+  /**
+   * One message to Joy: the conversation, oldest first, with the member's
+   * new message last, and the opened memory file as text. Both travel in
+   * the clear inside the signed request: the masterpod hands them to
+   * Anthropic's model, which writes the answer.
+   *
+   * The answer is read while it arrives (LogService.postLines), each line
+   * handed to `onLine` as it comes: `{ text }` for a piece of Joy's
+   * answer; then one last line, `{ done: true, stop, memory }` for an
+   * answer that ended (`stop` a JoyStop; `memory` the whole memory file
+   * after Joy changed it, or null when she did not), or `{ error }` for an
+   * answer that failed: `joy busy`, `joy unavailable` or `joy was cut
+   * off`.
+   *
+   * A refusal comes with its status in place of the lines: 503 joy is
+   * off, 429 daily limit reached, 400 conversation too long, 400 memory
+   * too long, and the refusals of every route at level setup.
+   */
+  askJoy(messages: JoyMessage[], memory: string, onLine: (line: unknown) => void): Promise<ApiResponse<LinesRead>> {
+    const envelope = this.session.sign('/ask-joy', { messages, memory });
+    if (!envelope) return Promise.resolve({ ok: false, status: 0, body: { error: this.lang.words().api.noSession } as unknown as LinesRead });
+    return this.log.postLines(BASE + '/ask-joy', envelope, onLine, JOY_SILENCE_MS);
   }
 
   // --- level setup: the passkeys (masterpod spec 19) --------------------------

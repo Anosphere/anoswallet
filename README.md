@@ -53,7 +53,14 @@ to the browser as `image/webp`, marked to be kept for a year
 (`Cache-Control: public, max-age=31536000, immutable`). An answer that
 is no picture, a sticker that is not there among them, goes on marked
 `no-store`, and anything else under `/stickers` is a 404 (the spec's
-4.16). Everything else is the Angular build (`dist/wallet/browser`),
+4.16). One answer under `/api` goes to the browser as a stream and with
+a type of its own, since 2026-11-24: the masterpod's answer to
+`POST /api/masterpod/ask-joy`, a message to Joy, the wallet's AI. The
+proxy hands it on line by line as the masterpod writes it, as
+`application/x-ndjson`, with `X-Accel-Buffering: no`, which tells nginx
+on the wallet servers not to collect the answer first, so the browser
+shows Joy's answer while it is being written (the spec's 4.18).
+Everything else is the Angular build (`dist/wallet/browser`),
 with `index.html` for the router's deep links. Every answer of the
 proxy, the build's files and the answers under `/api` alike, carries
 three safety headers: `X-Content-Type-Options: nosniff` (the browser
@@ -79,7 +86,7 @@ before that change), `DIST_DIR`, `RP_ID` localhost,
 ```
 server/
   index.js                 boots the proxy on PORT
-  app.js                   createApp(config): /api/config, the forwarders, the stickers' pictures under /stickers, the build
+  app.js                   createApp(config): /api/config, the forwarders, the answer to a message for Joy as a stream, the stickers' pictures under /stickers, the build
   config.js                the variables with their local defaults
 src/app/
   app.ts, app.html         the shell: toolbar, side navigation by status, the notification poll and its sound; since 2026-11-22 the Update button, the box "You are logged out" and the load of the page after them and after Lock (spec 8.1)
@@ -102,7 +109,7 @@ src/app/
   components/find-passkey.component.ts   the walk-through in front of the locked-out stepper, "Find your passkey first": five screens that name where a passkey may be and ask about each, with the start page's Log in on the first (spec 12.3)
   components/room-picture.component.ts   a room's round mark on the chat pages: the picture of a public room when it has one, else the grey disc with the icon of the room's kind (spec 8.6)
   pages/                   one file per route: landing, create, recover, vouching, identity, setup,
-                           wallet, noted-transactions, account, account-home, account-recovery-home, account-recovery, account-protect, account-passkeys, account-ledger-id, account-alerts, chat, marketplace, notifications, seed, log
+                           wallet, noted-transactions, account, account-home, account-recovery-home, account-recovery, account-protect, account-passkeys, account-ledger-id, account-alerts, chat, joy, joy-memory, marketplace, notifications, seed, log
   pages/my-recovery-case.page.ts   the person's recovery case, /cases/recovery/:caseId: the status, the video call with its time and its link, the chat with the attestor, the accounts being moved, the timeline (spec 13.3)
   services/
     config.service.ts      GET /api/config once
@@ -125,6 +132,7 @@ src/app/
     room-picture-cache.service.ts   the pictures of public rooms: one read per room and picture for the tab's life (it ends at a load of the page, which a Lock is since 2026-11-22), five at a time; a read that failed is asked again half a minute later at the earliest (spec 8.3)
     stickers.service.ts    the stickers' list: every set the masterpod has, asked for once after each login, when a conversation is first opened, and kept until the login ends; no timer (spec 4.16, 8.3)
     update.service.ts      the update check and the refresh: whether the wallet's server holds a newer build than this page runs, which shows the Update button, and the load of the page after that button, after Lock and after the box "You are logged out", made only once the server has answered (spec 8.1, 8.3)
+    joy.service.ts         Joy, the wallet's AI: the one chat with her, sent to the masterpod with every message and kept encrypted in the browser's own database (IndexedDB) so that a reload does not lose it, and the member's memory file, a blob on the masterpod that only the anoPod encryption key opens (spec 4.18, 8.3)
 public/                    plain files that the build copies beside index.html as they are
   manifest.webmanifest     says the wallet is an app once it is added to a phone's Home Screen: the name anoPod, no address bar (spec 2)
   icon-192.png, icon-512.png   the manifest's two pictures of the logo, 192 and 512 pixels a side
@@ -153,7 +161,14 @@ the sound's switch (`sound`) and, since 2026-11-23, the stickers sent
 lately from this phone (`stickers-sent`). Where the browser refuses its
 storage, the wallet works without them. On a phone where the security
 alerts were turned on, the browser also keeps the notification worker
-(`public/alerts-worker.js`) and that phone's delivery address.
+(`public/alerts-worker.js`) and that phone's delivery address. Since
+2026-11-24 the first sentence of this paragraph has one exception: one
+blob is written to browser storage, the chat with Joy that is under
+way. It is encrypted with the anoPod encryption key and kept in the
+browser's own database (IndexedDB, the database `anopod-wallet`), under
+the anoPod's id, so that a reload of the page does not lose it. No key
+is kept with it, so nothing opens it without the passkey (the spec's
+4.18).
 
 ## The wallet servers
 

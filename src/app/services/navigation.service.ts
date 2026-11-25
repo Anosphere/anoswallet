@@ -16,7 +16,8 @@ export interface NavItem {
  * The navigation (wallet spec 8.1): the one list the side panel and the
  * Home tiles both draw, so they cannot drift apart. Which entries it holds
  * follows the status: vouching until vouched; identity and setup until
- * setup is complete; Home first, then wallet, cases, chat, marketplace, DAO
+ * setup is complete; Home first, then wallet, cases, chat, Joy (the wallet's
+ * AI, since 2026-11-24; wallet spec 4.18), marketplace, DAO
  * and account once it is; Moderation in the moderator edition and Attesting in
  * the attestor edition (wallet spec 12.1, 13.1); Notifications; Vouch
  * requests when the pod is a seed; Log. The labels come from the
@@ -44,6 +45,7 @@ export class NavigationService {
         { path: '/wallet', label: nav.wallet, icon: 'account_balance_wallet' },
         { path: '/cases', label: nav.cases, icon: 'folder_shared' },
         { path: '/chat', label: nav.chat, icon: 'chat', badge: this.session.unreadRoomCount() },
+        { path: '/joy', label: nav.joy, icon: 'auto_awesome' },
         { path: '/marketplace', label: nav.marketplace, icon: 'storefront' },
         { path: '/dao', label: nav.dao, icon: 'how_to_vote' },
         { path: '/account', label: nav.account, icon: 'manage_accounts' },

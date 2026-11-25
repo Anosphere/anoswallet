@@ -100,6 +100,10 @@ Routes
                                       still answered and no longer read by the browser (2026-11-10, above)
     GET  /api/health                  200 { status: "ok" }
     ANY  /api/masterpod/<path>        forwarded to MASTERPOD_URL/<path>
+    POST /api/masterpod/ask-joy       a message to Joy (2026-11-24, 4.18; the point on a message to Joy, below): forwarded
+                                      to MASTERPOD_URL/ask-joy as every masterpod path is, and its answer handed on as
+                                      the stream of lines it is, application/x-ndjson, marked so that nginx does not
+                                      collect it first
     ANY  /api/anos/<n>/<path>         forwarded to VALIDATOR_URLS[n - 1]/<path>; n not 1..count: 404 { error: "unknown validator" }
     ANY  /api/keyholder/<n>/<path>    forwarded to KEYHOLDER_URLS[n - 1]/<path>; likewise 404 { error: "unknown keyholder" }
     POST /api/sign/<n>                forwarded to SIGNING_SERVER_URLS[n - 1]/sign; n not 1..count: 404 { error: "unknown signing server" }
@@ -172,7 +176,9 @@ Behaviour
   other header of the backend is dropped, and the proxy writes
   Content-Type itself: "application/json; charset=utf-8" when the
   backend said application/json, "text/plain; charset=utf-8" for
-  anything else. So a backend cannot set a cookie, and a browser never
+  anything else. (Since 2026-11-24 one answer keeps a type of its own,
+  the masterpod's stream of lines for a message to Joy: the point on a
+  message to Joy, below.) So a backend cannot set a cookie, and a browser never
   draws a backend's answer as a page. A redirect from a backend comes
   back with its status and without its target, and the wallet's code
   treats it as any failed call. Every answer under /api carries three
@@ -317,6 +323,37 @@ Behaviour
   headers and the page's policy, as every answer outside /api does. The
   wait and what is logged are those of every forward: 120 seconds, and
   a line for a 502.
+- A message to Joy (2026-11-24, section 11; 4.18). One answer under
+  /api is handed on as a stream, with a type of its own: the
+  masterpod's answer to POST /api/masterpod/ask-joy. The masterpod
+  writes it line by line while Joy's answer is being written, with
+  status 200 and the type application/x-ndjson (its spec, section 30).
+  The proxy has a forward of its own for that one path and method, in
+  front of the forward of the masterpod's other paths. The request
+  goes on exactly as on those: the three headers, the body streamed,
+  the prefix cut, a new connection. Of the answer, a 200 that the
+  masterpod calls application/x-ndjson goes to the browser as
+  "Content-Type: application/x-ndjson; charset=utf-8", and with one
+  header more, "X-Accel-Buffering: no". Every other answer on that
+  path, a refusal with its status among them, goes on as every answer
+  under /api does, JSON or plain text, without that header. The
+  header is for nginx on the wallet servers. nginx collects a
+  backend's answer before it sends it on, unless it is told otherwise
+  (proxy_buffering, on by default), and the words of an answer would
+  then show all at once at its end. With "no" in that header nginx
+  hands each piece to the browser as it comes, for that one answer,
+  and it does not pass the header itself on (nginx's own page on its
+  proxy module, read 2026-11-24). So deploy/nginx/wallet.conf did not
+  change. The proxy holds nothing back on any forward: the proxy
+  library hands each piece of an answer on as it arrives. The three
+  headers of every answer under /api stand on the stream too,
+  "Cache-Control: no-store" among them. The two time limits of a
+  forward (120 seconds) count the time in which nothing moves, and so
+  do nginx's 130 seconds; the masterpod sends an empty line every 10
+  seconds while an answer is under way, so an answer that takes
+  minutes is not cut. When the browser goes away in the middle of an
+  answer, the proxy closes its call to the masterpod, and the
+  masterpod then stops its call to Anthropic.
 - The signed envelope's path is the backend path: the browser signs
   "/complete-setup" and posts to /api/masterpod/complete-setup; the proxy
   strips its prefix and the masterpod sees /complete-setup.
@@ -1320,6 +1357,206 @@ count the same calls as before. The wallet's side is the shell's poll
 Chat), and chat.service, session.service and masterpod-api.service
 (8.3).
 
+### 4.18 Joy, the wallet's AI
+
+Added 2026-11-24 (section 11). There is no plan file: the talk with the
+user is the plan, and its work note is
+forclaude/notes/project-wallet-ai-joy.md. A member chats with an AI in
+the wallet, named Joy, as with any AI chat. The user: "Basically
+they're getting AI for free. They can use it for whatever the hell they
+would use the free version of CHATgpt for." And: "I want this to be
+cool, not just cheap." The answers are written by a model of the
+company Anthropic, Claude Haiku 5.5, which the masterpod calls for
+every message. The masterpod's side is its own spec's section 30, which
+holds the rules, the two tables, the three routes, the request to
+Anthropic, Joy's two tools for the memory file, the shared memory file
+and what is left as it is. The masterpod gained there: two tables
+(`joy_memories`, a member's memory file as a blob it cannot open, and
+`joy_usage`, a count of messages and tokens for each pod and day),
+three routes at level setup, five env variables, one file of text and
+one npm package. The wallet gained no package and no env variable.
+
+    POST /get-joy-memory (setup), new
+    body: {}
+    answer: 200 { memoryBlob, updatedAt }: the blob the wallet stored, hex, and when; both null before
+            the first store
+    a masterpod of before: 404, as for any route it does not have
+
+    POST /set-joy-memory (setup), new
+    body: { memoryBlob }: hex, 1 to 32768 bytes
+    answer: 200 { updatedAt }; the blob takes the place of the one before
+    refusals: 400 bad request shape, 400 invalid memoryBlob
+
+    POST /ask-joy (setup), new
+    body: { messages: [ { role: "user" | "assistant", text } ], memory }: the conversation, oldest first,
+          the member's new message last, and the opened memory file as text
+    refusals, each as JSON with its status, before anything is sent to Anthropic:
+            400 bad request shape
+            400 invalid messages (1 to 200 messages, each with a role and a text that is more than spaces,
+                the first and the last the member's)
+            400 conversation too long (the texts together over 120,000 bytes of UTF-8)
+            400 memory too long (over 10,240 bytes of UTF-8)
+            503 joy is off (the masterpod has no key for Anthropic)
+            429 daily limit reached (the pod has sent its 300 messages of the day, a day of UTC)
+    answer: 200, Content-Type application/x-ndjson, a stream of lines, each one JSON object:
+            { "text": "..." }                                a piece of Joy's answer, as it is written
+            { "done": true, "stop": "end" | "length" | "refused", "memory": "<the whole file>" | null }
+                                                             the last line of an answer that ended
+            { "error": "joy busy" | "joy unavailable" | "joy was cut off" }
+                                                             the last line of an answer that failed
+            an empty line may stand between two lines and means nothing; the masterpod writes one every
+            10 seconds while an answer is under way
+    a masterpod of before: 404
+
+What leaves the wallet. A message to Joy is the one thing in the wallet
+that a member writes and the masterpod reads. The conversation and the
+opened memory file travel in the clear inside the signed request, pass
+through the masterpod's memory and go to Anthropic, whose model reads
+them to write the answer. The masterpod writes neither into a table or
+a log (its spec, 30.2). The Joy page says so in one line that always
+stands under its header: "Joy is an AI. What you write to her leaves
+your wallet to be answered." The page of the memory file says the same
+of the file (8.2, Joy).
+
+The chat. There is one chat with Joy at a time, and the wallet holds
+it: joy.service (8.3) keeps its messages in the page's memory, so an
+answer that is being written goes on while the member looks at another
+page of the wallet. A message to Joy carries the chat's newest messages,
+oldest first: as many as fit the masterpod's limits, 200 messages and
+120,000 bytes of text, and the first of them the member's. A message
+with no text is left out (an answer that was refused or failed before
+a word of it came). So in a chat that has outgrown those limits Joy no
+longer reads the oldest messages; the chat on the screen is not cut,
+and the member is not told. A new message that is over 120,000 bytes by
+itself is not sent: the page says so (below).
+
+The chat survives a reload. After the member's own message, and again
+after each answer of Joy's, the wallet encrypts the whole chat with the
+anoPod encryption key (`wrapJson`, section 7, as a note's private part
+and the wallet settings are) and puts the blob into the browser's own
+database, IndexedDB, the wallet's first use of it:
+
+    database    anopod-wallet, version 1
+    place       joy-chat (an object store), one entry for each pod
+    key         the anoPod's id, hex
+    value       the blob as bytes: iv || ciphertext || tag of the JSON
+                { v: 1, messages: [ { role: "user" | "assistant", text, at, end? } ] }
+                at: when the message was sent, or when the answer ended (ISO 8601)
+                end: only on an answer that did not end as an answer should: "length", "refused" or "cut"
+
+When a Joy page opens for the first time in a login, the wallet reads
+the pod's entry and opens it. A blob that does not open under this
+anoPod encryption key is passed over, and the chat starts empty. After
+a Lock or a reload the blob stays in the browser, and nothing reads it
+without the passkey, which is what brings the encryption key back.
+New chat empties the chat and takes the entry out. The chat is in this
+browser on this device only: the masterpod keeps none of it, another
+phone does not have it, and a browser may clear its database by itself.
+Where a browser refuses its database, the chat lives in the page's
+memory alone and a reload loses it. Each person who logs in on one
+browser has an entry of their own. Saved chats, kept on the masterpod
+with a title, are the next build (section 10).
+
+The memory file. It is what Joy knows of a member from earlier chats:
+plain text of at most 10,240 bytes. The masterpod stores it as a blob
+it cannot open, the wallet's `wrapJson` of `{ v: 1, text }` under the
+anoPod encryption key, hex, as it stores the wallet settings (4.7). The
+wallet reads the blob with /get-joy-memory each time a Joy page opens,
+unless an answer is under way, and opens it; no blob yet is an empty
+file, and so is a blob that does not open. It sends the opened text as
+`memory` with every message. Joy changes the file on the masterpod with
+her two tools (its spec, 30.6), and when the last line of an answer
+carries `memory`, that is the whole file after her changes: the wallet
+takes it as the file, encrypts it and stores it with /set-joy-memory,
+before the next message can be sent. A store that fails is said in red,
+the wallet goes on with the new file, and the file is stored again
+with the next answer. No message is sent before the file has been read
+once in the login: an answer could otherwise put a new file in the
+place of one the wallet never saw. The member reads the file, changes
+it and empties it on its own page (8.2, Joy).
+
+The stream. The answer is meant to reach the browser as the masterpod
+writes it: through the doormen in front of the masterpod (HAProxy,
+whose settings, as the file they are built from has them, hold no line
+that collects or compresses an answer), through the proxy, which hands
+this one answer on as a stream (section 2), and through nginx, which
+that answer tells not to collect it. What of that was tried, and what
+was only read, is in section 11. The browser
+reads it with its own `fetch`, piece by piece, where every other call
+of the wallet goes through Angular's HttpClient, which hands an answer
+over only when it has ended (log.service's `postLines`, 8.3). The
+wallet gives an answer up when nothing at all has come for 60 seconds
+(JOY_SILENCE_MS): the masterpod's empty lines come every 10, so that
+long a silence means a dead connection, and without the limit a phone
+that lost its connection would show "Joy is writing…" for good.
+
+What a member is told (the words are in 8.8). A message that the
+masterpod refuses, and one whose answer fails before any of it came,
+is taken out of the chat again and its text put back into the message
+box, with the reason in red above the box:
+
+    503 joy is off                 "Joy is switched off right now. Try again later."
+    429 daily limit reached        "You have sent Joy as many messages as an anoPod may send in one day. You can
+                                   write to her again after 7:00 AM." The time is the end of the masterpod's day,
+                                   midnight UTC, on the member's own clock: 07:00 in Thailand
+    400 conversation too long      "This message is too long for Joy. Shorten it, or send it in parts." The wallet
+                                   says it by itself, without asking the masterpod, for a new message of more
+                                   than 120,000 bytes; the rest of a conversation it cuts (above)
+    400 memory too long            "Joy's memory of you is too long. Open Memory and take some lines out." The
+                                   wallet says it by itself for a file over 10,240 bytes
+    any other refusal              as the wallet shows every refusal: "/ask-joy: HTTP 403: setup not complete"
+    { error: "joy busy" }          "Joy is busy right now. Try again in a moment."
+    { error: "joy unavailable" }   "Joy cannot answer right now. Try again later."
+    { error: "joy was cut off" }   "Joy's answer was cut off. Send your message again." Also for an answer that
+                                   ended with no last line, and for one the wallet gave up after 60 seconds
+
+An answer that failed after a part of it had come keeps that part in
+the chat, with the last of those sentences under it in grey. Under an
+answer that ended with another `stop` than `end` stands a grey line
+too:
+
+    stop: "length"                 "Joy reached the longest answer she can give, so this one stops here. Ask her to
+                                   go on."
+    stop: "refused"                "Joy did not answer this. Try asking in another way."
+
+Decided while building, each a small thing the talk had not named:
+
+- The Joy entry stands in the side list after Chat, with the icon
+  `auto_awesome`, for every pod whose setup is complete, in all three
+  editions: the list of such a pod is the same in each, and the
+  masterpod's routes ask for no more than level setup.
+- The memory file has a page of its own, /joy/memory, reached by Memory
+  on the Joy page, so a phone's Back goes from it to the chat.
+- New chat and Delete all each ask in the confirmation box first (8.9),
+  since neither can be undone. The talk named neither question.
+- The conversation is cut from its oldest end, anew at every message.
+- The two blobs' forms and the names in IndexedDB, above.
+- The 60 seconds of silence, above.
+- The memory file is read at every opening of a Joy page, not once in a
+  login as the wallet settings are, so a line that Joy saved on another
+  device is there the next time the tab is opened.
+- The Log's entry for /ask-joy holds the status and two numbers and no
+  text (8.3).
+
+Left as it is:
+
+- A chat that has outgrown the masterpod's limits loses its oldest
+  messages for Joy without a word to the member.
+- The member's own message is kept when it is sent, and Joy's answer
+  when it has ended: a reload in the middle of an answer loses that
+  answer, and the chat comes back with the member's message last.
+- An answer cannot be stopped by the member.
+- The memory file is the last one written (the masterpod's spec,
+  30.10): two devices that write to Joy within the same minutes can
+  lose a line that one of them saved.
+- Joy's words are plain text: nothing is read as Markdown, and a web
+  address in an answer is no link.
+
+The proxy has one forward more for this (section 2), and nothing under
+deploy/ changed. The wallet's side is the two Joy pages (8.1; 8.2,
+Joy), joy.service, masterpod-api.service, log.service and
+navigation.service (8.3), and the words (8.8).
+
 ## 5. Validator changes (anossoftware)
 
 ### 5.1 A nonces table and two variables
@@ -1661,7 +1898,10 @@ Angular 22, standalone components, signals, the router, Angular Material
 22 with a prebuilt theme and no custom styling, web first: a toolbar and
 a side navigation on a desktop, the navigation collapsing behind a menu
 button on a phone. Everything secret lives in RAM and dies with the tab,
-as in the test apps; a new tab unlocks again.
+as in the test apps; a new tab unlocks again. (Since 2026-11-24 one
+thing of a pod's outlives the tab: the chat with Joy that is under way,
+kept in the browser's own database as a blob under the anoPod
+encryption key, which only the passkey brings back; 4.18, section 11.)
 
 ### 8.1 Shell, routes, guards
 
@@ -1692,6 +1932,8 @@ as in the test apps; a new tab unlocks again.
     /chat/requests           invites to me and join requests on my rooms
     /chat/new                start a chat: Message someone, Find public rooms, New public room
     /chat/:chatRoomId        one conversation
+    /joy                     Joy, the wallet's AI: the one chat with her, Memory, New chat (2026-11-24, 4.18)
+    /joy/memory              Joy's memory of the member: the file's text, Save, Delete all (2026-11-24, 4.18)
     /marketplace             browse: the filter chips, the Your listings row, the cards
     /marketplace/new         a new listing
     /marketplace/mine        your listings, open first, with who connected and Close
@@ -1721,7 +1963,8 @@ in the list above: they are in 13.2, and this one is there with them.
 
 A guard sends anyone without a session to /. Which pages the navigation
 shows follows the status: vouching until vouched; identity and setup
-until setup is complete; home first, then wallet, chat, marketplace, DAO
+until setup is complete; home first, then wallet, chat, Joy
+(2026-11-24, section 11; 4.18), marketplace, DAO
 (2026-11-08) and account once it is (2026-11-06, section 11); seed when
 isSeed. The Chat entry carries the number of unread rooms (8.2, Chat;
 2026-11-05, section 11) and the Notifications entry the number of unread
@@ -3939,6 +4182,62 @@ list: what the masterpod keeps since 2026-11-19 (4.10) is what the other
 members of a room see, the words "Sent" and "Seen" of the paragraph "One
 conversation", above.
 
+Joy (2026-11-24, section 11; 4.18): two screens. The chat, at /joy, in
+the navigation and on Home once setup is complete, after Chat. One
+frame as high as the screen leaves under the top bar, as the Chat page
+is, at most 820 px wide and centred on a desktop. From its top: a
+header with a round mark (the icon `auto_awesome`), the name "Joy",
+the text link "Memory", which goes to /joy/memory, and the outlined
+button "New chat"; one line on a grey ground that always stands there,
+"Joy is an AI. What you write to her leaves your wallet to be
+answered."; the thread; and the message box, "Message Joy", which grows
+to five lines, with the round Send. Enter sends and Shift+Enter makes a
+new line, as in a conversation with people. The member's messages stand
+at the right, Joy's at the left, each in a bubble; a bubble of Joy's is
+at most 88 percent of the frame wide, one of the member's 80. Joy's
+words are drawn as she wrote them: line breaks kept (`white-space:
+pre-wrap`) and nothing read as Markdown, so an asterisk shows as an
+asterisk. While the chat is empty the thread says what Joy is for: "Ask
+Joy anything: a question, something to write or to translate, a plan to
+think through." After a send the member's message shows at once, the
+box empties, Send and New chat are off, and "Joy is writing…" stands in
+a bubble in grey letters until the answer's first piece has come; then
+the answer shows as far as it has come and grows piece by piece. The
+thread follows what is added at its end while the reader is within 120
+px of the end; a reader who has gone up to read stays there. What the
+page says when a message is refused, when an answer fails and when one
+stops early is in 4.18: in red above the message box, with the text
+back in the box, or as a grey line under the answer. New chat, off
+while the chat is empty and while an answer is written, opens the
+confirmation box (8.9) "Start a new chat?" with the note "This chat is
+not saved anywhere. It will be gone, and it cannot be brought back."
+and the buttons Cancel and New chat, and then empties the chat. The
+chat is joy.service's (8.3), not the page's: leaving the page and
+coming back shows the chat as it stands, an answer that is still being
+written with it, and the message box keeps what was typed.
+Joy's memory, at /joy/memory: one outlined card, as the Account pages
+are. The title "Joy's memory of you"; a back link "Joy"; three
+paragraphs: "This is what Joy remembers about you. She reads it with
+every message you send her, and she adds a line when she learns
+something worth keeping.", "It is yours: change it, add to it, or
+delete it." and, in the muted colour, "The file is kept encrypted, and
+nobody at anoPod can open the kept file. It leaves your wallet, as your
+messages do, each time you write to Joy."; the file's text in a box
+"What Joy remembers", 6 to 18 lines high; under it how full the file
+would be with the box's text, "12% full", in percent of the 10,240
+bytes, rounded up, or in red "This is more than Joy can keep. Take some
+lines out." when the box holds more; then Save, off until the box
+differs from the stored file and while the text is too long, and
+Delete all, outlined in red, off while the file is empty. Save stores
+the box's text as the file, and "Saved." shows. Delete all opens the
+confirmation box "Delete everything Joy remembers about you?" with the
+note "In your next chat Joy will know nothing about you. It cannot be
+undone." and a red Delete all, which stores an empty file. While an
+answer of Joy's is being written both buttons are off and a line says
+"Joy is answering. You can change this when she is done.": the answer's
+last line may bring a file that Joy changed. A store that is refused
+shows its reason in red, as every refusal does.
+
 Marketplace (rebuilt for the phone 2026-11-06, section 11; the plan is
 forclaude/wallet-marketplace-plan-1.md): four screens. Browse, at
 /marketplace: one row of chips on top, scrolling sideways on a phone: All,
@@ -4507,7 +4806,16 @@ excepted, with the keyholder and anos calls included.
                             lastMessage, lastPosition }); RoomsAnswer stays the type of the list in memory;
                             seenSince on MessagesQuery, and listMessages answers a MessagesAnswer ({ messages,
                             seen, seenSeq }, the last two optional), an entry of seen a SeenItem ({ anopodId,
-                            seenPosition })
+                            seenPosition });
+                            Joy (2026-11-24, section 11; 4.18): three methods, after the wallet settings' two:
+                            getJoyMemory(quiet), which sends {} to /get-joy-memory and is quiet unless asked
+                            otherwise, since it is nothing the person did; setJoyMemory(memoryBlob), the blob as
+                            hex to /set-joy-memory; and askJoy(messages, memory, onLine), which signs
+                            { messages, memory } for /ask-joy and hands the envelope to log.service's postLines,
+                            so `onLine` gets each line of the answer as it comes, and which resolves, when the
+                            answer has ended, to how many lines came and whether it was read to its end (a
+                            LinesRead), or to the refusal with its status; the types JoyMessage ({ role, text })
+                            and JoyStop ("end", "length" or "refused")
     keyholder-api.service   the keyholder test app's, base path /api/keyholder/<n>
     anos-api.service        the anos test app's account-api.service.ts, base path /api/anos/<the session's
                             validator> (2026-11-10, below; /api/anos/<defaultValidator> until then),
@@ -4611,7 +4919,9 @@ excepted, with the keyholder and anos calls included.
                             complete, Chat and Notifications with their unread counts; the side panel and the
                             Home tiles both draw it; DAO after Marketplace and before Account (2026-11-08);
                             Moderation and Attesting with the counts of work-badge.service, the next line
-                            (2026-11-12, section 11)
+                            (2026-11-12, section 11); Joy after Chat and before Marketplace, with the icon
+                            auto_awesome and no count, once setup is complete, in every edition (2026-11-24,
+                            section 11; 4.18)
     work-badge.service      the numbers on the Attesting and the Moderation entries (2026-11-12, section 11; 8.1):
                             attestingIds and moderationIds, the ids of each page's things, and seen, the ids this
                             device has seen, { attesting, moderation }, kept in localStorage under
@@ -4890,10 +5200,58 @@ excepted, with the keyholder and anos calls included.
                             screen, and each time the page comes back to the front; it never looks while the page
                             is hidden, and no more once a newer build was seen; in a development build, whose
                             script has no content name, the check is off; both constants are in constants.ts
-    log.service             the activity log
+    joy.service             Joy, the wallet's AI (2026-11-24, section 11; 4.18): the one chat with her and the
+                            member's memory file, kept here and not in a page, so that an answer goes on while
+                            another page is on the screen. Signals: messages (the chat, oldest first: a
+                            JoyChatMessage is { role, text, at, end? }), answer (the answer that is being written,
+                            as far as it has come; null while none is), writing (true from a send until its
+                            answer has ended or failed), draft (what the message box holds), error (the page's
+                            red line), memory (the opened memory file; null until it was read in this login) and
+                            ready (true once the browser's database was looked into for the pod). open(), which
+                            both Joy pages call when they open: the first time in a login it reads the pod's
+                            entry of the browser's database and opens it under the encryption key; every time it
+                            reads the memory file (loadMemory), unless an answer is under way. send(): the
+                            draft's text becomes the member's message; nothing is sent without the encryption
+                            key, before the memory file is known, for a text over JOY_MAX_CONVERSATION_BYTES or
+                            with a memory file over JOY_MEMORY_MAX_BYTES; then masterpod-api.service's askJoy
+                            with the conversation cut to the limits (conversationOf, a function beside the
+                            class) and the memory file; each { text } line is added to answer; at the last line
+                            the answer becomes a message, a changed memory file is taken and stored
+                            (/set-joy-memory, the text wrapped as { v: 1, text }), and writing ends; what happens
+                            to a refused message and to a failed answer is in 4.18. newChat() empties the chat.
+                            loadMemory() reads /get-joy-memory, quiet, and opens the blob; an answer that comes
+                            after the file was set from this page is dropped. saveMemory(text), for the memory
+                            page: the text stored as the file, refused while an answer is under way and for a
+                            text over the limit; it answers null or the reason. After every change of messages
+                            the chat goes into the browser's database, encrypted, one write after the other
+                            (keep); the five functions that read and write that database (openDb, inStore,
+                            readKept, writeKept, dropKept) stand beside the class, and a browser that refuses
+                            leaves the chat in the page's memory. A login's end, and another pod in the tab,
+                            empty everything here (an effect on session.anopodId), and an answer that began under
+                            the login before is dropped. utf8Length(text), exported, counts a text as the
+                            masterpod does. The four constants are in constants.ts: JOY_MAX_MESSAGES (200),
+                            JOY_MAX_CONVERSATION_BYTES (120,000), JOY_MEMORY_MAX_BYTES (10,240) and
+                            JOY_SILENCE_MS (60 seconds)
+    log.service             the activity log; since 2026-11-24 (section 11; 4.18) also postLines(path, body,
+                            onLine, silenceMs), for an answer that a backend writes as a stream of lines, each
+                            one JSON object (/ask-joy): it posts through the browser's own fetch, where every
+                            other call goes through HttpClient, which hands an answer over only when it has
+                            ended; reads the answer as it arrives and hands each whole line to `onLine`, an
+                            empty line and a line that is no JSON passed over; and resolves, when the answer has
+                            ended, to { ok: true, status: 200, body: { lines, whole } } (a LinesRead: how many
+                            lines came, and whether the answer was read to its end). Another status than 200 is
+                            a refusal, as for post(): the status and the backend's body. When nothing arrives
+                            for `silenceMs` the call is given up: before the answer began that is status 0 with
+                            api.noAnswer as its reason, and in the middle of an answer `whole` is false, as it is
+                            when the connection breaks. The Log's entry for such a call holds the status and
+                            the two numbers, and none of the lines' text
 
 Keys are regenerated from blobs at each unlock; nothing secret touches
-localStorage, sessionStorage or IndexedDB.
+localStorage, sessionStorage or IndexedDB. (Since 2026-11-24, section
+11 and 4.18, IndexedDB holds one thing: the chat with Joy that is under
+way, as ciphertext under the anoPod encryption key. The key is never
+written there, so the sentence still holds for everything that can be
+read.)
 
 ### 8.4 The camera component
 
@@ -5429,6 +5787,29 @@ Only `sticker` is drawn as a word on the page; the three others, and
 "สติกเกอร์", "สติกเกอร์", "สติกเกอร์ที่ส่งล่าสุด" and "ชุดสติกเกอร์". Both
 languages are the words of the patch that the plan names (its section
 7), and no Thai reader has read the Thai.
+Joy (2026-11-24, section 11; 4.18): `nav` gains `joy`, "Joy", after
+`chat`, and a new group `joy` stands after `rooms`, 30 entries, two of
+them functions. The chat page's own, nine: `title`, "Joy"; `notice`,
+the one line under the header, "Joy is an AI. What you write to her
+leaves your wallet to be answered."; `memory`, "Memory"; `newChat`,
+"New chat"; `newChatTitle` and `newChatText`, the box before a new
+chat; `empty`, what the empty chat says; `message`, "Message Joy", the
+message box's name; and `writing`, "Joy is writing…". What a member is
+told when a message is refused, when an answer fails and when one
+stops early, nine, each with its case in 4.18: `off`,
+`dailyLimit(time)`, `messageTooLong`, `memoryTooLong`, `busy`,
+`unavailable`, `cutOff`, `stopLength` and `stopRefused`. The memory
+file's page, twelve: `memoryTitle`, `memoryWhat`, `memoryYours`,
+`memoryKept`, `memoryLabel`, `memoryUsed(percent)`, `memoryOver`,
+`deleteAll`, `deleteAllTitle`, `deleteAllText`, `memoryWait` and
+`memorySaved`. The page also uses `common.send`, `common.save`,
+`common.reading`, `common.cancel` and `common.noKeyInRamSentence`. In
+Thai "Joy" stays in Latin letters, as a product's name does, and where
+the English says "she" or "her" the Thai names Joy again; "ความจำ" is
+Memory, "แชทใหม่" New chat (the word of `common.newChat`) and
+"ลบทั้งหมด" Delete all. The words are the build chat's in both
+languages. The user had seen none of them when this was written, the
+one line among them, and no Thai reader has read the Thai.
 
 ### 8.9 The confirmation box
 
@@ -6001,6 +6382,16 @@ Cloud machines.
   wallet is not open, and an email goes with it (8.2, Security alerts;
   4.13). Nothing else is pushed: a chat message, a chat request and
   every other line of the bell still show only in the open wallet.
+- Joy (2026-11-24; 4.18), not built: saved chats, which is the next
+  build and a line of the after-production list ("Joy: saved chats":
+  a chat saved on the masterpod under the anoPod encryption key, with
+  a title, a list of old chats, bring one back, download one); more
+  than one chat at a time; a way to stop an answer; Markdown drawn as
+  headings, bold letters or tables, and web addresses as links; a look
+  into the internet, pictures and files; a word to the member when a
+  long chat's oldest messages are no longer sent; the chat on a second
+  device; and any change of the shared memory file from the wallet,
+  which is a file of the masterpod's repository (its spec, 30.7).
 
 ## 11. Build notes
 
@@ -19651,6 +20042,182 @@ dictionaries changed, and nothing on the masterpod.
   unchanged.
 - For the deploy: the wallet alone, the user's two lines on wallet1 and
   then on wallet2, with no `npm ci` (no package file changed).
+
+### Joy, the wallet's AI (2026-11-24)
+
+No plan file. The talk with the user is the plan (work note
+`~/Desktop/Z-TestNet/forclaude/notes/project-wallet-ai-joy.md`): "For
+day one, I want a joy tab, and there is a chat where members can chat
+with Joy.", and to the mechanism with its four questions: "Let's do
+it." This is the second of two steps, the wallet's part, built in a
+fresh chat on top of 15bd065, the working tree clean at its start. The
+first step is the masterpod's (4.18; the masterpod's spec, section 30),
+committed there the same day as 5ca9e41. Three new files and eleven
+changed ones, one commit. No new package, no env variable, and nothing
+under `deploy/` changed. With the wallet alone deployed, a member has
+the Joy entry and both pages, and a message is answered "Joy is
+switched off right now. Try again later." until the masterpod has its
+key for Anthropic.
+
+- New, `src/app/services/joy.service.ts`, as 4.18 and 8.3 now say: the
+  one chat and the memory file, the cut of what is sent, the keeping in
+  the browser's database, and what happens to a refused message and to
+  a failed answer.
+- New, `src/app/pages/joy.page.ts` and
+  `src/app/pages/joy-memory.page.ts`, as 8.2 (Joy) now says: the chat
+  at /joy and the memory file's page at /joy/memory.
+- Changed, `server/app.js`, as section 2 now says: the function
+  `ownStreamHeaders`; `forward` takes one parameter more,
+  `answerHeaders`, which is `ownAnswerHeaders` unless another is given;
+  and in `createApp`, in front of the forward of the masterpod's paths,
+  a forward for POST /api/masterpod/ask-joy with `ownStreamHeaders`.
+  The file's opening comment gained a paragraph. This is a change of
+  the wallet's own server program, the first since the stickers'.
+- Changed, `server/index.js`: two numbers of one comment. The local
+  defaults now make fifteen forwards and `network/wallet.env` 57, under
+  the 64 the file allows.
+- Changed, `src/app/services/log.service.ts`: `postLines`, its private
+  `readLines`, the type `LinesRead`, and one sentence more in the
+  class's comment.
+- Changed, `src/app/services/masterpod-api.service.ts`: the three
+  methods after the wallet settings' two, the types `JoyMessage` and
+  `JoyStop`, and one clause in the class's comment.
+- Changed, `src/app/services/navigation.service.ts`: the Joy entry and
+  its mention in the class's comment. `src/app/app.routes.ts`: the two
+  routes, behind the session guard. `src/app/constants.ts`: four
+  constants. `src/app/i18n/en.ts` and `th.ts`: `nav.joy` and the group
+  `joy`, 30 entries (8.8).
+- Changed, this spec: in section 2 one row of the routes, one sentence
+  in brackets in the point on a backend's answer, and the point "A
+  message to Joy"; the new 4.18; in 8.1 two routes and Joy in the
+  navigation's sentence; in 8.2 the paragraph "Joy"; in 8.3 the rows of
+  navigation.service, masterpod-api.service and log.service, and the
+  new row of joy.service; in 8.8 the paragraph "Joy"; one item of
+  section 10; this note; and, on the user's word after the build, one
+  sentence in brackets at the opening of section 8 and one at the end
+  of 8.3 (the point on older sentences, below). `README.md`: one
+  passage in "The proxy"; in "Layout" the row of app.js, the list of
+  pages and the new row of joy.service.ts; and, on the same word, one
+  dated passage at the end of the paragraph on what the browser keeps.
+- The trial, on this Mac, nothing of it kept in this repository. The
+  wallet's working tree as a development build, behind the wallet's own
+  server program (`server/app.js` of the working tree), behind the
+  masterpod's own app as committed (5ca9e41) on a scratch PostgreSQL of
+  its own, with a stand-in for Anthropic's API behind the masterpod (a
+  small server that answers in Anthropic's form; the masterpod's
+  package was pointed at it by `ANTHROPIC_BASE_URL`). So nothing was
+  billed, and no real answer of the model was seen: the first real
+  message is the proof still owed, as for the masterpod's step. The
+  login was made up: no passkey, fresh session keys from the wallet's
+  own code written onto a pod's row at level setup, and an encryption
+  key of the trial's. Everything after it was real: every request
+  signed by the wallet's code and checked by the masterpod's, nothing
+  of the wallet replaced but the sound. The page was driven in Google
+  Chrome with no window: 89 checks, none bad.
+  - The entry in the side list after Chat and its Home tile; the empty
+    chat; a message and its answer; the request as the stand-in got it
+    (the model, the conversation, the memory file in its place).
+  - A long answer of 907 characters, written in pieces 30 ms apart,
+    showed on the screen in 191 different lengths over about six
+    seconds, and the thread followed it; a reader who had scrolled up
+    stayed where they were. The finished answer was the stand-in's
+    text to the letter, with its line breaks, its asterisks and its
+    pound sign drawn as written.
+  - Joy saving a line: the answer of both rounds as one message, the
+    file stored with /set-joy-memory, the masterpod's row a blob in
+    which the saved word cannot be read, and the next message carrying
+    the file. The memory file's page: Save, the limit counted in bytes
+    of UTF-8 (3,413 Thai letters taken, 3,414 refused), Delete all
+    with its box.
+  - Each refusal and failure with its sentence: `joy busy` and `joy
+    unavailable` with the message back in the box; `joy was cut off`
+    after half an answer, which stays with its grey line; an answer
+    that was refused, one cut at the model's limit, and one with no
+    text at all; the daily limit, with the pod's count set to 300 by
+    hand; `joy is off`, on a second masterpod with no key, where the
+    memory file's two routes still work. The masterpod's `conversation
+    too long` and `memory too long` cannot be reached from this wallet,
+    which checks both sizes first; their two sentences were tried with
+    the wallet's own call answered inside the page, a stand-in of the
+    trial's. A message of 120,001 bytes was not sent; one of 120,000
+    went alone, and the next message carried what fits.
+  - A reload: the login gone, the blob still in the browser with none
+    of the chat's words readable in it, and after a login the chat
+    there again, message for message. New chat with its box, which
+    takes the entry out. Lock, then another person in the same browser
+    with an entry of their own, then the first person's chat back.
+  - Another page of the wallet while an answer was written: back on
+    the Joy page the answer was further along, the message box had kept
+    its text, and the answer ended whole.
+  - The stream through the wallet's own server: the answer's headers
+    (`Content-Type: application/x-ndjson; charset=utf-8`,
+    `X-Accel-Buffering: no`, `Cache-Control: no-store`, the two safety
+    headers of /api, no cookie); forty pieces written 150 ms apart
+    arrived as 41 reads spread over six seconds, never more than 152
+    ms apart; the masterpod's empty line arrived 10 seconds into a
+    silence of 11.5. A page that was closed in the middle of an answer
+    ended the masterpod's call at the stand-in.
+  - An answer that stalls: the half answer showed, the wallet had not
+    given up after 73 seconds, and the masterpod ended it as cut off
+    after 120. That is also an answer of two minutes passing the
+    wallet's own server, whose two limits are 120 seconds.
+  - The look, in English and in Thai, at 360 by 536, 360 by 560, 375
+    by 547, 390 by 760, 412 by 915, 600 by 800 and 1280 by 800: nothing
+    wider than the screen, no word of the header cut, the message box
+    whole inside the frame. On the shortest of them the thread keeps
+    272 px.
+  - The production build behind the same server, seven checks more,
+    none bad: its first page drawn under its own content security
+    policy with no error named by Chrome, /joy and /joy/memory leading
+    to the first page with no login, an unsigned call to
+    /api/masterpod/ask-joy refused as JSON, and the build's script
+    holding the Joy pages. Nobody logged in to that build: it has no
+    way in without a passkey.
+- Two things the trial found and the build put right: the memory
+  page's red line for a text that is too long used the chat page's
+  sentence; and a message sent in the first moments of the page, before
+  the kept chat was read, would have been written over by it, so
+  nothing is sent until that read is done.
+- Not tried. nginx: there is none on this Mac. That nginx hands an
+  answer with `X-Accel-Buffering: no` on piece by piece, and keeps the
+  header to itself, is read on nginx's own page; the wallet servers'
+  own nginx is the proof. The doormen in front of the masterpod: their
+  settings were read in the file they are built from, no doorman was
+  asked. A real phone, Safari, and a login with a passkey. The user's
+  own development server (`ng serve`), which passes /api on through a
+  proxy of its own. Anthropic itself.
+- `npx ng build` from the wallet folder into a scratch folder: clean,
+  no warning. The script is `main-C7U54FN6.js`, 2,366,875 bytes: 27,621
+  bytes more than the script of 15bd065, built the same way from a
+  scratch copy. The style sheet is `styles-HGVKDO6M.css`, 8,560 bytes,
+  the same file as before: the two pages' styles are in the script.
+  One build of that afternoon stopped with "Inlining of fonts failed",
+  when Google's font address did not answer; the next one passed. The
+  development build is clean too.
+- Sentences of before this build that say less than there is now.
+  Three said that nothing of a pod's is kept in the browser
+  (`README.md`, under "Layout": "no key, no blob and no session is
+  written to browser storage"; this spec, the opening of section 8, and
+  the sentence that ends 8.3, which names IndexedDB). They were left by
+  the build and brought in line the same day on the user's word ("go
+  ahead and update those lines"), before the commit: each has one dated
+  sentence beside it now, and its old words stand. The build's files
+  and its checks are as they were: the three sentences are in
+  `README.md` and in this file alone. Still left as it was: the
+  confirmation box's list of who opens it does not name the two new
+  boxes (the comment of `src/app/components/confirm-dialog.component.ts`,
+  its row in `README.md`, 8.9).
+- For the deploy. The masterpod first (its spec, 30.11: the schema
+  file, `npm ci`, the key), since the wallet's pages need its three
+  routes. Then the wallet, the user's two lines on wallet1 and then on
+  wallet2, with no `npm ci` (no package file changed); the install
+  script restarts the three units, which ends an answer that is being
+  written at that moment. In the minutes between the two servers, a
+  page of the new build can be answered by the server of before. Joy
+  then still answers, but as plain text that nginx collects, so the
+  words come in lumps or all at the end, and an answer from which
+  nothing reaches the page for 60 seconds is given up by the wallet
+  (read from the code and from nginx's page, not tried).
 
 ## 12. Recovery and the moderator edition
 
