@@ -270,8 +270,9 @@ export interface RoomItem {
   members: RoomMember[];
   /** The people invited who have not answered yet, oldest first. */
   invited: RoomMember[];
-  /** The room's newest message, null when it has none. */
-  lastMessage: MessageItem | null;
+  /** The room's newest message, null when it has none. Since 2026-11-24 (masterpod spec 31) it is that message as it stands now, never an edit or a delete (LastMessage). */
+  lastMessage: LastMessage | null;
+  /** The highest position of any row of the room, 0 for a room with none. Since 2026-11-24 (masterpod spec 31) it is above `lastMessage.position` whenever the room's newest row is an edit or a delete. */
   lastPosition: number;
   createdAt: string;
 }
@@ -308,7 +309,7 @@ export interface RoomsAnswer {
 /** A room of which only the newest message is new, as /list-chat-rooms sends it to a request with `since` (2026-11-24, masterpod spec 29): three fields, where a room that is sent whole is a RoomItem. */
 export interface RoomNews {
   chatRoomId: string;
-  lastMessage: MessageItem | null;
+  lastMessage: LastMessage | null;
   lastPosition: number;
 }
 
@@ -347,12 +348,48 @@ export interface PublicRoomItem {
   createdAt: string;
 }
 
+/**
+ * One row of a room as /list-messages hands it out. Until 2026-11-24 every
+ * row was a message. Since then (masterpod spec 31; wallet spec 4.19) a
+ * row is a message, an edit or a delete: an edit carries a message's new
+ * text, a delete carries none, and each names its message in
+ * `targetMessageId`. A row comes without its ciphertext, `message` null,
+ * once a later row of the room names the same message: a message that
+ * was edited or deleted, an edit that a newer edit or a delete followed,
+ * and every delete. A masterpod of before sends neither `kind` nor
+ * `targetMessageId`, and a missing one reads as null: a message.
+ */
 export interface MessageItem {
   messageId: string;
   position: number;
   senderAnopodId: string;
-  message: string;
+  message: string | null;
   createdAt: string;
+  kind?: 'edit' | 'delete' | null;
+  targetMessageId?: string | null;
+}
+
+/**
+ * A room's newest message as /list-chat-rooms gives it (2026-11-24,
+ * masterpod spec 31; wallet spec 4.19): the message as it stands now,
+ * never an edit or a delete. The id, the position, the sender and the time
+ * are the message's own, so an edit or a delete moves none of them.
+ * `message` is the newest edit's ciphertext for a message that was edited,
+ * and null for one that was deleted. `editPosition` is the position of the
+ * newest edit, null for a message that was never edited, and it stays what
+ * it was when an edited message is deleted. `deleted` is true once a
+ * delete names the message; a deleted newest message stays the room's
+ * `lastMessage`. A masterpod of before sends neither of the two fields: a
+ * missing `editPosition` reads as null and a missing `deleted` as false.
+ */
+export interface LastMessage {
+  messageId: string;
+  position: number;
+  senderAnopodId: string;
+  message: string | null;
+  createdAt: string;
+  editPosition?: number | null;
+  deleted?: boolean;
 }
 
 /** The query of /list-messages: the messages after a position, or with `beforePosition` the newest `limit` below it, afterPosition then ignored. With `seenSince` (2026-11-24, masterpod spec 29) the answer also says which members' seen positions changed after that number: 0 asks for every member who has seen anything. */
@@ -1026,13 +1063,23 @@ export class MasterpodApiService {
     return this.signed('/get-chat-room-picture', { chatRoomId }, quiet);
   }
 
-  /** The room's messages after a position (the poll), or with `beforePosition` the newest `limit` below it (opening a room, loading older ones). With `seenSince` in the query (2026-11-24, masterpod spec 29) the answer also carries the members' seen positions that changed after it. */
+  /** The room's messages after a position (the poll), or with `beforePosition` the newest `limit` below it (opening a room, loading older ones). With `seenSince` in the query (2026-11-24, masterpod spec 29) the answer also carries the members' seen positions that changed after it. Since 2026-11-24 (masterpod spec 31) the answer holds every row of the room, the edits and the deletes among the messages (MessageItem), and the positions and `limit` count every row. */
   listMessages(chatRoomId: string, query: MessagesQuery, quiet = false): Promise<ApiResponse<MessagesAnswer>> {
     return this.signed('/list-messages', { chatRoomId, ...query }, quiet);
   }
 
   sendMessage(chatRoomId: string, message: string): Promise<ApiResponse<{ messageId: string; position: number }>> {
     return this.signed('/send-message', { chatRoomId, message });
+  }
+
+  /** Gives a message of this pod's own a new text (2026-11-24, masterpod spec 31; wallet spec 4.19): `message` is the new text's ciphertext, as for /send-message. The masterpod writes a new row that names the message and changes none; the answer is that row's id and position. Refused in a chat about a listing, an old marketplace room and a chat about an attestor case (403), for another person's message (403), for a deleted one (409 message deleted) and more than 15 minutes after the message was sent (409 too late to edit). A masterpod of before answers 404. */
+  editMessage(chatRoomId: string, messageId: string, message: string): Promise<ApiResponse<{ messageId: string; position: number }>> {
+    return this.signed('/edit-message', { chatRoomId, messageId, message });
+  }
+
+  /** Deletes a message of this pod's own (2026-11-24, masterpod spec 31; wallet spec 4.19): the masterpod writes a new row that names the message and removes none; the answer is that row's id and position. Refused as /edit-message is, but at any time after the message was sent. A masterpod of before answers 404. */
+  deleteMessage(chatRoomId: string, messageId: string): Promise<ApiResponse<{ messageId: string; position: number }>> {
+    return this.signed('/delete-message', { chatRoomId, messageId });
   }
 
   /** Tells the masterpod how far this pod has read in a room (2026-11-19, masterpod spec 21). Always quiet: it is a report, not something the person did. A masterpod of before answers 404. */

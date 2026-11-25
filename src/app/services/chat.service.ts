@@ -279,8 +279,9 @@ export class ChatService {
     return this.crypto.toHex(await this.crypto.wrapRoomKey(roomKey, target.chatPublicKey, target.chatPublicKeyPq));
   }
 
-  /** The message's text, or null when this tab has no key for the room or the ciphertext does not open. */
-  async decryptMessage(room: RoomItem, message: string): Promise<string | null> {
+  /** The message's text, or null when this tab has no key for the room or the ciphertext does not open. Since 2026-11-24 also null for a row that came without ciphertext (wallet spec 4.19): a message that was edited or deleted, whose text the masterpod no longer hands out. */
+  async decryptMessage(room: RoomItem, message: string | null): Promise<string | null> {
+    if (message === null) return null;
     const key = await this.roomKeyOf(room);
     if (!key) return null;
     try {

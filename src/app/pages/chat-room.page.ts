@@ -2,12 +2,14 @@ import { TextFieldModule } from '@angular/cdk/text-field';
 import { Component, DestroyRef, ElementRef, Injector, afterNextRender, computed, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
+import { MatDialog } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
-import { MatMenuModule } from '@angular/material/menu';
+import { MatMenuModule, MatMenuTrigger } from '@angular/material/menu';
 import { Router, RouterLink } from '@angular/router';
 import { AvatarComponent } from '../components/avatar.component';
+import { askConfirm } from '../components/confirm-dialog.component';
 import { CopyButtonComponent } from '../components/copy-button.component';
 import { FoundAccountId, PinnedListingComponent } from '../components/pinned-listing.component';
 import { RoomPictureComponent } from '../components/room-picture.component';
@@ -16,7 +18,7 @@ import { redrawSquare } from '../images';
 import { ChatService, Piece, piecesOf } from '../services/chat.service';
 import { CryptoService } from '../services/crypto.service';
 import { LanguageService } from '../services/language.service';
-import { ApiResponse, reasonOf } from '../services/log.service';
+import { ApiError, ApiResponse, reasonOf } from '../services/log.service';
 import { MasterpodApiService, MessageItem, MessagesAnswer, Profile, RoomItem, RoomMember } from '../services/masterpod-api.service';
 import { RoomPictureCacheService } from '../services/room-picture-cache.service';
 import { SessionService } from '../services/session.service';
@@ -38,6 +40,38 @@ interface ShownMessage {
   notice: TradeMessageKind | null;
   /** The sticker the message's text names (2026-11-23, ../stickers): its whole text is a sticker's code; null for every other message. The thread draws that sticker's picture where the bubble would stand, from the code alone (pictureOf). */
   sticker: Sticker | null;
+  /** The text the bubble shows, as it was written (2026-11-24): what Edit puts into the message box. Null where there is no such text: a message that did not open, a message that was deleted, and one that waits. */
+  text: string | null;
+  /** The position of the edit whose text the bubble shows (2026-11-24); null for a message that shows its own text. With one, the bubble carries the word "edited", and "Seen" under it is counted from this position. */
+  editPosition: number | null;
+  /** True once a delete names the message (2026-11-24): the thread draws the grey line "This message was deleted" in its place. */
+  deleted: boolean;
+  /** True for a message that came without its text while the page holds no row that says what became of it (2026-11-24): the edit or the delete that names it is a row the next read brings. The thread does not draw the message until then. */
+  waiting: boolean;
+}
+
+/** A text as the page holds it once decrypted (2026-11-24): the text, or the words that stand in its place when it did not open, and which of the two it is. */
+interface Opened {
+  text: string;
+  opened: boolean;
+}
+
+/** The newest row that names a message, as the page keeps it (2026-11-24; wallet spec 4.19): a delete, or an edit with its text. An edit that came without its text is not kept: a newer row names the same message, and that row says how the message stands. */
+type Change = { kind: 'delete'; position: number } | { kind: 'edit'; position: number; text: Opened };
+
+/** What one answer of /list-messages held, decrypted (2026-11-24): its messages in the answer's order, each with its own text, null for one that came without; the edits and deletes that can be drawn, each with the message it names; and the lowest and the highest position of all its rows, drawn or not, 0 for an answer with no row. */
+interface RowsRead {
+  messages: { row: MessageItem; own: Opened | null }[];
+  changes: { target: string; change: Change }[];
+  lowest: number;
+  highest: number;
+}
+
+/** The edit that is going on (2026-11-24): the message, the text it had when Edit was tapped, and what the message box held then, which goes back into the box when the edit ends. */
+interface Editing {
+  messageId: string;
+  text: string;
+  draft: string;
 }
 
 /** Messages by one sender within GROUP_MINUTES of each other on one day: the name once on top (someone else's, in a room that is not direct), the time once below. */
@@ -50,7 +84,7 @@ interface Group {
   time: string;
 }
 
-/** What the thread draws: a day line, a group of bubbles, or, for the two traders of a marketplace chat (2026-11-19), a grey line in the place of a message the pinned card posted. */
+/** What the thread draws: a day line, a group of bubbles, or a grey line: for the two traders of a marketplace chat (2026-11-19) in the place of a message the pinned card posted, and since 2026-11-24, for everyone, in the place of a message that was deleted. */
 type ThreadItem = { kind: 'day'; key: string; label: string } | { kind: 'group'; key: string; group: Group } | { kind: 'notice'; key: string; text: string };
 
 /** Messages this close in time by one sender share a group. */
@@ -61,6 +95,9 @@ const FOLLOW_PX = 120;
 
 /** "Seen by" names the people who have seen a message up to this many of them; above it, it says how many they are. */
 const SEEN_NAMES = 3;
+
+/** Edit is in a message's menu for this many minutes after the message was sent, by this device's clock (2026-11-24). The masterpod decides by its own clock, and its number is the same (EDIT_MINUTES in its chat.service.js, masterpod spec 31). */
+const EDIT_MINUTES = 15;
 
 /** Older messages load by themselves when the reader comes this close to the top of the thread (2026-11-22). */
 const OLDER_PX = 300;
@@ -178,7 +215,39 @@ const REST_CHECK_MS = 40;
  * conversation's lower edge. No suggestion is worked out for them, so
  * nothing is fetched and nothing moves while they type; they send a
  * sticker from the panel. A guest in such a chat, who has no card, has
- * the strip.
+ * the strip. Since 2026-11-24 (forclaude/chat-edit-delete-plan-1.md;
+ * wallet spec 4.19) a person edits and deletes their own messages. A tap
+ * on a message of this pod's own, a click on a computer, opens a small
+ * menu at the bubble: Edit and Delete. Edit is in it for 15 minutes
+ * after the message was sent, by this device's clock, and never for a
+ * sticker. A long press stays the browser's own, which marks text; a tap
+ * on the copy button of an account id opens no menu, and neither does a
+ * click that ends a marking of text. No bubble has a menu in a chat
+ * about a listing, in an old marketplace room or in a chat about an
+ * attestor case, and nobody else's message has one anywhere. Edit puts
+ * the message's text into the message box, under a line "Editing a
+ * message" with a cross that stops the edit; Send saves it
+ * (/edit-message), and the bubble keeps its place, shows the new text
+ * and carries the small word "edited" where the tick stands. While a
+ * message is edited the stickers button and the suggested stickers are
+ * away, and Send with an unchanged text sends nothing and ends the
+ * edit. Delete asks once, with the confirmation box (8.9), and then
+ * (/delete-message) a grey line stands in the message's place, for
+ * everyone: "This message was deleted". The masterpod changes no row for
+ * either: an edit and a delete are rows of their own, which name the
+ * message, and /list-messages hands them out among the messages. So the
+ * thread's pages are pages of rows since that day, and a page of
+ * MESSAGES_PAGE rows can show fewer messages. The page never draws such
+ * a row as a bubble. It keeps, for each message, the newest row that
+ * names it, and draws the message by it: with the edit's text, or as the
+ * grey line. A message that came without its text while the page holds
+ * no row that names it is not drawn until the next read brings that
+ * row. This pod's own edit or delete is drawn at once, from the
+ * masterpod's answer; everyone else's arrives with the 3-second read.
+ * "Seen" under an edited message is counted from the edit. The
+ * masterpod's refusal of an edit as too late shows above the message
+ * box as "This message can no longer be edited.", and the text stays in
+ * the box.
  */
 @Component({
   selector: 'app-chat-room-page',
@@ -286,7 +355,7 @@ const REST_CHECK_MS = 40;
                   <span class="sender">{{ item.group.senderName }}</span>
                 }
                 @for (m of item.group.messages; track m.messageId) {
-                  <div class="bubble" [class.pending]="m.pending" [class.sticker]="pictureOf(m) !== null">
+                  <div class="bubble" [class.pending]="m.pending" [class.sticker]="pictureOf(m) !== null" (click)="tapped(m, $event)">
                     @if (pictureOf(m); as picture) {
                       <img [src]="picture" [alt]="t().chatRoom.sticker" width="148" height="128" (error)="pictureFailed(picture)" />
                     } @else if (m.sticker) {
@@ -305,12 +374,17 @@ const REST_CHECK_MS = 40;
                         }
                       </span>
                     }
-                    @if (m.mine) {
+                    @if (m.mine || m.editPosition !== null) {
                       <span class="state">
-                        @if (m.pending) {
-                          {{ t().chatRoom.sending }}
-                        } @else {
-                          <mat-icon class="tick">done</mat-icon>
+                        @if (m.editPosition !== null) {
+                          <span>{{ t().chatRoom.edited }}</span>
+                        }
+                        @if (m.mine) {
+                          @if (m.pending) {
+                            {{ t().chatRoom.sending }}
+                          } @else {
+                            <mat-icon class="tick">done</mat-icon>
+                          }
                         }
                       </span>
                     }
@@ -327,6 +401,15 @@ const REST_CHECK_MS = 40;
           <p class="muted empty">{{ t().chatRoom.noMessages }}</p>
         }
       </div>
+      <span class="menu-anchor" #messageAnchor [matMenuTriggerFor]="messageMenu" [matMenuTriggerRestoreFocus]="false" aria-hidden="true"></span>
+      <mat-menu #messageMenu="matMenu" xPosition="before">
+        <ng-template matMenuContent let-id="id" let-edit="edit">
+          @if (edit) {
+            <button mat-menu-item type="button" (click)="startEdit(id)" [disabled]="busy()"><mat-icon>edit</mat-icon><span>{{ t().chatRoom.edit }}</span></button>
+          }
+          <button mat-menu-item type="button" (click)="deleteMessage(id)" [disabled]="busy()"><mat-icon>delete</mat-icon><span>{{ t().chatRoom.delete }}</span></button>
+        </ng-template>
+      </mat-menu>
       @if (error(); as text) {
         <p class="error note">{{ text }}</p>
       }
@@ -337,13 +420,20 @@ const REST_CHECK_MS = 40;
           }
         </div>
       }
+      @if (editing()) {
+        <div class="editing">
+          <mat-icon>edit</mat-icon>
+          <span>{{ t().chatRoom.editing }}</span>
+          <button mat-icon-button type="button" (click)="stopEdit()" [disabled]="busy()" [attr.aria-label]="t().chatRoom.stopEditing"><mat-icon>close</mat-icon></button>
+        </div>
+      }
       <div class="composer">
-        @if (stickerSets().length > 0) {
+        @if (stickerSets().length > 0 && !editing()) {
           <button mat-icon-button type="button" class="stickers-button" (click)="toggleStickers()" [attr.aria-label]="t().chatRoom.stickers" [attr.aria-expanded]="showStickers()"><mat-icon>mood</mat-icon></button>
         }
         <mat-form-field appearance="outline" class="grow" subscriptSizing="dynamic">
           <mat-label>{{ t().chatRoom.message }}</mat-label>
-          <textarea matInput cdkTextareaAutosize cdkAutosizeMinRows="1" cdkAutosizeMaxRows="5" [ngModel]="messageText()" (ngModelChange)="messageText.set($event)" (keydown.enter)="enter($event)" (focus)="closeStickers()"></textarea>
+          <textarea matInput #messageBox cdkTextareaAutosize cdkAutosizeMinRows="1" cdkAutosizeMaxRows="5" [ngModel]="messageText()" (ngModelChange)="messageText.set($event)" (keydown.enter)="enter($event)" (focus)="closeStickers()"></textarea>
         </mat-form-field>
         <button mat-mini-fab type="button" class="send" (click)="send()" [disabled]="busy() || !messageText().trim()" [attr.aria-label]="t().common.send"><mat-icon>send</mat-icon></button>
       </div>
@@ -374,7 +464,7 @@ const REST_CHECK_MS = 40;
     }
   `,
   styles: `
-    :host { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+    :host { display: flex; flex-direction: column; height: 100%; min-height: 0; position: relative; }
     .head { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--mat-sys-outline-variant); }
     .back { display: none; }
     .texts { flex: 1; min-width: 0; }
@@ -399,7 +489,7 @@ const REST_CHECK_MS = 40;
     .face { margin-bottom: 18px; }
     .bubbles { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
     .group.mine .bubbles { align-items: flex-end; }
-    .bubble { padding: 8px 12px; border-radius: 16px; background: var(--mat-sys-surface-container); overflow-wrap: anywhere; }
+    .bubble { padding: 8px 12px; border-radius: 16px; background: var(--mat-sys-surface-container); overflow-wrap: anywhere; -webkit-tap-highlight-color: transparent; }
     .group.mine .bubble { background: var(--mat-sys-primary-container); }
     .bubble.pending { opacity: 0.6; }
     .bubble code { font-size: 12px; word-break: break-all; }
@@ -407,11 +497,15 @@ const REST_CHECK_MS = 40;
     .bubble.sticker img { display: block; width: 148px; height: 128px; object-fit: contain; object-position: left bottom; }
     .group.mine .bubble.sticker img { object-position: right bottom; }
     .plain { white-space: pre-wrap; }
-    .state { display: inline-flex; align-items: center; margin-left: 6px; font-size: 11px; color: var(--mat-sys-on-surface-variant); vertical-align: bottom; }
+    .state { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; font-size: 11px; color: var(--mat-sys-on-surface-variant); vertical-align: bottom; }
     .tick { font-size: 14px; width: 14px; height: 14px; }
     .mark { font-size: 11px; color: var(--mat-sys-on-surface-variant); margin: 0 8px 2px; }
     .sender { font-size: 11px; color: var(--mat-sys-on-surface-variant); margin: 0 0 2px 8px; }
     .time { font-size: 11px; color: var(--mat-sys-on-surface-variant); margin: 2px 8px 0; }
+    .menu-anchor { position: absolute; visibility: hidden; pointer-events: none; }
+    .editing { flex: none; display: flex; align-items: center; gap: 8px; padding: 0 4px 0 12px; border-top: 1px solid var(--mat-sys-outline-variant); font-size: 13px; color: var(--mat-sys-on-surface-variant); }
+    .editing > mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .editing > span { flex: 1; min-width: 0; }
     .composer { display: flex; gap: 8px; align-items: flex-end; padding: 8px 12px; border-top: 1px solid var(--mat-sys-outline-variant); }
     .grow { flex: 1; min-width: 0; }
     .send { flex: none; margin-bottom: 4px; }
@@ -454,6 +548,15 @@ export class ChatRoomPage {
   protected readonly t = this.lang.words;
   private readonly threadBox = viewChild<ElementRef<HTMLElement>>('threadBox');
   private readonly membersBox = viewChild<ElementRef<HTMLElement>>('membersBox');
+  /** The box before a delete is the wallet's confirmation box (2026-11-24; wallet spec 8.9). */
+  private readonly dialog = inject(MatDialog);
+  /** The page's own element (2026-11-24): the menu of a message is placed by its corner. */
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  /** The message box (2026-11-24): Edit puts the cursor into it. */
+  private readonly messageBox = viewChild<ElementRef<HTMLTextAreaElement>>('messageBox');
+  /** What the menu of a message opens from (2026-11-24): one element of the page that is not seen and takes no tap. A tap on a bubble lays it over that bubble and opens the menu, so the menu stands at the bubble. The same element read twice, as an element and as the menu's trigger. */
+  private readonly messageAnchor = viewChild<ElementRef<HTMLElement>>('messageAnchor');
+  private readonly messageTrigger = viewChild('messageAnchor', { read: MatMenuTrigger });
 
   /** True once the room list has arrived; the room is the one of the route, null when the pod is not in it. */
   protected readonly loaded = computed(() => this.session.chatRooms() !== null);
@@ -493,8 +596,8 @@ export class ChatRoomPage {
   });
   /** The stickers sent lately from this phone, the newest first (2026-11-23): read when this login's list arrives, when the stickers panel opens and after every sticker this page sends. The suggestions put them first. */
   private readonly sentLately = signal<Sticker[]>([]);
-  /** The stickers suggested for what stands in the message box (2026-11-23, suggestedStickers in ../stickers): the strip above the message box draws them. None while the stickers panel is open: the panel then holds every sticker, and the thread keeps its room. None for the two traders of a marketplace chat either (2026-11-23, later): the pinned listing card does not give way to the strip, and on a short phone the strip pushed their message box under the conversation's lower edge. */
-  protected readonly suggested = computed(() => (!this.showStickers() && !this.trader() ? suggestedStickers(this.stickers.sets(), this.messageText(), this.sentLately()) : []));
+  /** The stickers suggested for what stands in the message box (2026-11-23, suggestedStickers in ../stickers): the strip above the message box draws them. None while the stickers panel is open: the panel then holds every sticker, and the thread keeps its room. None for the two traders of a marketplace chat either (2026-11-23, later): the pinned listing card does not give way to the strip, and on a short phone the strip pushed their message box under the conversation's lower edge. And none while a message is edited (2026-11-24): an edit is a text. */
+  protected readonly suggested = computed(() => (!this.showStickers() && !this.trader() && !this.editing() ? suggestedStickers(this.stickers.sets(), this.messageText(), this.sentLately()) : []));
   /** True while the strip of suggestions shows (2026-11-23). */
   private readonly stripShown = computed(() => this.suggested().length > 0);
   protected readonly inviteName = signal('');
@@ -502,6 +605,13 @@ export class ChatRoomPage {
   protected readonly messageText = signal('');
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
+  /** The edit that is going on, null when there is none (2026-11-24): while one is, a line above the message box says "Editing a message", Send saves the text as that message's new text, and the stickers button and the suggested stickers are away. */
+  protected readonly editing = signal<Editing | null>(null);
+  /** True in a chat where a person edits and deletes their own messages (2026-11-24; forclaude/chat-edit-delete-plan-1.md, decision 2): every chat but a chat about a listing, an old marketplace room and a chat about an attestor case, where the masterpod refuses both. Told by the `listingId`, the `type` and the `caseId` of the chat's entry. */
+  private readonly changeable = computed(() => {
+    const room = this.room();
+    return room !== null && room.type !== 'marketplace' && !room.listingId && !room.caseId;
+  });
 
   /** True when the room has more than SEARCH_ABOVE people, members and invited together: the Members list then has its search box (2026-11-22). */
   protected readonly searchable = computed(() => {
@@ -543,7 +653,7 @@ export class ChatRoomPage {
     return [...found.values()];
   });
 
-  /** The messages as the thread draws them: a day line before each day, the messages of one sender within GROUP_MINUTES in one group, and for the two traders of a marketplace chat (2026-11-19) a grey line in the place of each message the pinned card posted, which ends the group before it. Since 2026-11-24 it also reads the day (chat.today): a day line is worded by today's date ("Today", "Yesterday"), so the thread is made again when the day changes; until then the room's entry was set anew every 5 seconds. */
+  /** The messages as the thread draws them: a day line before each day, the messages of one sender within GROUP_MINUTES in one group, and for the two traders of a marketplace chat (2026-11-19) a grey line in the place of each message the pinned card posted, which ends the group before it. Since 2026-11-24 it also reads the day (chat.today): a day line is worded by today's date ("Today", "Yesterday"), so the thread is made again when the day changes; until then the room's entry was set anew every 5 seconds. Since 2026-11-24, too (forclaude/chat-edit-delete-plan-1.md), a message that was deleted is the same grey line, "This message was deleted", in the message's place and for everyone, the person who deleted it among them; and a message that waits for the row that names it is passed over. */
   protected readonly thread = computed<ThreadItem[]>(() => {
     const room = this.room();
     if (!room) return [];
@@ -553,11 +663,17 @@ export class ChatRoomPage {
     let group: Group | null = null;
     let lastDay = '';
     for (const m of this.messages()) {
+      if (m.waiting) continue;
       const day = dayKey(m.createdAt);
       if (day !== lastDay) {
         items.push({ kind: 'day', key: `day-${day}`, label: this.chat.dayLabel(m.createdAt) });
         lastDay = day;
         group = null;
+      }
+      if (m.deleted) {
+        items.push({ kind: 'notice', key: m.messageId, text: this.t().chatRoom.messageDeleted });
+        group = null;
+        continue;
       }
       if (m.notice) {
         items.push({ kind: 'notice', key: m.messageId, text: this.noticeText(room, m) });
@@ -605,7 +721,14 @@ export class ChatRoomPage {
    * yet, a person who is only invited so far among them. A message drawn
    * as a grey line carries none. Empty in a room with nobody else in it
    * and nobody invited, and while no member carries a seen position, this
-   * pod among them: a masterpod of before.
+   * pod among them: a masterpod of before. Since 2026-11-24
+   * (forclaude/chat-edit-delete-plan-1.md, section 4, point 5) a message
+   * that was edited counts as seen by a member only once that member's
+   * seen position has reached the edit's position, which is above the
+   * message's own: "Seen" never stands under a text the other person has
+   * not read, and an edited newest message reads "Sent" again until then.
+   * A message that was deleted carries no word, as a grey line carries
+   * none.
    */
   protected readonly marks = computed(() => {
     const marks = new Map<string, string>();
@@ -614,24 +737,28 @@ export class ChatRoomPage {
     const me = this.session.anopodId();
     const others = room.members.filter((m) => m.anopodId !== me);
     if (others.length === 0 && room.invited.length === 0) return marks;
-    const mine = this.messages().filter((m) => m.mine && !m.pending && !m.notice);
+    const mine = this.messages().filter((m) => m.mine && !m.pending && !m.notice && !m.deleted && !m.waiting);
     if (mine.length === 0) return marks;
     const words = this.t().chatRoom;
     const newest = mine[mine.length - 1];
-    const seen = [...mine].reverse().find((m) => others.some((o) => (o.seenPosition ?? 0) >= m.position));
+    // The position a member must have read up to, to have seen the message as it stands: the newest edit's, else the message's own.
+    const reach = (m: ShownMessage) => m.editPosition ?? m.position;
+    const seen = [...mine].reverse().find((m) => others.some((o) => (o.seenPosition ?? 0) >= reach(m)));
     if (seen) {
-      const readers = others.filter((o) => (o.seenPosition ?? 0) >= seen.position).map((o) => o.username);
+      const readers = others.filter((o) => (o.seenPosition ?? 0) >= reach(seen)).map((o) => o.username);
       marks.set(seen.messageId, others.length === 1 ? words.seen : readers.length > SEEN_NAMES ? words.seenByCount(readers.length) : words.seenBy(readers.join(', ')));
     }
     if (seen !== newest) marks.set(newest.messageId, words.sent);
     return marks;
   });
 
-  /** The room the thread shows, whether its opening read is done, and the positions of the oldest and newest shown. */
+  /** The room the thread shows, whether its opening read is done, and the positions of the oldest and newest shown. Since 2026-11-24 the two positions are the lowest and the highest of the rows the page has read, drawn or not: an edit and a delete are rows with a position of their own, and no bubble. */
   private openedFor: string | null = null;
   private ready = false;
   private oldest = 0;
   private newest = 0;
+  /** For each message, by its id, the newest row that names it (2026-11-24; wallet spec 4.19): a delete, or the newest edit with its text. Kept for a message the page does not hold too: a row that names a message has a higher position than the message, so the page reads it first, and the message comes with a later read of older rows. Emptied when a conversation opens. */
+  private readonly changes = new Map<string, Change>();
   /** The newest position this page told the masterpod it has seen, for the room it shows; 0 when none. */
   private toldSeen = 0;
   /** The number this page sends as `seenSince` with its reads of the room's messages (2026-11-24; wallet spec 4.17): 0 when the room opens, which asks for every member who has seen anything, then the `seenSeq` of the last answer, which asks only for the positions that changed after it. */
@@ -821,10 +948,12 @@ export class ChatRoomPage {
     void this.send(suggestion.sticker);
   }
 
-  /** The room's newest page; whatever was shown before is dropped. Since 2026-11-23 the list of the sets of stickers is asked for here, which asks the masterpod only when this login has no list yet (stickers.service.ts). Since 2026-11-24 the same read asks with `seenSince` 0 for the seen position of every member who has seen anything (takeSeen). */
+  /** The room's newest page; whatever was shown before is dropped. Since 2026-11-23 the list of the sets of stickers is asked for here, which asks the masterpod only when this login has no list yet (stickers.service.ts). Since 2026-11-24 the same read asks with `seenSince` 0 for the seen position of every member who has seen anything (takeSeen). Since 2026-11-24, too, the page is the room's newest MESSAGES_PAGE rows, the edits and the deletes among them, so fewer messages than that can show; an edit that was going on ends, and the rows kept of the room before are dropped. */
   private async open(room: RoomItem): Promise<void> {
     this.ready = false;
+    this.endEdit();
     this.messages.set([]);
+    this.changes.clear();
     this.oldest = 0;
     this.newest = 0;
     this.toldSeen = 0;
@@ -847,11 +976,12 @@ export class ChatRoomPage {
       return;
     }
     this.takeSeen(room.chatRoomId, res.body);
-    const shown = await this.shown(room, res.body.messages);
+    const read = await this.read(room, res.body.messages);
     if (this.openedFor !== room.chatRoomId) return;
-    this.messages.set(shown);
-    this.oldest = shown.length > 0 ? shown[0].position : 0;
-    this.newest = shown.length > 0 ? shown[shown.length - 1].position : 0;
+    this.messages.set([]);
+    this.put(room, read, false);
+    this.oldest = read.lowest;
+    this.newest = read.highest;
     this.canLoadOlder.set(res.body.messages.length === MESSAGES_PAGE);
     this.ready = true;
     this.session.markSeen(room.chatRoomId, this.newest);
@@ -859,22 +989,22 @@ export class ChatRoomPage {
     void this.tellSeen();
   }
 
-  /** The page before the oldest shown; the reader stays on the message they were looking at. */
+  /** The page before the oldest shown; the reader stays on the message they were looking at. Since 2026-11-24 the page is the MESSAGES_PAGE rows before the lowest position read, the edits and the deletes among them: a page of rows can hold fewer messages, or none, and the next page is then asked for from that page's lowest position. */
   protected loadOlder(): Promise<void> {
     const room = this.room();
     if (!room || this.oldest === 0) return Promise.resolve();
     return this.run(async () => {
       const res = await this.api.listMessages(room.chatRoomId, { beforePosition: this.oldest, limit: MESSAGES_PAGE });
       if (!res.ok || this.openedFor !== room.chatRoomId) return res;
-      const shown = await this.shown(room, res.body.messages);
-      if (shown.length > 0) {
+      const read = await this.read(room, res.body.messages);
+      if (read.lowest > 0) {
         await this.threadAtRest();
         if (this.openedFor !== room.chatRoomId) return res;
         const el = this.threadBox()?.nativeElement;
         // How far the reader is from the thread's end; the same distance is set again once the older messages are drawn (2026-11-22). A browser that has kept the place by itself is then moved by nothing.
         const fromEnd = el ? el.scrollHeight - el.scrollTop : 0;
-        this.oldest = shown[0].position;
-        this.messages.update((list) => [...shown, ...list.filter((m) => !shown.some((s) => s.messageId === m.messageId))]);
+        this.oldest = read.lowest;
+        this.put(room, read, true);
         afterNextRender(
           () => {
             if (el) el.scrollTop = el.scrollHeight - fromEnd;
@@ -887,7 +1017,7 @@ export class ChatRoomPage {
     });
   }
 
-  /** New messages after the newest shown: quiet from the timer, logged after a send. The thread follows them only when the reader is near the bottom. Since 2026-11-24 the same read brings the members' seen positions that changed since the read before (takeSeen); they are taken before the return for an answer with no message. */
+  /** New messages after the newest shown: quiet from the timer, logged after a send. The thread follows them only when the reader is near the bottom. Since 2026-11-24 the same read brings the members' seen positions that changed since the read before (takeSeen); they are taken before the return for an answer with no message. Since 2026-11-24, too, it brings the edits and the deletes written after the highest position read: this is how an edit or a delete by someone else reaches an open conversation, within MESSAGES_POLL_MS. */
   private async poll(quiet: boolean): Promise<void> {
     const room = this.room();
     if (!room || !this.ready || this.openedFor !== room.chatRoomId || !this.session.hasSession() || (quiet && this.busy())) return;
@@ -895,12 +1025,12 @@ export class ChatRoomPage {
     if (!res.ok || this.openedFor !== room.chatRoomId) return;
     this.takeSeen(room.chatRoomId, res.body);
     if (res.body.messages.length === 0) return;
-    const shown = await this.shown(room, res.body.messages);
+    const read = await this.read(room, res.body.messages);
     if (this.openedFor !== room.chatRoomId) return;
     const follow = this.nearBottom();
-    this.messages.update((list) => [...list.filter((m) => !shown.some((s) => s.messageId === m.messageId)), ...shown]);
-    this.newest = Math.max(this.newest, shown[shown.length - 1].position);
-    if (this.oldest === 0) this.oldest = shown[0].position;
+    this.put(room, read, false);
+    this.newest = Math.max(this.newest, read.highest);
+    if (this.oldest === 0) this.oldest = read.lowest;
     this.session.markSeen(room.chatRoomId, this.newest);
     if (follow) this.scrollToBottom();
   }
@@ -940,26 +1070,107 @@ export class ChatRoomPage {
     else if (this.openedFor === room.chatRoomId && this.toldSeen === position) this.toldSeen = 0;
   }
 
-  /** The messages decrypted with the room key and split into pieces; the two reasons a text cannot show, as before. For the two traders of a marketplace chat (2026-11-19) each message also says what it is when the pinned card posted it (`notice`, from tradeMessageKind); null for every other message. Since 2026-11-23 each message also says which sticker its text names (`sticker`, from stickerNamed in ../stickers); null for every other message. */
-  private async shown(room: RoomItem, items: MessageItem[]): Promise<ShownMessage[]> {
+  /**
+   * The rows of one answer of /list-messages, decrypted with the room key
+   * (2026-11-24; wallet spec 4.19; until then every row was a message, and
+   * this was `shown`). A text that does not open is one of the two
+   * sentences that say why, as before. A row is one of three things. A
+   * message, with its own text, or with none when it came without: a
+   * later row of the room names it then. An edit, kept with its text for
+   * the message it names; an edit that came without its text is passed
+   * over, since a newer row names the same message. A delete, kept for
+   * the message it names. A row of a kind this wallet does not know, and
+   * an edit or a delete that names no message, is passed over. Nothing of
+   * the page is changed here: `put` does that, once the page still shows
+   * the room the rows were read for.
+   */
+  private async read(room: RoomItem, rows: MessageItem[]): Promise<RowsRead> {
     const hasKey = (await this.chat.roomKeyOf(room)) !== null;
-    const me = this.session.anopodId();
-    const list: ShownMessage[] = [];
-    for (const m of items) {
-      const text = (await this.chat.decryptMessage(room, m.message)) ?? (hasKey ? this.t().chatRoom.cannotDecrypt : this.t().chatRoom.noRoomKey);
-      list.push({
-        messageId: m.messageId,
-        position: m.position,
-        senderAnopodId: m.senderAnopodId,
-        createdAt: m.createdAt,
-        pieces: piecesOf(text),
-        mine: m.senderAnopodId === me,
-        pending: false,
-        notice: this.chat.isTrader(room) ? tradeMessageKind(text) : null,
-        sticker: stickerNamed(text),
-      });
+    const open = async (message: string): Promise<Opened> => {
+      const text = await this.chat.decryptMessage(room, message);
+      return text === null ? { text: hasKey ? this.t().chatRoom.cannotDecrypt : this.t().chatRoom.noRoomKey, opened: false } : { text, opened: true };
+    };
+    const read: RowsRead = { messages: [], changes: [], lowest: 0, highest: 0 };
+    for (const row of rows) {
+      if (read.lowest === 0 || row.position < read.lowest) read.lowest = row.position;
+      if (row.position > read.highest) read.highest = row.position;
+      const kind = row.kind ?? null;
+      const target = row.targetMessageId ?? null;
+      if (kind === null) read.messages.push({ row, own: row.message === null ? null : await open(row.message) });
+      else if (kind === 'delete' && target !== null) read.changes.push({ target, change: { kind, position: row.position } });
+      else if (kind === 'edit' && target !== null && row.message !== null) read.changes.push({ target, change: { kind, position: row.position, text: await open(row.message) } });
     }
-    return list;
+    return read;
+  }
+
+  /**
+   * A message as the thread draws it now (2026-11-24; wallet spec 4.19),
+   * by the rule the masterpod reads by too (its spec, 31.4): the message
+   * is deleted when a delete names it; otherwise its text is the newest
+   * edit's; otherwise its own. `change` is the newest row that names the
+   * message, as the page keeps it, and `own` the message's own text, null
+   * when its row came without. With neither, the message waits: it is not
+   * drawn until a read brings the row that names it. For the two traders
+   * of a marketplace chat (2026-11-19) the message also says what it is
+   * when the pinned card posted it (`notice`, from tradeMessageKind), and
+   * since 2026-11-23 which sticker its text names (`sticker`, from
+   * stickerNamed in ../stickers); both are read from the text the bubble
+   * shows.
+   */
+  private present(room: RoomItem, row: { messageId: string; position: number; senderAnopodId: string; createdAt: string }, own: Opened | null, change: Change | undefined): ShownMessage {
+    const base = { messageId: row.messageId, position: row.position, senderAnopodId: row.senderAnopodId, createdAt: row.createdAt, mine: row.senderAnopodId === this.session.anopodId(), pending: false };
+    const none = { pieces: [], notice: null, sticker: null, text: null, editPosition: null };
+    if (change?.kind === 'delete') return { ...base, ...none, deleted: true, waiting: false };
+    const shown = change ? change.text : own;
+    if (shown === null) return { ...base, ...none, deleted: false, waiting: true };
+    return {
+      ...base,
+      pieces: piecesOf(shown.text),
+      notice: this.chat.isTrader(room) ? tradeMessageKind(shown.text) : null,
+      sticker: stickerNamed(shown.text),
+      text: shown.opened ? shown.text : null,
+      editPosition: change ? change.position : null,
+      deleted: false,
+      waiting: false,
+    };
+  }
+
+  /** Keeps `change` as the newest row that names the message `target`, when it is that (2026-11-24): a delete always, since no edit is ever written after one; an edit only while no delete is kept and its position is above the kept edit's. True when what is kept changed. The same row kept twice changes nothing, so an answer that arrives twice does no harm. */
+  private keepChange(target: string, change: Change): boolean {
+    const held = this.changes.get(target);
+    if (held && (held.kind === 'delete' || (change.kind === 'edit' && change.position <= held.position))) return false;
+    this.changes.set(target, change);
+    return true;
+  }
+
+  /**
+   * Puts what one answer of /list-messages held into the page (2026-11-24;
+   * wallet spec 4.19). Its edits and deletes are kept first (keepChange).
+   * Then its messages join the thread, each as it stands now (present):
+   * at the thread's top for a page of older rows, else at its end, and in
+   * the place of an entry with the same id, as before. A message the
+   * thread already holds is drawn anew when one of the answer's rows
+   * names it: that is how an edit or a delete by someone else changes a
+   * bubble that is on the screen.
+   */
+  private put(room: RoomItem, read: RowsRead, older: boolean): void {
+    const named = new Set<string>();
+    for (const { target, change } of read.changes) {
+      if (this.keepChange(target, change)) named.add(target);
+    }
+    const fresh = read.messages.map(({ row, own }) => this.present(room, row, own, this.changes.get(row.messageId)));
+    if (fresh.length === 0 && named.size === 0) return;
+    const ids = new Set(fresh.map((m) => m.messageId));
+    this.messages.update((list) => {
+      const kept = list.filter((m) => !ids.has(m.messageId)).map((m) => (named.has(m.messageId) ? this.present(room, m, null, this.changes.get(m.messageId)) : m));
+      return older ? [...fresh, ...kept] : [...kept, ...fresh];
+    });
+  }
+
+  /** This pod's own edit or delete, drawn at once from the masterpod's 201 (2026-11-24): the row is kept as the newest that names the message, and the message is drawn anew. The read that follows brings the same row again, which changes nothing. */
+  private drawChange(room: RoomItem, target: string, change: Change): void {
+    if (!this.keepChange(target, change)) return;
+    this.messages.update((list) => list.map((m) => (m.messageId === target ? this.present(room, m, null, change) : m)));
   }
 
   /**
@@ -969,9 +1180,12 @@ export class ChatRoomPage {
    * the bubble away and puts the text back. With a sticker (2026-11-23)
    * the message is that sticker's code, and send() leaves the message box
    * as it is. A sticker that went through is noted as sent lately
-   * (rememberSticker in ../stickers).
+   * (rememberSticker in ../stickers). While a message is edited
+   * (2026-11-24) Send saves the edit and sends no message (saveEdit).
    */
   protected send(sticker: Sticker | null = null): Promise<void> {
+    const edit = this.editing();
+    if (edit && !sticker) return this.saveEdit(edit);
     const text = sticker ? stickerCode(sticker) : this.messageText().trim();
     if (!text) return Promise.resolve();
     return this.run(async () => {
@@ -989,6 +1203,10 @@ export class ChatRoomPage {
         pending: true,
         notice: null,
         sticker,
+        text,
+        editPosition: null,
+        deleted: false,
+        waiting: false,
       };
       this.messages.update((list) => [...list, pending]);
       if (!sticker) this.messageText.set('');
@@ -1017,6 +1235,179 @@ export class ChatRoomPage {
       void this.tellSeen();
       return res;
     });
+  }
+
+  /** True for a message that has a menu (2026-11-24; forclaude/chat-edit-delete-plan-1.md, section 7): the chat is one where editing and deleting are on (changeable), and the message is this pod's own, has been sent and is not deleted. So the menu shows only where the masterpod would say yes. */
+  private canChange(m: ShownMessage): boolean {
+    return this.changeable() && m.mine && !m.pending && !m.deleted && !m.waiting;
+  }
+
+  /** True when that menu has Edit (2026-11-24): the message is a text that opened, not a sticker, and was sent at most EDIT_MINUTES ago by this device's clock. The masterpod decides by its own clock: a device whose clock is off gets its refusal as a sentence (saveEdit). */
+  private canEdit(m: ShownMessage): boolean {
+    return this.canChange(m) && m.sticker === null && m.text !== null && Date.now() - Date.parse(m.createdAt) <= EDIT_MINUTES * 60_000;
+  }
+
+  /**
+   * A tap on a bubble, a click on a computer (2026-11-24;
+   * forclaude/chat-edit-delete-plan-1.md, decision 6). On a message of
+   * this pod's own that has a menu (canChange) it opens that menu at the
+   * bubble: Edit, when the message can be edited (canEdit), and Delete.
+   * On every other bubble it does nothing, as before. No menu either for
+   * a tap on the copy button of an account id, nor for a click that ends
+   * a marking of text: the text is then still marked when the click
+   * arrives. A long press is not a tap and stays the browser's own, which
+   * marks text. The menu opens from the page's one anchor element, laid
+   * over the part of the bubble that the thread shows.
+   */
+  protected tapped(m: ShownMessage, event: Event): void {
+    if (!this.canChange(m) || this.busy()) return;
+    const bubble = event.currentTarget;
+    if (!(bubble instanceof HTMLElement)) return;
+    if (event.target instanceof Element && event.target.closest('app-copy-button') !== null) return;
+    if (window.getSelection()?.isCollapsed === false) return;
+    const trigger = this.messageTrigger();
+    const anchor = this.messageAnchor()?.nativeElement;
+    const thread = this.threadBox()?.nativeElement;
+    if (!trigger || !anchor || !thread) return;
+    const page = this.host.nativeElement.getBoundingClientRect();
+    const frame = thread.getBoundingClientRect();
+    const box = bubble.getBoundingClientRect();
+    const top = Math.max(box.top, frame.top);
+    const bottom = Math.min(box.bottom, frame.bottom);
+    anchor.style.left = `${box.left - page.left}px`;
+    anchor.style.top = `${top - page.top}px`;
+    anchor.style.width = `${box.width}px`;
+    anchor.style.height = `${Math.max(0, bottom - top)}px`;
+    trigger.menuData = { id: m.messageId, edit: this.canEdit(m) };
+    // A menu's trigger learns from the press of a mouse on it that a pointer opened the menu, and then draws no entry as a keyboard's choice. No finger can reach the anchor, so the press is said to it here; without it the menu opens with Edit drawn darker, as if it were picked.
+    anchor.dispatchEvent(new MouseEvent('mousedown', { button: 0, buttons: 1, detail: 1 }));
+    trigger.openMenu();
+  }
+
+  /**
+   * The menu's Edit (2026-11-24): the message's text goes into the message
+   * box, the cursor with it, and the line "Editing a message" stands
+   * above the box until the edit ends. What the box held is kept and goes
+   * back into it then (endEdit). The stickers panel closes, and a reader
+   * at the thread's end stays there. Whether the message can still be
+   * edited was told when the menu opened; the clock is not asked again
+   * here, and the masterpod decides at the save.
+   */
+  protected startEdit(messageId: string): void {
+    const m = this.messages().find((entry) => entry.messageId === messageId);
+    if (!m || !this.canChange(m) || m.sticker !== null || m.text === null || this.busy()) return;
+    const follow = this.nearBottom();
+    const draft = this.editing()?.draft ?? this.messageText();
+    this.editing.set({ messageId, text: m.text, draft });
+    this.messageText.set(m.text);
+    this.closeStickers();
+    this.error.set(null);
+    this.messageBox()?.nativeElement.focus();
+    if (follow) this.scrollToBottom();
+  }
+
+  /** The cross of the line "Editing a message" (2026-11-24): the edit ends and nothing is sent. */
+  protected stopEdit(): void {
+    this.endEdit();
+  }
+
+  /** Ends the edit that is going on, if one is (2026-11-24): the line above the message box goes, and the box holds again what it held before Edit was tapped. */
+  private endEdit(): void {
+    const edit = this.editing();
+    if (!edit) return;
+    this.editing.set(null);
+    this.messageText.set(edit.draft);
+  }
+
+  /**
+   * Send while a message is edited (2026-11-24;
+   * forclaude/chat-edit-delete-plan-1.md; wallet spec 4.19). An empty box
+   * sends nothing, as for a message. An unchanged text sends nothing and
+   * ends the edit. Otherwise the new text goes out encrypted with the
+   * room key, as a message does, with /edit-message. From the masterpod's
+   * 201 the bubble shows the new text and the word "edited" at once, in
+   * its place, and the edit ends; the read that follows brings whatever
+   * else arrived. The box keeps the text until that answer, so a refusal
+   * loses nothing; when the person typed on meanwhile, the edit does not
+   * end: the box keeps what they typed and the next Send saves it. The masterpod's refusal as too late, or because the
+   * message was deleted meanwhile, shows as a sentence of the wallet's
+   * own in the red line above the message box; the edit then ends and the
+   * text stays in the box, so it is not lost. Every other refusal shows
+   * as the page shows one, and the edit goes on.
+   */
+  private saveEdit(edit: Editing): Promise<void> {
+    const text = this.messageText().trim();
+    if (!text) return Promise.resolve();
+    if (text === edit.text.trim()) {
+      this.endEdit();
+      return Promise.resolve();
+    }
+    return this.run(async () => {
+      const room = this.room();
+      if (!room) throw new Error(this.t().chatRoom.notOpen);
+      const key = await this.chat.roomKeyOf(room);
+      if (!key) throw new Error(this.t().common.noRoomKey);
+      const res = await this.api.editMessage(room.chatRoomId, edit.messageId, await this.crypto.encryptText(key, text));
+      if (this.openedFor !== room.chatRoomId) return res;
+      if (!res.ok) {
+        const sentence = this.refusedChange(res);
+        if (sentence === null) return res;
+        this.editing.set(null);
+        await this.poll(false);
+        throw new Error(sentence);
+      }
+      this.drawChange(room, edit.messageId, { kind: 'edit', position: res.body.position, text: { text, opened: true } });
+      // The edit ends when the box still holds what was saved. A person who went on typing while the save was on its way is still editing: the box keeps what they typed, and the next Send saves that.
+      if (this.messageText().trim() === text) this.endEdit();
+      else this.editing.set({ ...edit, text });
+      await this.poll(false);
+      void this.tellSeen();
+      return res;
+    });
+  }
+
+  /**
+   * The menu's Delete (2026-11-24; forclaude/chat-edit-delete-plan-1.md;
+   * wallet spec 4.19). The wallet asks once, with its confirmation box
+   * (8.9); the box's first button, and a step back in the browser's
+   * history, delete nothing. After a yes /delete-message goes out, and
+   * from the masterpod's 201 the grey line "This message was deleted"
+   * stands in the message's place at once; an edit of that message that
+   * was going on ends. A refusal because the message was deleted
+   * meanwhile shows as a sentence of the wallet's own; every other
+   * refusal as the page shows one.
+   */
+  protected async deleteMessage(messageId: string): Promise<void> {
+    const room = this.room();
+    const m = this.messages().find((entry) => entry.messageId === messageId);
+    if (!room || !m || !this.canChange(m) || this.busy()) return;
+    const words = this.t().chatRoom;
+    const yes = await askConfirm(this.dialog, { title: words.deleteTitle, lines: [], notes: [words.deleteText], confirmLabel: words.delete, danger: true });
+    if (!yes || this.openedFor !== room.chatRoomId) return;
+    await this.run(async () => {
+      const res = await this.api.deleteMessage(room.chatRoomId, messageId);
+      if (this.openedFor !== room.chatRoomId) return res;
+      if (!res.ok) {
+        const sentence = this.refusedChange(res);
+        if (sentence === null) return res;
+        await this.poll(false);
+        throw new Error(sentence);
+      }
+      if (this.editing()?.messageId === messageId) this.endEdit();
+      this.drawChange(room, messageId, { kind: 'delete', position: res.body.position });
+      await this.poll(false);
+      void this.tellSeen();
+      return res;
+    });
+  }
+
+  /** The wallet's own sentence for the two refusals of /edit-message and /delete-message that a person can meet through the menu (2026-11-24; forclaude/chat-edit-delete-plan-1.md, section 7): `409 too late to edit`, when the 15 minutes passed by the masterpod's clock, and `409 message deleted`, when the message was deleted meanwhile, from another device of the same person. Null for every other answer, which shows as the page shows a refusal. */
+  private refusedChange(res: ApiResponse<unknown>): string | null {
+    if (res.ok || res.status !== 409) return null;
+    const reason = (res.body as Partial<ApiError> | null)?.error;
+    if (reason === 'too late to edit') return this.t().chatRoom.tooLateToEdit;
+    if (reason === 'message deleted') return this.t().chatRoom.alreadyDeleted;
+    return null;
   }
 
   protected findInvitee(): Promise<void> {
