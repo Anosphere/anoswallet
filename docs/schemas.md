@@ -5152,9 +5152,18 @@ of them. The accounts it reads: this pod's usable
 spending accounts when it is the seller, and this pod's usable accounts
 named in the chat (an id in the messages that is one of
 session.accounts), pair one from each keyBlob; with no account id in the
-chat nothing is read. A trade is the chat's when it is between one of
-those accounts and an account named in the chat, whoever posted the id.
-First /list-escrows on each account: the newest open trade of the chat
+chat nothing is read. A trade is the chat's when the chat names its
+transaction id (2026-11-26, section 11): the card's own message about
+the trade (the next paragraph) puts it there, and it has the shape of
+an account id, so it is among the ids named in the chat; when the chat
+names several trades that exist, the one named first. Only a chat that
+names no trade that exists takes a trade by the rule of 2026-11-10: the
+one between one of those accounts and an account named in the chat,
+whoever posted the id, the newest when there are several. Until
+2026-11-26 that rule was the only one, so an older chat between the
+same two people on the same accounts showed their newest trade, with
+its amount, in place of its own.
+First /list-escrows on each account: the chat's open trade
 shows as the box (2026-11-17, section 11; until then as the line "Escrow
 trade: 100 anos · Waiting for the seller to release the anos"), by the
 trade's stage and this pod's side in it, the seller being the pod whose
@@ -5194,8 +5203,15 @@ Dispute stay on that page; until 2026-11-17 Release was there only. An
 open trade shows this way whatever the listing's status. With none open, /list-transactions on each account
 with `from` the room's createdAt, 200 rows at a time
 (CARD_TRANSACTIONS_PAGE), paging back with beforePosition while a page
-comes back full: an escrowTransfer of the chat is its released trade, the
-newest when there are several. The open list is read first because the
+comes back full, every page (until 2026-11-26 the read stopped at the
+first trade of the chat): an escrowTransfer named in the chat is its
+released trade, the one named first when several are; with none named,
+the newest escrowTransfer between the account and an account named in
+the chat. Once the chat's released trade is known and the chat names
+it, nothing more is read: a release ends the chat's trading, and a
+newer open trade between the same accounts is another chat's
+(2026-11-26; until then the open list was read on, and such a trade
+showed here). The open list is read first because the
 validators write the link before the trade leaves /list-escrows
 (anossoftware src/accounts/accounts.service.js, writeApproved), so a
 released trade is never missing from both reads. A released trade ends
@@ -5240,9 +5256,15 @@ the card says "Nothing was sent. This chat already has an escrow trade."
 and shows that trade. Three limits: the buyer's card can match a trade
 only when the seller's account id is in the chat, which the chat's
 message about the trade (the next paragraph) puts there the first time
-the seller has the chat open after the trade started; two chats at once
-between the same two people on the same accounts both read Released after
-one release; a seller who recovered the account after a lost passkey
+the seller has the chat open after the trade started; a chat with no
+trade of its own (none started in it, or a cancelled one only) reads a
+trade of another chat between the same two people on the same accounts,
+open or Released, since it names no trade and takes the newest between
+the accounts, and the message the seller's card then posts in it names
+that trade, which makes it the chat's for good (until 2026-11-26 every
+chat between the same two people did so, its own trade or not, which
+is what decision 9 of forclaude/wallet-finished-trade-plan-1.md
+accepted as the safe side); a seller who recovered the account after a lost passkey
 cannot read the old account, so a release sent from it is not seen. "Send
 my account", "Send another account" and "Put the anos in escrow" show
 until a trade has started, and again after a cancelled
@@ -5271,7 +5293,9 @@ the transaction ids it posted about, per room (`told`), so a check that
 runs before the thread shows the message does not post it again; a post
 that fails is tried again by the next check; two devices of the seller in
 the same chat at the same moment can post it twice. The buyer's card
-never posts about a trade.
+never posts about a trade. Since 2026-11-26 the transaction id in the
+message is also what makes the trade the chat's on every later check
+(the paragraph above).
 
 The attestor in a marketplace chat (2026-11-12, section 11; the plan is
 forclaude/wallet-case-chats-plan-1.md, its decisions 9, 26 and 27; the
@@ -15450,7 +15474,11 @@ The forty Thai lines, as `th.ts` has them:
   and style of the languages plan's 1.6 and by the Thai `th.ts` already
   has for the same things; no Thai reader has read it. No line ends in
   a full stop, and the keys of `findPasskey` stand in the English
-  file's order.
+  file's order. (Since 2026-11-26 the line `findPasskey.s5Tick` reads
+  "ฉันลองทุกขั้นตอนแล้ว พาสคีย์ของฉันหายไปแล้ว", and the English "I've
+  tried all the steps. My passkey is gone.": the note "The tick box of
+  the walk-through says all the steps (2026-11-26)" at the end of
+  section 11.)
 - The names of the two apps, as Apple's and Google's own Thai help
   pages have them; both pages could be read, on 2026-11-18. Apple's
   article 104955 in Thai (support.apple.com/th-th/104955, "ค้นหารหัสผ่าน
@@ -23416,6 +23444,63 @@ masterpod deploy is done"). No new package, no env variable, nothing in
   4, point 6), and the details of "notifications" there get a dated
   paragraph.
 
+### The chat's trade is the one the chat names (2026-11-26)
+
+Built in the chat that found the bug, on the user's word ("Yes, build
+it"), with no plan file, on top of ce2c752, the working tree clean. One
+file of `src/app` and this file, one commit. Why: a wallet user sent
+two screenshots of finished marketplace chats on 2026-11-26. In the
+first the card's own lines read "You are selling 100 anos to
+donjai140123 · 4.00 THB each · donjai140123 pays you 400 THB", the chat
+shows the buyer paying 400 THB on 20 Nov, and the box under the lines
+reads "Released: 200 anos"; in the second, "You are buying 200 anos from
+tawan7891 · 3.60 THB each · you pay tawan7891 720 THB" and "Released:
+500 anos". The cause: since 2026-11-10 (the note "The pinned card reads
+a finished trade") the card took as the chat's trade the newest trade
+between one of the accounts it reads and an account named in the chat,
+open from /list-escrows, else released from /list-transactions since
+the room was made, and nothing tied a trade to the chat it was started
+in, although the card's own message about the trade names the
+transaction id in the chat and the card already collects it (the
+64-hex rule of `piecesOf`). So once the same two people traded again on
+the same accounts, in a new chat for a new listing, every older chat
+between them showed the newest trade's amount: the older room was made
+earlier, and the newer release, written later, fell inside its date
+range and came first. The number changed between visits because
+`released`, once found, stays for the visit only; the next visit read
+again and found the newer row. Decision 9 of
+`forclaude/wallet-finished-trade-plan-1.md` had accepted the narrow
+case of two chats at once; the case of an older chat was not seen
+then. Wallet only: no validator, doorman, masterpod or proxy change.
+
+- `src/app/components/pinned-listing.component.ts`: `named`, a computed
+  map of every id named in the chat to the position of the first
+  message that names it, in place of the set `check()` built;
+  `ReleasedTrade` gains `namedAt`, and the type `NamedRow`. `check()`:
+  an open trade whose transaction id the chat names (`openNamed`, the
+  one named first when several are) is the chat's; the trades of the
+  pair rule (`openPair`) count only when no named trade is found open
+  or released; the rows are read when no named open trade is found and
+  no released trade is kept; nothing is read once the released trade
+  kept is a named one (`watched` is empty then). `releasedLink()` reads
+  every page since the room was made and answers both the row named
+  first and the newest row of the pair rule, where it stopped at the
+  first row of the pair rule. `tell()` takes the map. The words, the
+  template and the other pages are untouched.
+- 8.2 Chat, "The chat's trade": the rule by the transaction id, the
+  rows read to the end, nothing read after a named release, and the
+  second of the three limits narrowed to a chat with no trade of its
+  own; "The chat's message about its trade": one sentence.
+- Not run in a browser: the user deploys and tries it on the test net.
+  What a chat shows after the deploy: a chat whose message names its
+  trade shows that trade's amount from the first visit on, since the
+  card reads the validators on every visit; a chat where, before this
+  change, the seller's card had posted the newer trade's message as
+  well names both and shows the one named first, its own; a chat with
+  no trade of its own keeps the behaviour of decision 9.
+- For the deploy: the user's two lines on wallet1 and then on wallet2,
+  with no `npm ci` (no package file changed).
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`
@@ -23591,7 +23676,10 @@ alone, without the offset. When the configuration has not loaded or
 the proxy sent no lock numbers, the second line ends "Enough of them
 have to send their part." and the fourth reads "Money in a guarded
 or vault account then waits out its lock." Under the list a box to
-tick, "I tried all of these. My passkey is gone.", and the button
+tick, "I've tried all the steps. My passkey is gone." (since
+2026-11-26; "I tried all of these." until then, which pointed at the
+four screens before while the list right above the box is what happens
+after a case is opened), and the button
 Next, off until the box is ticked. Next shows the stepper, at its
 top. Leaving the screen unticks the box.
 
