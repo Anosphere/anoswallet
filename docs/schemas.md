@@ -355,7 +355,9 @@ Behaviour
   seconds while an answer is under way, so an answer that takes
   minutes is not cut. When the browser goes away in the middle of an
   answer, the proxy closes its call to the masterpod, and the
-  masterpod then stops its call to Anthropic.
+  masterpod then stops its call to Anthropic. (Since 2026-11-25, the
+  masterpod's spec, section 36: its call to the company whose model
+  answers, Anthropic or OpenAI.)
 - The signed envelope's path is the backend path: the browser signs
   "/complete-setup" and posts to /api/masterpod/complete-setup; the proxy
   strips its prefix and the masterpod sees /complete-setup.
@@ -1377,6 +1379,13 @@ and what is left as it is. The masterpod gained there: two tables
 `joy_usage`, a count of messages and tokens for each pod and day),
 three routes at level setup, five env variables, one file of text and
 one npm package. The wallet gained no package and no env variable.
+(Since 2026-11-25, the masterpod's spec, section 36: the model that
+writes the answers is Anthropic's Claude Haiku 5.5 or OpenAI's GPT-6.2
+Sol, by a setting of the masterpod, and Anthropic's when the setting is
+not there. The wallet does not change for it: the three routes, the
+request and the stream are as written here, and a chat that is open when
+the company changes goes on, since the wallet sends the words of the
+chat with every message.)
 
     POST /get-joy-memory (setup), new
     body: {}
@@ -1413,6 +1422,9 @@ one npm package. The wallet gained no package and no env variable.
             since 2026-11-25 (4.21): two kinds of line more, { "drawing": true }, each time Joy starts on
             a picture, and { "picture": { type, data, description } }, one line with a picture that was
             made
+            since 2026-11-25 (the masterpod's spec, section 36): the model that answers is Anthropic's or
+            OpenAI's, by a setting of the masterpod. The request, the refusals and the stream are the same;
+            "joy is off" then means that the masterpod has no key for the company that answers
     a masterpod of before: 404
 
 What leaves the wallet. A message to Joy is the one thing in the wallet
@@ -1432,7 +1444,12 @@ is.)
 description that Joy wrote from the chat goes from the masterpod to a
 second company, OpenAI. What the wallet sends is as before, with one
 thing more in it, a note of the wallet's in front of an earlier answer
-that had a picture. The one line stays as it is.)
+that had a picture. The one line stays as it is.) (Since 2026-11-25, the
+masterpod's spec, section 36: the conversation and the memory file go to
+the company whose model answers, to Anthropic or to OpenAI, by a setting
+of the masterpod. The wallet cannot tell which: it sends the same
+request and reads the same stream. The one line names no company and
+stays as it is.)
 
 The chat. There is one chat with Joy at a time, and the wallet holds
 it: joy.service (8.3) keeps its messages in the page's memory, so an
@@ -1808,7 +1825,13 @@ column that counts the searches, what Joy is told and what it costs.
 The masterpod gained there: one column on `joy_usage` (`searches`), two
 env variables and new words in its shared memory file. No table, no
 route and no npm package. The wallet gained no package, no env variable
-and no route.
+and no route. (Since 2026-11-25, the masterpod's spec, section 36: when
+OpenAI's model answers, the search is OpenAI's own web search tool,
+which OpenAI runs inside the request in the same way. The lines of the
+stream and `sources` are the same. Two things can differ in what a
+member sees: an answer from one of OpenAI's own services, such as its
+weather service, has no source; and asked one more question about a
+searched answer, Joy may search again.)
 
     POST /ask-joy (setup), the request as before (4.18), two additions to its answer
     body: { messages: [ { role, text } ], memory }, as before: of each message the wallet sends its role
@@ -1921,7 +1944,9 @@ which can hold words of the member's message, and the query goes to a
 search engine that Anthropic uses. The one line under Joy's header
 does not say that in particular and stays as it is (the plan's section
 4, point 9): it is still true. A tap on a source takes the member to
-that page's site, as any link does.
+that page's site, as any link does. (Since 2026-11-25, the masterpod's
+spec, section 36: or to one that OpenAI uses, when OpenAI's model
+answers.)
 
 What a wallet tab does that was loaded before this step's deploy (the
 plan's section 4, point 11; tried by the masterpod's step, its spec
@@ -2166,6 +2191,10 @@ description that Joy wrote from the chat goes to OpenAI, with a hash of
 the anoPod's id and nothing else of the chat (the masterpod's spec,
 33.3). The one line under Joy's header does not say that in particular
 and stays as it is (the plan's section 4, point 9): it is still true.
+(Since 2026-11-25, the masterpod's spec, section 36: "nothing else of
+the chat" holds for the request that makes the picture. When OpenAI's
+model writes Joy's answers, the chat goes to OpenAI too, in the request
+for her answer, as it went to Anthropic.)
 
 What a wallet tab does that was loaded before this step's deploy (the
 plan's section 4, point 11; tried by the masterpod's step, its spec
