@@ -23542,6 +23542,55 @@ user's words for the new text: "I've tried all the steps".
 - For the deploy: the user's two lines on wallet1 and then on wallet2,
   with no `npm ci` (no package file changed).
 
+### The username boxes tell the phone's keyboard to leave the word alone (2026-11-26)
+
+Built on the user's word in the same chat ("1 and 2 yes"), with no
+plan file, on top of the commit of the note above. Four page files and
+this file, one commit; nothing else of the wallet changes. Why: the
+item "username boxes: the phone's keyboard writes a capital and
+suggests words" of `after_production_todos/things-to-do-after-production.md`,
+added 2026-11-21 on the user's word. On an iPhone the keyboard treated
+a username box like a line of ordinary text: it wrote the first letter
+as a capital, underlined the word as a spelling mistake and offered
+other words above the keys ("Deficit" for "sefix"), because no box
+said otherwise. A username is small letters, digits and the
+underscore, and every page lowers what was typed before it uses it, so
+nothing went wrong with the username itself; what a person saw was
+"Sefix" above "sefix is available", and a tap on an offered word gave
+another username than the one typed.
+
+- Five boxes, each `<input matInput>` gaining the three attributes
+  `autocapitalize="none" autocorrect="off" spellcheck="false"`, the
+  way sites write a username box: `pages/create.page.ts` (the Username
+  box of step 2), `pages/vouching.page.ts` (the Username box under
+  Find a seed), `pages/chat-new.page.ts` (the Username box of Message
+  someone) and `pages/chat-room.page.ts` (Invite by username, and
+  Search members above the Members list). The item's file counted
+  three boxes; the two of the chat room came later or were not
+  counted.
+- The attributes are read by the keyboard alone: `autocapitalize`
+  leaves the shift key down at the start of the box, `autocorrect`
+  stops the keyboard from putting another word in the place of the
+  typed one, `spellcheck` takes the red line away. Nothing else of the
+  pages changes, and the pages still lower what was typed.
+- Seen in a production build of a copy of ad9eb6e with the four page
+  files alone, on this Mac: the build is clean, with no warning; each
+  of the three words stands five times in the built script, and not at
+  all in a build of ad9eb6e as it is.
+- Seen on a simulated iPhone 17 with iOS 26.5, in its Safari, with a
+  development build of the same copy served from this Mac and, beside
+  it, a build of ad9eb6e as it is. On the create page's Username box of
+  the build as it is, the keyboard came up in capitals (the shift key
+  on) with the row of suggested words above the keys, and five taps on
+  its keys s, e, f, i, x gave "Sefix", marked for correction, with
+  "Deficit" and "Deficiency" offered. With this change the same box
+  brought the keyboard up in small letters with no row of suggestions,
+  and the same five taps gave "sefix", plain. The four other boxes were
+  not looked at on the phone; they carry the same three attributes. Not
+  seen on a real phone, on Android, or on the live wallet.
+- For the deploy: the user's two lines on wallet1 and then on wallet2,
+  with no `npm ci` (no package file changed).
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`

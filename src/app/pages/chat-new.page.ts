@@ -56,7 +56,7 @@ import { SessionService } from '../services/session.service';
       <mat-tab [label]="t().chatNew.tabMessage">
         <div class="tab">
           <div class="form">
-            <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>{{ t().common.username }}</mat-label><input matInput [ngModel]="username()" (ngModelChange)="username.set($event)" (keyup.enter)="find()" /></mat-form-field>
+            <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>{{ t().common.username }}</mat-label><input matInput [ngModel]="username()" (ngModelChange)="username.set($event)" (keyup.enter)="find()" autocapitalize="none" autocorrect="off" spellcheck="false" /></mat-form-field>
             <button mat-stroked-button type="button" (click)="find()" [disabled]="busy() || !username().trim()">{{ t().common.find }}</button>
           </div>
           @if (found(); as person) {
