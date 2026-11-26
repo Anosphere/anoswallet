@@ -2265,6 +2265,281 @@ nothing under deploy/ changed. The wallet's side is the Joy page (8.2,
 Joy), joy.service and masterpod-api.service (8.3), the words (8.8) and
 the box of New chat (8.9).
 
+### 4.22 The notifications: only what is new, and the page's own reads
+
+Added 2026-11-25 (forclaude/notifications-page-plan-1.md, FINAL on the
+user's word, its steps 1 and 2; section 11): the wallet's read of the
+notifications of every 5 seconds gets only what is new, and the
+Notifications page has a new look, with filters over the list, "Show
+older" under it, and everything marked read when the page opens. Until
+then every such read got the newest 100 notifications whole, the read
+ones too: 4.9 KB every 5 seconds for a person with 20 notifications and
+24.6 KB for a person with 100 or more, counted from the form of the
+answer. The user, 2026-11-25: "I don't think we ever fixed it so that
+it won't ask the masterpod for every single notification every time. It
+should only be asking for new ones." The masterpod's side is its own
+spec's section 34, which holds the rule, the counter and the number,
+the changes of the two routes and what is left as it is. The masterpod
+gained three things there. A running number on every notification,
+`seq`, from a counter of its own in the database, the sequence
+`notification_seq`. Three fields more in the body of
+/list-notifications, `since`, `before` and `kinds`, with each row's
+`seq` in its answer and three numbers of the pod's whole list, `seq`,
+`count` and `unread`. And a second form of the body of
+/mark-notifications-read, `upTo`. No new route, no table, no env
+variable and no npm package.
+
+    POST /list-notifications (session), three fields more in the body, one more in each row and three in the answer
+    body: { unreadOnly, limit, since, before, kinds }, all optional; a field that is absent, or null, is not named
+          limit: the most rows an answer holds, 1 to 500; 100 when it is not named, as before
+          since: only the rows with a seq above it, a whole number from 0 to 9007199254740991; a since of 0 is a
+                 since
+          before: only the rows with a seq below it, a whole number from 1 to 9007199254740991
+          kinds: only rows of these kinds, a list of 1 to 21 of the twenty-one kind names, each once
+    answer: 200 { notifications: [ { notificationNumber, kind, referenceId, read, createdAt, seq } ], seq, count,
+            unread }
+            notifications: the rows that fit, the highest seq first, at most limit of them
+            seq: the highest seq among the caller's notifications, 0 when there is none; the number to send as
+                 the next since
+            count: how many notifications the caller has
+            unread: how many of them are unread
+            count and unread are of all the caller's rows, whatever the body asks for
+            nothing new: {"notifications":[],"seq":812,"count":57,"unread":2}, 52 bytes
+    checks: 400 bad request shape for a body that names both since and before; then 400 invalid unreadOnly,
+            invalid limit, invalid since, invalid before, invalid kinds
+    a masterpod of before: reads unreadOnly and limit alone, and answers { notifications }, with no seq in a row
+
+    POST /mark-notifications-read (session), a second form of the body
+    body: { notificationNumbers }, 1 to 500 ids, as before, or { upTo }, a whole number from 0 to
+          9007199254740991
+    writes, with upTo: every unread notification of the caller whose seq is upTo or lower is marked read
+    answer: 200 { marked }, how many rows were marked, as before
+    checks: 400 bad request shape for a body that names both forms or neither; 400 invalid upTo
+    a masterpod of before: answers a body with upTo with 400 bad request shape
+
+What the wallet sends, four bodies of /list-notifications and one of
+/mark-notifications-read:
+
+    the first read after a login or a page load    { "limit": 30 }
+    every 5 seconds, on every page                 { "since": 812 }
+    a tap on a filter, here Security               { "limit": 30, "kinds": ["passkeyAdded", "transferWaiting",
+                                                   "recoveryMoveWaiting", "recoveryCaseOpened",
+                                                   "alertSettingsChanged"] }
+    a tap on "Show older"                          { "limit": 30, "before": 771 }, with kinds when a filter is on
+    the page opens, or a row arrives on it         { "upTo": 812 }, to /mark-notifications-read
+
+Until this step the wallet sent { "unreadOnly": false } every 5 seconds
+and the ids of the rows to mark; it sends neither any more. A page is 30
+rows (`NOTIFICATIONS_PAGE`, constants.ts).
+
+What the wallet does with it (session.service, the shell's poll and the
+Notifications page; 8.1, 8.2, 8.3):
+
+- The list and its three numbers. The wallet keeps the list in memory,
+  session.notifications, newest first, as before, and three numbers
+  beside it: session.notificationsSeq, session.notificationsCount and
+  session.unread, the `seq`, `count` and `unread` of the answer that
+  was last put into the list. The list is null until the first answer.
+- The first read. While the list has no `seq`, the shell's read asks
+  for { "limit": 30 }: that is the first read after a login or a page
+  load. Its answer is the list.
+- The read on the timer (`readNotifications()` in app.ts). Every later
+  read sends the list's `seq` as `since`. The rows that come back go on
+  top of the list, and the answer's three numbers are the list's. When
+  no row came, the list is not set anew, so nothing that draws from it
+  is worked out again. One thing more: when such an answer says that
+  nothing is unread, every row in memory is read, whatever it said when
+  the row came, since the answer of a mark can be lost on its way.
+- The compare. Before the rows are put in, the wallet compares. When
+  the answer's `count` is not the count it had plus the rows that came,
+  it missed a row: more rows were new than one answer holds, or a
+  notification was committed after a later-numbered one (the
+  masterpod's spec, 34.3). When the answer's `seq` is below the `since`
+  that was sent, the masterpod's database was put back from a backup.
+  In both cases the wallet reads the first page again, once, and that
+  answer takes the list's place. When that read fails, the list and its
+  numbers stay as they were, and the next read on the timer finds the
+  same thing again.
+- Answers in another order. An answer of the shell's read is put in
+  only while the list's `seq` is still the one the read was asked with.
+  It is also dropped when the answer of a mark came between the asking
+  and the answer: such an answer can carry the rows and the unread
+  number of before the mark. The next read brings what a dropped answer
+  held.
+- The number in the menu and on Home is session.unread: all of the
+  pod's unread notifications, as the masterpod counts them, and not
+  only the rows in memory.
+- The page's own reads. The Notifications page (8.2) asks the masterpod
+  for rows in three cases only: the first page, when the page is opened
+  in the first seconds after a login, before the shell's poll has read
+  it; a filter's first page; and "Show older". The last two change
+  neither the list's `seq` nor its count: they bring rows for the page.
+- A filter's list. A tap on a filter shows at once the rows of that
+  group which the list in memory holds, and the page reads the filter's
+  first page, { "limit": 30, "kinds": [...] }. Which kinds make a group
+  is the wallet's list (8.2); the masterpod knows no groups. The rows
+  of the answer take the place of the rows shown, and with them stand,
+  on top, the rows of the group that the list in memory holds with a
+  `seq` above the highest `seq` of the filter's own rows: those are the
+  rows that the shell's read has brought since. When the filter's own
+  rows are none, every row of the group that the list in memory holds
+  is shown. The plan's section 7 words this otherwise: "with the rows
+  of that group that the timer brings put on top". Taken to the letter
+  that shows a row twice: a notification that was written after the
+  shell's last read is above the `since` of its next one, can already
+  be on the filter's first page, and comes again with that next read.
+  Leaving out the rows whose id the filter's rows hold is not enough
+  either: when more rows of a group came at once than a page holds, the
+  shell's read brings rows that belong below the filter's first page,
+  and they would stand on top. The masterpod's build found both in its
+  trial (its spec, 34.5 and 34.8), and this step's trial showed both in
+  the built page (section 11). The filter's rows belong to the page and
+  are gone when another filter is picked or the page is left.
+- "Show older". Under All it stands while the list in memory holds
+  fewer rows than `count`, under a filter while the last read for that
+  filter came back full, with 30 rows. A tap reads { "limit": 30,
+  "before": N }, with the group's `kinds` under a filter, N being the
+  lowest `seq` the page shows. Under All the rows go to the end of the
+  list in memory, under a filter to the end of the filter's rows. The
+  answer is put in only while the row it was asked below is still the
+  lowest one. Under All its rows are put in as read: an older row that
+  was still unread was marked with the rest when the page opened, or is
+  marked now, so it has no dot.
+- The first page again, with a filter on. When the shell reads the
+  first page again because it missed a row, the page with a filter on
+  reads that filter's first page again too, and the rows that came with
+  "Show older" fold back to the first 30
+  (session.notificationPages counts the first pages that were put in).
+- Marking. Opening the page marks everything read: one request,
+  /mark-notifications-read with { "upTo": the list's seq }. The page
+  sends it when it opens with something unread, and when a row arrives
+  while it is open: each time the list in memory or the unread number
+  changes while something is unread. It sends nothing while the unread
+  number is 0, while the list has no `seq`, and while a mark is on its
+  way. After the answer every row of the list up to that number is
+  read, and the unread number is the rows above it that are still
+  unread: none, unless a row arrived while the mark was on its way,
+  which the next mark then covers at once. A notification that was
+  written after the wallet's last read has a higher `seq`, so it is not
+  marked; it comes with the next read, as a new row. A mark that fails
+  changes nothing: the number stays, and the next change of the list
+  sends it again, which is a row that arrives or the page opened again.
+  A read on the timer with nothing new does not send it again.
+- The dots. The rows that were unread when the page opened and the rows
+  that arrived while it was open keep a dot and a bold sentence for as
+  long as the page is open: their ids are kept on the page and are gone
+  with it. A row that comes with "Show older" was marked with the rest
+  when the page opened, so it comes read and has no dot. A row of a
+  filter's first page that is above the list's `seq` was written after
+  the shell's last read, so it arrived while the page is open: it has
+  its dot at once, before the shell's read brings it.
+- The words that depend on the clock. The time under a sentence is
+  worded by the clock ("Just now", "5 min ago", "3 h ago",
+  "Yesterday"). session.minute is the clock's minute as a signal. Every
+  read of the shell looks at the clock, and the page's rows read the
+  signal, so the words are drawn again each minute and at midnight with
+  nothing else set anew. chat.service's `today` (4.17) is no use here:
+  it moves only once setup is complete, and the rows of the vouching
+  come before that.
+- A masterpod of before. An answer without `seq`, `count` and `unread`
+  is taken as the first page: its rows are the list, the list has no
+  `seq`, its count is the rows that came and its unread number the
+  unread rows among them, so the next read asks for the first page
+  again. That is also a masterpod server that still runs the old code
+  during the masterpod's own deploy. Nothing more is built for it, by
+  the plan: against such a server no mark is sent, "Show older" does
+  not stand, and a filter shows the newest 30 rows of every kind, since
+  the old code does not read `kinds`. So this step is deployed only
+  once the masterpod's step runs on every masterpod server.
+- A read that is refused or not answered changes nothing, and the next
+  one asks again. A read of the page that fails shows the red line,
+  "/list-notifications: HTTP 503: ...", unless nobody waits for it any
+  more: the page's own first read when the shell's has brought the list
+  meanwhile, and an older page when another filter was tapped
+  meanwhile.
+
+Decided while building, where the plan left a point of the code open,
+each the smallest way seen:
+
+1. Where the code is. No new file. The list, its numbers and the three
+   ways they change (`putNotifications`, `putNewNotifications`,
+   `putNotificationsRead`) are in session.service, the shell's read is
+   in app.ts beside the poll, and the page's own reads and the mark are
+   in the page. One new constant, `NOTIFICATIONS_PAGE`, stands in
+   constants.ts with the wallet's other page sizes; the plan does not
+   name that file.
+2. The compare comes before the rows are put on top. The plan's 3.3
+   words it the other way round. The result is the same whenever the
+   read of the first page succeeds. When it fails, the list is as it
+   was, and the rows of the next answer are not put in a second time.
+3. After a mark's answer the unread number is the unread rows above
+   `upTo` that the list holds, where the plan says 0. It is 0 unless a
+   row arrived while the mark was on its way.
+4. When the page marks. The plan names two moments, the page's opening
+   and a row that arrives. The page marks whenever the list in memory
+   or the unread number changes while something is unread, which is
+   those two moments. After a mark that failed, an older page under All
+   sends it again too.
+5. A filter's list is worked out from two things each time, the list
+   in memory and the page's own rows for the filter, by the rule
+   above. The page keeps no record of which rows the shell's read
+   brought.
+6. "New" is the block of rows with a dot at the top of what is shown,
+   and "Earlier" the rest, as the stand-in page of the plan's pictures
+   has it. A row never moves. A row with a dot below a row without one
+   keeps its place and its dot; with marking up to a number that needs
+   the gap of the masterpod's 34.7.
+7. A tap on the filter that is on takes it off, and All is on. A tap on
+   All while it is on leaves it on: Material's list of chips would
+   take the mark off and show no filter as on.
+8. A page with no row says "No notifications yet." or "No notifications
+   of this kind." only once it knows that there is none: under All
+   when the wallet has its list, under a filter when the masterpod has
+   answered for it. The red line of a read that failed goes when a
+   first page is put into the list.
+9. The mark and the page's reads are quiet: they are not in the Log
+   (8.2, Log), as the shell's reads are not.
+10. `listNotifications` takes the body as one object, and
+    `markNotificationsRead` the number. `NotificationsAnswer` and the
+    row's `seq` are in session.service beside `NotificationItem`; the
+    three numbers and the row's `seq` are optional in the types, since
+    a masterpod of before sends none.
+11. Four things came from a second reader's read of the code against
+    the plan (section 11), each a few lines and each built: a row of a
+    filter's first page that the shell's read has not brought yet has
+    its dot at once; an older page's rows under All are put in as read,
+    where the build had first dropped an older page that crossed a
+    mark; an answer that says nothing is unread makes every row in
+    memory read; and a refusal that nobody waits for sets no red line.
+    A fifth was left as it is: when a row arrives while a mark is on
+    its way and that mark then fails, the row is not marked until the
+    next change of the list.
+
+What a person sees is in 8.2, Notifications. What travels down to the
+phone, counted at the trial's front as bytes of an answer's body
+(section 11): 54 bytes every 5 seconds while nothing is new, where the
+newest 100 came whole; about 310 bytes once for a new notification; and
+7.7 KB for the first page of 30 rows after a login, where it was up to
+24.6 KB. Opening the page brings no rows. What goes up is as before:
+three signed requests every 5 seconds once setup is complete and two
+before that, about 9.6 KB each (section 10); a mark is one request
+where a press of the old button was two.
+
+One gap is known and left as it is, by the masterpod's spec (its 34.7):
+two notifications for one pod are written at the same instant and
+committed in the other order than their numbers, the wallet's read
+falls between the two commits, and the page marks before the wallet's
+next read. The row with the lower number is then marked before the
+wallet was sent it: it comes with the first page, in its place and
+already read, with no dot, and was never counted in the number.
+
+The proxy forwards both routes as any masterpod path (section 2);
+nothing in server/ and nothing under deploy/ changed, and no request
+was added, so the doormen count the same calls as before. The wallet's
+side is the shell's poll (8.1; 8.2, Notifications), the Notifications
+page and Home's number (8.2), session.service (8.3) and the words
+(8.8).
+
 ## 5. Validator changes (anossoftware)
 
 ### 5.1 A nonces table and two variables
@@ -3489,7 +3764,11 @@ which shows while its status is open and one of the pod's accounts whose
 balance entry has guardianVotes at least 1 (balances.service, 8.3, from
 the /get-account read Home already makes) is neither its proposer nor in
 its votes; a refusal shows no line, the lines are a convenience
-(2026-11-08, section 11).
+(2026-11-08, section 11). Since 2026-11-25 (section 11; 4.22) the number
+of "4 unread notifications", and the one that the Notifications tile and
+the menu's entry carry, is the count of all of the pod's unread
+notifications, as the masterpod answers it with every read; until then
+it was the unread rows among the newest 100.
 
 Wallet. Titled "Wallet" (the subtitle left on 2026-11-06, section 11).
 On top the balance card (balance-card.component over balances.service,
@@ -5618,12 +5897,16 @@ guardian accounts again and clears the two messages. The green is
 line "A fund proposal is open for your vote" is in the Home paragraph
 above.
 
-Notifications: the list, newest first, mark read; the 5-second poll
-runs while a session is open and updates the status (vouched, counts),
+Notifications: the list, newest first, mark read (since 2026-11-25 with
+a new look and no button: the paragraphs "Since 2026-11-25" below); the
+5-second poll runs while a session is open and updates the status (vouched, counts),
 and the chat rooms with them once setup is complete. Since 2026-11-24
 (section 11; 4.17) the poll's read of the chat rooms asks only for what
 is new: about 100 bytes come back while nothing is new, where the whole
-list came before. Its two other reads are as they were. Since 2026-11-19
+list came before. Its two other reads are as they were. Since 2026-11-25
+(section 11; 4.22) the poll's read of the notifications asks only for
+what is new too: 54 bytes come back while nothing is new, where the
+newest 100 notifications came whole. Since 2026-11-19
 (section 11) the poll also rings the wallet's sound when its read of the
 chat rooms holds a new message from someone else or a new chat request
 (8.1). A notification by itself rings nothing: a chat request rings
@@ -5654,6 +5937,64 @@ anoPod"; neither links anywhere. alertSettingsChanged, one kind for
 every change of the pod's alert list, reads "Your security alerts were
 changed" and links to the Security alerts page, /account/alerts; its
 reference id is the pod's own id, which the link does not use.
+
+Since 2026-11-25 (section 11; 4.22; the plan is
+forclaude/notifications-page-plan-1.md) the Notifications page has a new
+look. It is a frame of at most 720 pixels, in the middle of its room on
+a wide screen, where the card was as wide as the page. Top to bottom:
+the title "Notifications"; a row of five filters, chips, All, Security,
+Chat, Cases and Vouching, which scrolls sideways inside its strip on a
+phone; the rows; and "Show older" under them while older rows are left.
+A row is a round disc of 40 px with the icon of the row's group, the
+kind's sentence whole, on as many lines as it needs, and under it the
+time in small grey letters. The four groups, which are the wallet's own
+list: Security is passkeyAdded, transferWaiting, recoveryMoveWaiting,
+recoveryCaseOpened and alertSettingsChanged, a shield with a lock
+(shield_lock) on a red disc; Chat is chatInvite, inviteAccepted,
+inviteDeclined, joinRequest, joinApproved and joinDeclined; Cases is
+tradeCaseOpened, disputeCaseOpened, caseScheduled, caseDecided,
+caseDismissed and recoveryCaseScheduled; Vouching is vouchRequest,
+vouchApproved, vouchDeclined and vouched. Chat, Cases and Vouching have
+a grey disc with the icon of the menu's Chat, Cases and Vouch requests
+entries (chat, folder_shared, verified_user). The time reads "Just now"
+in the first minute, then "5 min ago", then "3 h ago" up to 24 hours,
+and after that as the chat list words a day: "Yesterday", the weekday
+within six days, else the date ("Nov 18"), with the year when it is
+another year. The whole row is the link, where it was the sentence
+alone: for the fourteen kinds that were links before, which lead where
+they led (above), and for vouchRequest, "Someone asked you to vouch for
+them", which leads to the Vouch requests page, /seed. The other six
+kinds are rows like the others and no link: vouchApproved,
+vouchDeclined, vouched, joinDeclined, recoveryMoveWaiting and
+recoveryCaseOpened. A kind that the wallet does not know shows its name
+as its sentence, as before, with a bell on a grey disc; it is no link
+and shows under All only. Gone are the subtitle "Newest first; refreshed
+every 5 seconds", the envelope, the date with seconds, the 16 characters
+of the reference id, and the two buttons under the list, "Mark N read"
+and "Refresh".
+
+Since the same day the page marks by itself (4.22). The rows that are
+unread when the page opens stand first, under the heading "New", each
+with a bold sentence and a blue dot at its right; the rest stand under
+"Earlier". With no unread row the page has neither heading. Opening the
+page marks everything read with one request, so the number in the menu
+and on Home goes to zero, and the rows keep their dot for as long as the
+page is open: after a tap on a row and the way back, no row has one. A
+new notification comes onto the open page by itself within 5 seconds,
+on top under "New" with its dot, and is marked read at once. A tap on a
+filter shows the rows of its group, the newest 30; a row keeps its dot
+under a filter; a tap on the filter that is on takes it off, which is
+All. "Show older" brings 30 more rows with each tap and is off while
+its read is on its way; an older row that was still unread comes
+without a dot, since it was marked with the rest when the page opened.
+A list with no row says "No notifications yet.", a filter with none "No
+notifications of this kind.", and the page says "Loading" while a read
+of its own is on its way and no row is there to show. A read of the
+page that fails shows a red line with the path and the reason. The page
+draws the list in memory, which the shell's poll keeps, and asks the
+masterpod for no rows when it opens, except in the first seconds after
+a login; until this step it read the whole list again at its opening
+and after "Mark N read".
 
 Seed: the Vouch requests page, for a seed or super seed (2026-11-08,
 section 11). One small call, /list-vouch-requests, answers the open
@@ -5708,7 +6049,23 @@ excepted, with the keyholder and anos calls included.
                             which is set anew only when something in it changed, where until then it was the
                             latest /list-chat-rooms answer, set anew every 5 seconds; and chatRoomsSeq, a plain
                             field: that list's number, the `seq` of the answer that was last put into it, null
-                            while there is no list and after an answer that carried none, null again at close
+                            while there is no list and after an answer that carried none, null again at close;
+                            since 2026-11-25 (section 11; 4.22) notifications is the notifications in memory, newest
+                            first, null until the first answer of /list-notifications and null again at close, where
+                            until then it was that route's latest answer, the newest 100, set anew every 5 seconds;
+                            three numbers stand beside it, the `seq`, `count` and `unread` of the answer that was
+                            last put into the list: notificationsSeq, a plain field, null while there is no list
+                            and after an answer that carried none; notificationsCount, a signal; and unread, a
+                            signal and a number, all of the pod's unread notifications, where until then it was a
+                            list, the unread rows among the newest 100; notificationPages, a signal, how many first
+                            pages were put into the list, which the Notifications page reads; notificationMarks, a
+                            plain field, how many answers of a mark have come; minute, a signal, the clock's
+                            minute, which the shell's read of the notifications sets and the rows of the
+                            Notifications page read; and the three ways the list changes: putNotifications(answer),
+                            a first page, which also takes an answer without the numbers; putNewNotifications(rows,
+                            seq, count, unread), the rows of a read with `since`, put on top; and
+                            putNotificationsRead(upTo), after a mark's answer; NotificationItem carries `seq`,
+                            optional, and NotificationsAnswer is the answer's type, its three numbers optional
     masterpod-api.service   the keyholder test app's api.service.ts, base path /api/masterpod, the two changed
                             routes and the four new ones added; the marketplace routes of 2026-11-06: getListing,
                             listingId on createChatRoom, mine and status any on listListings, no hpkeKey on
@@ -5790,7 +6147,12 @@ excepted, with the keyholder and anos calls included.
                             data, description }), a picture as one line of the answer brings it; no method
                             changed: the `onLine` of askJoy now also gets a line { drawing: true } each time Joy
                             starts on a picture, and a line { picture } when one was made, which joy.service
-                            reads and checks
+                            reads and checks;
+                            the notifications (2026-11-25, section 11; 4.22): the type NotificationsQuery ({ limit,
+                            since, before, kinds }, all optional); listNotifications(query, quiet), which sends the
+                            query as the body and answers a NotificationsAnswer (session.service, above), where it
+                            took unreadOnly and sent { unreadOnly }; and markNotificationsRead(upTo), which sends
+                            { upTo } and is always quiet, where it took the ids of the rows to mark and sent them
     keyholder-api.service   the keyholder test app's, base path /api/keyholder/<n>
     anos-api.service        the anos test app's account-api.service.ts, base path /api/anos/<the session's
                             validator> (2026-11-10, below; /api/anos/<defaultValidator> until then),
@@ -6966,6 +7328,27 @@ message was already deleted." The Thai, in the same order: "ข้อควา�
 "ข้อความนี้ถูกลบแล้ว", "ลบข้อความนี้หรือไม่", "ทุกคนในแชทนี้จะเห็นว่ามีข้อความถูกลบ
 การกระทำนี้ไม่สามารถยกเลิกได้", "ข้อความนี้แก้ไขไม่ได้แล้ว" and "ข้อความนี้ถูกลบไปแล้ว".
 The Thai is the build's, and no Thai reader has read it.
+The Notifications page's new look (2026-11-25, section 11; 4.22):
+`notifications` gains eight entries after `none` and loses two.
+`security`, "Security", the second filter; `fresh`, "New", and
+`earlier`, "Earlier", the two headings; `showOlder`, "Show older", the
+button under the list; `justNow`, "Just now", and two functions that
+take a number, `minutesAgo`, "5 min ago", and `hoursAgo`, "3 h ago",
+the time under a sentence in its first 24 hours; and `noneInGroup`, "No
+notifications of this kind.", what a filter with no row says. Gone from
+both files are `subtitle`, "Newest first; refreshed every 5 seconds",
+and `markRead`, "Mark 2 read", with the subtitle and the button.
+`title`, `none` and the twenty-one `labels` are as they were. The four
+other filters take words that exist: `common.all`, `nav.chat`,
+`nav.cases` and `nav.vouching`. The row of filters is named
+`common.filters` for a screen reader, "Loading" is `common.loading`, and
+the day words after 24 hours are the chat list's. The Thai, in the same
+order: "ความปลอดภัย", "ใหม่", "ก่อนหน้านี้", "แสดงรายการเก่ากว่า",
+"เมื่อสักครู่", "5 นาทีที่แล้ว", "3 ชม. ที่แล้ว" and
+"ไม่มีการแจ้งเตือนประเภทนี้". Both languages are the plan's words, letter
+for letter (its section 7; compared by a script), which the user read
+with the plan. The Thai is the planning chat's, and no Thai reader has
+read it.
 
 ### 8.9 The confirmation box
 
@@ -7531,8 +7914,10 @@ Cloud machines.
   sent as hex, so one request is about 9.6 KB, and the wallet sends
   three every 5 seconds: /list-notifications, /check-anopod-status and
   /list-chat-rooms); the notifications, whose read still answers the
-  newest 100 whole every 5 seconds; the reads of the whole chat list at
-  a page load, at a login and after a person's own action, once each;
+  newest 100 whole every 5 seconds (no longer since 2026-11-25: that
+  read brings only what is new too; 4.22, section 11); the reads of the
+  whole chat list at a page load, at a login and after a person's own
+  action, once each;
   keeping the list on the phone between two loads of the page; and the
   members leaving the chat list altogether, with a read that hands out
   a chat's members a page at a time, so a room that is sent whole still
@@ -22696,6 +23081,311 @@ variable, nothing in `server/` and nothing under `deploy/`.
   is back with the next load of this step's wallet (4.21). The same
   holds for as long as a wallet server is taken back to a commit of
   before this step.
+
+### The Notifications page: a new look, and only what is new every 5 seconds (2026-11-25)
+
+Step 2 of `~/Desktop/Z-TestNet/forclaude/notifications-page-plan-1.md`
+(FINAL, 2026-11-25, on the user's word "Yes, final"), the wallet's part,
+built in a fresh chat that the planning chat started on the user's word
+("Yes, start it"), on top of 7a70064, the working tree clean. Nine files
+of `src/app`, `README.md` and this file, one commit. Why: the user, that
+day: "I want to discuss making the notifications tab on the anosphere
+better. We haven't updated it since launching, and it looks bad. First
+off, I don't think we ever fixed it so that it won't ask the masterpod
+for every single notification every time. It should only be asking for
+new ones." The masterpod's part is the plan's step 1 (4.22; the
+masterpod's spec, section 34). The user committed it there as 4b4c0cb
+while this step was being built, and that commit's code and schema file
+are what this step's trial ran on. The user deployed it on prod1, prod2
+and prod3 the same afternoon, by their word in that build's chat ("The
+masterpod deploy is done"). No new package, no env variable, nothing in
+`server/` and nothing under `deploy/`.
+
+- Changed, `src/app/services/session.service.ts`, as 4.22 and 8.3 now
+  say: `seq` on `NotificationItem`, and the type `NotificationsAnswer`;
+  `notifications` is null until the first answer, where it was an empty
+  list; the fields `notificationsSeq`, `notificationsCount`,
+  `notificationPages`, `notificationMarks` and `minute`; `unread` is a
+  number in a signal, where it was the unread rows as a computed list;
+  `close()` empties the list and its three numbers; and three methods,
+  `putNotifications`, `putNewNotifications` and `putNotificationsRead`.
+- Changed, `src/app/services/masterpod-api.service.ts`: the type
+  `NotificationsQuery`; `listNotifications(query, quiet)`, which sends
+  the query as the body and answers a `NotificationsAnswer`; and
+  `markNotificationsRead(upTo)`, which sends `{ upTo }` and is always
+  quiet. The file's import names `NotificationsAnswer`.
+- Changed, `src/app/app.ts`: `poll()` calls `readNotifications()` where
+  it called `listNotifications(false, true)` and set the answer;
+  `readNotifications()`, new, with its comment; the import of
+  `NOTIFICATIONS_PAGE`; and, after the build's report, a sentence in the
+  comment over the poll's timer (below).
+- Changed, `src/app/constants.ts`: `NOTIFICATIONS_PAGE`, 30. The plan
+  does not name this file.
+- Changed, `src/app/pages/notifications.page.ts`, the whole file, as 8.2
+  and 4.22 now say. Its template and its styles are those of the
+  stand-in page that drew the plan's pictures
+  (`forclaude/notifications-page-plan-1-tools/notifications.page.stand-in.ts`),
+  with the words from the dictionary, the red line, "Loading", and the
+  tap and the off state of "Show older". One style more than the
+  stand-in has: `.error`, the red line's colour.
+- Changed, `src/app/services/navigation.service.ts` and
+  `src/app/pages/home.page.ts`: each reads `session.unread()` where it
+  read `session.unread().length`.
+- Changed, `src/app/i18n/en.ts` and `th.ts`: eight entries in and two
+  out (8.8), compared with the plan's section 7 by a script, letter for
+  letter.
+- Changed, this spec: the new 4.22; in 8.2 the paragraph "Notifications"
+  (two dated sentences and two new paragraphs) and one sentence at the
+  end of the paragraph "Home"; in 8.3 the row of session.service; in 8.8
+  one paragraph; this note; and, after the build's report, on the user's
+  word (below), a clause in the row of masterpod-api.service in 8.3 and
+  one in an item of section 10. `README.md`: a dated clause in the row
+  of `app.ts, app.html` and a new row for `pages/notifications.page.ts`.
+- One sentence of the plan was not taken to the letter, on the word of
+  the session that started this build: the plan's section 7 on a
+  filter's list, "with the rows of that group that the timer brings put
+  on top". 4.22 ("A filter's list") has the rule that was built and why.
+  The user was told on 2026-11-25, with the masterpod's report, and did
+  not object.
+- What the plan left open and the build decided is in 4.22, "Decided
+  while building": eleven points.
+- Places that the plan does not name and that this step left out of
+  date or short. The build left them as they were and named them to the
+  user in its report: the item "From the chat list plan" of section 10,
+  which said that the notifications' read "still answers the newest 100
+  whole every 5 seconds"; the comment over the poll's timer in
+  `src/app/app.ts`, which named the chat list's change of 2026-11-24
+  and not this one; the row of masterpod-api.service in 8.3, which
+  lists that file's changes by date and had no clause for the two
+  methods' new form; and, in a file of another chat's, the part
+  "Notifications" of `joy/wallet.md`, which describes the page of
+  before. The user, asked whether to bring the three of the wallet's
+  own in line before the commit: "Yes, fix them". So, before the
+  commit: the item of section 10 has a dated clause beside its
+  sentence; the comment over the timer has a sentence for this step;
+  and the row in 8.3 has its clause. No line of code changed: the
+  build from the wallet folder gave the same script again, byte for
+  byte (`cmp`), so no walk was run again. The part of `joy/wallet.md`
+  is as it was; it is the other chat's file.
+- The trial, on this Mac, nothing of it kept in this repository. This
+  step's files as a development build of a scratch copy, behind the
+  wallet's own server program, behind the masterpod's own app of step 1
+  (4b4c0cb) on a scratch PostgreSQL 17 of its own (127.0.0.1, port
+  61947, a data folder of its own, no socket file; this Mac's own
+  PostgreSQL on port 5432 was not touched). A small front of the
+  trial's between the two wrote down every request and its answer and
+  could hold an answer back, refuse a request or change an answer. The
+  database is the one the masterpod's trial left its tools for: ten
+  pods and 439 notifications of all twenty-one kinds. The login was
+  made up (no passkey: fresh session keys from the wallet's own code,
+  written onto a pod's row). Everything after it was real: every
+  request signed by the wallet's code and checked by the masterpod's,
+  every row read, drawn and marked by the wallet's own shell and page,
+  nothing of the wallet replaced but the sound. The pages were driven
+  in Google Chrome with no window, each person in a Chrome of their
+  own. Three walks, 171 checks in their last runs on the files as they
+  are committed (97, 58 and 16), none bad:
+  - The first read after a login asks for `{ "limit": 30 }` and nothing
+    else: 30 rows, 7.7 KB. For a person with 234 notifications of which
+    43 are unread, 40 of them below the newest 100, the menu's entry,
+    Home's tile and Home's line all say 43, though the list in memory
+    holds 3 unread rows.
+  - Every later read on the timer asks for `{ "since": N }` and nothing
+    else. With nothing new the answer is 54 bytes, and the list in
+    memory was set 0 times in 11 seconds. A round is three requests, as
+    before, and two for an anoPod before setup, which never reads the
+    chat list.
+  - A new notification while another page is open: the one row came
+    alone within 5 seconds, 307 bytes, the count and the number in the
+    menu followed, and nothing was marked.
+  - The page opens: one request, /mark-notifications-read with
+    `{ "upTo": N }`, the list's `seq`, and the masterpod marked all 44,
+    the 40 old ones among them. The page asked for no rows. The 4 rows
+    that were unread stand under "New", bold and with a dot, the other
+    27 under "Earlier"; the number in the menu is gone. Away from the
+    page and back: no dot, neither heading, no request.
+  - A row that arrives on the open page: on top under "New" within 5
+    seconds, "Just now", and its mark asked 19 ms after it came. Two
+    rows written in one transaction came together, the later one first,
+    with one mark.
+  - Each filter: one read, `{ "limit": 30, "kinds": [...] }` with the
+    group's kinds in the plan's order, the newest 30 rows of the group
+    and no other, the list in memory and its numbers untouched. With
+    the answer held back, the group's rows of the list in memory showed
+    at once. A tap on the filter that is on takes it off; a tap on All
+    while it is on leaves it on.
+  - "Show older" under All: `{ "limit": 30, "before": N }`, off while
+    its read is on its way, seven taps for 238 rows, each row once and
+    in the table's order, gone when the list held every row. The 40
+    rows that had been unread before the page opened came read and
+    without a dot. Under a filter: `kinds` with it, and gone when a
+    read brought fewer than 30.
+  - A row of the timer under a filter. A chat row and a security row
+    written together: under Chat the chat row on top with its dot,
+    once, and both marked with one request. A chat row written and Chat
+    tapped before the timer's read: the filter's first page held it,
+    with its dot at once and under "New", the timer then brought it,
+    and it stood on the page once. Forty
+    chat rows written at once and Chat tapped before the timer's read:
+    the page stayed the newest 30 of the group, and "Show older"
+    brought the other ten with their dot and twenty older ones.
+  - A missed row. A write committed after a later-numbered one, with a
+    read between the two commits: the next read brought no row and a
+    count one higher, the wallet read the first page again, once, and
+    the list held the late row in its place. With Cases on and 60 rows
+    loaded, the page read the filter's first page again too. 130 rows
+    written at once: the read with `since` held 100, and the first page
+    was read again. An answer whose `seq` the trial had put below the
+    `since`: the first page again. A read of the first page that the
+    trial refused: the list and its numbers stayed, and the next read
+    found the same thing and put it right.
+  - A mark that the trial refused: the number stayed, the rows kept
+    their dot, and the reads on the timer with nothing new did not send
+    it again in 11 seconds. A tap on "Show older" then brought the
+    older row, which the masterpod still had as unread, without a dot,
+    and the mark went again with that change of the list, and through.
+    A row that arrived on a page whose mark was refused was marked at
+    the page's next opening.
+  - The answer of a mark lost on its way, the mark itself done: the
+    wallet still said 2; the next read on the timer said that nothing
+    is unread, the number went and no mark was sent again; and at the
+    page's next opening only the row that had come since stood under
+    "New".
+  - An answer of the timer's read that the trial held back while the
+    page was opened and marked: dropped when it came, and the next read
+    brought its row. The page's own first read and the shell's on their
+    way at once: the first answer was put in and the second dropped.
+  - The first seconds after a login: the page read the first page
+    itself and said "Loading" meanwhile; "No notifications yet." for an
+    empty list and `{ "since": 0 }` after it; "No notifications of this
+    kind." for a filter with no row. A read of the page that was
+    refused, the first page's, a filter's and an older page's: the red
+    line "/list-notifications: HTTP 503: ...", and no word that there
+    is no row. The same refusals when nobody waited for them any more,
+    the first page's after the shell's read had brought the list and
+    an older page's after a filter was tapped: no red line.
+  - A row whose kind the trial had renamed on its way: its name as its
+    sentence, a bell on a grey disc, no link, under All only.
+  - The time words in English and in Thai, for rows of eight ages:
+    "Just now", "5 min ago", "3 h ago", "23 h ago", "Yesterday", "Sun",
+    "Nov 16", "Oct 21, 2025", and เมื่อสักครู่, 5 นาทีที่แล้ว, 3 ชม.
+    ที่แล้ว, เมื่อวาน, อาทิตย์, 16 พ.ย. A page's clock moved a minute on:
+    nothing was drawn again until the timer's read, which then turned
+    "Just now" into "1 min ago" with the list set 0 times. The clock
+    moved across midnight: "Yesterday" became "Tue" the same way. That
+    was an anoPod before setup.
+  - A tap anywhere on "Someone asked you to vouch for them" opened the
+    Vouch requests page; a tap on a row that is no link did nothing.
+  - A masterpod server on the code of before step 1 (f6348af on the new
+    tables): every answer came without `seq`, every read asked for the
+    first page, the page drew the 30 rows and sent no mark; under a
+    filter it showed the newest 30 rows of every kind. With the two
+    kinds of server answering in turn, the wallet asked for the first
+    page after an answer without `seq` and with `since` after one with
+    it, and a mark that reached the old code was refused with 400 bad
+    request shape and changed nothing. With the new code alone again
+    the mark went through at the page's next opening.
+- Made-up people with the real page, at random. Three people, each in a
+  Chrome of their own, and 2,100 random steps in three rounds with
+  three seeds: notifications written one, two or up to 130 at a time
+  (7,247 in all), a write committed after a later-numbered one (136
+  times), the shell's own poll (958 reads), the page opened (104 times)
+  and left, a filter tapped (153 times), "Show older" (117 taps, 3,361
+  rows), a mark refused, the page loaded again (65 times). After every
+  read on the timer the list in memory, its three numbers, the menu's
+  number and the rows the page draws were compared with the table:
+  1,075 comparisons, none different. Six rounds of the same kind had
+  run before, on the files as they stood before the second reader's
+  four things: 2,055 comparisons, none different.
+- Faults put in, to see that the walks notice one: eight copies of this
+  step's wallet with one change each, built and walked. The walks named
+  each, with one to 33 bad checks: no comparison of the count (8 bad,
+  and 69 of 153 comparisons of a random round); an answer put in though
+  a mark's answer had come meanwhile (2); an answer put in though the
+  list's `seq` had moved (1); no look at the clock in the timer's read
+  (3, in the clock's walk); no second read of a filter's first page
+  (2); a filter's list with the rows left out by their id (2, and 10 of
+  153 in a random round); a filter's list by the letter of the plan's
+  section 7 (5, and 9 of 153: a row stood on the page twice, and
+  Angular itself warned of two rows with one key); and a mark sent
+  while nothing is unread (33). The random round of 320 steps did not
+  notice the copy without the second read of a filter's first page; the
+  main walk did.
+- A second reader. After the trial a fresh reader, read only, compared
+  the change with the plan's sections 3.3 to 3.6, 4 and 7 and looked
+  for a row of events that ends in a wrong screen or a wrong number. It
+  also wrote the built rules as a model of its own and ran about 99,000
+  events against a made-up masterpod with slow, crossing and failing
+  answers: no row twice, none out of order, none missing. It named no
+  decision of the build as built wrongly, and five things in rare
+  orders of events. Four were built and tried (4.22, "Decided while
+  building", point 11), and every walk, the random rounds and the
+  faults were run again on the files as they are committed. The fifth
+  is left as it is (below).
+- Pictures of the built page, each beside the plan's own, in
+  `forclaude/notifications-page-plan-1-pictures/` (the files whose
+  names begin with `built-`): mai with the ten rows of the plan's
+  pictures, at 390 and 360 wide in English and in Thai and at 1024 and
+  1280 wide; the filter Security; Home before the page is opened; and
+  for a person with 42 rows the end of the list with "Show older" and
+  after a tap on it. Measured in each: nothing wider than the screen,
+  no sentence cut, the five filters in one row that scrolls inside its
+  strip on a phone (the last filter ends at 406 of 390 in English and
+  at 444 of 360 in Thai) and stands whole on a computer, the frame 720
+  wide in the middle of its room at 1024 and at 1280. Row for row the
+  built page is the plan's picture, with one difference: for ten rows
+  there is no "Show older", since nothing older is left.
+- `npx ng build` from the wallet folder into a scratch folder: clean,
+  no warning. The script is `main-W5GICPOM.js`, 2,404,988 bytes: 9,808
+  more than the script of 7a70064 and of 4c8f5ee, `main-6N7NAIT6.js`,
+  2,395,180 bytes, which the live wallet served that day (the two files
+  of 7a70064 do not enter the build). The style sheet is
+  `styles-HGVKDO6M.css`, 8,560 bytes, the same file as before: the
+  page's styles are in the script. The build's folder has ten files as
+  before. A scratch copy built the same bytes under another name
+  (`cmp`), and every walk ran on that copy's builds. That build behind
+  the wallet's own server, five checks, none bad: its first page drawn
+  under its own content security policy with no error named by Chrome,
+  /notifications leading to the first page with no login, and the
+  script holding this step's words in both languages and no longer the
+  subtitle, the envelope or `unreadOnly`.
+- Seen and left as it is:
+  - A dot can stand under "Earlier" only when a read row lies between
+    unread ones. The trial's first database had such rows, made by
+    hand; marking up to a number cannot leave them, but for the gap of
+    the masterpod's 34.7.
+  - On a browser that does not hold a page's place when a row is added
+    above it, a row that arrives pushes the rows down by its height
+    while a person is further down the list. The page before this step
+    did the same every time it drew its list.
+  - The marketplace's row of chips has the trait that this page's
+    filters would have had: a tap on All while it is on leaves no chip
+    marked. Not touched.
+  - The gap of the masterpod's 34.7 (4.22).
+  - A row that arrives while a mark is on its way, when that mark then
+    fails: the row is not marked until the list changes again or the
+    page is opened again (the second reader's fifth thing). And a
+    person who leaves the page and is back before a slow mark's answer
+    sees the dots once more.
+- Not tried: a real phone, and the simulated phones; the live wallet,
+  its nginx and the doormen; the masterpod's servers, PostgreSQL 16 and
+  PgBouncer; a slow connection; a login with a passkey; a screen
+  reader; a Thai reader; Safari and Firefox; the attestor's and the
+  moderator's editions, which run the same code; the user's own
+  development server (`ng serve`).
+- For the deploy: the masterpod's step first, on prod1, prod2 and
+  prod3, with its schema line on the leader before the first restart
+  (the masterpod's spec, 34.8); that was done on 2026-11-25, on the
+  user's word. Only then the wallet: the user's two
+  lines on wallet1 and then on wallet2, with no `npm ci` (no package
+  file changed). A wallet of this step in front of a masterpod server
+  that still runs the old code shows its list and marks nothing. A
+  wallet that is open on a phone during the deploy keeps the script it
+  has until it is loaded again, and goes on asking for the newest 100
+  until then. The box of "the bell on a phone cuts a long line" on the
+  after-production list is ticked with this step (the plan's section
+  4, point 6), and the details of "notifications" there get a dated
+  paragraph.
 
 ## 12. Recovery and the moderator edition
 

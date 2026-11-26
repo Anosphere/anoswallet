@@ -169,9 +169,15 @@ export const th: Words = {
   },
   notifications: {
     title: 'การแจ้งเตือน',
-    subtitle: 'ใหม่สุดก่อน รีเฟรชทุก 5 วินาที',
     none: 'ยังไม่มีการแจ้งเตือน',
-    markRead: (n: number) => `ทำเครื่องหมายว่าอ่านแล้ว ${n} รายการ`,
+    security: 'ความปลอดภัย',
+    fresh: 'ใหม่',
+    earlier: 'ก่อนหน้านี้',
+    showOlder: 'แสดงรายการเก่ากว่า',
+    justNow: 'เมื่อสักครู่',
+    minutesAgo: (n: number) => `${n} นาทีที่แล้ว`,
+    hoursAgo: (n: number) => `${n} ชม. ที่แล้ว`,
+    noneInGroup: 'ไม่มีการแจ้งเตือนประเภทนี้',
     labels: {
       vouchRequest: 'มีคนขอให้คุณรับรองเขา',
       vouchApproved: 'seed รับรองคุณแล้ว',

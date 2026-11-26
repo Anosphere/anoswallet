@@ -10,7 +10,7 @@ import { MatToolbarModule } from '@angular/material/toolbar';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { map } from 'rxjs';
 import { askConfirm } from './components/confirm-dialog.component';
-import { NOTIFICATIONS_POLL_MS } from './constants';
+import { NOTIFICATIONS_PAGE, NOTIFICATIONS_POLL_MS } from './constants';
 import { ChatService } from './services/chat.service';
 import { ConfigService } from './services/config.service';
 import { LanguageService } from './services/language.service';
@@ -94,6 +94,8 @@ export class App {
     // and the chat rooms with them once setup is complete (8.2, Chat). Since
     // 2026-11-24 the read of the chat rooms asks only for what is new and
     // puts it into the list in memory (chat.service's refreshNews; 4.17).
+    // Since 2026-11-25 the read of the notifications asks only for what is
+    // new too (readNotifications, below; 4.22).
     // The poll also rings: after that read the list goes to ring(), which
     // plays the wallet's sound for what is new in it (8.1).
     const timer = setInterval(() => void this.poll(), NOTIFICATIONS_POLL_MS);
@@ -137,8 +139,8 @@ export class App {
     if (this.polling) return;
     this.polling = true;
     try {
-      const [notifications, status, rooms] = await Promise.all([
-        this.api.listNotifications(false, true),
+      const [, status, rooms] = await Promise.all([
+        this.readNotifications(),
         this.api.checkAnopodStatus(true),
         this.session.setupComplete() ? this.chat.refreshNews() : Promise.resolve(null),
       ]);
@@ -147,7 +149,6 @@ export class App {
         await this.loggedOut();
         return;
       }
-      if (notifications.ok) this.session.notifications.set(notifications.body.notifications);
       if (status.ok) this.session.status.set(status.body);
       // The read of the chat rooms has put its answer into the list in memory already (refreshNews): the sound is given that list as it stands now.
       const list = rooms?.ok ? this.session.chatRooms() : null;
@@ -155,6 +156,50 @@ export class App {
     } finally {
       this.polling = false;
     }
+  }
+
+  /**
+   * The poll's read of the notifications (2026-11-25; wallet spec 4.22; the
+   * plan is forclaude/notifications-page-plan-1.md). Until then every read
+   * got the newest 100 whole and put them in the place of the list. Now the
+   * first read after a login or a page load asks for the newest 30, and its
+   * answer is the list in memory. Every later read sends the list's `seq`
+   * as `since` and gets only the rows above it, which go on top of the
+   * list; when none came, the list is not set anew. Before the rows are
+   * put in, the wallet compares. When the answer's `count` is not the count
+   * the wallet had plus the rows that came, it missed a row; when the
+   * answer's `seq` is below the `since` that was sent, the masterpod's
+   * database was put back from a backup. In both cases the first page is
+   * read again, once, and takes the list's place; if that read fails, the
+   * list stays as it was and the next read finds the same thing again. An
+   * answer without `seq`, from a masterpod of before, is taken as the first
+   * page, and the next read asks for the first page again. An answer is
+   * dropped, and the next read brings what it held, in two cases: when the
+   * list's `seq` is no longer the one this read was asked with, and when
+   * the answer of a mark came meanwhile (the Notifications page marks),
+   * since such an answer can carry the rows and the number of before the
+   * mark. A read that is refused or not answered changes nothing. Every
+   * call also looks at the clock, for the Notifications page's words that
+   * depend on the time (session.minute).
+   */
+  private async readNotifications(): Promise<void> {
+    this.session.minute.set(Math.floor(Date.now() / 60_000));
+    const since = this.session.notificationsSeq;
+    const marks = this.session.notificationMarks;
+    const stillAsked = () => this.session.hasSession() && this.session.notificationsSeq === since && this.session.notificationMarks === marks;
+    const res = await this.api.listNotifications(since === null ? { limit: NOTIFICATIONS_PAGE } : { since }, true);
+    if (!res.ok || !stillAsked()) return;
+    const { notifications, seq, count, unread } = res.body;
+    if (since === null || typeof seq !== 'number' || typeof count !== 'number' || typeof unread !== 'number') {
+      this.session.putNotifications(res.body);
+      return;
+    }
+    if (count === this.session.notificationsCount() + notifications.length && seq >= since) {
+      this.session.putNewNotifications(notifications, seq, count, unread);
+      return;
+    }
+    const page = await this.api.listNotifications({ limit: NOTIFICATIONS_PAGE }, true);
+    if (page.ok && stillAsked()) this.session.putNotifications(page.body);
   }
 
   /**

@@ -4,7 +4,7 @@ import { AttestationPayload, Envelope, EscrowVerdictPayload, FollowUp, HybridPub
 import { LanguageService } from './language.service';
 import { ApiResponse, LinesRead, LogService } from './log.service';
 import { CaseStatus, RecoveryPodAnswer } from './recovery.service';
-import { AnosAccountItem, NotificationItem, SessionService, StatusAnswer } from './session.service';
+import { AnosAccountItem, NotificationsAnswer, SessionService, StatusAnswer } from './session.service';
 
 export type { NotificationItem } from './session.service';
 
@@ -882,6 +882,14 @@ export interface ExistingEvidence {
   keyForCase: string;
 }
 
+/** What /list-notifications takes (2026-11-25, masterpod spec 34), each field optional: `limit`, the most rows an answer holds (100 when it is not named); `since`, only the rows with a `seq` above it; `before`, only the rows with a `seq` below it; `kinds`, only rows of these kinds. A body never names both `since` and `before`. */
+export interface NotificationsQuery {
+  limit?: number;
+  since?: number;
+  before?: number;
+  kinds?: string[];
+}
+
 /**
  * All HTTP calls to the masterpod live here, one method per route (the
  * keyholder test app's api.service.ts, base path /api/masterpod, the two
@@ -976,12 +984,14 @@ export class MasterpodApiService {
     return this.signed('/send-vouch-request', { anopodIdTo });
   }
 
-  listNotifications(unreadOnly = false, quiet = false): Promise<ApiResponse<{ notifications: NotificationItem[] }>> {
-    return this.signed('/list-notifications', { unreadOnly }, quiet);
+  /** /list-notifications (2026-11-25; wallet spec 4.22; masterpod spec 34). The wallet sends four bodies: { limit } for the first page, { since } every 5 seconds for the rows above that number, { limit, kinds } for the first page of a filter, and { limit, before }, with `kinds` under a filter, for the rows below that number. Every answer carries the pod's three numbers beside the rows; a masterpod of before knows `limit` alone and answers the rows alone. Until 2026-11-25 the wallet sent { unreadOnly: false } and got the newest 100. */
+  listNotifications(query: NotificationsQuery = {}, quiet = false): Promise<ApiResponse<NotificationsAnswer>> {
+    return this.signed('/list-notifications', query, quiet);
   }
 
-  markNotificationsRead(notificationNumbers: string[]): Promise<ApiResponse<{ marked: number }>> {
-    return this.signed('/mark-notifications-read', { notificationNumbers });
+  /** /mark-notifications-read with { upTo } (2026-11-25; wallet spec 4.22; masterpod spec 34): every unread notification of this pod whose `seq` is `upTo` or lower is marked read; the answer says how many were. Always quiet: the Notifications page sends it by itself, at its opening and when a row arrives on it. A masterpod of before answers 400 bad request shape. Until 2026-11-25 the wallet sent the ids of the rows to mark. */
+  markNotificationsRead(upTo: number): Promise<ApiResponse<{ marked: number }>> {
+    return this.signed('/mark-notifications-read', { upTo }, true);
   }
 
   // --- level vouched ------------------------------------------------------

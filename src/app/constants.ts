@@ -11,6 +11,9 @@ export const MESSAGES_POLL_MS = 3_000;
 export const ACCOUNT_POLL_MS = 5_000;
 export const VOUCH_REQUESTS_POLL_MS = 5_000;
 
+/** The first read of the notifications after a login brings this many of the newest rows, and so does a filter's first read and each tap on "Show older" of the Notifications page (wallet spec 4.22; 2026-11-25). */
+export const NOTIFICATIONS_PAGE = 30;
+
 /** The update check (wallet spec 8.1; 2026-11-22): how often the wallet asks its own server for the page again, while the page is on the screen, to see whether a newer build is there. It also asks when it starts and each time it comes back to the front. */
 export const UPDATE_CHECK_MS = 300_000;
 

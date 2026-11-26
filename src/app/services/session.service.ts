@@ -37,13 +37,22 @@ export interface AnosAccountItem {
   createdAt: string;
 }
 
-/** One notification as /list-notifications answers it. */
+/** One notification as /list-notifications answers it. Since 2026-11-25 (wallet spec 4.22; masterpod spec 34) with `seq`, the row's running number on the masterpod: a later notification has a higher one. A masterpod of before sends none. */
 export interface NotificationItem {
   notificationNumber: string;
   kind: string;
   referenceId: string;
   read: boolean;
   createdAt: string;
+  seq?: number;
+}
+
+/** What /list-notifications answers since 2026-11-25 (wallet spec 4.22; masterpod spec 34): the rows, the highest `seq` first, and three numbers of the pod's whole list, whatever the request asked for: `seq`, the highest number among the pod's notifications, 0 when it has none; `count`, how many notifications the pod has; `unread`, how many of them are unread. A masterpod of before sends the rows alone. */
+export interface NotificationsAnswer {
+  notifications: NotificationItem[];
+  seq?: number;
+  count?: number;
+  unread?: number;
 }
 
 /** A keyholder's number and receiving key, as /get-keyholder-public-key answers it. */
@@ -93,9 +102,20 @@ export class SessionService {
   readonly passkeyCredentialId = signal<string | null>(null);
   /** The pod's anos accounts from /list-anos-accounts. */
   readonly accounts = signal<AnosAccountItem[]>([]);
-  /** The notifications, newest first, refreshed by the shell's 5-second poll. */
-  readonly notifications = signal<NotificationItem[]>([]);
-  readonly unread = computed(() => this.notifications().filter((n) => !n.read));
+  /** The notifications in memory, newest first, null until the first answer of /list-notifications. Until 2026-11-25 it was that route's latest answer, the newest 100, set anew every 5 seconds. Since then (wallet spec 4.22; the plan is forclaude/notifications-page-plan-1.md) the first read of a login brings the newest 30, the shell's 5-second read brings only the rows that are new, which go on top, and the Notifications page's "Show older" puts older rows at the end. A read that brings no row does not set it anew. */
+  readonly notifications = signal<NotificationItem[] | null>(null);
+  /** The list's `seq` (2026-11-25, masterpod spec 34): the `seq` of the answer of /list-notifications that was last put into the list, which the next read of what is new sends as `since`, and up to which the Notifications page marks everything read. Null while there is no list, and after an answer that carried no number (a masterpod of before): the next read then asks for the first page. */
+  notificationsSeq: number | null = null;
+  /** The list's `count` (2026-11-25): how many notifications the pod has in all, by the answer that was last put into the list. "Show older" stands on the Notifications page while the list holds fewer rows. */
+  readonly notificationsCount = signal(0);
+  /** The list's `unread`: how many of the pod's notifications are unread, all of them and not only the rows in memory. It is the number on the Notifications entry of the menu, on its Home tile and in Home's line. Until 2026-11-25 it was the unread rows among the newest 100, as a list. */
+  readonly unread = signal(0);
+  /** How many times a first page was put into the list (putNotifications). The Notifications page reads it: with a filter on, it reads that filter's first page again each time. */
+  readonly notificationPages = signal(0);
+  /** How many answers of /mark-notifications-read have come (putNotificationsRead). An answer of /list-notifications that was asked for before a mark's answer came can carry the rows and the number of before the mark, so it is dropped: whoever asks looks at this count before and after. */
+  notificationMarks = 0;
+  /** The clock's minute, as a signal (2026-11-25; wallet spec 4.22). A row of the Notifications page words its time by the clock ("Just now", "5 min ago", "3 h ago", "Yesterday"). The page reads this signal, so those words are drawn again each minute and at midnight. The shell's 5-second read of the notifications looks at the clock; it runs for every logged-in pod, before setup is complete too. */
+  readonly minute = signal(Math.floor(Date.now() / 60_000));
   /** The chat list in memory (the rooms, the invites to this pod, the join requests on its rooms), null until the first answer of /list-chat-rooms. Until 2026-11-24 it was that route's latest answer, set anew every 5 seconds. Since then (wallet spec 4.17; chat.service.ts) only the first read of a login and the read after a person's own action bring the whole list; the shell's 5-second read and the Chat page's opening bring what is new, which is put into this list, and the open conversation's read writes the members' seen positions into it. It is set anew only when something in it changed. */
   readonly chatRooms = signal<RoomsAnswer | null>(null);
   /** The number of that list (2026-11-24, masterpod spec 29): the `seq` of the answer of /list-chat-rooms that was last put into it, which the next read of what is new sends as `since`. Null while there is no list, and after an answer that carried no number (a masterpod of before): the next read then asks for the whole list. */
@@ -157,7 +177,10 @@ export class SessionService {
     this.hasIdentity.set(false);
     this.passkeyCredentialId.set(null);
     this.accounts.set([]);
-    this.notifications.set([]);
+    this.notifications.set(null);
+    this.notificationsSeq = null;
+    this.notificationsCount.set(0);
+    this.unread.set(0);
     this.chatRooms.set(null);
     this.chatRoomsSeq = null;
     this.stickerSets.set(null);
@@ -233,6 +256,48 @@ export class SessionService {
     const next = { ...this.seenPositions(), [chatRoomId]: position };
     this.seenPositions.set(next);
     writeSeen(anopodId, next);
+  }
+
+  // --- the notifications in memory (wallet spec 4.22, 2026-11-25) --------------
+
+  /**
+   * A first page of /list-notifications becomes the list in memory, and the
+   * answer's three numbers the list's. The first read after a login or a
+   * page load, by the shell or by the Notifications page, and the shell's
+   * read of the first page after it missed a row. An answer without the
+   * numbers, from a masterpod of before, is taken as the first page too:
+   * the list then has no `seq`, so the next read asks for the first page
+   * again, its count is the rows that came, and its unread number the
+   * unread rows among them.
+   */
+  putNotifications(answer: NotificationsAnswer): void {
+    const rows = answer.notifications;
+    const numbered = typeof answer.seq === 'number' && typeof answer.count === 'number' && typeof answer.unread === 'number';
+    this.notifications.set(rows);
+    this.notificationsSeq = numbered ? (answer.seq ?? null) : null;
+    this.notificationsCount.set(numbered ? (answer.count ?? 0) : rows.length);
+    this.unread.set(numbered ? (answer.unread ?? 0) : rows.filter((n) => !n.read).length);
+    this.notificationPages.update((n) => n + 1);
+  }
+
+  /** What a read with `since` brought: the rows go on top of the list in memory, and the answer's three numbers are the list's. When no row came, the list is not set anew. One thing more: when the masterpod says that nothing is unread, every row in memory is read, whatever it said when the row came, since the answer of a mark can be lost on its way. */
+  putNewNotifications(rows: NotificationItem[], seq: number, count: number, unread: number): void {
+    const list = this.notifications() ?? [];
+    const held = unread === 0 && list.some((n) => !n.read) ? list.map((n) => (n.read ? n : { ...n, read: true })) : list;
+    if (rows.length > 0 || held !== list) this.notifications.set([...rows, ...held]);
+    this.notificationsSeq = seq;
+    this.notificationsCount.set(count);
+    this.unread.set(unread);
+  }
+
+  /** The masterpod has marked every notification of this pod up to the number `upTo` read (/mark-notifications-read with `upTo`): every row of the list in memory up to that number is read. The unread number is the rows above it that are still unread: none, unless a row arrived while the mark was on its way. */
+  putNotificationsRead(upTo: number): void {
+    const list = this.notifications();
+    if (list === null) return;
+    const rows = list.map((n) => (n.read || (n.seq ?? 0) > upTo ? n : { ...n, read: true }));
+    this.notifications.set(rows);
+    this.unread.set(rows.filter((n) => !n.read).length);
+    this.notificationMarks += 1;
   }
 
   // --- the next-step rule (wallet spec 8.1) ---------------------------------

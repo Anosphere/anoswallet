@@ -53,7 +53,7 @@ export class NavigationService {
     }
     if (this.config.moderatorEdition()) items.push({ path: '/moderation', label: nav.moderation, icon: 'gavel', badge: this.workBadge.moderationCount() });
     if (this.config.attestorEdition()) items.push({ path: '/attesting', label: nav.attesting, icon: 'fact_check', badge: this.workBadge.attestingCount() });
-    items.push({ path: '/notifications', label: nav.notifications, icon: 'notifications', badge: this.session.unread().length });
+    items.push({ path: '/notifications', label: nav.notifications, icon: 'notifications', badge: this.session.unread() });
     if (status?.isSeed || status?.isSuperSeed) items.push({ path: '/seed', label: nav.vouchRequests, icon: 'verified_user' });
     items.push({ path: '/log', label: nav.log, icon: 'receipt_long' });
     return items;

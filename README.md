@@ -89,7 +89,7 @@ server/
   app.js                   createApp(config): /api/config, the forwarders, the answer to a message for Joy as a stream, the stickers' pictures under /stickers, the build
   config.js                the variables with their local defaults
 src/app/
-  app.ts, app.html         the shell: toolbar, side navigation by status, the notification poll and its sound; since 2026-11-22 the Update button, the box "You are logged out" and the load of the page after them and after Lock (spec 8.1)
+  app.ts, app.html         the shell: toolbar, side navigation by status, the notification poll and its sound; since 2026-11-22 the Update button, the box "You are logged out" and the load of the page after them and after Lock (spec 8.1); since 2026-11-25 the poll's read of the notifications asks the masterpod only for what is new, where it got the newest 100 whole every 5 seconds (spec 4.22)
   app.routes.ts            the routes of spec 8.1; session.guard.ts sends anyone without a session to /
   constants.ts             the PRF salt label, the polling intervals
   amounts.ts               anos <-> millionths
@@ -110,6 +110,7 @@ src/app/
   components/room-picture.component.ts   a room's round mark on the chat pages: the picture of a public room when it has one, else the grey disc with the icon of the room's kind (spec 8.6)
   pages/                   one file per route: landing, create, recover, vouching, identity, setup,
                            wallet, noted-transactions, account, account-home, account-recovery-home, account-recovery, account-protect, account-passkeys, account-ledger-id, account-alerts, chat, joy, joy-memory, marketplace, notifications, seed, log
+  pages/notifications.page.ts   the notifications, with a new look since 2026-11-25: a round icon for a row's group, the sentence whole and the time under it ("5 min ago"), the whole row as the link, five filters (All, Security, Chat, Cases, Vouching), "Show older" under the list, and everything marked read when the page opens, with no button (spec 4.22, 8.2)
   pages/my-recovery-case.page.ts   the person's recovery case, /cases/recovery/:caseId: the status, the video call with its time and its link, the chat with the attestor, the accounts being moved, the timeline (spec 13.3)
   services/
     config.service.ts      GET /api/config once
