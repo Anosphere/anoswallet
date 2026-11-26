@@ -23501,6 +23501,47 @@ then. Wallet only: no validator, doorman, masterpod or proxy change.
 - For the deploy: the user's two lines on wallet1 and then on wallet2,
   with no `npm ci` (no package file changed).
 
+### The tick box of the walk-through says all the steps (2026-11-26)
+
+Built on the user's word in the chat that went through the
+after-production list for small things ("1 and 2 yes"), with no plan
+file, on top of ad9eb6e. Two dictionary lines and this file, one
+commit; nothing else of the wallet changes. Why: the item "recovery
+walk-through: the wording of the tick box" of
+`after_production_todos/things-to-do-after-production.md`, added
+2026-11-19 on the user's word. Under the list of screen 5, "What a
+recovery is", the box read "I tried all of these. My passkey is
+gone.": "all of these" pointed at the four screens before, while the
+list right above the box is what happens after a case is opened. The
+user's words for the new text: "I've tried all the steps".
+
+- `src/app/i18n/en.ts`, `findPasskey.s5Tick`: "I've tried all the
+  steps. My passkey is gone." The second sentence stays.
+- `src/app/i18n/th.ts`, `findPasskey.s5Tick`: "ฉันลองทุกขั้นตอนแล้ว
+  พาสคีย์ของฉันหายไปแล้ว", written here (ขั้นตอน is this file's word
+  for a step); no Thai reader has read it.
+- Spec: 12.3 (the sentence of screen 5, with a dated clause) and the
+  note "The walk-through in front of the locked-out stepper
+  (2026-11-18)" (a dated clause after its forty Thai lines). Those two
+  went in with ad9eb6e, which staged this file whole while this change
+  was being built in the same folder; this note comes with the
+  change's own commit. `components/find-passkey.component.ts` is
+  untouched: it draws the dictionary's line. The plan
+  `forclaude/recover-walkthrough-plan-1.md` keeps the old sentence, as
+  a record.
+- Seen in a production build of a copy of ad9eb6e with the two
+  dictionary lines alone, on this Mac: the build is clean, with no
+  warning; the built script holds the new English sentence once and
+  the old one not at all, and the new Thai line once (read with its
+  escapes turned back into letters). Seen in a development build of
+  the same copy, served from a scratch folder in the Claude app's
+  browser pane at 390 pixels wide: screen 5 of `/recover/open` with
+  the box's new sentence whole beside the box, in English and, with
+  the language set to Thai in the page, in Thai. Not seen on a phone
+  or on the live wallet.
+- For the deploy: the user's two lines on wallet1 and then on wallet2,
+  with no `npm ci` (no package file changed).
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`
