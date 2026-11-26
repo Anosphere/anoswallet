@@ -158,9 +158,15 @@ export const en = {
   },
   notifications: {
     title: 'Notifications',
-    subtitle: 'Newest first; refreshed every 5 seconds',
     none: 'No notifications yet.',
-    markRead: (n: number) => `Mark ${n} read`,
+    security: 'Security',
+    fresh: 'New',
+    earlier: 'Earlier',
+    showOlder: 'Show older',
+    justNow: 'Just now',
+    minutesAgo: (n: number) => `${n} min ago`,
+    hoursAgo: (n: number) => `${n} h ago`,
+    noneInGroup: 'No notifications of this kind.',
     labels: {
       vouchRequest: 'Someone asked you to vouch for them',
       vouchApproved: 'A seed vouched for you',

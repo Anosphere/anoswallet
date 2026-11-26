@@ -149,7 +149,7 @@ export class HomePage {
     const openVotes = this.openVotes();
     if (openVotes > 0) lines.push({ path: '/dao', icon: 'how_to_vote', words: home.openVotes(openVotes) });
     if (this.openFundVote()) lines.push({ path: '/dao/guardians', icon: 'shield', words: home.openFundVote });
-    const unread = this.session.unread().length;
+    const unread = this.session.unread();
     if (unread > 0) lines.push({ path: '/notifications', icon: 'notifications', words: home.unreadNotifications(unread) });
     return lines;
   });
