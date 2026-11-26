@@ -67,7 +67,7 @@ A new member goes through five things in a fixed order. A login brings the membe
    - The member asks people they know for their username, types it in and presses "Search" [ค้นหา]. The person's card shows their photo and whether they can vouch. "Send request" [ส่งคำขอ] sends the request, and the person approves or declines.
    - The page checks every few seconds and changes by itself, so the member can close the wallet and come back later. A decline shows under Notifications, and the member asks someone else.
    - A seed finds the requests on the page "Vouch requests" [คำขอรับรอง], each with "Approve" [อนุมัติ] and "Decline" [ปฏิเสธ], and should approve only someone they know. The wallet has nothing that takes a vouch back.
-3. The public ledger id, on the page "Your public ledger id" [รหัสตัวตนสาธารณะของคุณ] (menu entry "Identity"). The member types their birth record: first name, last name, father's first and last name, mother's first name and maiden name, city of birth, country of birth and date of birth. The father's and the mother's names and the city can be set to "Unknown".
+3. The public ledger id, on the page "Your public ledger id" [รหัสตัวตนสาธารณะของคุณ] (menu entry "Identity" [ตัวตน]). The member types their birth record: first name, last name, father's first and last name, mother's first name and maiden name, city of birth, country of birth and date of birth. The father's and the mother's names and the city can be set to "Unknown" [ไม่ทราบ].
    - What it is for: the wallet turns the record into a one-way hash on the device. If the member is ever locked out, they type the same record again on a new device, and that is how their anoPod is found. The answers themselves are not stored and not sent.
    - The page first says why, and the member ticks "I understand this record can never be deleted" [ฉันเข้าใจว่าบันทึกนี้ไม่สามารถลบได้เลย]. After the form the member checks every answer and presses "All information is correct" [ข้อมูลทั้งหมดถูกต้อง].
    - Until setup is complete the record is only in the page's memory. A member who logs in again before that types it again, and can still change it. Once setup is complete it cannot be undone or changed, and the record made from it can never be deleted. Later, on the Public ledger id page under Account, a member can type the record again and see whether it gives the same id.
@@ -195,7 +195,7 @@ The wallet's two rules for this stage: a buyer does not pay until the status box
 - On that page: which side the member is on, a status box, the amount, the other side's account, when the trade was made, the stage, the transaction's id, and the buttons for the member's side while the anos are held. It refreshes every 5 seconds while the trade is open.
 - The trade box in a marketplace chat shows the same status box. Of the three actions it has only the seller's release, as the button "I have been paid: release the anos" [ฉันได้รับเงินแล้ว: ปล่อย anos], and a link to the page above.
 
-The status box says in a headline whether the anos are in escrow, which of the four steps of a trade it is at (see the marketplace), and the one thing to do. The headlines: "Not in escrow" [ไม่อยู่ในเอสโครว์], "Not in escrow yet" [ยังไม่อยู่ในเอสโครว์] while the validators check, "In escrow: N anos", "Being released" [กำลังปล่อย], "Being cancelled" [กำลังยกเลิก], "In dispute" [อยู่ในข้อพิพาท], and in a chat's box "Released: N anos" after the end.
+The status box says in a headline whether the anos are in escrow, which of the four steps of a trade it is at (see the marketplace), and the one thing to do. The headlines: "Not in escrow" [ไม่อยู่ในเอสโครว์], "Not in escrow yet" [ยังไม่อยู่ในเอสโครว์] while the validators check, "In escrow: N anos" [อยู่ในเอสโครว์: N anos], "Being released" [กำลังปล่อย], "Being cancelled" [กำลังยกเลิก], "In dispute" [อยู่ในข้อพิพาท], and in a chat's box "Released: N anos" [ปล่อยแล้ว: N anos] after the end.
 
 ### A dispute
 
@@ -252,7 +252,7 @@ Menu entry "Chat" [แชท]. Messages are encrypted on the device, and the mas
 The list shows the chats, newest activity first. An unread chat has a bold title and a dot. The pencil button opens a page with three tabs:
 
 - "Message someone" [ส่งข้อความถึงใครสักคน]: a username, "Find" [ค้นหา], then "Start chat" [เริ่มแชท]. It opens the private chat the two already have, or makes one. A chat about a listing or a case does not count as that chat.
-- "Find public rooms" [ค้นหาห้องสาธารณะ]: a search box and the rooms, those with the most members first. Each has "Open" [เปิด] for a room the member is in, "Request to join" [ขอเข้าร่วม], or "Requested" after asking.
+- "Find public rooms" [ค้นหาห้องสาธารณะ]: a search box and the rooms, those with the most members first. Each has "Open" [เปิด] for a room the member is in, "Request to join" [ขอเข้าร่วม], or "Requested" [ส่งคำขอแล้ว] after asking.
 - "New public room" [ห้องสาธารณะใหม่]: a name and "Create" [สร้าง].
 
 While invites or requests wait, the row "Requests" [คำขอ] stands on top of the list. Its page lists the invites to the member, each with "Accept" [ยอมรับ] and "Decline" [ปฏิเสธ], and the requests to join the member's rooms, each with "Approve" [อนุมัติ] and "Decline". A person is in a chat only after accepting. Until then the chat's title shows them as invited.
@@ -270,7 +270,7 @@ The menu with three dots at the top of a chat:
 - "Invite an attestor" [เชิญผู้ยืนยัน]: only for the two traders of a marketplace chat, and only while their trade is in dispute and attestors have a case open on it. An invited attestor can read the whole chat.
 - "Members" [สมาชิก]: the list of people in the chat.
 - "Room picture" [รูปของห้อง]: only for the creator of a public room. The picture can be replaced, and it cannot be taken away.
-- "Leave" [ออกจากห้อง]: for every member except the chat's creator. It asks nothing. The chat goes from the member's list at once, and the member no longer sees its messages or, in a marketplace chat, its trade box. To come back to a private chat the member has to be invited again and accept. To come back to a public room the member asks to join again.
+- "Leave" [ออกจากห้อง]: for every member except the chat's creator. It asks nothing. The chat goes from the member's list at once, and the member no longer sees its messages or, in a marketplace chat, its trade box. To come back to a private chat the member has to be invited again and accept. To come back to a public room the member asks to join again. A listing's owner who left a chat about it comes back when the other person invites them again, with "Connect again" [ติดต่ออีกครั้ง] on the listing's page, and the owner accepts.
 
 The creator of a chat about a listing is the person who pressed "Connect", so that person cannot leave it and the listing's owner can. The creator of a chat about a case is the attestor. The wallet has nothing that deletes a chat or removes another person from one.
 
@@ -330,7 +330,7 @@ A stake leaves the account for good, and a member cannot take it back. The box b
 Menu entry "DAO". The DAO is everyone who has staked anos for DAO votes. A DAO proposal is a text that the community votes on. An accepted proposal records what was decided. It moves no anos and changes nothing by itself.
 
 - A member with DAO votes can post one, with "New proposal" [ข้อเสนอใหม่] (a round plus button on a phone): a title of 100 characters at most and a text of 5,000 at most. Posting counts as the member's own support. A member can have one pending proposal at a time.
-- A new proposal is "Pending" [รอดำเนินการ]: it collects support. A member supports it with the button that reads Support and the number of their votes.
+- A new proposal is "Pending" [รอดำเนินการ]: it collects support. A member supports it with the button "Support with N votes" [สนับสนุนด้วย N โหวต], where N is the number of their votes.
 - With enough support it is "Open for votes" [เปิดให้โหวต]: members vote "For" [เห็นด้วย] or "Against" [ไม่เห็นด้วย].
 - Then it is "Accepted" [ได้รับการยอมรับ] or "Rejected" [ถูกปฏิเสธ]. A proposal that did not get enough support in time is "Expired" [หมดอายุ].
 - How much support is needed, how long each stage lasts and how many votes it takes to post stand in the notice at the top of the DAO page and under the form of a new proposal.
@@ -347,7 +347,7 @@ The card "Guardians" [ผู้คุ้มครอง] on the DAO page opens t
 
 ## The Account page
 
-Menu entry "Account" [บัญชี], page title "Your account". It has five rows.
+Menu entry "Account" [บัญชี], page title "Your account" [บัญชีของคุณ]. It has five rows.
 
 ### "Account recovery" [การกู้คืนบัญชี]: the recovery selfie and details
 
@@ -422,24 +422,27 @@ Menu entry "Joy". Joy is the wallet's AI. The page says so in one line: "Joy is 
 - "New chat" [แชทใหม่] empties the chat after a box that asks. It cannot be brought back, and its pictures go with it.
 - Joy can search the web. Under such an answer stands "Sources" with links that open in a new tab.
 - Joy can have a picture made. It stands in the answer with the button "Download" [ดาวน์โหลด]. On an iPhone or an iPad the button opens the phone's share sheet, where the picture can be saved to Photos. Elsewhere the picture is saved as a file.
-- "Memory" [ความจำ] opens the page "Joy's memory of you": a short text that Joy reads with every message and adds a line to when she learns something worth keeping. It is the member's: they can change it and press "Save" [บันทึก], or press the red "Delete all" [ลบทั้งหมด], which cannot be undone. The page shows how full it is. The text is stored encrypted, and nobody at anoPod can open the stored file.
+- "Memory" [ความจำ] opens the page "Joy's memory of you" [ความจำของ Joy เกี่ยวกับคุณ]: a short text that Joy reads with every message and adds a line to when she learns something worth keeping. It is the member's: they can change it and press "Save" [บันทึก], or press the red "Delete all" [ลบทั้งหมด], which cannot be undone. The page shows how full it is. The text is stored encrypted, and nobody at anoPod can open the stored file.
 - An anoPod can send Joy only so many messages in one day. Past that the page says when the member can write to her again.
 
 ## Notifications
 
-This part describes the Notifications page as it is today. The page is being worked on.
+Menu entry "Notifications" [การแจ้งเตือน], with the number of unread ones. A notification is one line about something that happened to the member's anoPod, such as a chat invite, a case, a waiting transfer or a new passkey. The page lists them, newest first, and most kinds are links to what they are about.
 
-Menu entry "Notifications" [การแจ้งเตือน], with the number of unread ones. The page lists what happened to the member's anoPod, newest first, and reads again every 5 seconds. A row has a line of words and the date. Many rows are links. The button under the list marks all unread rows as read.
+The number counts all unread notifications of the anoPod. Home shows it too, on the tile of that name and in a line of its list, and both open the page. The wallet reads what is new every 5 seconds, so the number and the open page change by themselves. A notification by itself plays no sound.
 
-What a row can say, and where its link leads:
+- Five filters at the top: "All" [ทั้งหมด] and one for each group of kinds, "Security" [ความปลอดภัย], "Chat" [แชท], "Cases" [เคส] and "Vouching" [การรับรอง]. One is on at a time.
+- A row has a round icon for its group, the notification's sentence and under it the time. The sentence names no person, chat, account or case. Where a row is a link, the whole row is the link.
+- Opening the page marks every notification read, and the number goes away. There is no button for it. The rows that were unread keep a dot and bold words until the member leaves the page. While such rows are there, those at the top stand under the heading "New" and the rows after them under "Earlier". A notification that arrives while the page is open shows the same way.
+- A login loads the newest 30 notifications. While older ones are left, the button "Show older" [แสดงรายการเก่ากว่า] under the rows brings 30 more with each tap.
+- Nothing in the wallet deletes a notification, turns a kind off, or marks a single row read or unread. The page has no refresh button.
 
-- About vouching: someone asked the member to vouch for them, a seed vouched for the member or declined, the member is vouched. No link. A seed answers requests on the page "Vouch requests" [คำขอรับรอง].
-- About chats: an invite to a chat room and a request to join the member's room lead to Requests. An accepted or declined invite and an approved join request lead to the chat. A declined join request has no link.
-- About cases: an attestor opened a case on the member's assisted transfer or on their escrow dispute, a video call was scheduled for a case or for a recovery, the case was decided or dismissed. These lead to the case.
-- "A passkey was added to your anoPod" leads to the Passkeys page.
-- "A transfer is waiting to leave one of your accounts" leads to that account's page.
-- "A recovery is moving anos out of one of your accounts" and "A recovery was started for your anoPod" have no link.
-- "Your security alerts were changed" leads to the Security alerts page.
+The kinds by group, and where a row leads:
+
+- "Security": "A passkey was added to your anoPod" leads to the page "Passkeys" [พาสคีย์], "A transfer is waiting to leave one of your accounts" to that account's page, "Your security alerts were changed" to the page "Security alerts" [การแจ้งเตือนความปลอดภัย]. "A recovery is moving anos out of one of your accounts" and "A recovery was started for your anoPod" are no link.
+- "Chat": an invite to a chat room and a request to join the member's room lead to the page "Requests" [คำขอ]. An accepted or declined invite and an approved join request lead to the chat. A declined join request is no link.
+- "Cases": a case was opened on the member's assisted transfer or escrow dispute, a video call was scheduled for a case or a recovery, a case was decided or dismissed. Each leads to the case's page.
+- "Vouching": a request to vouch for someone leads to the page "Vouch requests" [คำขอรับรอง]. A seed's vouch or decline and the member being vouched are no link.
 
 ## The Log page
 
@@ -462,10 +465,10 @@ The last menu entry, "Log" [บันทึก], lists the newest 40 calls the w
 ## FAQ: known troubles
 
 - The device shows an error when a passkey is made or used, saying that the request is not allowed. The wallet cannot tell three causes apart: the member closed the device's passkey box; the device has no passkey for the wallet; or the wallet was opened from a link inside another app, like the Google app on an iPhone, where a page cannot reach the passkey. For the last one the member opens Safari or Chrome itself and goes to the wallet there.
-- A member taps "Log in" on a new phone and no passkey shows. The passkey is where the anoPod was made, and with the Apple or Google account of that phone. On an Apple device it is in the Passwords app, on Android or in Chrome in Google Password Manager under Passkeys. The walk "Find your passkey first", behind "Recover account" on the first page, goes through every place. A recovery is only for a passkey that is gone for good.
+- A member taps "Log in" [เข้าสู่ระบบ] on a new phone and no passkey shows. The passkey is where the anoPod was made, and with the Apple or Google account of that phone. On an Apple device it is in the Passwords app, on Android or in Chrome in Google Password Manager under Passkeys. The walk "Find your passkey first" [ค้นหาพาสคีย์ของคุณก่อน], behind "Recover account" [กู้คืนบัญชี] on the first page, goes through every place. A recovery is only for a passkey that is gone for good.
 - The wallet says that the passkey gave no PRF output, or that it does not report PRF support. That device, browser or passkey store cannot make the kind of passkey the wallet needs.
 - The box "You are logged out" comes up. The login ended after some hours, or the anoPod logged in again somewhere else. The member logs in again.
-- A chat page says "No chat keys in this tab: unlock again." The member presses "Lock" and logs in again.
+- A chat page says "No chat keys in this tab: unlock again." The member presses "Lock" [ล็อก] and logs in again.
 - The camera does not open. The page says so and offers "Or pick a photo" [หรือเลือกรูปถ่าย]: the member picks a photo from the phone instead.
 - The trade box in a chat says "Cannot check right now". The wallet could not reach the validators and is trying again. A buyer does not pay until the box says that the anos are in escrow.
-- The chat with Joy is gone. It is kept only in the browser of one device. It is not there on another device or in another browser, and "New chat" empties it.
+- The chat with Joy is gone. It is kept only in the browser of one device. It is not there on another device or in another browser, and "New chat" [แชทใหม่] empties it.
