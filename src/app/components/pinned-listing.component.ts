@@ -35,13 +35,20 @@ export interface FoundAccountId {
   position: number;
 }
 
-/** The chat's released trade: the amount the card shows, and what the message about it needs, the link's id, its sender and receiver, and whether this pod sent it. */
+/** The chat's released trade: the amount the card shows, and what the message about it needs, the link's id, its sender and receiver, and whether this pod sent it; namedAt, the position of the first message that names its id (2026-11-26), null for one taken by the rule of 2026-11-10. */
 interface ReleasedTrade {
   amount: string;
   transactionId: string;
   from: string;
   to: string;
   mine: boolean;
+  namedAt: number | null;
+}
+
+/** A released trade's chain row whose transaction id the chat names, with the position of the first message that names it. */
+interface NamedRow {
+  row: TransactionItem;
+  namedAt: number;
 }
 
 /** What one check of the chat's trade found: an open trade, a released one, neither, or a read that failed. */
@@ -106,9 +113,14 @@ type Found = 'open' | 'released' | 'none' | 'unread';
  * Yes of the Release box: an open trade
  * from /list-escrows, else a released one from /list-transactions since the
  * room was made, on the seller's spending accounts and this pod's accounts
- * named in the chat. A trade is the chat's when its other side is an account
- * named in the chat; the card reads the room's messages itself for those
- * ids, since the page holds the newest ones only. A released trade ends the
+ * named in the chat. A trade is the chat's when the chat names its
+ * transaction id (2026-11-26; the card's own message about the trade puts
+ * it there), the one named first when several are; only a chat that names
+ * no trade that exists takes the newest trade whose other side is an
+ * account named in the chat, the rule of 2026-11-10, which until
+ * 2026-11-26 was the only one and made an older chat show the same two
+ * people's newest trade. The card reads the room's messages itself for
+ * those ids, since the page holds the newest ones only. A released trade ends the
  * chat's trading: the box reads Released, no button of the guide comes
  * back, and "Close the listing" shows for the owner of an open listing. A
  * trade seen open here and then gone with nothing released reads Cancelled,
@@ -352,6 +364,15 @@ export class PinnedListingComponent {
   private readonly older = signal<FoundAccountId[] | null>(null);
   /** Every account id in the chat, newest first: the card's own read of the room and the page's, which carries what arrived since. */
   private readonly ids = computed(() => [...this.accountIds(), ...(this.older() ?? [])].sort((a, b) => b.position - a.position));
+  /** Every id named in the chat with the position of the first message that names it (2026-11-26): account ids, and the transaction ids of the card's messages about a trade, which have the same shape, 64 hex characters. */
+  private readonly named = computed<ReadonlyMap<string, number>>(() => {
+    const named = new Map<string, number>();
+    for (const a of this.ids()) {
+      const at = named.get(a.accountId);
+      if (at === undefined || a.position < at) named.set(a.accountId, a.position);
+    }
+    return named;
+  });
   /** The account ids the other trader posted, newest first (2026-11-12; until then the ids anyone but this pod posted), so a guest's messages never feed the trade form; with no other trader found in the room, the ids someone else posted. */
   protected readonly theirAccountIds = computed(() => {
     const me = this.session.anopodId();
@@ -709,13 +730,25 @@ export class PinnedListingComponent {
 
   /**
    * What the chat's trade is, read from the validators (wallet spec 8.2,
-   * Chat; 2026-11-10). First the pod's accounts, when this tab has none
-   * yet, and the room's account ids, once (readIds). Then /list-escrows on
-   * each watched account: the newest open trade whose other side is an
-   * account named in the chat is shown. With none open and none released
-   * yet, /list-transactions on each watched account since the room was made
-   * (releasedLink): an escrowTransfer whose other side is an account named
-   * in the chat is the chat's released trade, and it stays. /list-escrows
+   * Chat; 2026-11-10, by the transaction id since 2026-11-26). First the
+   * pod's accounts, when this tab has none yet, and the room's account
+   * ids, once (readIds). The chat's trade is the trade whose transaction
+   * id the chat names (named): the card's own message about a trade puts
+   * the id there, and it has the shape of an account id, so it is among
+   * the ids named in the chat; when the chat names several trades that
+   * exist, the one named first. Then /list-escrows on each watched
+   * account: an open trade named in the chat is shown. With none, and no
+   * released trade kept from an earlier check, /list-transactions on each
+   * watched account since the room was made (releasedLink): an
+   * escrowTransfer named in the chat is the chat's released trade, and it
+   * stays; once it is kept nothing more is read, since a release ends the
+   * chat's trading. Only a chat that names no trade that exists takes a
+   * trade by the rule of 2026-11-10, the message may not be posted yet or
+   * never was: the newest trade whose other side is an account named in
+   * the chat, open first, else released since the room was made. Until
+   * 2026-11-26 that rule was the only one, so an older chat between the
+   * same two people on the same accounts showed their newest trade, with
+   * its amount, in place of its own. /list-escrows
    * is read first because the validators write a release before the trade
    * leaves that list, so a trade gone from it is already on the chain. A
    * trade seen open and then gone with nothing released is cancelled. A
@@ -751,37 +784,48 @@ export class PinnedListingComponent {
         if (this.roomId !== room.chatRoomId) return 'unread';
         this.older.set(older);
       }
-      const named = new Set(this.ids().map((a) => a.accountId));
-      // With no account id in the chat there is nothing to look for, and nothing is read.
-      const watched = named.size > 0 ? this.watched() : [];
+      const named = this.named();
+      const kept = this.released();
+      // With no account id in the chat there is nothing to look for, and nothing is read; nor once the released trade kept is one the chat names.
+      const watched = named.size > 0 && (kept === null || kept.namedAt === null) ? this.watched() : [];
       const opened: { accountId: string; pairOne: PairOne }[] = [];
-      const open: { trade: EscrowItem; myAccount: string }[] = [];
+      const openNamed: { trade: EscrowItem; myAccount: string; namedAt: number }[] = [];
+      const openPair: { trade: EscrowItem; myAccount: string }[] = [];
       for (const accountId of watched) {
         const pairOne = await this.pairOne(accountId);
         opened.push({ accountId, pairOne });
         const res = await this.anos.listEscrows(pairOne, accountId, true);
         if (!res.ok) return this.unread(room);
         for (const trade of res.body.escrows) {
-          const otherSide = trade.accountId === accountId ? trade.accountIdTo : trade.accountId;
-          if (named.has(otherSide)) open.push({ trade, myAccount: accountId });
+          const namedAt = named.get(trade.transactionId);
+          if (namedAt !== undefined) {
+            openNamed.push({ trade, myAccount: accountId, namedAt });
+          } else {
+            const otherSide = trade.accountId === accountId ? trade.accountIdTo : trade.accountId;
+            if (named.has(otherSide)) openPair.push({ trade, myAccount: accountId });
+          }
         }
       }
-      let link: TransactionItem | null = null;
-      let linkAccount = '';
-      if (open.length === 0 && this.released() === null) {
+      // The released trade: a row the chat names, the one named first over every account, else the newest row by the pair rule.
+      let link: { row: TransactionItem; account: string; namedAt: number | null } | null = null;
+      if (openNamed.length === 0 && kept === null) {
         for (const { accountId, pairOne } of opened) {
           const found = await this.releasedLink(pairOne, accountId, room.createdAt, named);
           if (found === undefined) return this.unread(room);
-          if (found !== null && (link === null || found.position > link.position)) {
-            link = found;
-            linkAccount = accountId;
+          if (found.named !== null) {
+            if (link === null || link.namedAt === null || found.named.namedAt < link.namedAt) link = { row: found.named.row, account: accountId, namedAt: found.named.namedAt };
+          } else if (found.pair !== null && (link === null || (link.namedAt === null && found.pair.position > link.row.position))) {
+            link = { row: found.pair, account: accountId, namedAt: null };
           }
         }
       }
       if (this.roomId !== room.chatRoomId) return 'unread';
       this.read.set(true);
-      open.sort((a, b) => b.trade.createdAt.localeCompare(a.trade.createdAt));
-      const newest = open[0];
+      openNamed.sort((a, b) => a.namedAt - b.namedAt);
+      openPair.sort((a, b) => b.trade.createdAt.localeCompare(a.trade.createdAt));
+      // The chat's open trade: the one named in the chat; else, with no named trade released either, the newest between the accounts.
+      let newest: { trade: EscrowItem; myAccount: string } | undefined = openNamed[0];
+      if (!newest && (link === null || link.namedAt === null)) newest = openPair[0];
       if (newest) {
         const { trade, myAccount } = newest;
         this.trade.set(trade);
@@ -797,8 +841,8 @@ export class PinnedListingComponent {
       }
       this.trade.set(null);
       this.tellDisputeCase(null);
-      if (link !== null && this.released() === null) {
-        this.released.set({ amount: link.amount, transactionId: link.transactionId, from: link.accountId ?? '', to: link.accountIdTo ?? '', mine: link.accountId === linkAccount });
+      if (link !== null && kept === null) {
+        this.released.set({ amount: link.row.amount, transactionId: link.row.transactionId, from: link.row.accountId ?? '', to: link.row.accountIdTo ?? '', mine: link.row.accountId === link.account, namedAt: link.namedAt });
       }
       const done = this.released();
       if (done !== null) {
@@ -836,7 +880,7 @@ export class PinnedListingComponent {
    * between cannot send it into another chat. No key, a refusal or anything
    * thrown changes nothing: the next check tries again.
    */
-  private async tell(room: RoomItem, named: Set<string>, transactionId: string, text: string): Promise<void> {
+  private async tell(room: RoomItem, named: ReadonlyMap<string, number>, transactionId: string, text: string): Promise<void> {
     if (named.has(transactionId) || this.told.has(transactionId)) return;
     try {
       const key = await this.chat.roomKeyOf(room);
@@ -912,26 +956,37 @@ export class PinnedListingComponent {
   }
 
   /**
-   * The newest escrowTransfer written since the room was made between this
-   * account and an account named in the chat: /list-transactions with from
-   * the room's createdAt, CARD_TRANSACTIONS_PAGE rows at a time, newest
-   * first, paging back while a page comes back full. Null when there is
-   * none, undefined when a read fails.
+   * The chat's released trade on this account, among the escrowTransfers
+   * written since the room was made: /list-transactions with from the
+   * room's createdAt, CARD_TRANSACTIONS_PAGE rows at a time, newest first,
+   * paging back while a page comes back full, every page (until 2026-11-26
+   * the read stopped at the first row of the pair rule). `named`: of the
+   * rows whose transaction id the chat names, the one named first
+   * (2026-11-26); `pair`: the newest row whose other side is an account
+   * named in the chat, the rule of 2026-11-10, for a chat that names no
+   * trade. Each null when there is none; undefined when a read fails.
    */
-  private async releasedLink(pairOne: PairOne, accountId: string, from: string, named: Set<string>): Promise<TransactionItem | null | undefined> {
+  private async releasedLink(pairOne: PairOne, accountId: string, from: string, named: ReadonlyMap<string, number>): Promise<{ named: NamedRow | null; pair: TransactionItem | null } | undefined> {
     let beforePosition: number | null = null;
+    let first: NamedRow | null = null;
+    let pair: TransactionItem | null = null;
     for (;;) {
       const body: { from: string; limit: number; beforePosition?: number } = { from, limit: CARD_TRANSACTIONS_PAGE };
       if (beforePosition !== null) body.beforePosition = beforePosition;
       const res = await this.anos.listTransactions(pairOne, accountId, body, true);
       if (!res.ok) return undefined;
       const rows = res.body.transactions;
-      const link = rows.find((t) => {
-        const otherSide = t.accountId === accountId ? t.accountIdTo : t.accountId;
-        return t.type === 'escrowTransfer' && otherSide !== null && named.has(otherSide);
-      });
-      if (link) return link;
-      if (rows.length < CARD_TRANSACTIONS_PAGE) return null;
+      for (const t of rows) {
+        if (t.type !== 'escrowTransfer') continue;
+        const namedAt = named.get(t.transactionId);
+        if (namedAt !== undefined) {
+          if (first === null || namedAt < first.namedAt) first = { row: t, namedAt };
+        } else if (pair === null) {
+          const otherSide = t.accountId === accountId ? t.accountIdTo : t.accountId;
+          if (otherSide !== null && named.has(otherSide)) pair = t;
+        }
+      }
+      if (rows.length < CARD_TRANSACTIONS_PAGE) return { named: first, pair };
       beforePosition = rows[rows.length - 1].position;
     }
   }

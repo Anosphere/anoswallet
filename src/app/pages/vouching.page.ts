@@ -67,7 +67,7 @@ interface SentRequest {
           <div class="row">
             <mat-form-field appearance="outline">
               <mat-label>{{ t().common.username }}</mat-label>
-              <input matInput [ngModel]="searchName()" (ngModelChange)="searchName.set($event)" (keyup.enter)="search()" />
+              <input matInput [ngModel]="searchName()" (ngModelChange)="searchName.set($event)" (keyup.enter)="search()" autocapitalize="none" autocorrect="off" spellcheck="false" />
             </mat-form-field>
             <button mat-stroked-button type="button" (click)="search()" [disabled]="busy() || !searchName().trim()">{{ t().common.search }}</button>
           </div>

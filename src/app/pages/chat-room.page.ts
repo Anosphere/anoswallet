@@ -307,7 +307,7 @@ const REST_CHECK_MS = 40;
       </header>
       @if (showInvite()) {
         <div class="panel form">
-          <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>{{ t().chatRoom.inviteByUsername }}</mat-label><input matInput [ngModel]="inviteName()" (ngModelChange)="inviteName.set($event)" (keyup.enter)="findInvitee()" /></mat-form-field>
+          <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>{{ t().chatRoom.inviteByUsername }}</mat-label><input matInput [ngModel]="inviteName()" (ngModelChange)="inviteName.set($event)" (keyup.enter)="findInvitee()" autocapitalize="none" autocorrect="off" spellcheck="false" /></mat-form-field>
           <button mat-stroked-button type="button" (click)="findInvitee()" [disabled]="busy() || !inviteName().trim()">{{ t().common.find }}</button>
           @if (inviteTarget(); as found) {
             @if (found.selfie; as selfie) {
@@ -341,7 +341,7 @@ const REST_CHECK_MS = 40;
       @if (showMembers()) {
         <div class="panel people">
           @if (searchable()) {
-            <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>{{ t().chatRoom.searchMembers }}</mat-label><input matInput [ngModel]="memberSearch()" (ngModelChange)="searchMembers($event)" /></mat-form-field>
+            <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>{{ t().chatRoom.searchMembers }}</mat-label><input matInput [ngModel]="memberSearch()" (ngModelChange)="searchMembers($event)" autocapitalize="none" autocorrect="off" spellcheck="false" /></mat-form-field>
           }
           <div class="members" #membersBox>
             @for (m of shownMembers(); track m.anopodId) {

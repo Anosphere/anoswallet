@@ -154,7 +154,7 @@ export interface JoyMessage {
   text: string;
 }
 
-/** How an answer of Joy's ended, as the last line of /ask-joy's answer says it (masterpod spec 30): `end`, an answer that ended by itself; `length`, cut off where the model reached its limit; `refused`, stopped by the safety check of Anthropic, the company whose model writes Joy's answers. */
+/** How an answer of Joy's ended, as the last line of /ask-joy's answer says it (masterpod spec 30): `end`, an answer that ended by itself; `length`, cut off where the model reached its limit; `refused`, stopped by the safety check of Anthropic, the company whose model writes Joy's answers. Since 2026-11-25 (masterpod spec 36) that company is Anthropic or OpenAI, by a setting of the masterpod, and the wallet reads the three words the same way with either. With OpenAI, `refused` is an answer that OpenAI's filter stopped or that the model itself refused, and `length` is any other answer that was left unfinished. */
 export type JoyStop = 'end' | 'length' | 'refused';
 
 /** One web page that Joy used for an answer, as the last line of /ask-joy's answer names it (masterpod spec 32; wallet spec 4.20; 2026-11-24): the page's title, which is an empty text when the page gave none, and its address. */
@@ -1202,7 +1202,10 @@ export class MasterpodApiService {
    * One message to Joy: the conversation, oldest first, with the member's
    * new message last, and the opened memory file as text. Both travel in
    * the clear inside the signed request: the masterpod hands them to
-   * Anthropic's model, which writes the answer.
+   * Anthropic's model, which writes the answer. Since 2026-11-25
+   * (masterpod spec 36) it hands them to the model of the company that
+   * its setting picks, Anthropic's or OpenAI's. The request and the
+   * stream are the same with either.
    *
    * The answer is read while it arrives (LogService.postLines), each line
    * handed to `onLine` as it comes: `{ text }` for a piece of Joy's

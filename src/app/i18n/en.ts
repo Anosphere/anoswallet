@@ -1190,7 +1190,7 @@ export const en = {
     s5Money: 'Then you get back in. Your money is moved to new accounts, and two attestors have to sign each move.',
     s5Waits: (guarded: string, vault: string) => `Money in a guarded account then waits ${guarded}, and money in a vault account ${vault}.`,
     s5WaitsSome: 'Money in a guarded or vault account then waits out its lock.',
-    s5Tick: 'I tried all of these. My passkey is gone.',
+    s5Tick: "I've tried all the steps. My passkey is gone.",
   },
   recoverOpen: {
     subtitle: 'Open a recovery case',

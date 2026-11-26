@@ -355,7 +355,9 @@ Behaviour
   seconds while an answer is under way, so an answer that takes
   minutes is not cut. When the browser goes away in the middle of an
   answer, the proxy closes its call to the masterpod, and the
-  masterpod then stops its call to Anthropic.
+  masterpod then stops its call to Anthropic. (Since 2026-11-25, the
+  masterpod's spec, section 36: its call to the company whose model
+  answers, Anthropic or OpenAI.)
 - The signed envelope's path is the backend path: the browser signs
   "/complete-setup" and posts to /api/masterpod/complete-setup; the proxy
   strips its prefix and the masterpod sees /complete-setup.
@@ -1377,6 +1379,13 @@ and what is left as it is. The masterpod gained there: two tables
 `joy_usage`, a count of messages and tokens for each pod and day),
 three routes at level setup, five env variables, one file of text and
 one npm package. The wallet gained no package and no env variable.
+(Since 2026-11-25, the masterpod's spec, section 36: the model that
+writes the answers is Anthropic's Claude Haiku 5.5 or OpenAI's GPT-6.2
+Sol, by a setting of the masterpod, and Anthropic's when the setting is
+not there. The wallet does not change for it: the three routes, the
+request and the stream are as written here, and a chat that is open when
+the company changes goes on, since the wallet sends the words of the
+chat with every message.)
 
     POST /get-joy-memory (setup), new
     body: {}
@@ -1413,6 +1422,9 @@ one npm package. The wallet gained no package and no env variable.
             since 2026-11-25 (4.21): two kinds of line more, { "drawing": true }, each time Joy starts on
             a picture, and { "picture": { type, data, description } }, one line with a picture that was
             made
+            since 2026-11-25 (the masterpod's spec, section 36): the model that answers is Anthropic's or
+            OpenAI's, by a setting of the masterpod. The request, the refusals and the stream are the same;
+            "joy is off" then means that the masterpod has no key for the company that answers
     a masterpod of before: 404
 
 What leaves the wallet. A message to Joy is the one thing in the wallet
@@ -1432,7 +1444,12 @@ is.)
 description that Joy wrote from the chat goes from the masterpod to a
 second company, OpenAI. What the wallet sends is as before, with one
 thing more in it, a note of the wallet's in front of an earlier answer
-that had a picture. The one line stays as it is.)
+that had a picture. The one line stays as it is.) (Since 2026-11-25, the
+masterpod's spec, section 36: the conversation and the memory file go to
+the company whose model answers, to Anthropic or to OpenAI, by a setting
+of the masterpod. The wallet cannot tell which: it sends the same
+request and reads the same stream. The one line names no company and
+stays as it is.)
 
 The chat. There is one chat with Joy at a time, and the wallet holds
 it: joy.service (8.3) keeps its messages in the page's memory, so an
@@ -1808,7 +1825,13 @@ column that counts the searches, what Joy is told and what it costs.
 The masterpod gained there: one column on `joy_usage` (`searches`), two
 env variables and new words in its shared memory file. No table, no
 route and no npm package. The wallet gained no package, no env variable
-and no route.
+and no route. (Since 2026-11-25, the masterpod's spec, section 36: when
+OpenAI's model answers, the search is OpenAI's own web search tool,
+which OpenAI runs inside the request in the same way. The lines of the
+stream and `sources` are the same. Two things can differ in what a
+member sees: an answer from one of OpenAI's own services, such as its
+weather service, has no source; and asked one more question about a
+searched answer, Joy may search again.)
 
     POST /ask-joy (setup), the request as before (4.18), two additions to its answer
     body: { messages: [ { role, text } ], memory }, as before: of each message the wallet sends its role
@@ -1921,7 +1944,9 @@ which can hold words of the member's message, and the query goes to a
 search engine that Anthropic uses. The one line under Joy's header
 does not say that in particular and stays as it is (the plan's section
 4, point 9): it is still true. A tap on a source takes the member to
-that page's site, as any link does.
+that page's site, as any link does. (Since 2026-11-25, the masterpod's
+spec, section 36: or to one that OpenAI uses, when OpenAI's model
+answers.)
 
 What a wallet tab does that was loaded before this step's deploy (the
 plan's section 4, point 11; tried by the masterpod's step, its spec
@@ -2166,6 +2191,10 @@ description that Joy wrote from the chat goes to OpenAI, with a hash of
 the anoPod's id and nothing else of the chat (the masterpod's spec,
 33.3). The one line under Joy's header does not say that in particular
 and stays as it is (the plan's section 4, point 9): it is still true.
+(Since 2026-11-25, the masterpod's spec, section 36: "nothing else of
+the chat" holds for the request that makes the picture. When OpenAI's
+model writes Joy's answers, the chat goes to OpenAI too, in the request
+for her answer, as it went to Anthropic.)
 
 What a wallet tab does that was loaded before this step's deploy (the
 plan's section 4, point 11; tried by the masterpod's step, its spec
@@ -5123,9 +5152,18 @@ of them. The accounts it reads: this pod's usable
 spending accounts when it is the seller, and this pod's usable accounts
 named in the chat (an id in the messages that is one of
 session.accounts), pair one from each keyBlob; with no account id in the
-chat nothing is read. A trade is the chat's when it is between one of
-those accounts and an account named in the chat, whoever posted the id.
-First /list-escrows on each account: the newest open trade of the chat
+chat nothing is read. A trade is the chat's when the chat names its
+transaction id (2026-11-26, section 11): the card's own message about
+the trade (the next paragraph) puts it there, and it has the shape of
+an account id, so it is among the ids named in the chat; when the chat
+names several trades that exist, the one named first. Only a chat that
+names no trade that exists takes a trade by the rule of 2026-11-10: the
+one between one of those accounts and an account named in the chat,
+whoever posted the id, the newest when there are several. Until
+2026-11-26 that rule was the only one, so an older chat between the
+same two people on the same accounts showed their newest trade, with
+its amount, in place of its own.
+First /list-escrows on each account: the chat's open trade
 shows as the box (2026-11-17, section 11; until then as the line "Escrow
 trade: 100 anos · Waiting for the seller to release the anos"), by the
 trade's stage and this pod's side in it, the seller being the pod whose
@@ -5165,8 +5203,15 @@ Dispute stay on that page; until 2026-11-17 Release was there only. An
 open trade shows this way whatever the listing's status. With none open, /list-transactions on each account
 with `from` the room's createdAt, 200 rows at a time
 (CARD_TRANSACTIONS_PAGE), paging back with beforePosition while a page
-comes back full: an escrowTransfer of the chat is its released trade, the
-newest when there are several. The open list is read first because the
+comes back full, every page (until 2026-11-26 the read stopped at the
+first trade of the chat): an escrowTransfer named in the chat is its
+released trade, the one named first when several are; with none named,
+the newest escrowTransfer between the account and an account named in
+the chat. Once the chat's released trade is known and the chat names
+it, nothing more is read: a release ends the chat's trading, and a
+newer open trade between the same accounts is another chat's
+(2026-11-26; until then the open list was read on, and such a trade
+showed here). The open list is read first because the
 validators write the link before the trade leaves /list-escrows
 (anossoftware src/accounts/accounts.service.js, writeApproved), so a
 released trade is never missing from both reads. A released trade ends
@@ -5211,9 +5256,15 @@ the card says "Nothing was sent. This chat already has an escrow trade."
 and shows that trade. Three limits: the buyer's card can match a trade
 only when the seller's account id is in the chat, which the chat's
 message about the trade (the next paragraph) puts there the first time
-the seller has the chat open after the trade started; two chats at once
-between the same two people on the same accounts both read Released after
-one release; a seller who recovered the account after a lost passkey
+the seller has the chat open after the trade started; a chat with no
+trade of its own (none started in it, or a cancelled one only) reads a
+trade of another chat between the same two people on the same accounts,
+open or Released, since it names no trade and takes the newest between
+the accounts, and the message the seller's card then posts in it names
+that trade, which makes it the chat's for good (until 2026-11-26 every
+chat between the same two people did so, its own trade or not, which
+is what decision 9 of forclaude/wallet-finished-trade-plan-1.md
+accepted as the safe side); a seller who recovered the account after a lost passkey
 cannot read the old account, so a release sent from it is not seen. "Send
 my account", "Send another account" and "Put the anos in escrow" show
 until a trade has started, and again after a cancelled
@@ -5242,7 +5293,9 @@ the transaction ids it posted about, per room (`told`), so a check that
 runs before the thread shows the message does not post it again; a post
 that fails is tried again by the next check; two devices of the seller in
 the same chat at the same moment can post it twice. The buyer's card
-never posts about a trade.
+never posts about a trade. Since 2026-11-26 the transaction id in the
+message is also what makes the trade the chat's on every later check
+(the paragraph above).
 
 The attestor in a marketplace chat (2026-11-12, section 11; the plan is
 forclaude/wallet-case-chats-plan-1.md, its decisions 9, 26 and 27; the
@@ -15421,7 +15474,11 @@ The forty Thai lines, as `th.ts` has them:
   and style of the languages plan's 1.6 and by the Thai `th.ts` already
   has for the same things; no Thai reader has read it. No line ends in
   a full stop, and the keys of `findPasskey` stand in the English
-  file's order.
+  file's order. (Since 2026-11-26 the line `findPasskey.s5Tick` reads
+  "ฉันลองทุกขั้นตอนแล้ว พาสคีย์ของฉันหายไปแล้ว", and the English "I've
+  tried all the steps. My passkey is gone.": the note "The tick box of
+  the walk-through says all the steps (2026-11-26)" at the end of
+  section 11.)
 - The names of the two apps, as Apple's and Google's own Thai help
   pages have them; both pages could be read, on 2026-11-18. Apple's
   article 104955 in Thai (support.apple.com/th-th/104955, "ค้นหารหัสผ่าน
@@ -23387,6 +23444,153 @@ masterpod deploy is done"). No new package, no env variable, nothing in
   4, point 6), and the details of "notifications" there get a dated
   paragraph.
 
+### The chat's trade is the one the chat names (2026-11-26)
+
+Built in the chat that found the bug, on the user's word ("Yes, build
+it"), with no plan file, on top of ce2c752, the working tree clean. One
+file of `src/app` and this file, one commit. Why: a wallet user sent
+two screenshots of finished marketplace chats on 2026-11-26. In the
+first the card's own lines read "You are selling 100 anos to
+donjai140123 · 4.00 THB each · donjai140123 pays you 400 THB", the chat
+shows the buyer paying 400 THB on 20 Nov, and the box under the lines
+reads "Released: 200 anos"; in the second, "You are buying 200 anos from
+tawan7891 · 3.60 THB each · you pay tawan7891 720 THB" and "Released:
+500 anos". The cause: since 2026-11-10 (the note "The pinned card reads
+a finished trade") the card took as the chat's trade the newest trade
+between one of the accounts it reads and an account named in the chat,
+open from /list-escrows, else released from /list-transactions since
+the room was made, and nothing tied a trade to the chat it was started
+in, although the card's own message about the trade names the
+transaction id in the chat and the card already collects it (the
+64-hex rule of `piecesOf`). So once the same two people traded again on
+the same accounts, in a new chat for a new listing, every older chat
+between them showed the newest trade's amount: the older room was made
+earlier, and the newer release, written later, fell inside its date
+range and came first. The number changed between visits because
+`released`, once found, stays for the visit only; the next visit read
+again and found the newer row. Decision 9 of
+`forclaude/wallet-finished-trade-plan-1.md` had accepted the narrow
+case of two chats at once; the case of an older chat was not seen
+then. Wallet only: no validator, doorman, masterpod or proxy change.
+
+- `src/app/components/pinned-listing.component.ts`: `named`, a computed
+  map of every id named in the chat to the position of the first
+  message that names it, in place of the set `check()` built;
+  `ReleasedTrade` gains `namedAt`, and the type `NamedRow`. `check()`:
+  an open trade whose transaction id the chat names (`openNamed`, the
+  one named first when several are) is the chat's; the trades of the
+  pair rule (`openPair`) count only when no named trade is found open
+  or released; the rows are read when no named open trade is found and
+  no released trade is kept; nothing is read once the released trade
+  kept is a named one (`watched` is empty then). `releasedLink()` reads
+  every page since the room was made and answers both the row named
+  first and the newest row of the pair rule, where it stopped at the
+  first row of the pair rule. `tell()` takes the map. The words, the
+  template and the other pages are untouched.
+- 8.2 Chat, "The chat's trade": the rule by the transaction id, the
+  rows read to the end, nothing read after a named release, and the
+  second of the three limits narrowed to a chat with no trade of its
+  own; "The chat's message about its trade": one sentence.
+- Not run in a browser: the user deploys and tries it on the test net.
+  What a chat shows after the deploy: a chat whose message names its
+  trade shows that trade's amount from the first visit on, since the
+  card reads the validators on every visit; a chat where, before this
+  change, the seller's card had posted the newer trade's message as
+  well names both and shows the one named first, its own; a chat with
+  no trade of its own keeps the behaviour of decision 9.
+- For the deploy: the user's two lines on wallet1 and then on wallet2,
+  with no `npm ci` (no package file changed).
+
+### The tick box of the walk-through says all the steps (2026-11-26)
+
+Built on the user's word in the chat that went through the
+after-production list for small things ("1 and 2 yes"), with no plan
+file, on top of ad9eb6e. Two dictionary lines and this file, one
+commit; nothing else of the wallet changes. Why: the item "recovery
+walk-through: the wording of the tick box" of
+`after_production_todos/things-to-do-after-production.md`, added
+2026-11-19 on the user's word. Under the list of screen 5, "What a
+recovery is", the box read "I tried all of these. My passkey is
+gone.": "all of these" pointed at the four screens before, while the
+list right above the box is what happens after a case is opened. The
+user's words for the new text: "I've tried all the steps".
+
+- `src/app/i18n/en.ts`, `findPasskey.s5Tick`: "I've tried all the
+  steps. My passkey is gone." The second sentence stays.
+- `src/app/i18n/th.ts`, `findPasskey.s5Tick`: "ฉันลองทุกขั้นตอนแล้ว
+  พาสคีย์ของฉันหายไปแล้ว", written here (ขั้นตอน is this file's word
+  for a step); no Thai reader has read it.
+- Spec: 12.3 (the sentence of screen 5, with a dated clause) and the
+  note "The walk-through in front of the locked-out stepper
+  (2026-11-18)" (a dated clause after its forty Thai lines). Those two
+  went in with ad9eb6e, which staged this file whole while this change
+  was being built in the same folder; this note comes with the
+  change's own commit. `components/find-passkey.component.ts` is
+  untouched: it draws the dictionary's line. The plan
+  `forclaude/recover-walkthrough-plan-1.md` keeps the old sentence, as
+  a record.
+- Seen in a production build of a copy of ad9eb6e with the two
+  dictionary lines alone, on this Mac: the build is clean, with no
+  warning; the built script holds the new English sentence once and
+  the old one not at all, and the new Thai line once (read with its
+  escapes turned back into letters). Seen in a development build of
+  the same copy, served from a scratch folder in the Claude app's
+  browser pane at 390 pixels wide: screen 5 of `/recover/open` with
+  the box's new sentence whole beside the box, in English and, with
+  the language set to Thai in the page, in Thai. Not seen on a phone
+  or on the live wallet.
+- For the deploy: the user's two lines on wallet1 and then on wallet2,
+  with no `npm ci` (no package file changed).
+
+### The username boxes tell the phone's keyboard to leave the word alone (2026-11-26)
+
+Built on the user's word in the same chat ("1 and 2 yes"), with no
+plan file, on top of the commit of the note above. Four page files and
+this file, one commit; nothing else of the wallet changes. Why: the
+item "username boxes: the phone's keyboard writes a capital and
+suggests words" of `after_production_todos/things-to-do-after-production.md`,
+added 2026-11-21 on the user's word. On an iPhone the keyboard treated
+a username box like a line of ordinary text: it wrote the first letter
+as a capital, underlined the word as a spelling mistake and offered
+other words above the keys ("Deficit" for "sefix"), because no box
+said otherwise. A username is small letters, digits and the
+underscore, and every page lowers what was typed before it uses it, so
+nothing went wrong with the username itself; what a person saw was
+"Sefix" above "sefix is available", and a tap on an offered word gave
+another username than the one typed.
+
+- Five boxes, each `<input matInput>` gaining the three attributes
+  `autocapitalize="none" autocorrect="off" spellcheck="false"`, the
+  way sites write a username box: `pages/create.page.ts` (the Username
+  box of step 2), `pages/vouching.page.ts` (the Username box under
+  Find a seed), `pages/chat-new.page.ts` (the Username box of Message
+  someone) and `pages/chat-room.page.ts` (Invite by username, and
+  Search members above the Members list). The item's file counted
+  three boxes; the two of the chat room came later or were not
+  counted.
+- The attributes are read by the keyboard alone: `autocapitalize`
+  leaves the shift key down at the start of the box, `autocorrect`
+  stops the keyboard from putting another word in the place of the
+  typed one, `spellcheck` takes the red line away. Nothing else of the
+  pages changes, and the pages still lower what was typed.
+- Seen in a production build of a copy of ad9eb6e with the four page
+  files alone, on this Mac: the build is clean, with no warning; each
+  of the three words stands five times in the built script, and not at
+  all in a build of ad9eb6e as it is.
+- Seen on a simulated iPhone 17 with iOS 26.5, in its Safari, with a
+  development build of the same copy served from this Mac and, beside
+  it, a build of ad9eb6e as it is. On the create page's Username box of
+  the build as it is, the keyboard came up in capitals (the shift key
+  on) with the row of suggested words above the keys, and five taps on
+  its keys s, e, f, i, x gave "Sefix", marked for correction, with
+  "Deficit" and "Deficiency" offered. With this change the same box
+  brought the keyboard up in small letters with no row of suggestions,
+  and the same five taps gave "sefix", plain. The four other boxes were
+  not looked at on the phone; they carry the same three attributes. Not
+  seen on a real phone, on Android, or on the live wallet.
+- For the deploy: the user's two lines on wallet1 and then on wallet2,
+  with no `npm ci` (no package file changed).
+
 ## 12. Recovery and the moderator edition
 
 Design settled 2026-10-26 (`~/Desktop/Z/forclaude/recovery-and-moderator.md`
@@ -23562,7 +23766,10 @@ alone, without the offset. When the configuration has not loaded or
 the proxy sent no lock numbers, the second line ends "Enough of them
 have to send their part." and the fourth reads "Money in a guarded
 or vault account then waits out its lock." Under the list a box to
-tick, "I tried all of these. My passkey is gone.", and the button
+tick, "I've tried all the steps. My passkey is gone." (since
+2026-11-26; "I tried all of these." until then, which pointed at the
+four screens before while the list right above the box is what happens
+after a case is opened), and the button
 Next, off until the box is ticked. Next shows the stepper, at its
 top. Leaving the screen unticks the box.
 
