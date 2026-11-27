@@ -423,6 +423,7 @@ Menu entry "Joy". Joy is the wallet's AI. The page says so in one line: "Joy is 
 - Joy can search the web. Under such an answer stands "Sources" with links that open in a new tab.
 - Joy can have a picture made. It stands in the answer with the button "Download" [ดาวน์โหลด]. On an iPhone or an iPad the button opens the phone's share sheet, where the picture can be saved to Photos. Elsewhere the picture is saved as a file.
 - The paperclip left of the box adds one picture to a message, which still needs words. An x takes the picture off again. Joy sees it once, with that message.
+- While the box is empty, the round button is a microphone. A tap opens the keyboard, and the box says "Tap your keyboard mic" [แตะไมค์บนแป้นพิมพ์]. The member taps the keyboard's own microphone and speaks: the wallet cannot start voice typing itself. Not in the Home Screen app of an iPhone before iOS 26.
 - "Memory" [ความจำ] opens the page "Joy's memory of you" [ความจำของ Joy เกี่ยวกับคุณ]: a short text that Joy reads with every message and adds a line to when she learns something worth keeping. It is the member's: they can change it and press "Save" [บันทึก], or press the red "Delete all" [ลบทั้งหมด], which cannot be undone. The page shows how full it is. The text is stored encrypted, and nobody at anoPod can open the stored file.
 - An anoPod can send Joy only so many messages in one day, and only so many pictures. Past that the page says when the member can write to her again.
 

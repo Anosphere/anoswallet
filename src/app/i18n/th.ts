@@ -885,6 +885,8 @@ export const th: Words = {
     message: 'ข้อความถึง Joy',
     addPicture: 'เพิ่มรูปภาพ',
     removePicture: 'นำรูปภาพนี้ออก',
+    mic: 'พูดข้อความของคุณ',
+    micHint: 'แตะไมค์บนแป้นพิมพ์',
     writing: 'Joy กำลังเขียน…',
     searching: 'Joy กำลังค้นหาในเว็บ…',
     drawing: 'Joy กำลังสร้างรูปภาพ…',

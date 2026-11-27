@@ -2943,6 +2943,133 @@ joy.service and masterpod-api.service (8.3), constants.ts, the words
 (8.8) and Joy's wallet file, joy/wallet.md, whose part "Joy" has one
 entry more and one clause more (section 11).
 
+### 4.24 A microphone in Send's place points to the keyboard's own
+
+Added 2026-11-26 (a talk and a build in one chat, on the user's words,
+with no plan file; section 11): on Joy's page (8.2) the round button
+right of the message box is a microphone while the box holds no words.
+The user: "A lot of people don't know that if they are on their phone
+and they click into a text box and they click the microphone on their
+keyboard, that they can do voice to text." And: "I was thinking of
+adding a microphone to the text box that will open this feature on their
+phone." A web page cannot open it: no attribute of HTML and no call of
+JavaScript presses the microphone key of a phone's keyboard. A page can
+put the cursor into a box, and the phone then brings its keyboard up.
+So the wallet's microphone does that, and the box says where to tap
+next. The voice typing itself is the phone's. The wallet records
+nothing and asks the browser for no microphone, and nothing leaves the
+wallet that did not leave it before. It is the wallet's part alone: no
+route, no field of a request, nothing in the masterpod, no package, no
+env variable, nothing in server/ and nothing under deploy/.
+
+What a person sees (8.2, Joy).
+
+- The microphone. While the message box holds no words, the round
+  button right of the box is a microphone: the same round button that
+  is Send, lit, with the icon `mic`. Blanks alone are no words. From the
+  first word on the button is Send, as before, and when the words are
+  taken out again it is the microphone again. There is one round button
+  at a time.
+- A tap on it. The cursor goes into the box, inside the tap, so the
+  phone brings its keyboard up. The box's label goes up into its border,
+  as on any tap into the box, and in the box stands in grey "Tap your
+  keyboard mic" (Thai: "แตะไมค์บนแป้นพิมพ์"), where the typing goes. It is the
+  box's placeholder, so nothing on the page moves for it.
+- The member then taps the microphone of the phone's own keyboard and
+  speaks. What the keyboard writes comes into the box as typed words do.
+- The grey words go when a word comes into the box, when the box loses
+  the cursor and when a message is sent. A tap into the box itself shows
+  none.
+- While Joy writes an answer the microphone is not off: it only moves
+  the cursor. Send and the paperclip are off then, as before.
+- With a picked picture (4.23) it is the same. A picture alone is not
+  sent, so the button is the microphone until words come.
+- On a computer the microphone shows too. A click on it puts the cursor
+  into the box and shows the same words.
+
+Where the microphone is not shown.
+
+One place was found where a keyboard has no microphone key at all: the
+wallet opened from the Home Screen icon of an iPhone whose iOS is older
+than 26. Seen in the simulators with real taps: in the Home Screen app
+of iOS 18.6 the keyboard comes up with no microphone key, twice in two
+openings, while Safari's own keyboard on the same phone has the key; on
+iOS 26.5 and on iOS 27.0 the keyboard has the key in Safari and in the
+Home Screen app alike. In that one place the round button is Send at all
+times, as before this section, since a microphone there would point at
+nothing. `keyboardHasMic()` in joy.page.ts decides it once, when the
+page is made. `navigator.standalone`, Apple's own mark of a page opened
+from the Home Screen, which no other browser has, must be true; and the
+version that Safari names in its user agent (`Version/18.6`) must be
+below 26. The system's number beside it is no help: it stays at 18_7 on
+the newer versions. A Home Screen app that names no version counts as an
+older one. `webkitSpeechRecognition` is in the page in all six places,
+so it does not tell them apart. This is a guard for a limit of Apple's,
+not a rule of the wallet's: when no iPhone older than iOS 26 is left,
+the function and its one use in the template can go. iOS 26.0 to 26.4
+were not seen. An iPad was not seen either: the guard takes it as it
+takes an iPhone, by the same two marks.
+
+Why it stands in Send's place.
+
+The paperclip of 4.23 took 36 px from the message box: on a phone of
+360 px the box is 218 px wide and its line for letters 186 px. A
+microphone inside the box, which the user saw first in a picture, takes
+28 px more at every width, which leaves 158 px there. "Tap your keyboard mic"
+is 170.8 px wide in the box's letters (Roboto, 16 px) and the Thai
+141.9 px. Send does nothing while the box holds no words, so in its
+place the microphone takes no room at all. The user saw both ways in a
+second picture and said: "The round button". Measured in Chrome with no
+window, on this step's files: at 360 by 560, 360 by 740, 375 by
+667, 390 by 844, 412 by 915 and 430 by 932, in English and in Thai, the
+words fit the box's one line, the box stays one line high, and ten parts
+of the page (the frame, the line under the header, the thread, the part
+under the thread, the box's row, the paperclip, the box, its outline,
+the round button, the last bubble) stand where they stand without this
+section, to the tenth of a pixel, before a tap, after it, after a resize
+of the window and after two typed words. With a picked picture above the
+box the same, at three of those sizes. Words longer than the line would
+not do: a box that sizes itself (`cdkTextareaAutosize`) does not grow
+when its placeholder changes, so they are cut off, and at the window's
+next resize the box grows a line and stays so while the words are set.
+"Tap the microphone on your keyboard", the first wording, is 284.8 px.
+
+Decided while building, not asked of the user.
+
+- The guard above, for the Home Screen app of an iPhone older than iOS
+  26.
+- The grey words go with a send. Without that, a message sent with the
+  Enter key, where the cursor stays in the box, would show them again in
+  the emptied box.
+- The microphone shows on a computer too. No rule tells a phone from a
+  computer here.
+- The microphone is never off, also while Joy writes and before the kept
+  chat was looked for: it only moves the cursor.
+- Its name for a screen reader is "Speak your message".
+
+Left as it is.
+
+- A chat room's message box (8.2, Chat) has no microphone. Its line for
+  letters is shorter by the stickers button and was not measured.
+- A microphone that records. ChatGPT's page records the voice itself and
+  sends the recording to its own models, which write the text (OpenAI's
+  help page "Voice Dictation - FAQ", read 2026-11-26). Here that would
+  be a route on the masterpod and a model that is paid by the minute.
+- The browser's own speech recognition (`webkitSpeechRecognition`), which
+  a page can start. On iOS 27 its first use works and later ones hear
+  nothing (WebKit's bug 326069, open on 2026-11-26).
+- A keyboard that has no microphone for another reason: voice typing
+  switched off in the phone's settings, or another keyboard than the
+  phone's own. The grey words then point at nothing, and a page cannot
+  see which keyboard a phone has.
+- A phone of 320 px, which is a small phone set to a large display, and
+  a phone set to larger letters: the English words do not fit the 146 px
+  there. They are cut off, and after the window's next resize the box is
+  a line taller while they show. The Thai fits at 320 px.
+- In Safari the wallet's page stands under the phone's clock while the
+  keyboard is up, as it does after a tap into the box itself (the
+  frame's 100vh; not this section's).
+
 ## 5. Validator changes (anossoftware)
 
 ### 5.1 A nonces table and two variables
@@ -5901,6 +6028,16 @@ write to her and the pictures you send her leave your wallet to be
 answered." since this step: two lines of text on a phone, one on a
 desktop. Send is lit when the box holds words, as before, also with a
 picture picked.
+Since 2026-11-26 (section 11; 4.24) the round button right of the
+message box is a microphone while the box holds no words: the same round
+button, lit, with the icon `mic` in the place of `send`, and never off.
+A tap on it puts the cursor into the box, which brings the phone's
+keyboard up, and the box says in grey "Tap your keyboard mic", as its
+placeholder, until a word comes, the box loses the cursor or a message
+is sent. From the first word on the button is Send, as before. Nothing
+on the page moves for the microphone or for its words. In the wallet
+opened from the Home Screen icon of an iPhone older than iOS 26, whose
+keyboard has no microphone key, the round button is Send at all times.
 Joy's memory, at /joy/memory: one outlined card, as the Account pages
 are. The title "Joy's memory of you"; a back link "Joy"; three
 paragraphs: "This is what Joy remembers about you. She reads it with
@@ -7813,6 +7950,16 @@ against the plan's own table by a script. The Thai is the planning
 chat's, and no Thai reader has read it. A file that the browser cannot
 open as a picture gets the wallet's own sentence `camera.unreadable`,
 which was there before.
+Since 2026-11-26 (section 11; 4.24) the group `joy` has 42 entries: two
+more, after `removePicture`. `mic`, "Speak your message", is the
+microphone's name for a screen reader and is drawn nowhere. `micHint`,
+"Tap your keyboard mic", is the grey line in the message box after a tap
+on the microphone. The Thai is "พูดข้อความของคุณ" and
+"แตะไมค์บนแป้นพิมพ์". `micHint` is short on purpose, in both languages: it
+has to fit the box's one line on a phone of 360 px (4.24). The user saw
+both wordings of `micHint` in the pictures before the build, the Thai as
+a draft of the chat's; `mic` is the build chat's in both languages. No
+Thai reader has read the Thai.
 Edit and delete (2026-11-24, section 11; 4.19): `chat` gains one entry
 and `chatRoom` ten, after `stickerSet`. `chat.messageDeleted`, "Message
 deleted", the chat list's line for a deleted newest message. In
@@ -8481,6 +8628,11 @@ Cloud machines.
   message, once, with that message. Not built of it: a picture alone,
   more than one picture, Joy seeing a picture again, a file that is no
   picture, and the other things that 4.23 lists under "Left as it is".)
+  (Since 2026-11-26, 4.24: a microphone stands in Send's place while the
+  message box is empty, and points to the microphone of the phone's own
+  keyboard. Not built of it: a microphone that records, the browser's
+  own speech recognition, a microphone at a chat room's message box, and
+  the other things that 4.24 lists under "Left as it is".)
 - From the chat edit and delete plan
   (forclaude/chat-edit-delete-plan-1.md, 2026-11-24, its section 6;
   4.19), not built: a history of a message's earlier texts, which the
@@ -24343,6 +24495,135 @@ variable, nothing in `server/` and nothing under `deploy/`.
   masterpod by the how-to page above. The proof still owed is the user's
   first picture in the live wallet, and the look at the pod's row of
   `joy_usage` after it.
+
+### A microphone in Send's place on Joy's page (2026-11-26)
+
+A talk and a build in one chat, with no plan file, on top of 5a985c5,
+the working tree clean. Three files of `src/app`, `joy/wallet.md` and
+this file, one commit. Why: the user, that day: "A lot of people don't
+know that if they are on their phone and they click into a text box and
+they click the microphone on their keyboard, that they can do voice to
+text." And: "I was thinking of adding a microphone to the text box that
+will open this feature on their phone." A page cannot open it (4.24), so
+the talk put three ways to the user: a microphone that points to the
+keyboard's own, the browser's speech recognition, and a recording sent
+to a model, as ChatGPT's page does it. The first was taken up. To a line
+of its own for the hint the user said: "But that hint is going to take
+up valuable real estate", so the hint became the box's placeholder. A
+first picture showed the microphone inside the box. The same afternoon
+the paperclip of 4.23 went in, the user asked for a review before the
+build, and the review found that the pictured words no longer fitted
+beside it. A second picture showed two ways that fit, and the user said:
+"The round button". No new package, no env variable, nothing in
+`server/`, nothing under `deploy/`, nothing in the masterpod.
+
+- `src/app/pages/joy.page.ts`: the round button is one of two under an
+  `@if` on `joy.draft().trim() || !micShown`: Send as it was, or a
+  `mat-mini-fab` of the same class with the icon `mic`, named by
+  `joy.mic`, which calls `mic()`. `mic()` sets the signal `micHint` and
+  puts the cursor into the textarea (`#messageBox`), inside the tap.
+  The textarea's `placeholder` is `joy.micHint` while the signal is set,
+  and its `blur` and `send()` clear the signal. `micShown` is
+  `keyboardHasMic()`, a function of the file (4.24). No style rule was
+  added.
+- `src/app/i18n/en.ts` and `th.ts`: two entries each, after
+  `removePicture` (8.8).
+- `joy/wallet.md`, built and not typed: 62,491 bytes (62,148 before; the
+  user's ceiling is 62,500, so 9 bytes are left). One line more, in the
+  part "Joy", after the entry on the paperclip. Its source is
+  `~/Desktop/Z-TestNet/forclaude/joy-files-plan-1-tools/wallet-file/src/08-joy-rest.md`,
+  and it was built from a copy of the working folder, since the two new
+  entries of the dictionary were not committed yet.
+- This file: the new section 4.24, dated clauses in 8.2 (Joy), 8.8 and
+  10, and this note. The README is unchanged: it names no part of Joy's
+  page.
+- What was decided while building and what is left as it is: 4.24.
+
+Tried, on this Mac. The pictures, the scripts and what they printed are
+in `~/Desktop/Z-TestNet/forclaude/microphone-hint-pictures/`.
+
+- Chrome with no window, a development build of a copy of the working
+  folder, a made-up login and a made-up chat, no server asked:
+  - The measures of 4.24: seven sizes from 320 by 568 to 430 by 932, two
+    languages, four states, ten parts, each against a build of 5a985c5.
+    Nothing differs but at 320 by 568 in English, where the words do not
+    fit. With a picked picture: three sizes, two languages, nothing
+    differs.
+  - What the round button and the grey words do, 34 checks, 17 a
+    language, none bad: a fresh page; a tap on the microphone; the first
+    word; the words taken out again; blanks alone; the box losing the
+    cursor; a tap into the box itself; Enter after the microphone; a tap
+    on the round Send; while Joy writes, with and without words; a
+    picked picture, with and without words. A send was a stand-in that
+    counts and empties the box.
+  - The guard, ten made-up browsers, none bad: Chrome named itself as a
+    Safari and the page was given Apple's mark before its own script
+    ran. Opened from the Home Screen as Safari 17.6, 18.6 and 18.7 and
+    with no version named: Send. As Safari 26.0, 26.5 and 27.0: the
+    microphone. In Safari itself, 18.6 and 27.0, and in Chrome as it
+    is: the microphone.
+  - Two copies with one fault each: without the clearing in `send()` two
+    checks went bad, without the clearing at `blur` four.
+- The production build, made in the wallet's folder into a scratch
+  folder: no warning. `main-4EPVXBF7.js`, 2,413,412 bytes, 1,255 more
+  than the script of 5a985c5 (`main-PJX4CYAA.js`, 2,412,157), which the
+  live wallet served that evening. The styles file is as before
+  (`styles-HGVKDO6M.css`, 8,560 bytes).
+- Simulated phones, with real taps and the phone's own keyboard. The
+  page came from a small file server on this Mac that sets the made-up
+  login up by itself; a send went nowhere.
+  - iPhone 16 with iOS 18.6, in Safari: a tap on the microphone brought
+    the keyboard up (what Safari shows of the page went from 659 to 391
+    points), the cursor stood in the box with "Tap your keyboard mic"
+    whole, and the keyboard had its microphone key at the lower right.
+    With "Hello Joy" in the box the round button was Send. A tap on it
+    sent once, the keyboard went away, the grey words were gone, the
+    page stood where it had stood and the button was the microphone
+    again.
+  - The same phone, from the Home Screen icon: the keyboard came up and
+    had no microphone key, in two openings. That is the guard's reason.
+    With the guard the round button there is Send, switched off while
+    the box is empty, as before.
+  - iPhone SE with iOS 27.0, a screen of 375 points, in Safari: the
+    keyboard came up with its microphone key left of the space bar, the
+    words whole. After the keyboard's own tick the grey words were gone.
+    A tap into the box itself then left the page at the same place as
+    the microphone's tap had, with no grey words. From the Home Screen
+    icon: a keyboard with the microphone key, and with the guard the
+    microphone.
+  - iPhone 17 with iOS 26.5, in Safari and from the Home Screen icon: a
+    keyboard with the microphone key both times, and with the guard the
+    microphone.
+  - Android 17 with Chrome 149 and Google's keyboard, a screen of 360 by
+    536: the keyboard came up, the words whole, and the keyboard's own
+    microphone stood at the right end of the strip above its keys. With
+    "Hello" the round button was Send, and after a tap on it the
+    microphone again.
+  - The taps on the three iPhones were made on the build before the
+    guard went in. With the guard, four of the six places were opened
+    once more and showed the round button named above: Safari on iOS
+    18.6, and the Home Screen app on all three versions. Safari on iOS
+    26.5 and 27.0 was not opened again: the guard does nothing there,
+    which the check with made-up browsers covers. Android was looked at
+    with the guard in.
+- Joy's wallet file: the kept check's four checks to read held (62,491
+  bytes; one line break at the end; the same twenty parts in the same
+  order; each of the 263 names with a Thai name a pair of the two
+  dictionaries). Its fourteen others are about the build of 2026-11-25
+  and say nothing on a later change: thirteen were bad, as its README
+  says to expect.
+- Not tried by the build: a real phone; the voice typing itself, since
+  the key of a simulated keyboard was not tapped; iOS 26.0 to 26.4; an
+  iPad; Samsung's keyboard and any other than Apple's and Google's; a
+  computer's keyboard; Firefox; a screen reader; a Thai reader on the
+  Thai; and the user's own `ng serve`.
+- For the deploy: the wallet alone, the user's two lines on wallet1 and
+  wallet2, with no `npm ci` and no new setting. After it Joy's wallet
+  file goes to the masterpod by the how-to page of the files plan
+  (`~/Desktop/Z-TestNet/how_to/joy/how_to_upload_joys_files_to_the_masterpod.md`).
+  The proof still owed is the user's own tap on a real phone, in Safari
+  or Chrome and from the Home Screen icon: the keyboard up, the words in
+  the box, and the keyboard's microphone writing into it.
 
 ## 12. Recovery and the moderator edition
 

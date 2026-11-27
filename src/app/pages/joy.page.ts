@@ -1,5 +1,5 @@
 import { TextFieldModule } from '@angular/cdk/text-field';
-import { Component, ElementRef, Injector, afterNextRender, effect, inject, untracked, viewChild } from '@angular/core';
+import { Component, ElementRef, Injector, afterNextRender, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
@@ -13,6 +13,26 @@ import { LanguageService } from '../services/language.service';
 
 /** While an answer is being written the thread follows it only when the reader is this close to the bottom. */
 const FOLLOW_PX = 120;
+
+/**
+ * False in the one place found where the keyboard has no microphone key
+ * for the page's microphone to point at (wallet spec 4.24): the wallet
+ * opened from the Home Screen icon of an iPhone or iPad whose iOS is
+ * older than 26. Seen in the simulators: the keyboard of such an app
+ * has no microphone key on iOS 18.6 and has one on iOS 26.5 and 27.0,
+ * while Safari's own keyboard has it on all three. This is a guard for
+ * a limit of Apple's, not a rule of the wallet's.
+ * `navigator.standalone` is Apple's own mark of a page opened from the
+ * Home Screen, and no other browser has it. The version is the one
+ * that Safari names in its user agent (`Version/18.6`): the system's
+ * number beside it stays at 18_7 on the newer versions. A Home Screen
+ * app that names no version counts as an older one.
+ */
+function keyboardHasMic(): boolean {
+  if ((navigator as Navigator & { standalone?: boolean }).standalone !== true) return true;
+  const version = /Version\/(\d+)/.exec(navigator.userAgent);
+  return version !== null && Number(version[1]) >= 26;
+}
 
 /**
  * Joy (wallet spec 8.2; 2026-11-24, section 11; 4.18), at /joy: the
@@ -69,6 +89,20 @@ const FOLLOW_PX = 120;
  * line says so. The box of New chat is as it was: its sentence on
  * pictures stands only for a picture that Joy made, which has a
  * Download.
+ *
+ * Since 2026-11-26 (wallet spec 4.24) the round button right of the
+ * message box is a microphone while the box holds no words, and Send
+ * again from the first word on. A web page cannot start a phone's
+ * voice typing: only the microphone key of the phone's own keyboard
+ * does. So a tap on the page's microphone puts the cursor into the
+ * box, which brings the keyboard up, and the box says in grey "Tap
+ * your keyboard mic", as its placeholder. The grey words go when a
+ * word comes into the box, when the box loses the cursor and when a
+ * message is sent. The page records nothing and asks the browser for
+ * no microphone. In the one place found where a keyboard has no
+ * microphone key, the wallet opened from the Home Screen icon of an
+ * iPhone or iPad older than iOS 26, the round button stays Send
+ * (keyboardHasMic).
  *
  * There is one chat. It is kept by joy.service, not by this page, so an
  * answer goes on while the member looks at another page, and the chat is
@@ -160,9 +194,13 @@ const FOLLOW_PX = 120;
           <button mat-icon-button type="button" class="attach" (click)="picker.click()" [disabled]="joy.writing() || !joy.ready() || joy.picking()" [attr.aria-label]="t().joy.addPicture"><mat-icon>attach_file</mat-icon></button>
           <mat-form-field appearance="outline" class="grow" subscriptSizing="dynamic">
             <mat-label>{{ t().joy.message }}</mat-label>
-            <textarea matInput cdkTextareaAutosize cdkAutosizeMinRows="1" cdkAutosizeMaxRows="5" [ngModel]="joy.draft()" (ngModelChange)="joy.draft.set($event)" (keydown.enter)="enter($event)"></textarea>
+            <textarea matInput #messageBox cdkTextareaAutosize cdkAutosizeMinRows="1" cdkAutosizeMaxRows="5" [placeholder]="micHint() ? t().joy.micHint : ''" [ngModel]="joy.draft()" (ngModelChange)="joy.draft.set($event)" (keydown.enter)="enter($event)" (blur)="micHint.set(false)"></textarea>
           </mat-form-field>
-          <button mat-mini-fab type="button" class="send" (click)="send()" [disabled]="joy.writing() || !joy.ready() || joy.picking() || !joy.draft().trim()" [attr.aria-label]="t().common.send"><mat-icon>send</mat-icon></button>
+          @if (joy.draft().trim() || !micShown) {
+            <button mat-mini-fab type="button" class="send" (click)="send()" [disabled]="joy.writing() || !joy.ready() || joy.picking() || !joy.draft().trim()" [attr.aria-label]="t().common.send"><mat-icon>send</mat-icon></button>
+          } @else {
+            <button mat-mini-fab type="button" class="send" (click)="mic()" [attr.aria-label]="t().joy.mic"><mat-icon>mic</mat-icon></button>
+          }
         </div>
       </div>
     </div>
@@ -216,6 +254,11 @@ export class JoyPage {
   protected readonly lang = inject(LanguageService);
   protected readonly t = this.lang.words;
   private readonly threadBox = viewChild<ElementRef<HTMLElement>>('threadBox');
+  private readonly messageBox = viewChild<ElementRef<HTMLTextAreaElement>>('messageBox');
+  /** True from a tap on the microphone until the message box loses the cursor or a message is sent (wallet spec 4.24): the box then shows the hint as its placeholder. */
+  protected readonly micHint = signal(false);
+  /** False where the keyboard has no microphone key (keyboardHasMic): the round button is then Send at all times, as before 4.24. */
+  protected readonly micShown = keyboardHasMic();
   /** The member's pictures in the thread whose opening has been reported (uploadDrawn): their height is no new growth any more. */
   private readonly drawnUploads = new WeakSet<Element>();
 
@@ -247,11 +290,25 @@ export class JoyPage {
     this.send();
   }
 
-  /** The message box's text goes to Joy, with the picture that is picked, and the thread goes to its end. Nothing goes while a picked file is still being redrawn. */
+  /** The message box's text goes to Joy, with the picture that is picked, and the thread goes to its end. Nothing goes while a picked file is still being redrawn. The microphone's hint goes with the send. */
   protected send(): void {
     if (this.joy.writing() || !this.joy.ready() || this.joy.picking() || !this.joy.draft().trim()) return;
+    this.micHint.set(false);
     void this.joy.send();
     this.scrollToBottom();
+  }
+
+  /**
+   * The microphone, which stands in Send's place while the message box
+   * holds no words (wallet spec 4.24). A web page cannot start a
+   * phone's voice typing: only the microphone key of the phone's own
+   * keyboard does. So the cursor goes into the box, inside the tap, so
+   * that the phone brings its keyboard up, and the box says where to
+   * tap next.
+   */
+  protected mic(): void {
+    this.micHint.set(true);
+    this.messageBox()?.nativeElement.focus();
   }
 
   /** The file that the member picked with the paperclip goes to joy.service, which redraws it. The picker is emptied, so that the same picture can be picked again. */
