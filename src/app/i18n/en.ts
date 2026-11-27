@@ -879,6 +879,8 @@ export const en = {
     message: 'Message Joy',
     addPicture: 'Add a picture',
     removePicture: 'Take this picture off',
+    mic: 'Speak your message',
+    micHint: 'Tap your keyboard mic',
     writing: 'Joy is writing…',
     searching: 'Joy is searching the web…',
     drawing: 'Joy is making a picture…',
