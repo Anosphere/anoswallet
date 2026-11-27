@@ -99,5 +99,9 @@ export const JOY_MAX_CONVERSATION_BYTES = 120_000;
 /** The memory file Joy keeps for a member has at most this many bytes of UTF-8 (wallet spec 4.18): the masterpod's limit. */
 export const JOY_MEMORY_MAX_BYTES = 10_240;
 
-/** How long Joy's answer may bring nothing before the wallet gives it up as cut off (wallet spec 4.18). The masterpod sends an empty line every 10 seconds while an answer is under way, so this long with nothing at all means that the connection is dead. */
+/** How long Joy's answer may bring nothing before the wallet gives it up as cut off (wallet spec 4.18). The masterpod sends an empty line every 10 seconds while an answer is under way, so this long with nothing at all means that the connection is dead. The time runs from the request's start, so since 2026-11-26 (wallet spec 4.23) the way up of a picture that goes with the message is inside it: a picture of 590 KB goes up in 16 seconds at 384 kbit a second. */
 export const JOY_SILENCE_MS = 60_000;
+
+/** A picture that a member sends Joy with a message goes out redrawn (wallet spec 4.23; 2026-11-26): its longer side at most this many pixels, a fresh JPEG at this factor (redrawImage in images.ts). The masterpod takes a picture of at most as many pixels wide and high (its spec, section 37). */
+export const JOY_UPLOAD_SIDE = 1568;
+export const JOY_UPLOAD_JPEG = 0.85;

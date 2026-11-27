@@ -134,7 +134,7 @@ src/app/
     room-copies.service.ts   the chat rooms' copies: for every room a person has opened, a copy of the room's thread, whole in the page's memory and, as its newest 200 messages, encrypted in the browser's own database (IndexedDB), so that a way back into a room shows its messages at once and the masterpod is asked only for what is new; the code that opens that database is in this file (spec 8.2, 8.3)
     stickers.service.ts    the stickers' list: every set the masterpod has, asked for once after each login, when a conversation is first opened, and kept until the login ends; no timer (spec 4.16, 8.3)
     update.service.ts      the update check and the refresh: whether the wallet's server holds a newer build than this page runs, which shows the Update button, and the load of the page after that button, after Lock and after the box "You are logged out", made only once the server has answered (spec 8.1, 8.3)
-    joy.service.ts         Joy, the wallet's AI: the one chat with her, sent to the masterpod with every message and kept encrypted in the browser's own database (IndexedDB) so that a reload does not lose it, and the member's memory file, a blob on the masterpod that only the anoPod encryption key opens (spec 4.18, 8.3); since 2026-11-24 also whether Joy is searching the web, and the web pages she cited for an answer, which are kept with the chat and checked by the wallet when they come and when a kept chat is opened (spec 4.20); since 2026-11-25 also the pictures that Joy has made: the words while one is made, the check of a picture's line, each picture kept as an encrypted entry of its own in the same database, Download, and the note that goes back to Joy in the place of a picture (spec 4.21)
+    joy.service.ts         Joy, the wallet's AI: the one chat with her, sent to the masterpod with every message and kept encrypted in the browser's own database (IndexedDB) so that a reload does not lose it, and the member's memory file, a blob on the masterpod that only the anoPod encryption key opens (spec 4.18, 8.3); since 2026-11-24 also whether Joy is searching the web, and the web pages she cited for an answer, which are kept with the chat and checked by the wallet when they come and when a kept chat is opened (spec 4.20); since 2026-11-25 also the pictures that Joy has made: the words while one is made, the check of a picture's line, each picture kept as an encrypted entry of its own in the same database, Download, and the note that goes back to Joy in the place of a picture (spec 4.21); since 2026-11-26 also the one picture that a member sends Joy with a message: the picked picture redrawn as a JPEG of at most 1,568 pixels a side, sent on that one message and on no later one, kept as an encrypted entry of its own in the same database, and the note that goes to Joy in its place with every later message (spec 4.23)
 public/                    plain files that the build copies beside index.html as they are
   manifest.webmanifest     says the wallet is an app once it is added to a phone's Home Screen: the name anoPod, no address bar (spec 2)
   icon-192.png, icon-512.png   the manifest's two pictures of the logo, 192 and 512 pixels a side
@@ -186,7 +186,11 @@ the database `anopod-wallet` (`joy-pictures`, under the anoPod's id and
 an id that the wallet makes up). The chat's own blob holds only that id
 and the description that Joy wrote. No key is kept with these blobs
 either. New chat deletes a chat's pictures with the chat, and they stay
-after Lock (the spec's 4.21).
+after Lock (the spec's 4.21). Since 2026-11-26 a picture that the
+member sent Joy in that chat is kept the same way, in the same place of
+the same database, and the member's message in the chat's own blob
+holds only the picture's id. The picture itself went to the masterpod
+once, with the message it came with (the spec's 4.23).
 
 ## The wallet servers
 

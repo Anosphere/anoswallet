@@ -148,10 +148,17 @@ export interface NoteRange {
   to?: string;
 }
 
-/** One message of a conversation with Joy as /ask-joy takes it (masterpod spec 30; 2026-11-24): who wrote it, the member (`user`) or Joy (`assistant`), and its text. */
+/** One message of a conversation with Joy as /ask-joy takes it (masterpod spec 30; 2026-11-24): who wrote it, the member (`user`) or Joy (`assistant`), and its text. Since 2026-11-26 (masterpod spec 37; wallet spec 4.23) the last message of a conversation, the member's new one, may carry `upload`: one picture that goes with it. */
 export interface JoyMessage {
   role: 'user' | 'assistant';
   text: string;
+  upload?: JoyUpload;
+}
+
+/** The picture that a member sends Joy with a message, as /ask-joy takes it on the member's new message (masterpod spec 37; wallet spec 4.23; 2026-11-26): the picture's type and its bytes as base64, the form in which a selfie and a chat room's picture travel. The wallet sends a JPEG that it has redrawn, at most 1,568 pixels wide and high. */
+export interface JoyUpload {
+  contentType: string;
+  image: string;
 }
 
 /** How an answer of Joy's ended, as the last line of /ask-joy's answer says it (masterpod spec 30): `end`, an answer that ended by itself; `length`, cut off where the model reached its limit; `refused`, stopped by the safety check of Anthropic, the company whose model writes Joy's answers. Since 2026-11-25 (masterpod spec 36) that company is Anthropic or OpenAI, by a setting of the masterpod, and the wallet reads the three words the same way with either. With OpenAI, `refused` is an answer that OpenAI's filter stopped or that the model itself refused, and `length` is any other answer that was left unfinished. */
@@ -1205,7 +1212,12 @@ export class MasterpodApiService {
    * Anthropic's model, which writes the answer. Since 2026-11-25
    * (masterpod spec 36) it hands them to the model of the company that
    * its setting picks, Anthropic's or OpenAI's. The request and the
-   * stream are the same with either.
+   * stream are the same with either. Since 2026-11-26 (masterpod spec
+   * 37; wallet spec 4.23) the member's new message, the last of
+   * `messages`, may carry one picture, `upload` (a JoyUpload). It travels
+   * in the clear with the message, and the masterpod hands it to the same
+   * company with that one message and keeps none of it. No other message
+   * carries a picture.
    *
    * The answer is read while it arrives (LogService.postLines), each line
    * handed to `onLine` as it comes: `{ text }` for a piece of Joy's
@@ -1225,7 +1237,11 @@ export class MasterpodApiService {
    *
    * A refusal comes with its status in place of the lines: 503 joy is
    * off, 429 daily limit reached, 400 conversation too long, 400 memory
-   * too long, and the refusals of every route at level setup.
+   * too long, and the refusals of every route at level setup. Since
+   * 2026-11-26 three more, each only for a message with a picture: 400
+   * invalid upload: and the reason (a picture that the masterpod's check
+   * does not take, which the wallet's own redraw never sends), 503
+   * uploads are off, and 429 daily upload limit reached.
    */
   askJoy(messages: JoyMessage[], memory: string, onLine: (line: unknown) => void): Promise<ApiResponse<LinesRead>> {
     const envelope = this.session.sign('/ask-joy', { messages, memory });
