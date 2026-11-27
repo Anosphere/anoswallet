@@ -52,6 +52,24 @@ const FOLLOW_PX = 120;
  * its place. The box of New chat says one sentence more when the chat
  * holds a picture, since the pictures go with the chat.
  *
+ * Since 2026-11-26 (wallet spec 4.23) a member can send Joy one picture
+ * with a message. A paperclip stands left of the message box. A tap on
+ * it opens the device's own picker for one picture. What that picker
+ * offers is the device's: on an iPhone the photo library, the camera
+ * and the files. The picked picture shows as a small square
+ * above the message box, with an x that takes it off again, and a
+ * second pick puts the new one in its place. Send is lit when the box
+ * holds words, as before: a picture alone is not sent. In the sent
+ * message the picture stands above the words, and it stays there, also
+ * after a reload, until New chat. A picture whose bytes this browser no
+ * longer keeps shows the grey line of 4.21 in its place. A message that
+ * goes back into the box brings its picture back above the box. The one
+ * line under the header says that pictures leave the wallet too. A file
+ * that the browser cannot open as a picture is not taken, and the red
+ * line says so. The box of New chat is as it was: its sentence on
+ * pictures stands only for a picture that Joy made, which has a
+ * Download.
+ *
  * There is one chat. It is kept by joy.service, not by this page, so an
  * answer goes on while the member looks at another page, and the chat is
  * there after a reload of the page. New chat empties it, after a box that
@@ -76,6 +94,13 @@ const FOLLOW_PX = 120;
               @if (joy.pictureUrls()[p.id]; as url) {
                 <img class="picture" [src]="url" [alt]="p.description" (load)="pictureDrawn($event)" />
                 <button mat-stroked-button type="button" class="download" (click)="joy.download(p.id)"><mat-icon>download</mat-icon>{{ t().joy.download }}</button>
+              } @else {
+                <span class="mark">{{ t().joy.pictureGone }}</span>
+              }
+            }
+            @if (m.upload; as u) {
+              @if (joy.pictureUrls()[u.id]; as url) {
+                <img class="upload" [src]="url" alt="" (load)="uploadDrawn($event)" />
               } @else {
                 <span class="mark">{{ t().joy.pictureGone }}</span>
               }
@@ -124,12 +149,21 @@ const FOLLOW_PX = 120;
       @if (joy.error(); as text) {
         <p class="error note">{{ text }}</p>
       }
-      <div class="composer">
-        <mat-form-field appearance="outline" class="grow" subscriptSizing="dynamic">
-          <mat-label>{{ t().joy.message }}</mat-label>
-          <textarea matInput cdkTextareaAutosize cdkAutosizeMinRows="1" cdkAutosizeMaxRows="5" [ngModel]="joy.draft()" (ngModelChange)="joy.draft.set($event)" (keydown.enter)="enter($event)"></textarea>
-        </mat-form-field>
-        <button mat-mini-fab type="button" class="send" (click)="send()" [disabled]="joy.writing() || !joy.ready() || !joy.draft().trim()" [attr.aria-label]="t().common.send"><mat-icon>send</mat-icon></button>
+      <div class="foot">
+        @if (joy.picked(); as p) {
+          <div class="picked">
+            <span class="thumb"><img [src]="p.url" alt="" /><button type="button" class="drop" (click)="joy.unpick()" [attr.aria-label]="t().joy.removePicture"><mat-icon>close</mat-icon></button></span>
+          </div>
+        }
+        <div class="composer">
+          <input #picker type="file" accept="image/*" hidden (change)="pickedFile($event)" />
+          <button mat-icon-button type="button" class="attach" (click)="picker.click()" [disabled]="joy.writing() || !joy.ready() || joy.picking()" [attr.aria-label]="t().joy.addPicture"><mat-icon>attach_file</mat-icon></button>
+          <mat-form-field appearance="outline" class="grow" subscriptSizing="dynamic">
+            <mat-label>{{ t().joy.message }}</mat-label>
+            <textarea matInput cdkTextareaAutosize cdkAutosizeMinRows="1" cdkAutosizeMaxRows="5" [ngModel]="joy.draft()" (ngModelChange)="joy.draft.set($event)" (keydown.enter)="enter($event)"></textarea>
+          </mat-form-field>
+          <button mat-mini-fab type="button" class="send" (click)="send()" [disabled]="joy.writing() || !joy.ready() || joy.picking() || !joy.draft().trim()" [attr.aria-label]="t().common.send"><mat-icon>send</mat-icon></button>
+        </div>
       </div>
     </div>
   `,
@@ -154,9 +188,18 @@ const FOLLOW_PX = 120;
     .source { display: flex; align-items: baseline; gap: 6px; min-width: 0; padding: 7px 0; line-height: 18px; color: var(--mat-sys-primary); text-decoration: none; }
     .source-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .source-site { flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--mat-sys-on-surface-variant); }
-    .composer { flex: none; display: flex; gap: 8px; align-items: flex-end; padding: 8px 12px; border-top: 1px solid var(--mat-sys-outline-variant); }
+    .upload { display: block; width: auto; height: auto; max-width: 220px; max-height: 280px; margin-bottom: 2px; border-radius: 16px; background: var(--mat-sys-surface-container); }
+    .foot { flex: none; border-top: 1px solid var(--mat-sys-outline-variant); }
+    .picked { display: flex; padding: 12px 12px 2px; }
+    .thumb { position: relative; flex: none; width: 64px; height: 64px; }
+    .thumb img { display: block; width: 64px; height: 64px; object-fit: cover; border-radius: 10px; background: var(--mat-sys-surface-container); }
+    .drop { position: absolute; top: -7px; right: -7px; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; background: var(--mat-sys-inverse-surface); color: var(--mat-sys-inverse-on-surface); }
+    .drop::after { content: ''; position: absolute; inset: -9px; }
+    .drop mat-icon { width: 16px; height: 16px; font-size: 16px; }
+    .composer { display: flex; gap: 4px; align-items: flex-end; padding: 8px 12px 8px 4px; }
+    .attach { flex: none; margin-bottom: 4px; }
     .grow { flex: 1; min-width: 0; }
-    .send { flex: none; margin-bottom: 4px; }
+    .send { flex: none; margin: 0 0 4px 4px; }
     .note { flex: none; padding: 8px 12px; margin: 0; }
     .empty { text-align: center; margin: auto; max-width: 320px; }
     .muted { color: var(--mat-sys-on-surface-variant); }
@@ -173,10 +216,12 @@ export class JoyPage {
   protected readonly lang = inject(LanguageService);
   protected readonly t = this.lang.words;
   private readonly threadBox = viewChild<ElementRef<HTMLElement>>('threadBox');
+  /** The member's pictures in the thread whose opening has been reported (uploadDrawn): their height is no new growth any more. */
+  private readonly drawnUploads = new WeakSet<Element>();
 
   constructor() {
     void this.joy.open();
-    // The thread follows what is added at its end, a message, the next piece of an answer, the line on a search, the line on a picture or the picture itself, while the reader is near the end. A reader who has gone up to read stays there.
+    // The thread follows what is added at its end, a message, the next piece of an answer, the line on a search, the line on a picture or the picture itself, while the reader is near the end. A reader who has gone up to read stays there. The red line and the picked picture stand under the thread and take their room from it, so the thread follows them too.
     effect(() => {
       this.joy.messages();
       this.joy.answer();
@@ -184,6 +229,7 @@ export class JoyPage {
       this.joy.drawing();
       this.joy.answerPicture();
       this.joy.error();
+      this.joy.picked();
       untracked(() => {
         if (this.nearBottom()) this.scrollToBottom();
       });
@@ -201,11 +247,19 @@ export class JoyPage {
     this.send();
   }
 
-  /** The message box's text goes to Joy, and the thread goes to its end. */
+  /** The message box's text goes to Joy, with the picture that is picked, and the thread goes to its end. Nothing goes while a picked file is still being redrawn. */
   protected send(): void {
-    if (this.joy.writing() || !this.joy.ready() || !this.joy.draft().trim()) return;
+    if (this.joy.writing() || !this.joy.ready() || this.joy.picking() || !this.joy.draft().trim()) return;
     void this.joy.send();
     this.scrollToBottom();
+  }
+
+  /** The file that the member picked with the paperclip goes to joy.service, which redraws it. The picker is emptied, so that the same picture can be picked again. */
+  protected pickedFile(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (file) void this.joy.pick(file);
   }
 
   /** New chat: a box asks first, since the chat is saved nowhere and cannot be brought back. When the chat holds a picture that can still be downloaded, the box says one sentence more: the pictures go with the chat. */
@@ -228,6 +282,30 @@ export class JoyPage {
     const picture = event.target as HTMLElement;
     if (!el) return;
     const grew = Math.max(0, picture.offsetHeight - picture.offsetWidth);
+    if (el.scrollHeight - el.scrollTop - el.clientHeight <= FOLLOW_PX + grew) this.scrollToBottom();
+  }
+
+  /**
+   * Called when the browser has opened the bytes of a picture that the
+   * member sent. Until then that picture takes no room at all; from then
+   * on it has its own height. A reader who was near the thread's end
+   * before it grew is brought to the end again, as for a picture that
+   * Joy made: without this the member's own words, which stand under
+   * their picture, would be out of sight right after a send. The
+   * pictures of a kept chat are opened together, and a picture takes
+   * its room as soon as the browser knows its size, which can be before
+   * it reports here. So every picture that has not reported yet counts
+   * with the room it takes at this moment, not this one alone: a
+   * picture that the browser has not begun to open takes none.
+   */
+  protected uploadDrawn(event: Event): void {
+    const el = this.threadBox()?.nativeElement;
+    if (!el) return;
+    let grew = 0;
+    for (const picture of el.querySelectorAll<HTMLImageElement>('img.upload')) {
+      if (!this.drawnUploads.has(picture)) grew += picture.offsetHeight;
+    }
+    this.drawnUploads.add(event.target as Element);
     if (el.scrollHeight - el.scrollTop - el.clientHeight <= FOLLOW_PX + grew) this.scrollToBottom();
   }
 

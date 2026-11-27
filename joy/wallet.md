@@ -391,7 +391,7 @@ A recovery is for a member whose passkey is gone for good. It is not a password 
 
 On the first page, "Recover account" [กู้คืนบัญชี] opens a page with two cards: "I'm locked out" with the button "Start" [เริ่ม], and "Continue a recovery" [ดำเนินการกู้คืนต่อ] with the button "Continue" [ดำเนินการต่อ].
 
-"Start" first opens the walk "Find your passkey first" [ค้นหาพาสคีย์ของคุณก่อน]. It names, one screen at a time, the places a passkey may be: the device at hand, with the button "Try Log in now" [ลอง "เข้าสู่ระบบ" ตอนนี้], which has to be tried before the walk goes on; the device where the anoPod was made; the member's Apple or Google account; a spare passkey. Only a member who ticks "I tried all of these. My passkey is gone." [ฉันลองทั้งหมดนี้แล้ว พาสคีย์ของฉันหายไปแล้ว] goes on. A member who finds the passkey just logs in.
+"Start" first opens the walk "Find your passkey first" [ค้นหาพาสคีย์ของคุณก่อน]. It names, one screen at a time, the places a passkey may be: the device at hand, with the button "Try Log in now" [ลอง "เข้าสู่ระบบ" ตอนนี้], which has to be tried before the walk goes on; the device where the anoPod was made; the member's Apple or Google account; a spare passkey. Only a member who ticks "I've tried all the steps. My passkey is gone." [ฉันลองทุกขั้นตอนแล้ว พาสคีย์ของฉันหายไปแล้ว] goes on. A member who finds the passkey just logs in.
 
 ### Opening a case
 
@@ -415,15 +415,16 @@ The keys of the old accounts were lost with the old passkey, so those accounts c
 
 ## Joy
 
-Menu entry "Joy". Joy is the wallet's AI. The page says so in one line: "Joy is an AI. What you write to her leaves your wallet to be answered."
+Menu entry "Joy". Joy is the wallet's AI. The page says so in one line: "Joy is an AI. What you write to her and the pictures you send her leave your wallet to be answered."
 
 - There is one chat. The member writes in the box at the bottom, and the answer shows while it is written.
 - The chat is kept encrypted in the browser of the device at hand, and nowhere else. It is still there after the page is loaded again and after a new login. It is not on another device or in another browser.
 - "New chat" [แชทใหม่] empties the chat after a box that asks. It cannot be brought back, and its pictures go with it.
 - Joy can search the web. Under such an answer stands "Sources" with links that open in a new tab.
 - Joy can have a picture made. It stands in the answer with the button "Download" [ดาวน์โหลด]. On an iPhone or an iPad the button opens the phone's share sheet, where the picture can be saved to Photos. Elsewhere the picture is saved as a file.
+- The paperclip left of the box adds one picture to a message, which still needs words. An x takes the picture off again. Joy sees it once, with that message.
 - "Memory" [ความจำ] opens the page "Joy's memory of you" [ความจำของ Joy เกี่ยวกับคุณ]: a short text that Joy reads with every message and adds a line to when she learns something worth keeping. It is the member's: they can change it and press "Save" [บันทึก], or press the red "Delete all" [ลบทั้งหมด], which cannot be undone. The page shows how full it is. The text is stored encrypted, and nobody at anoPod can open the stored file.
-- An anoPod can send Joy only so many messages in one day. Past that the page says when the member can write to her again.
+- An anoPod can send Joy only so many messages in one day, and only so many pictures. Past that the page says when the member can write to her again.
 
 ## Notifications
 

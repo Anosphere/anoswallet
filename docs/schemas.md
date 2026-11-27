@@ -268,6 +268,10 @@ Behaviour
     and the policy is as it was.
     Since 2026-11-25 a picture that Joy had made (4.21) is one more
     picture from a blob: address, so the policy is as it was.
+    Since 2026-11-26 a picture that a member sends Joy (4.23) is one
+    more: the picked picture above the message box and the picture in a
+    sent message are drawn from blob: addresses, so the policy is as it
+    was.
   - "connect-src 'self'": the page's code calls only the wallet's own
     address, where every call goes to /api.
   - "frame-ancestors 'none'": no page may show the wallet inside a
@@ -358,6 +362,11 @@ Behaviour
   masterpod then stops its call to Anthropic. (Since 2026-11-25, the
   masterpod's spec, section 36: its call to the company whose model
   answers, Anthropic or OpenAI.)
+  (Since 2026-11-26, 4.23: the request can carry one picture, about
+  270,000 to 790,000 characters of base64 for a picture as the wallet
+  redraws it. Nothing here changed for it: the proxy hands a request's
+  body on as it comes and reads none of it, and nginx on the wallet
+  servers takes a body of 72 MB, deploy/nginx/wallet.conf.)
 - The signed envelope's path is the backend path: the browser signs
   "/complete-setup" and posts to /api/masterpod/complete-setup; the proxy
   strips its prefix and the masterpod sees /complete-setup.
@@ -1425,6 +1434,10 @@ chat with every message.)
             since 2026-11-25 (the masterpod's spec, section 36): the model that answers is Anthropic's or
             OpenAI's, by a setting of the masterpod. The request, the refusals and the stream are the same;
             "joy is off" then means that the masterpod has no key for the company that answers
+            since 2026-11-26 (4.23): the last message of `messages`, the member's new one, may carry
+            `upload`, one picture, and three refusals more can come for such a message: 400 invalid
+            upload: <reason>, 503 uploads are off and 429 daily upload limit reached. The stream is as it
+            was
     a masterpod of before: 404
 
 What leaves the wallet. A message to Joy is the one thing in the wallet
@@ -1450,6 +1463,11 @@ the company whose model answers, to Anthropic or to OpenAI, by a setting
 of the masterpod. The wallet cannot tell which: it sends the same
 request and reads the same stream. The one line names no company and
 stays as it is.)
+(Since 2026-11-26, 4.23: a picture that a member sends with a message
+travels in the clear with that message, inside the signed request, and
+the masterpod hands it to the same company and keeps none of it. The one
+line was changed for it and reads: "Joy is an AI. What you write to her
+and the pictures you send her leave your wallet to be answered.")
 
 The chat. There is one chat with Joy at a time, and the wallet holds
 it: joy.service (8.3) keeps its messages in the page's memory, so an
@@ -1462,6 +1480,10 @@ a word of it came). So in a chat that has outgrown those limits Joy no
 longer reads the oldest messages; the chat on the screen is not cut,
 and the member is not told. A new message that is over 120,000 bytes by
 itself is not sent: the page says so (below).
+(Since 2026-11-26, 4.23: a message to Joy also carries the picture that
+goes with the member's new message, on that message alone. The two
+limits count messages and the bytes of their texts, as before, and no
+picture.)
 
 The chat survives a reload. After the member's own message, and again
 after each answer of Joy's, the wallet encrypts the whole chat with the
@@ -1481,6 +1503,9 @@ database, IndexedDB, the wallet's first use of it:
                 since 2026-11-25 (4.21) the database is version 2 and has a second place, joy-pictures,
                 and a message can have one field more, picture: only on an answer of Joy's for which
                 a picture was made
+                since 2026-11-26 (4.23) a message can have one field more, upload: only on a message of
+                the member's that went with a picture. The database's version and its two places are as
+                they were
 
 When a Joy page opens for the first time in a login, the wallet reads
 the pod's entry and opens it. A blob that does not open under this
@@ -1497,6 +1522,8 @@ with a title, are the next build (section 10).
 (Since 2026-11-25, 4.21: the pictures that Joy had made for the chat are
 kept beside it, each as an entry of its own in a second place of the
 same database, and New chat takes them out with the chat.)
+(Since 2026-11-26, 4.23: the pictures that the member sent in the chat
+are kept there too, each as an entry of the same form.)
 
 The memory file. It is what Joy knows of a member from earlier chats:
 plain text of at most 10,240 bytes. The masterpod stores it as a blob
@@ -1530,6 +1557,8 @@ wallet gives an answer up when nothing at all has come for 60 seconds
 (JOY_SILENCE_MS): the masterpod's empty lines come every 10, so that
 long a silence means a dead connection, and without the limit a phone
 that lost its connection would show "Joy is writing…" for good.
+(Since 2026-11-26, 4.23: the 60 seconds run from the request's start, so
+the way up of a picture that goes with the message is inside them.)
 
 What a member is told (the words are in 8.8). A message that the
 masterpod refuses, and one whose answer fails before any of it came,
@@ -1550,6 +1579,11 @@ box, with the reason in red above the box:
     { error: "joy unavailable" }   "Joy cannot answer right now. Try again later."
     { error: "joy was cut off" }   "Joy's answer was cut off. Send your message again." Also for an answer that
                                    ended with no last line, and for one the wallet gave up after 60 seconds
+
+(Since 2026-11-26, 4.23: two refusals more have a sentence of their own,
+429 daily upload limit reached and 503 uploads are off, both only for a
+message with a picture. And a message that goes back into the message
+box brings its picture back above the box.)
 
 An answer that failed after a part of it had come keeps that part in
 the chat, with the last of those sentences under it in grey. Under an
@@ -1836,6 +1870,7 @@ searched answer, Joy may search again.)
     POST /ask-joy (setup), the request as before (4.18), two additions to its answer
     body: { messages: [ { role, text } ], memory }, as before: of each message the wallet sends its role
           and its text and nothing else; the sources of an earlier answer are not sent back
+          (since 2026-11-26, 4.23: and, on the member's new message alone, the picture that goes with it)
     answer: the stream of 4.18, with one kind of line more and one field more in the last line:
             { "searching": true }                            Joy starts a web search. One line for each
                                                              search she starts, written before the search
@@ -1906,6 +1941,9 @@ What the wallet does with it (8.2, Joy; 8.3).
   message carries an earlier searched answer as its words alone, and
   Joy is told so in the masterpod's shared memory file (its spec,
   32.5).
+  (Since 2026-11-26, 4.23: the request has one thing more, the picture
+  that goes with the member's new message. The sources are still not
+  sent back.)
 - Which answers show sources. Every answer that ended, whatever its
   `stop`: one that was cut at the model's limit or stopped by the
   safety check shows the pages cited up to there, the rows between its
@@ -1937,6 +1975,10 @@ for the pictures, and a message can also have `picture`. The other way
 round holds only in a browser where no wallet of 4.21 has opened Joy: a
 wallet of before cannot open a database of version 2, and comes up with
 an empty chat.)
+(Since 2026-11-26, 4.23: a message of the member's can also have
+`upload`. A wallet of 4.21 opens such a chat, shows that message as its
+words alone, and leaves the field on the message when it writes the chat
+again: tried, section 11.)
 
 What leaves the wallet. Nothing that the wallet sends changes. One
 thing is new behind the masterpod: for a search Joy writes a query,
@@ -2023,6 +2065,8 @@ The wallet gained no package, no env variable and no route.
     POST /ask-joy (setup), the request as before (4.18), two additions to its answer
     body: { messages: [ { role, text } ], memory }, as before: of each message the wallet sends its role
           and its text and nothing else; no picture is ever sent back
+          (since 2026-11-26, 4.23: one picture can go, the member's own, on the member's new message; a
+          picture that Joy made is still never sent back)
     answer: the stream of 4.18 and 4.20, with two kinds of line more:
             { "drawing": true }                              Joy starts a call of her picture tool. One
                                                              line for each call that she starts, written
@@ -2125,6 +2169,9 @@ What the wallet does with it (8.2, Joy; 8.3).
   what is sent. The chat on the screen shows her words as she wrote
   them. An answer whose picture is no longer kept still goes back with
   its note: the description is in the chat.
+  (Since 2026-11-26, 4.23: the request has one thing more, the picture
+  that goes with the member's new message, and an earlier message of the
+  member's that had a picture carries a note of its own.)
 - Which answers keep a picture. Every answer in which one came. One that
   ended, whatever its `stop`. One that ended with a picture and no word:
   it is no cut-off answer, and shows the picture and its button alone.
@@ -2153,6 +2200,8 @@ reload"), as they are since this step:
     value       the blob as bytes: iv || ciphertext || tag (the wallet's `encrypt`, section 7) of
                 one byte, the length of the type's name || the type's name in ASCII ("image/jpeg") ||
                 the picture's bytes as they came, with no base64 in between
+    since 2026-11-26 (4.23) a picture that a member sent has an entry in joy-pictures too, with a key and
+    a value of the same form, and the member's message has upload: { id }
 
 A browser that has the database of before keeps its first place, and the
 chats in it, through the change of version: the wallet makes the second
@@ -2178,12 +2227,18 @@ no longer kept in this browser." Her words stay. Where the browser
 refuses the write of a picture (no room, a private window), the picture
 stays on the page until a reload, and the grey line stands in its place
 after that.
+(Since 2026-11-26, 4.23: the same holds for a picture that a member
+sent. Its `upload` is checked, its entry is read and opened before the
+chat shows, and the same grey line stands in its place when it is gone.)
 
 New chat takes the pod's chat and every picture of the pod out of the
 database, in one transaction, and gives the pictures' addresses back to
 the browser. Another pod's entries in the same browser are not touched.
 The box of New chat says one sentence more when the chat holds a picture
 that can still be downloaded (8.9).
+(Since 2026-11-26, 4.23: a picture that a member sent goes out of the
+database with the others. It does not count for the box's sentence: it
+has no Download.)
 
 What leaves the wallet. Nothing that the wallet sends changes but the
 note above. One thing is new behind the masterpod: for a picture, the
@@ -2195,6 +2250,9 @@ and stays as it is (the plan's section 4, point 9): it is still true.
 the chat" holds for the request that makes the picture. When OpenAI's
 model writes Joy's answers, the chat goes to OpenAI too, in the request
 for her answer, as it went to Anthropic.)
+(Since 2026-11-26, 4.23: the one line was changed, for a picture that a
+member sends. Of a picture that Joy has made it says as little as
+before.)
 
 What a wallet tab does that was loaded before this step's deploy (the
 plan's section 4, point 11; tried by the masterpod's step, its spec
@@ -2286,6 +2344,10 @@ with no chat that names it, until New chat; a line of any length is read
 to its end before it is checked (log.service's `postLines`); and under
 an answer that failed after its picture came, the grey line still says
 "Send your message again", which makes a second picture.
+(Since 2026-11-26, 4.23: of "Joy seeing a picture, her own or a member's
+photo" one thing is built. Joy sees a picture that a member sends, once,
+with the message that it comes with. She still does not see a picture
+that she made, and no picture is made from a member's photo.)
 
 The proxy forwards the call as before (section 2): it hands the stream
 on and reads no line of it, and its page policy lets a picture from the
@@ -2568,6 +2630,318 @@ was added, so the doormen count the same calls as before. The wallet's
 side is the shell's poll (8.1; 8.2, Notifications), the Notifications
 page and Home's number (8.2), session.service (8.3) and the words
 (8.8).
+
+### 4.23 A member sends Joy one picture with a message
+
+Added 2026-11-26 (forclaude/joy-uploads-plan-2.md, FINAL on the user's
+word "Yes to all 4", its step 2; section 11): a member sends Joy, the
+wallet's AI of 4.18, one picture with a message: a photo, a screenshot,
+a picture of a page. The user: "I want to make an upload button for Joy,
+so people can add screenshots/ images. Only 1 at a time for now." And:
+"Joy sees the picture once with the message that comes with it." The
+masterpod's side is the plan's step 1 and its own spec's section 37,
+which holds the rules, the new field of the request and its checks, the
+count of a pod's pictures of the day, the picture in the request to the
+company that answers, what Joy is told and what it costs. The masterpod
+gained there: one column on `joy_usage` (`uploads`), one env variable
+(`JOY_DAILY_UPLOADS`, 50 unless set, and 0 switches uploads off) and new
+words in its shared memory file. No table, no route and no npm package.
+The wallet gained no package, no env variable and no route, and the
+browser's database is as 4.21 left it.
+
+    POST /ask-joy (setup), one field more in the request and three refusals more; the answer as before
+    body: { messages: [ { role, text } ], memory }, as before, and on the LAST message, which is the member's
+          new one, when a picture goes with it:
+          { "role": "user", "text": "What does this sign say?",
+            "upload": { "contentType": "image/jpeg", "image": "<the picture as base64>" } }
+          contentType: always image/jpeg from the wallet: its redraw gives nothing else
+          image: the redrawn picture's bytes as plain base64 with its padding. A picture of 1,568 pixels is
+                 about 200 to 590 KB, so this text is about 270,000 to 790,000 characters long
+          no other message of the list carries `upload`, and a message needs words also when it has a picture
+    refusals more, each only for a message that carries a picture:
+            400 invalid upload: <reason>     the masterpod's own check of a picture did not take it: a type
+                                             that is none of its three, base64 that it cannot read or of
+                                             more than 10 MB, bytes that do not begin as a picture of that
+                                             type, or more than 1,568 pixels wide or high. The wallet's own
+                                             redraw sends none of these
+            503 uploads are off              the masterpod's JOY_DAILY_UPLOADS is 0
+            429 daily upload limit reached   the pod has sent its 50 pictures of the day, a day of UTC. The
+                                             message has been counted as one of the day's 300 messages
+    answer: the stream of 4.18, 4.20 and 4.21, unchanged. No line of it carries a member's picture
+    a masterpod of before: it reads role and text, passes `upload` over as it passes every field that it does
+    not know, and answers the words alone
+
+What a person sees (8.2, Joy).
+
+- The paperclip. It stands left of the message box. A tap on it opens
+  the device's own picker for one picture. What the picker offers is the
+  device's. On the simulated iPhones (iOS 26.5 in Safari and from the
+  Home Screen, iOS 18.6 in Safari) it was a menu of three: Photo
+  Library, Take Photo, Choose File. On the emulated Android phone
+  (Android 17, Chrome 149) it was Android's own photo picker, which
+  showed the photo library and offered neither a camera nor the files
+  (section 11). The picker is the one of a public room's picture (4.15):
+  a file input with `accept="image/*"` and no `multiple`, here not
+  drawn, with the paperclip clicking it. It is emptied after each pick,
+  so the same picture can be picked again.
+- The picked picture. It shows as a small square above the message box,
+  with an x on its corner that takes it off again. A second pick puts
+  the new picture in its place. It belongs to the message box, as the
+  box's words do: it is still there after a visit to another page of the
+  wallet and after New chat, and a login's end takes it away.
+- Send. It is lit when the box holds words, as before. A picture alone
+  is not sent: with a picture picked and no words Send is off, and the
+  Enter key sends nothing. While a picked file is being redrawn, Send
+  and the paperclip are off for that moment, so that no message leaves
+  without the picture that was just picked.
+- The message. The picture stands in the member's message, above the
+  words, and stays there: after a reload too, until New chat.
+- Once. Joy sees a picture with the message that it comes with, and with
+  no later one. The masterpod's shared memory file tells her so (its
+  spec, 37.5), and she says so when a member asks her to look again.
+
+What the wallet does with a picked file.
+
+- The redraw. The file goes through the wallet's own `redrawImage`
+  (src/app/images.ts, as it is), which dispute evidence goes through:
+  the browser opens the file with the turn that the phone wrote into it,
+  draws it on white, makes its longer side 1,568 pixels when it is
+  longer (never larger than it was), and writes a fresh JPEG at the
+  factor 0.85. The two numbers are `JOY_UPLOAD_SIDE` and
+  `JOY_UPLOAD_JPEG` in constants.ts. The redrawn picture is what stands
+  above the box, what is sent and what is kept. The file itself is used
+  for nothing else.
+- Only pixels. What a phone writes into a photo beside its pixels does
+  not go out: the camera, the date, the place. Seen in the trial with a
+  real photo that holds all three (section 11). In Chrome the fresh JPEG
+  has no Exif block at all. In Safari it has a small one of Safari's own
+  writing, which holds three entries, the colour space and the picture's
+  width and height, and an empty IPTC block beside it: nothing of the
+  photo.
+- A file that is no picture. A file that the browser cannot open as a
+  picture is not taken. The page's red line says so in the wallet's own
+  words, which a public room's picker shows too (`camera.unreadable`):
+  "The browser cannot read this file as a picture. Pick another photo."
+  A picture that was picked before stays. Which files a browser opens is
+  the browser's: this Mac's Chrome did not open an iPhone's HEIC photo,
+  a TIFF or an SVG, and opened a PNG, a WebP, a GIF and a BMP, each of
+  which came out as a JPEG.
+- The check on the size is the redraw itself. The wallet sets no ceiling
+  of bytes. Six real pictures came out at 84 to 445 KB in Chrome and
+  three at 394 to 585 KB on the simulated iPhones, where the masterpod
+  takes 10 MB.
+
+What a message to Joy carries.
+
+- The role and the text of each message, as before, and one thing more:
+  on the member's new message, the picture that goes with it, as
+  `upload`.
+- A picture goes once. In every later message the member's message that
+  had a picture goes without it, as a note of the wallet's, an empty
+  line and the member's words:
+
+      [Note from the wallet: a picture came with this message. It is not sent to you again.]
+
+  The note is the plan's, letter for letter (its 3.5), and the
+  masterpod's shared memory file tells Joy what the line is. It stands
+  only in what is sent. The chat on the screen shows the member's words
+  as they were written. A message whose picture the browser no longer
+  keeps still goes with its note.
+- An answer of Joy's that had a picture of her making goes with its own
+  note, as 4.21 has it. No picture that Joy made is ever sent.
+- The two limits of a conversation count messages and the bytes of their
+  texts (4.18), the notes among them, and no picture.
+
+Where a member's picture is. In the page's memory: an address of its
+bytes for the page to draw (an object URL), the one that stood above the
+message box. The page holds no bytes of it for a Download: a member's
+picture has none. In the browser's database: an entry of its own, of the
+form of 4.21. In the chat's message: `upload: { id }`, an id that the
+wallet makes up, 16 random bytes as hex. The bytes are in no message.
+
+The kept chat and the pictures' place, as they are since this step:
+
+    database    anopod-wallet, version 2, as since 4.21
+    place       joy-chat, as before: one entry for each pod, under the anoPod's id
+    value       the blob as bytes: iv || ciphertext || tag of the JSON
+                { v: 1, messages: [ { role: "user" | "assistant", text, at, end?, sources?, picture?, upload? } ] }
+                upload: only on a message of the member's that went with a picture: { id }
+                id: 32 hex characters, made up by the wallet
+    place       joy-pictures, as before: one entry for each picture, now also for each picture that a
+                member sent. The key and the value are those of 4.21, the type's name "image/jpeg"
+
+A picture's entry is written at the send, in the same row of writes as
+the chat and before the chat that names it. So a reload in the middle of
+an answer brings the chat back with the member's message last and its
+picture in it (tried, section 11). When a kept chat is opened, the
+wallet checks each kept `upload` (`keptUploadOf`: only on a message of
+the member's, an id of the wallet's form, kept as the id alone), reads
+each picture's entry, opens it under the anoPod encryption key and makes
+an address for the page, before the chat shows. A picture whose entry is
+not there, does not open under this key, or names another type than the
+wallet's three shows the grey line of 4.21 in its place, above the
+member's words: "This picture is no longer kept in this browser." A chat
+that was kept before this step has no `upload` and opens as it is.
+
+New chat takes the pod's chat and every picture of the pod out of the
+database, in one transaction, as before: the pictures that a member sent
+with the ones that Joy made. The box of New chat is as it was (8.9). Its
+second sentence, "Its pictures go with it. Download the ones you want to
+keep first.", stands only when the chat holds a picture that Joy made
+and that can still be downloaded. A member's own picture has no
+Download, and the member has it already.
+
+A message that goes back into the box. A message that the masterpod
+refuses, and one whose answer fails before any of it came, is taken out
+of the chat again and its text put back into the message box, as before
+(4.18). Its picture then stands above the box again, the same picture,
+and its entry goes out of the browser's database again. So a message
+that came back can be sent again as it stands, or with the picture taken
+off.
+
+What a member is told, beside the sentences of 4.18 (the words are in
+8.8):
+
+    429 daily upload limit reached   "You have sent Joy as many pictures as an anoPod may send in one day. You can
+                                     send pictures again after 7:00 AM." The time is the end of the masterpod's
+                                     day, as in 4.18
+    503 uploads are off              "Joy cannot look at pictures right now. Send your message without the picture."
+    400 invalid upload: <reason>     as the wallet shows every refusal: "/ask-joy: HTTP 400: invalid upload: image
+                                     must be a picture of its contentType". The wallet's own redraw never sends
+                                     such a picture
+    a file that is no picture        "The browser cannot read this file as a picture. Pick another photo."
+
+Every other refusal and every failure of 4.18 is told as before, also
+for a message with a picture: Joy switched off, the day's messages, a
+message that is too long, a failed answer. A pick starts with a clean
+red line, as a send does.
+
+What leaves the wallet. A picture that a member sends travels in the
+clear inside the signed request, with the message that it comes with,
+passes through the masterpod's memory and goes to the company whose
+model answers, Anthropic or OpenAI. The masterpod writes no picture into
+a table or into its log (its spec, 37.4). The one line under Joy's
+header says so now: "Joy is an AI. What you write to her and the
+pictures you send her leave your wallet to be answered." The wallet's
+own Log holds the call's status and two numbers, as before, and nothing
+of a picture.
+
+The wallet's watch on a silent answer stays at 60 seconds
+(`JOY_SILENCE_MS`, 4.18). It runs from the request's start, so the way
+up of the picture is inside it. In the trial a picture of 445 KB went up
+and was answered in 15 seconds on a line of 384 kbit a second. On a line
+of 56 kbit a second the wallet gave the message up after 60 seconds, and
+it came back into the box with its picture and the line "/ask-joy: HTTP
+0: no answer in 60 s" (section 11).
+
+The order of the two deploys is the plan's (its section 5): the
+masterpod first, then the wallet, in one sitting. A wallet of this step
+in front of a masterpod of before would lose every picture without a
+word: such a masterpod answers the words alone, and nothing tells the
+wallet (tried, section 11). A wallet tab that was loaded before this
+step's deploy has no paperclip and sends as before, and for it nothing
+changes. It shows the Update button by itself (8.1).
+
+Two wallets in one browser. The database's version did not change, so a
+wallet of before this step opens a chat that this step's wallet kept. It
+shows the member's message that had a picture as its words alone, sends
+it with no note, leaves the field `upload` on the message when it writes
+the chat again, and its New chat takes the member's pictures out with
+the others. This step's wallet then shows the picture in its message
+again (tried, section 11). That can happen in the minutes between the
+deploys of the two wallet servers, and on a wallet server that is taken
+back to a commit of before this step.
+
+Decided while building, each a small thing the plan had not named:
+
+- While a picked file is being redrawn, Send and the paperclip are off
+  (joy.service's `picking`). A message that left in that moment would go
+  without the picture that the member had just picked, and a second pick
+  could overtake the first. On this Mac a redraw took 11 to 141 ms.
+- The paperclip is off while an answer is under way and until the kept
+  chat was looked for, as Send is.
+- The wallet's note is joined as the note of 4.21 is: the note, an empty
+  line, the member's words.
+- The entry of a picture goes out of the browser's database again when
+  its message goes back into the box (`dropPicture`), after the chat was
+  kept without the message. Otherwise each refused try would leave an
+  entry that no chat names, until New chat.
+- A pick starts with a clean red line. A file that is not taken leaves a
+  picture that was picked before in its place.
+- The picked picture stays through a visit to another page and through
+  New chat, as the words in the box do.
+- After the send the page draws the message's picture from the address
+  that stood above the box: one address, no second copy of the bytes.
+- A kept `upload` is checked when a chat is opened, as `sources` and
+  `picture` are: only on a message of the member's, an id of the
+  wallet's form, and kept as the id alone.
+- The thread follows the picked picture, which takes its room from the
+  thread (the page's effect reads `picked`), and it follows a member's
+  picture when the browser has opened it (`uploadDrawn`). A member's
+  picture has no box until the browser knows its size, since its shape
+  is not known before. The pictures of a kept chat are opened together,
+  and a picture takes its room as soon as the browser knows its size,
+  which can be before it reports to the page. So every picture that has
+  not reported yet counts with the room that it takes at that moment,
+  not the reporting one alone. Counting the reporting one alone, and
+  counting only the pictures that the browser had wholly opened, each
+  left a kept chat with three pictures 427 px above its end in some
+  openings (seen, section 11).
+- The paperclip stands at Send's height, 4 px above the lower edge of
+  the box, as the sticker button of a conversation does. The planning
+  chat's picture of the look had it 4 px lower.
+- The x on a picked picture is 22 px wide, and a finger hits it up to 9
+  px beside it (an area of 40 by 40 px that is not drawn).
+- The type that goes with a picture and into its entry is a constant of
+  joy.service.ts, `image/jpeg`.
+- The new entries of the dictionary are named `addPicture`,
+  `removePicture`, `uploadLimit(time)` and `uploadsOff` (8.8).
+
+Left as it is (the plan's section 6): a picture alone, with no words;
+more than one picture with a message; Joy seeing a picture again with a
+later message, and comparing two pictures; PDFs, Word, Excel and other
+files; video and sound; keeping an upload on the anoPod or on a server;
+a larger view of a picture inside the wallet; dragging or pasting a
+picture on a computer; Joy changing a member's photo, or making a
+picture from it; a Translate button, and a text reader of our own; price
+work. And of this build:
+
+- Nothing tells a member how many pictures of the day are left. The
+  refusal at the number is the first word of it.
+- The masterpod counts a picture when it takes it, not when it is
+  answered (its spec, 37.4). A message whose answer then fails comes
+  back into the box with its picture, and sending it again counts a
+  second picture (seen, section 11).
+- A member's picture has no words for a screen reader: its `alt` is
+  empty, in the message and above the box.
+- A picture that a masterpod of before passed over stands in the chat
+  like any other, and nothing tells the member that Joy did not see it.
+- What the device's picker offers is the device's (above): the wallet
+  asks for one picture and adds no camera button of its own.
+- A file that the browser cannot open is not taken, whatever it is
+  (above): an iPhone's HEIC photo that is picked on a computer in Chrome
+  among them.
+- On the smallest phone of the trial (360 by 536) a picked picture and a
+  red line of three lines leave the thread 43 to 71 px high until the
+  message is sent or the picture taken off.
+- A login that ends in the middle of a redraw drops the picked file
+  without a word.
+- A kept chat that holds a member's picture and a picture of Joy's that
+  is more than 120 px higher than wide can open short of its end: the
+  two kinds are followed by two functions of the page, and the one of
+  4.21 counts its own picture alone. Read in the code, not tried. The
+  masterpod's setting makes square pictures, for which it does not
+  arise.
+
+The proxy forwards the call as before (section 2): it hands a request's
+body on as it comes and reads none of it, and it hands the stream on.
+Nothing in server/ and nothing under deploy/ changed: nginx on the
+wallet servers takes a body of 72 MB (deploy/nginx/wallet.conf), the
+masterpod takes about 74 MB (its spec, section 8), and a request with a
+picture is under 1 MB. The wallet's side is the Joy page (8.2, Joy),
+joy.service and masterpod-api.service (8.3), constants.ts, the words
+(8.8) and Joy's wallet file, joy/wallet.md, whose part "Joy" has one
+entry more and one clause more (section 11).
 
 ## 5. Validator changes (anossoftware)
 
@@ -2920,6 +3294,8 @@ room, in a database of the rooms' own; 8.2, Chat, 8.3 and section 11.)
 (Since 2026-11-25 also a third: the pictures that Joy had made for the
 chat that is under way, each a blob of its own under the same key, in
 Joy's database beside the chat; 4.21, section 11.)
+(Since 2026-11-26 the pictures that the member sent Joy in that chat are
+kept the same way, in the same place; 4.23, section 11.)
 
 ### 8.1 Shell, routes, guards
 
@@ -5501,6 +5877,30 @@ follows the grey line and the picture as it follows the answer, follows
 once more when the browser has opened a picture and its box has taken
 the picture's shape, and leaves a reader who has gone up where they are.
 An answer without a picture looks as it did.
+Since 2026-11-26 (section 11; 4.23) a member can send Joy one picture
+with a message, and the chat shows three things more. A paperclip stands
+left of the message box: an icon button of 40 by 40 px with the icon
+`attach_file`, at Send's height. It is off while an answer is written,
+until the kept chat was looked for, and while a picked file is redrawn.
+A tap on it opens the device's own picker for one picture (4.23). A
+picked picture stands above the message box, under the line that parts
+the thread from the box, as a square of 64 by 64 px with corners rounded
+by 10 px, the picture cut to fill it. On its upper right corner stands a
+dark round x of 22 px, which takes the picture off again; a finger hits
+it up to 9 px beside it. With a picked picture the part under the thread
+is 78 px higher and the thread that much lower, and the thread follows.
+In a sent message the picture stands above the member's words, at the
+right, at most 220 px wide and 280 px high in its own shape: 220 by 146
+px for a photo of three to two, 187 by 280 px for one of two to three.
+Its corners are rounded by 16 px. It has no button under it, and a tap
+on it does nothing. In the place of a picture that the browser no longer
+keeps stands the grey line of 4.21. The red line of a refusal stands
+above the line that parts the thread from the box, so over a picked
+picture. The one line under the header reads "Joy is an AI. What you
+write to her and the pictures you send her leave your wallet to be
+answered." since this step: two lines of text on a phone, one on a
+desktop. Send is lit when the box holds words, as before, also with a
+picture picked.
 Joy's memory, at /joy/memory: one outlined card, as the Account pages
 are. The title "Joy's memory of you"; a back link "Joy"; three
 paragraphs: "This is what Joy remembers about you. She reads it with
@@ -6201,6 +6601,10 @@ excepted, with the keyholder and anos calls included.
                             changed: the `onLine` of askJoy now also gets a line { drawing: true } each time Joy
                             starts on a picture, and a line { picture } when one was made, which joy.service
                             reads and checks;
+                            a member's picture for Joy (2026-11-26, section 11; 4.23): the type JoyUpload ({
+                            contentType, image }), one picture as /ask-joy takes it, and `upload`, optional, on a
+                            JoyMessage; no method changed: askJoy signs the messages as they are handed to it,
+                            the last of them with its picture, and three refusals more can come back (4.23);
                             the notifications (2026-11-25, section 11; 4.22): the type NotificationsQuery ({ limit,
                             since, before, kinds }, all optional); listNotifications(query, quiet), which sends the
                             query as the body and answers a NotificationsAnswer (session.service, above), where it
@@ -6737,6 +7141,34 @@ excepted, with the keyholder and anos calls included.
                             transaction, pictureKey, readPicture and writePicture are the pictures' own, and
                             packPicture and unpackPicture put the type's name in front of a picture's bytes and
                             take it off again
+                            A member's picture (2026-11-26, section 11; 4.23): two signals more, picked (the one
+                            picture that the member has picked for the next message, redrawn already: an address
+                            of its bytes in the page's memory, and the bytes; null while none is picked) and
+                            picking (true while a picked file is redrawn). A JoyChatMessage can carry upload (a
+                            JoyChatUpload, { id }, only on a message of the member's that went with a picture).
+                            pick(file) redraws the file with redrawImage of images.ts, at JOY_UPLOAD_SIDE (1,568)
+                            and JOY_UPLOAD_JPEG (0.85), both in constants.ts, and puts the outcome in the place
+                            of a picture that was picked before; a file that cannot be opened as a picture sets
+                            the red line to camera.unreadable and leaves the picture of before; it does nothing
+                            while an answer is under way or another pick is redrawn. unpick() takes the picked
+                            picture off and gives its address back to the browser. send() does nothing while a
+                            pick is redrawn; it gives the picked picture an id, moves its address into
+                            pictureUrls, has its entry written (keepPicture, with the type UPLOAD_TYPE,
+                            image/jpeg), puts upload on the member's message and hands askJoy the conversation
+                            with the picture as base64 on its last message; when the message goes back into the
+                            box it takes the address out of pictureUrls again, has the entry taken out
+                            (dropPicture, after the chat was kept without the message) and sets picked again.
+                            conversationOf(messages, upload) puts UPLOAD_NOTE, exported, an empty line and the
+                            words in the place of the text of an earlier message of the member's that had a
+                            picture, and the picture on the newest message alone. refusalWords has two sentences
+                            more (uploadLimit with nextDay(), uploadsOff). open() reads the entries of the
+                            member's pictures with those of Joy's (openPictures) and holds bytes for a Download
+                            only for Joy's; the reading of a kept chat puts every message's upload through
+                            keptUploadOf and drops it from an answer of Joy's. hasPictures() counts only a
+                            picture that Joy made. newChat() leaves the picked picture as it leaves the draft,
+                            and a login's end takes it away. deletePicture(entry) stands beside the class and
+                            takes one entry out of joy-pictures. The database, its version and its two places are
+                            as they were
     log.service             the activity log; since 2026-11-24 (section 11; 4.18) also postLines(path, body,
                             onLine, silenceMs), for an answer that a backend writes as a stream of lines, each
                             one JSON object (/ask-joy): it posts through the browser's own fetch, where every
@@ -6768,6 +7200,9 @@ phone's delivery address.)
 (Since 2026-11-25, section 11 and 4.21, IndexedDB holds a third thing,
 in the database of Joy's chat: the pictures that Joy had made for that
 chat, each as ciphertext under the same key.)
+(Since 2026-11-26, section 11 and 4.23: and the pictures that the member
+sent Joy in that chat, in the same place, each as ciphertext under the
+same key.)
 
 ### 8.4 The camera component
 
@@ -7356,6 +7791,28 @@ so is the English of the first. The Thai of the first is the build
 chat's. No Thai reader has read any of it. The button is named Download
 and never Save, on the user's word: "Save would make people think it's
 being saved on their anopod."
+Since 2026-11-26 (section 11; 4.23) the group `joy` has 40 entries: four
+more, one of them a function, and `notice` has new words: "Joy is an AI.
+What you write to her and the pictures you send her leave your wallet to
+be answered." Two stand after `message`, both names for a screen reader
+and drawn nowhere: `addPicture`, "Add a picture", the paperclip; and
+`removePicture`, "Take this picture off", the x on a picked picture. Two
+stand after `dailyLimit`: `uploadLimit(time)`, "You have sent Joy as
+many pictures as an anoPod may send in one day. You can send pictures
+again after (the time).", the red line past the day's pictures, with the
+time that `dailyLimit` has; and `uploadsOff`, "Joy cannot look at
+pictures right now. Send your message without the picture.", the red
+line while the masterpod has uploads switched off. The Thai is "Joy เป็น
+AI ข้อความที่คุณเขียนและรูปภาพที่คุณส่งถึง Joy
+จะถูกส่งออกจากกระเป๋าเงินของคุณเพื่อนำไปตอบ", "เพิ่มรูปภาพ",
+"นำรูปภาพนี้ออก", "คุณส่งรูปภาพถึง Joy ครบจำนวนที่ anoPod
+หนึ่งส่งได้ในหนึ่งวันแล้ว ส่งรูปภาพได้อีกครั้งหลัง (the time)" and
+"ตอนนี้ Joy ดูรูปภาพไม่ได้ ส่งข้อความโดยไม่มีรูปภาพ". All five are the
+plan's words in both languages, letter for letter (its 3.7), held
+against the plan's own table by a script. The Thai is the planning
+chat's, and no Thai reader has read it. A file that the browser cannot
+open as a picture gets the wallet's own sentence `camera.unreadable`,
+which was there before.
 Edit and delete (2026-11-24, section 11; 4.19): `chat` gains one entry
 and `chatRoom` ten, after `stickerSet`. `chat.messageDeleted`, "Message
 deleted", the chat list's line for a deleted newest message. In
@@ -7662,6 +8119,9 @@ Since 2026-11-25 (section 11; 4.21) the box before a new chat has a
 second note under its first when the chat holds a picture that can still
 be downloaded: "Its pictures go with it. Download the ones you want to
 keep first."
+(Since 2026-11-26, 4.23: only a picture that Joy made counts for that
+note. A picture that the member sent has no Download, and the box does
+not name it.)
 
 Seven more buttons sign with an account's key and open no box
 (2026-11-19, section 11). They ask in the page or asked nothing until
@@ -8017,6 +8477,10 @@ Cloud machines.
   of it: Joy seeing a picture, a picture made from a member's photo, and
   the other things that 4.21 lists under "Left as it is". Files are as
   before.)
+  (Since 2026-11-26, 4.23: Joy sees a picture that a member sends with a
+  message, once, with that message. Not built of it: a picture alone,
+  more than one picture, Joy seeing a picture again, a file that is no
+  picture, and the other things that 4.23 lists under "Left as it is".)
 - From the chat edit and delete plan
   (forclaude/chat-edit-delete-plan-1.md, 2026-11-24, its section 6;
   4.19), not built: a history of a message's earlier texts, which the
@@ -23590,6 +24054,295 @@ another username than the one typed.
   seen on a real phone, on Android, or on the live wallet.
 - For the deploy: the user's two lines on wallet1 and then on wallet2,
   with no `npm ci` (no package file changed).
+
+### A member sends Joy one picture with a message (2026-11-26)
+
+Step 2 of `~/Desktop/Z-TestNet/forclaude/joy-uploads-plan-2.md` (FINAL,
+2026-11-26, on the user's word "Yes to all 4"), the wallet's part, built
+in a fresh chat of its own, on top of 8a4044a, the working tree clean.
+Six files of `src/app`, `joy/wallet.md`, `README.md` and this file, one
+commit. Why: the user, that day: "I want to make an upload button for
+Joy, so people can add screenshots/ images. Only 1 at a time for now."
+And: "Joy sees the picture once with the message that comes with it."
+The masterpod's part is the plan's step 1 (4.23; the masterpod's spec,
+section 37). The user committed it there as cbd51ce while this step was
+being built, and that commit's code, its schema file and its shared
+memory file are what this step's trial ran on. No new package, no env
+variable, nothing in `server/` and nothing under `deploy/`.
+
+- Changed, `src/app/constants.ts`: `JOY_UPLOAD_SIDE` (1568) and
+  `JOY_UPLOAD_JPEG` (0.85), and one sentence more in the comment of
+  `JOY_SILENCE_MS`.
+- Changed, `src/app/services/masterpod-api.service.ts`, as 8.3 now says:
+  the type `JoyUpload`, and `upload`, optional, on a `JoyMessage`. The
+  comment of `askJoy()` names the picture and the three refusals. No
+  method changed.
+- Changed, `src/app/services/joy.service.ts`, as 4.23 and 8.3 now say.
+  `upload` on a `JoyChatMessage`, and the types `JoyChatUpload` and
+  `JoyPicked`. The signals `picked` and `picking`. New: `pick()`,
+  `unpick()` and `dropPicture()`. In `send()`: nothing goes while a pick
+  is redrawn; the picked picture gets its id, its address moves into
+  `pictureUrls`, its entry is written and the request carries it; and in
+  the branch of a message that goes back, the address goes out of
+  `pictureUrls`, the entry out of the database, and `picked` holds the
+  picture again. `open()` holds bytes for a Download only for a picture
+  that Joy made. `openPictures()` reads the entries of both kinds,
+  `openKept()` puts every kept `upload` through `keptUploadOf()`,
+  `refusalWords()` has two sentences more, and `reset()` takes the
+  picked picture away. Beside the class: `UPLOAD_TYPE`, `UPLOAD_NOTE`
+  (exported), `keptUploadOf()`, `deletePicture()`, and
+  `conversationOf()` with the second note and with the picture on the
+  newest message. The code of `hasPictures()` is as it was: its comment
+  now says why a member's picture does not count. The class comment
+  gained a paragraph, and the comments of what changed say so.
+- Changed, `src/app/pages/joy.page.ts`, as 8.2 (Joy) now says. The
+  template: in a message of the member's, above its bubble, the picture
+  or the grey line of a picture that is gone; and under the thread one
+  part (`.foot`) that holds the picked picture with its x, the picker,
+  which is not drawn, and the row of before with the paperclip in front.
+  Style lines for `.upload`, `.foot`, `.picked`, `.thumb`, `.drop` and
+  `.attach`; the row's padding and Send's margin changed so that the
+  three stand in one row. In the class: the effect that keeps a reader
+  at the thread's end reads `picked` too; `send()` does nothing while a
+  pick is redrawn; and `pickedFile()` and `uploadDrawn()`, new, the
+  second with the set `drawnUploads`. `pictureDrawn()` of 4.21 is as it
+  was. The class comment gained a paragraph.
+- Changed, `src/app/i18n/en.ts` and `th.ts`: new words for `notice` and
+  four entries more (8.8). All five were held against the plan's own
+  table by a script, letter for letter, in both languages: in the
+  dictionary that the page shows, and in the script of the production
+  build.
+- Changed, `joy/wallet.md`, Joy's wallet file, which is built and not
+  typed: from the source in
+  `~/Desktop/Z-TestNet/forclaude/joy-files-plan-1-tools/wallet-file/`,
+  whose part "Joy" (`src/08-joy-rest.md`) gained one entry on the
+  paperclip and one clause on the day's pictures. The file has 62,148
+  bytes (61,929 before), under the ceiling of 62,500 that the user set
+  for it with this plan (its point 8), 352 bytes below it. Four lines
+  differ: the page's one line, which comes from the dictionary; the new
+  entry; the clause; and the tick box's sentence of the recovery
+  walk-through (commit aaacf15), by which the file had been behind the
+  dictionary, as the plan says (4 bytes). The number 62,000 in the check
+  and in the README of the source's folder is 62,500 now. Joy reads the
+  file only once it is uploaded to the masterpod
+  (`~/Desktop/Z-TestNet/how_to/joy/how_to_upload_joys_files_to_the_masterpod.md`):
+  that is a step of the deploy.
+- Not changed: `server/app.js`, whose forward of POST
+  /api/masterpod/ask-joy hands a body on without reading it and whose
+  page policy has `img-src 'self' data: blob:`;
+  `deploy/nginx/wallet.conf`, which takes a body of 72 MB;
+  `src/app/images.ts`, whose `redrawImage()` and `imageObjectUrl()` are
+  used as they are; `src/app/services/log.service.ts`; and no package
+  file.
+- Changed, this spec: the new 4.23; in section 2 two dated clauses (the
+  page policy's list, and the point on a message to Joy); in 4.18 seven
+  (the route's block, what leaves the wallet, the chat, the kept chat's
+  block and its paragraph, the stream, and what a member is told); in
+  4.20 three (the route's block, what is sent, and the kept chat); in
+  4.21 seven (the route's block, what is sent, the kept chat's block,
+  the opening of a kept chat, New chat, what leaves the wallet, and
+  "Left as it is"); in section 8 the opening paragraph; in 8.2 the
+  paragraph "Joy"; in 8.3 the rows of masterpod-api.service and
+  joy.service and the closing paragraph; in 8.8 the paragraph "Joy"; in
+  8.9 the box before a new chat; in section 10 the item on Joy; and this
+  note. `README.md`: a dated clause in the row of `joy.service.ts` under
+  "Layout", and dated sentences in the paragraph on what the browser
+  keeps.
+- What the plan left open and the build decided is in 4.23, "Decided
+  while building": thirteen small things. What the build found and left
+  is there under "Left as it is".
+- The trial, on this Mac, nothing of it kept in this repository. This
+  step's files as a development build of a scratch copy, behind the
+  wallet's own server program, behind the masterpod's own app of step 1
+  (a copy of its working folder whose files under `src`, `db` and `joy`
+  are those of cbd51ce byte for byte) on a scratch PostgreSQL of its own
+  (127.0.0.1, port 62463), with stand-ins for both companies behind the
+  masterpod. A stand-in answers a message that holds the word LOOK with
+  what it was sent: "I see a picture: image/jpeg, 206298 bytes, mark
+  c0e6016e52ff.", the mark being the first twelve hex characters of the
+  picture's SHA-256, or "I see no picture." So the trial read what the
+  masterpod handed to the company, nothing was billed, and no real
+  answer of Joy's on a picture was seen: the user's first picture in the
+  live wallet is the proof still owed. The login was made up (no
+  passkey: fresh session keys from the wallet's own code, written onto a
+  pod's row, and an encryption key of the trial's). Everything after it
+  was real: every request signed by the wallet's code and checked by the
+  masterpod's, the answer a stream through the wallet's own server
+  program. The page was driven in Google Chrome with no window, and a
+  pick went through Chrome's own file chooser, answered with a file of
+  this Mac. 231 checks in the last run of the seven walks on the files
+  as they go into the commit, none bad.
+  - The plan's walk (its section 1). The paperclip, a button of 40 by 40
+    px, stands left of the message box at Send's height, and a tap on it
+    opens the chooser for one file. A photo of 4288 by 2848 pixels and
+    1,896,240 bytes, with a camera's name, a date and a place inside,
+    stood 84 ms later as a square of 64 px above the box: a fresh JPEG
+    of 1568 by 1041 pixels and 206,298 bytes with nothing inside but
+    pixels. A second pick took its place, and the first picture's
+    address was given back to the browser. The x took the picture off.
+    With a picture and no words Send was off, and Enter sent nothing.
+    With words: the message showed at once with its picture above the
+    words, the box and the square were empty, and Joy's answer named the
+    type, the bytes and the mark of the picture that the wallet held,
+    byte for byte.
+  - What each message sends, read from the request as it left Chrome and
+    from what the stand-in got. The new message carries `role`, `text`
+    and `upload` (`contentType` and `image`, plain base64 with its
+    padding); no other message carries `upload`. The masterpod sent the
+    company one request for it, the message's words and then the
+    picture, and the pod's row counted one picture more. The next
+    message carried no picture: a request of 378 characters, the earlier
+    message as the wallet's note, an empty line and its words, and Joy
+    answered "I see no picture." The note stood nowhere on the screen. A
+    second picture in the same chat: one picture in the request, the new
+    one. An answer for which Joy reads a file: the picture in both
+    requests to the company, counted once. The same with Anthropic's
+    stand-in answering.
+  - A reload. The database at version 2 with its two places. The
+    picture's entry is the picture's bytes and 39 more, with nothing
+    readable in it; opened with the session's own key it is the type's
+    name and the picked picture byte for byte. The chat's entry holds
+    the picture's id and no bytes of it. After a new login the chat was
+    back message for message, each picture drawn in the size of before
+    (220 by 146 px, 187 by 280 px), and the page held no bytes of a
+    member's picture for a Download. A reload while a message with a
+    picture was on its way up on a slow line, before anything of an
+    answer had come: after a new login the chat was back with the
+    member's message last and its picture drawn in it, the box empty and
+    no red line, and the next message went with the note for it.
+  - New chat. With only pictures of the member's in the chat the box had
+    its one sentence. New chat took the chat's entry and every picture
+    of the pod out of the database and gave the addresses back; the
+    words in the box and a picture that was picked and not sent yet
+    stayed.
+  - Joy's made pictures as before (4.21), also in one chat with a
+    member's picture: hers with its Download and its bytes held, the
+    member's without; the box of New chat then with its second sentence;
+    her answer still sent as its note.
+  - A refused message, and each red line. Past the day's pictures (429):
+    the message was on the screen with its picture while it was asked,
+    then out of the chat again, its words back in the box, the same
+    picture above the box, the red line with the time above it, the
+    picture's entry out of the database, one message and no picture
+    counted. Sent again as it stood it came back again; with the picture
+    taken off it was answered. The fiftieth picture of a day was taken
+    and the fifty-first refused. The day's messages (429), uploads
+    switched off (503, on a masterpod with `JOY_DAILY_UPLOADS=0`: the
+    new sentence, and a message with no picture answered as ever), Joy
+    switched off, and a message that is too long: each as 4.18 and 4.23
+    say, the message back with its picture. An answer that fails before
+    any of it came (the company refuses the key, fails with a server's
+    error, fails after the masterpod's retries): the sentence of 4.18,
+    the message back in the box with its picture. The masterpod had
+    counted the picture each time (its spec, 37.4): three such messages
+    and the one of the next sentence counted four pictures. An answer
+    that fails after a part of it came: the message stays in the chat
+    with its picture, with the grey line of a cut-off answer. A picture
+    that the masterpod's own check refuses, which the trial planted
+    since the wallet's redraw makes none: "/ask-joy: HTTP 400: invalid
+    upload: image must be a picture of its contentType", and nothing
+    counted.
+  - Files. A text file named photo.jpg, a PDF, an empty file, half a
+    JPEG, an iPhone's HEIC photo, a TIFF, and an SVG with a script
+    inside: none was taken, each brought the red line of
+    `camera.unreadable`, a picture that was picked before stayed, and
+    the SVG's script did not run. What came out as a JPEG of at most
+    1,568 pixels: a phone's screenshot (a PNG of 1170 by 2532: 725 by
+    1568, 83,826 bytes), a photo that is higher than wide, a photo whose
+    pixels lie on their side with the phone's word to turn it (it came
+    out upright), a photo of 8000 by 5313 pixels (in 110 ms), and a
+    small PNG, a GIF and a BMP of 300 by 200, which were not made
+    bigger. Six real pictures of 190 KB to 2.5 MB came out at 84 to 445
+    KB.
+  - The wallet of before the step (8a4044a) and this step's wallet in
+    one browser, the same database. A chat that the wallet of before had
+    kept opened as it was. A chat that this step's wallet had kept, with
+    a picture: the wallet of before showed that message as its words
+    alone, sent it with no note, and left `upload` on the message when
+    it wrote the chat again; this step's wallet then showed the picture
+    in its message again. New chat in the wallet of before took the
+    member's pictures out with the chat.
+  - The masterpod of before the step (8c20ff3) behind this step's
+    wallet: it answered the words, "I see no picture.", with no refusal,
+    and the picture stood in the chat like any other. That is why the
+    masterpod is deployed first.
+  - Both languages, on seven screens from 360 by 536 to 1280 by 800: the
+    plan's words in their places, nothing wider than the screen, the
+    paperclip and Send in one row. On 360 by 536 a picked picture and a
+    red line of three lines left the thread 43 to 71 px high. A kept
+    chat whose picture's entry was taken out by hand: the chat opened
+    whole with the grey line in the picture's place, above the member's
+    words, and a later message still carried the note for it. A planted
+    chat of 28 messages with planted entries, none of which the wallet
+    ever writes: an `upload` on an answer of Joy's and ids of other
+    forms, among them `__proto__`, were dropped; an id with no entry, an
+    entry under another key and entries that say they are a page or an
+    SVG showed the grey line, and nothing ran as a page.
+  - The watch on a silent answer. On a line of 384 kbit a second a
+    picture of 445,021 bytes, a request of 603,129 characters, went up
+    and was answered in 15 seconds. On a line of 56 kbit a second the
+    wallet gave the message up after 60.4 seconds: "/ask-joy: HTTP 0: no
+    answer in 60 s", the message back in the box with its picture.
+  - The thread's end, the one fault that the trial found in this step's
+    own code, twice. A kept chat with three pictures of the member's
+    opened 427 px above its end in some openings. The first cut of
+    `uploadDrawn()` counted the reporting picture alone, the second only
+    the pictures that the browser had wholly opened; a picture has its
+    room before either. As it is now, a chat with five pictures stood at
+    its end after each of 24 openings, with the browser slowed by 1, 2,
+    4 and 6 in turn, and after each of ten sends. Since the hard order
+    came by chance alone, one walk makes it certain: it holds the
+    pictures' reports back, lets each picture take its room (1,000 px in
+    all), keeps one picture from being wholly open, and then hands the
+    page the first report. The thread went to its end.
+  - Fault copies. Eighteen copies of this step's files, each with one
+    fault of the kind a slip would make (no note on an earlier message,
+    the picture on the first message, Send lit without words, 4,096
+    pixels, no picture back with a message, the entry left behind, the
+    box of New chat counting a member's picture, a kept id not checked,
+    the pictures not opened with a kept chat, a member's picture held
+    for a Download, the two cuts of `uploadDrawn()` above, the thread
+    following neither a member's picture nor the picked one, no sentence
+    for the two refusals, no red line for a bad file, an address not
+    given back, several files in the picker). The walks noticed all
+    eighteen.
+  - The production build, made in this folder into a scratch folder: no
+    warning. `main-PJX4CYAA.js`, 2,412,157 bytes, 6,107 more than the
+    script of 8a4044a; `styles-HGVKDO6M.css` as before. Behind the
+    wallet's own server program its first page was drawn under the
+    page's own policy with no error in Chrome, the script held the
+    plan's ten texts, the wallet's note and the two numbers of the
+    redraw, and under that policy a picture was redrawn and drawn from a
+    blob: address. A body of 4 MB went through the server program to the
+    masterpod.
+  - Simulated and emulated phones, with real taps on the paperclip and
+    in the phone's own picker, the page reaching the trial's servers on
+    this Mac. iPhone 17 with iOS 26.5, in Safari: the paperclip opened a
+    menu of three (Photo Library, Take Photo, Choose File); a photo of
+    the library went out as a JPEG of 1568 by 1041 pixels and 393,906
+    bytes, and Joy's stand-in saw exactly those bytes. The library's
+    photo holds a camera's name, a date and a place; what went out holds
+    a block of 76 bytes of Safari's own writing with the colour space,
+    the width and the height, and an empty IPTC block. The next message
+    went without the picture, a tap on the x took a second pick off, and
+    after a fresh load the chat was back with its picture. The same
+    phone from the Home Screen icon: the same menu, and a photo of
+    483,120 bytes seen by Joy's stand-in. iPhone 16 with iOS 18.6, in
+    Safari: the same menu, 585,366 bytes. Android 17 with Chrome 149, a
+    screen of 360 by 536: the paperclip opened Android's own photo
+    picker, which offered the photo library and neither a camera nor the
+    files; a photo went out as 194,083 bytes with no Exif block at all.
+- Not tried by the build: Anthropic's and OpenAI's real models with a
+  picture, so no real answer of Joy's on one; nginx and the masterpod's
+  doormen with a body of this size, which were read (72 MB, and no size
+  set); a real phone; a login with a passkey; an iPad; Firefox; a screen
+  reader; a Thai reader on the new Thai; and the user's own `ng serve`.
+- For the deploy: one sitting with the masterpod's step, the masterpod
+  first (4.23). No `npm ci` and no new setting on the wallet servers.
+  After the wallet's two servers, Joy's wallet file goes to the
+  masterpod by the how-to page above. The proof still owed is the user's
+  first picture in the live wallet, and the look at the pod's row of
+  `joy_usage` after it.
 
 ## 12. Recovery and the moderator edition
 
